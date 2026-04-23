@@ -62,8 +62,13 @@ export function LocationsTable({ locations }: { locations: Location[] }) {
           <TableBody>
             {locations.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
-                  No locations yet.
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8 px-6">
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">No locations yet.</p>
+                    <p className="text-sm">
+                      Add your first shop using the <strong>New location</strong> button above. Locations are the foundation — you&apos;ll need at least one before you can invite staff, record sales, or run payroll.
+                    </p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (

@@ -49,36 +49,54 @@ export async function listUsers(): Promise<UserListRow[]> {
 export const inviteUser = wrapAction({
   schema: InviteUserInput,
   roles: ["owner"],
-  handler: async (input): Promise<{ id: string; email: string }> => {
+  handler: async (input): Promise<{ id: string; email: string; existed: boolean }> => {
     const admin = createAdminClient();
-
-    // Send magic-link invite. Supabase creates the auth user on invite and
-    // our 0002 trigger inserts the matching profile row (role=staff default;
-    // first user would become owner — but we're logged in already as owner so
-    // that branch is not reached).
     const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/auth/reset-password`;
-    const { data, error } = await admin.auth.admin.inviteUserByEmail(input.email, {
-      data: { full_name: input.full_name },
-      redirectTo,
-    });
-    if (error) throw error;
-    if (!data.user) throw new Error("Invite did not return a user");
 
-    // Patch the profile with desired role, location, flags.
-    const { error: updateErr } = await admin
+    // Try to find an existing auth user with this email first. Idempotent:
+    // if the email was already invited (or the owner is retrying after a
+    // prior failure), we patch the existing profile instead of erroring.
+    const { data: listData } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+    const existing = listData?.users.find(
+      (u) => u.email?.toLowerCase() === input.email.toLowerCase(),
+    );
+
+    let userId: string;
+    let existed = false;
+
+    if (existing) {
+      userId = existing.id;
+      existed = true;
+    } else {
+      const { data, error } = await admin.auth.admin.inviteUserByEmail(input.email, {
+        data: { full_name: input.full_name },
+        redirectTo,
+      });
+      if (error) throw error;
+      if (!data.user) throw new Error("Invite did not return a user");
+      userId = data.user.id;
+    }
+
+    // Ensure a profile row exists (upsert — covers the rare case where the
+    // trigger didn't fire, e.g. on a user imported via SQL).
+    const { error: upsertErr } = await admin
       .from("profiles")
-      .update({
-        full_name: input.full_name,
-        role: input.role,
-        location_id: input.location_id,
-        can_enter_expenses: input.can_enter_expenses,
-        active: true,
-      })
-      .eq("id", data.user.id);
-    if (updateErr) throw updateErr;
+      .upsert(
+        {
+          id: userId,
+          email: input.email,
+          full_name: input.full_name,
+          role: input.role,
+          location_id: input.location_id,
+          can_enter_expenses: input.can_enter_expenses,
+          active: true,
+        },
+        { onConflict: "id" },
+      );
+    if (upsertErr) throw upsertErr;
 
     revalidatePath("/settings/users");
-    return { id: data.user.id, email: data.user.email ?? input.email };
+    return { id: userId, email: input.email, existed };
   },
 });
 
@@ -125,6 +143,49 @@ export const toggleUserActive = wrapAction({
     if (error) throw error;
     revalidatePath("/settings/users");
     return data as Profile;
+  },
+});
+
+// ----------------------------------------------------------------------------
+// Hard delete — removes the auth user, which cascades to profiles via
+// `on delete cascade`. Internal tool; no soft-delete semantics needed.
+// Safeguards: can't delete yourself, can't delete the last owner.
+// ----------------------------------------------------------------------------
+import { z } from "zod";
+
+export const deleteUser = wrapAction({
+  schema: z.object({ id: z.string().uuid() }),
+  roles: ["owner"],
+  handler: async (input, profile): Promise<{ deleted: true }> => {
+    if (input.id === profile.id) {
+      throw new Error("You can't delete your own account");
+    }
+
+    const supabase = await createClient();
+    const { data: target, error: targetErr } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", input.id)
+      .single();
+    if (targetErr) throw targetErr;
+
+    if (target?.role === "owner") {
+      const { count } = await supabase
+        .from("profiles")
+        .select("*", { count: "exact", head: true })
+        .eq("role", "owner")
+        .eq("active", true);
+      if ((count ?? 0) <= 1) {
+        throw new Error("Cannot delete the last active owner");
+      }
+    }
+
+    const admin = createAdminClient();
+    const { error } = await admin.auth.admin.deleteUser(input.id);
+    if (error) throw error;
+
+    revalidatePath("/settings/users");
+    return { deleted: true };
   },
 });
 

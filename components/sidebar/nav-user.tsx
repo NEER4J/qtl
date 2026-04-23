@@ -58,15 +58,15 @@ export function NavUser({
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-gray-100 dark:data-[state=open]:bg-gray-800 data-[state=open]:text-gray-900 dark:data-[state=open]:text-gray-50"
+              className="data-[state=open]:bg-neutral-100 dark:data-[state=open]:bg-neutral-800 data-[state=open]:text-neutral-900 dark:data-[state=open]:text-neutral-50"
             >
-              <Avatar className="h-8 w-8 rounded-lg grayscale">
+              <Avatar className="h-8 w-8 rounded-lg neutralscale">
                 <AvatarImage src={user.avatar || undefined} alt={user.name} />
                 <AvatarFallback className="rounded-lg">{getInitials(user.name)}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
-                <span className="text-gray-500 dark:text-gray-400 truncate text-xs">{user.email}</span>
+                <span className="text-neutral-500 dark:text-neutral-400 truncate text-xs">{user.email}</span>
               </div>
               <EllipsisVertical className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -85,7 +85,7 @@ export function NavUser({
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
-                  <span className="text-gray-500 dark:text-gray-400 truncate text-xs">{user.email}</span>
+                  <span className="text-neutral-500 dark:text-neutral-400 truncate text-xs">{user.email}</span>
                 </div>
               </div>
             </DropdownMenuLabel>

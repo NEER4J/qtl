@@ -23,6 +23,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
     redirect("/auth/login");
   }
   if (!profile.active) redirect("/auth/login?error=account_disabled");
+  if (profile.role === "portal_customer") redirect("/portal/invoices");
 
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value === "true";

@@ -89,8 +89,17 @@ export function CustomersTable({
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                  {search ? "No customers match your search." : "No customers yet."}
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8 px-6">
+                  {search ? (
+                    <p>No customers match <strong>&quot;{search}&quot;</strong>. Try a shorter search, or clear the box.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      <p className="font-medium text-foreground">No customers yet.</p>
+                      <p className="text-sm">
+                        Customers are added automatically the first time you record a sales job with a new billing name — you don&apos;t usually need to add them manually here.
+                      </p>
+                    </div>
+                  )}
                 </TableCell>
               </TableRow>
             ) : (

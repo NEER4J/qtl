@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
+import { PageHelp } from "@/components/help/page-help";
 import { SimpleBar, SimpleLine } from "@/components/analytics/charts";
 import { requireProfile } from "@/lib/auth/require";
 import { getJobsAnalytics } from "@/lib/actions/analytics";
@@ -32,6 +33,20 @@ export default async function JobsAnalyticsPage({
         <h1 className="text-2xl font-semibold tracking-tight">Job Duration Analytics</h1>
         <p className="text-sm text-muted-foreground">{data.period_label}</p>
       </div>
+
+      <PageHelp id="analytics-jobs">
+        <p>
+          How long things take in the shop. These numbers come from the start and end times recorded on each job — jobs without both times don&apos;t show up here.
+        </p>
+        <ul>
+          <li><strong>Average duration by service type</strong> — helps you spot when something&apos;s running long or short.</li>
+          <li><strong>Jobs per hour of day</strong> — shows when the shop is busiest. Useful for scheduling staff.</li>
+          <li><strong>Duration buckets</strong> (0–15 min, 15–30, 30–60, 60+) — where most of the work falls.</li>
+        </ul>
+        <p>
+          Encourage staff to record start and end times on every job — the more jobs with times, the clearer these charts get.
+        </p>
+      </PageHelp>
 
       <AnalyticsFilters
         locations={locations}

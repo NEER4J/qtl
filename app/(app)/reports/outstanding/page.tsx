@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
+import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { getOutstandingInvoices } from "@/lib/actions/reports";
 import { listActiveLocations } from "@/lib/actions/reference";
@@ -49,6 +50,18 @@ export default async function OutstandingReportPage({
           {rows.length} invoice{rows.length !== 1 ? "s" : ""} · {formatMoney(total_outstanding)} outstanding
         </p>
       </div>
+
+      <PageHelp id="reports-outstanding">
+        <p>
+          Every unpaid or partially paid invoice, grouped by how long it&apos;s been overdue.
+        </p>
+        <ul>
+          <li>The brackets are Current, 1–30 days, 31–60, 61–90, and 90+. Standard accounts-receivable aging.</li>
+          <li>The summary cards at the top show the total owed in each bracket. Prioritize calls to the oldest.</li>
+          <li>Click any invoice to open it and record the payment once the customer pays.</li>
+        </ul>
+        <p>Download as a spreadsheet and hand it to whoever does collections.</p>
+      </PageHelp>
 
       <AnalyticsFilters
         locations={locations}

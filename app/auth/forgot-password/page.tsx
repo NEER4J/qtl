@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
       <div className="mx-auto flex w-full flex-col justify-center space-y-8 sm:w-[350px]">
         <div className="space-y-2 text-center">
           <h1 className="text-3xl font-medium">Check your email</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm">
+          <p className="text-neutral-500 dark:text-neutral-400 text-sm">
             We've sent you a password reset link. Please check your email and follow the instructions.
           </p>
         </div>
@@ -71,7 +71,7 @@ export default function ForgotPasswordPage() {
     <div className="mx-auto flex w-full flex-col justify-center space-y-8 sm:w-[350px]">
       <div className="space-y-2 text-center">
         <h1 className="text-3xl font-medium">Forgot your password?</h1>
-        <p className="text-gray-500 dark:text-gray-400 text-sm">
+        <p className="text-neutral-500 dark:text-neutral-400 text-sm">
           Enter your email address and we'll send you a link to reset your password.
         </p>
       </div>
@@ -104,7 +104,7 @@ export default function ForgotPasswordPage() {
       <div className="text-center">
         <Link 
           href="/auth/login" 
-          className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50"
+          className="text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-50"
         >
           Back to Login
         </Link>

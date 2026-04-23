@@ -24,6 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EmptyDropdownHint } from "@/components/help/empty-state";
+import { InfoTip } from "@/components/help/info-tip";
 import { createSalesJob, updateSalesJob } from "@/lib/actions/sales";
 import { SalesJobInput } from "@/lib/schemas/sales";
 import type { Customer, Location, PaymentMode, ServiceType } from "@/lib/db/types";
@@ -332,24 +334,32 @@ export function SalesJobForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Location</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                      disabled={!!lockedLocationId}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {locationOptions.map((l) => (
-                          <SelectItem key={l.id} value={l.id}>
-                            {l.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {locationOptions.length === 0 ? (
+                      <EmptyDropdownHint
+                        message="No shop locations have been added yet."
+                        actionLabel="Add a location"
+                        href="/settings/locations"
+                      />
+                    ) : (
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        disabled={!!lockedLocationId}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {locationOptions.map((l) => (
+                            <SelectItem key={l.id} value={l.id}>
+                              {l.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -359,7 +369,12 @@ export function SalesJobForm({
                 name="invoice_no"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Invoice #</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      Invoice #
+                      <InfoTip>
+                        Whatever you write on the paper invoice. It has to be unique within this shop — you can&apos;t reuse an invoice number you&apos;ve used before at the same location.
+                      </InfoTip>
+                    </FormLabel>
                     <FormControl>
                       <Input {...field} className="font-mono" />
                     </FormControl>
@@ -389,20 +404,28 @@ export function SalesJobForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Service</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {serviceTypes.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {serviceTypes.length === 0 ? (
+                      <EmptyDropdownHint
+                        message="No service types set up yet."
+                        actionLabel="Add service types"
+                        href="/settings/services"
+                      />
+                    ) : (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {serviceTypes.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -532,7 +555,12 @@ export function SalesJobForm({
                 name="hst"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>HST ({(hstRate * 100).toFixed(0)}%)</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      HST ({(hstRate * 100).toFixed(0)}%)
+                      <InfoTip>
+                        Calculated automatically from the sub total. You can&apos;t edit this field directly — change the sub total and HST updates.
+                      </InfoTip>
+                    </FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" min="0" readOnly className="bg-muted/50" {...field} />
                     </FormControl>

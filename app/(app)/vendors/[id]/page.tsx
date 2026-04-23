@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { getVendor, getVendorExpenseHistory } from "@/lib/actions/vendors";
 import { formatDate, formatMoney } from "@/lib/utils/format";
@@ -59,6 +60,14 @@ export default async function VendorDetailPage({
           </a>
         </Button>
       </div>
+
+      <PageHelp id="vendor-detail">
+        <ul>
+          <li><strong>Statement CSV</strong> — download a spreadsheet of every bill you&apos;ve had from this vendor. Useful for reconciling against their monthly statement.</li>
+          <li><strong>Balance owing</strong> — total of unpaid amounts across all their bills.</li>
+          <li>Click any row to open that expense, where you can record a payment or edit.</li>
+        </ul>
+      </PageHelp>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>

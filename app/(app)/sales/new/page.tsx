@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PageHelp } from "@/components/help/page-help";
 import { SalesJobForm } from "@/components/sales/sales-job-form";
 import { requireProfile } from "@/lib/auth/require";
 import {
@@ -42,6 +43,20 @@ export default async function NewSalesJobPage() {
           </p>
         </div>
       </div>
+
+      <PageHelp id="sales-new">
+        <p>Quick guide to each field:</p>
+        <ul>
+          <li><strong>Customer</strong> — start typing a name or license plate to find existing customers. If they&apos;re brand new, just type the billing name; a customer record is created automatically when you save.</li>
+          <li><strong>Invoice number</strong> — whatever you use on your written invoice. It has to be unique within the shop; if you try to reuse one, the form will tell you.</li>
+          <li><strong>Sub total / HST / Total</strong> — enter the sub total. HST is calculated at 13% automatically; the total updates as you type.</li>
+          <li><strong>Payment mode and amount paid</strong> — if the customer paid in full, the status becomes &quot;Paid&quot;. Partial payment shows as &quot;Partial&quot;. Leave it blank for &quot;Outstanding&quot; and record payment later.</li>
+          <li><strong>Start / end time</strong> — optional, but recording them lets the analytics tell you how long different jobs take and which bay is fastest.</li>
+        </ul>
+        <p>
+          Staff can only create jobs at their own shop. Once saved, staff can&apos;t edit — ask a manager or owner to fix anything.
+        </p>
+      </PageHelp>
 
       <SalesJobForm
         mode="create"

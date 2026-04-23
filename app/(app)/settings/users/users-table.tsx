@@ -1,9 +1,19 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { KeyRound, Pencil, Plus } from "lucide-react";
+import { KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  deleteUser,
   resetUserPassword,
   toggleUserActive,
   type UserListRow,
@@ -30,6 +41,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   accountant: "Accountant",
   staff: "Staff",
   employee: "Employee",
+  portal_customer: "Portal Customer",
 };
 
 export function UsersTable({
@@ -41,6 +53,7 @@ export function UsersTable({
 }) {
   const [inviting, setInviting] = useState(false);
   const [editing, setEditing] = useState<UserListRow | null>(null);
+  const [deleting, setDeleting] = useState<UserListRow | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const handleToggle = (u: UserListRow) => {
@@ -51,6 +64,20 @@ export function UsersTable({
         return;
       }
       toast.success(result.data.active ? "User reactivated" : "User deactivated");
+    });
+  };
+
+  const handleDelete = () => {
+    if (!deleting) return;
+    const target = deleting;
+    startTransition(async () => {
+      const result = await deleteUser({ id: target.id });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(`${target.full_name || target.email} deleted`);
+      setDeleting(null);
     });
   };
 
@@ -89,8 +116,13 @@ export function UsersTable({
           <TableBody>
             {users.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
-                  No users yet. Invite your first team member.
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8 px-6">
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">Just you for now.</p>
+                    <p className="text-sm">
+                      Click <strong>Invite user</strong> to add your team. Each person gets an email with a link to set their own password. Make sure you&apos;ve added your shop locations first — managers, staff, and employees all need a shop assigned.
+                    </p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
@@ -139,6 +171,16 @@ export function UsersTable({
                       >
                         {u.active ? "Deactivate" : "Reactivate"}
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Delete user"
+                        className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                        disabled={isPending}
+                        onClick={() => setDeleting(u)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -159,6 +201,35 @@ export function UsersTable({
         user={editing ?? undefined}
         locations={locations}
       />
+      <AlertDialog
+        open={deleting !== null}
+        onOpenChange={(open) => !open && setDeleting(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes {deleting?.full_name || deleting?.email} from
+              the system, including their login. Their past sales, expenses, and
+              audit entries stay — those rows reference deleted auth IDs but
+              don&apos;t get removed. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleDelete();
+              }}
+              disabled={isPending}
+              className="bg-rose-600 hover:bg-rose-700"
+            >
+              {isPending ? "Deleting…" : "Delete user"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

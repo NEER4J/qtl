@@ -31,6 +31,7 @@ export const userRoleSchema = z.enum([
   "accountant",
   "staff",
   "employee",
+  "portal_customer",
 ]);
 
 export const paginationSchema = z.object({

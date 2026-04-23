@@ -20,7 +20,7 @@ export function SimpleIcon({ icon, className, ...props }: SimpleIconProps) {
       aria-label={title}
       aria-hidden="false"
       focusable="false"
-      className={cn("fill-gray-900 dark:fill-gray-50 size-5", className)}
+      className={cn("fill-neutral-900 dark:fill-neutral-50 size-5", className)}
       {...props}
     >
       <title>{title}</title>

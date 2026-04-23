@@ -31,7 +31,7 @@ interface NavMainProps {
 }
 
 const IsComingSoon = () => (
-  <span className="ml-auto rounded-md bg-gray-200 dark:bg-gray-800 px-2 py-1 text-xs">Soon</span>
+  <span className="ml-auto rounded-md bg-neutral-200 dark:bg-neutral-800 px-2 py-1 text-xs">Soon</span>
 );
 
 const NavItemExpanded = ({
@@ -127,7 +127,7 @@ const NavItemCollapsed = ({
                 isActive={isActive(subItem.url)}
               >
                 <Link href={subItem.url} target={subItem.newTab ? "_blank" : undefined}>
-                  {subItem.icon && <subItem.icon className="text-gray-900 dark:text-gray-50" />}
+                  {subItem.icon && <subItem.icon className="text-neutral-900 dark:text-neutral-50" />}
                   <span>{subItem.title}</span>
                   {subItem.comingSoon && <IsComingSoon />}
                 </Link>

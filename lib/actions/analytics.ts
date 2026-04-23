@@ -582,3 +582,73 @@ export async function getPayrollAnalytics(filter: AnalyticsFilter = {}): Promise
     payroll_vs_revenue_pct,
   };
 }
+
+// ============================================================================
+// Year-over-year comparison — sales revenue this vs last year, same window.
+// ============================================================================
+export interface YoyComparison {
+  current_label: string;
+  prior_label: string;
+  current_total: number;
+  prior_total: number;
+  pct_change: number;
+  monthly: { month_offset: number; current: number; prior: number }[];
+}
+
+export async function getSalesYoy(filter: AnalyticsFilter = {}): Promise<YoyComparison> {
+  const { supabase, locationId } = await scopedClient(filter);
+  const { from, to } = defaultRange(filter);
+
+  const priorFrom = shiftYear(from, -1);
+  const priorTo = shiftYear(to, -1);
+
+  const runQ = async (f: string, t: string) => {
+    let q = supabase
+      .from("sales_jobs")
+      .select("job_date, total")
+      .is("deactivated_at", null)
+      .gte("job_date", f)
+      .lte("job_date", t);
+    if (locationId) q = q.eq("location_id", locationId);
+    const { data, error } = await q;
+    if (error) throw error;
+    return (data ?? []) as { job_date: string; total: number }[];
+  };
+
+  const [current, prior] = await Promise.all([runQ(from, to), runQ(priorFrom, priorTo)]);
+
+  const current_total = current.reduce((s, r) => s + Number(r.total), 0);
+  const prior_total = prior.reduce((s, r) => s + Number(r.total), 0);
+
+  // Bucket by relative month offset from the start date
+  const fromDate = new Date(from);
+  const bucket = (rows: { job_date: string; total: number }[], baseFrom: string) => {
+    const base = new Date(baseFrom);
+    const m: Record<number, number> = {};
+    for (const r of rows) {
+      const d = new Date(r.job_date);
+      const offset = (d.getFullYear() - base.getFullYear()) * 12 + (d.getMonth() - base.getMonth());
+      m[offset] = (m[offset] ?? 0) + Number(r.total);
+    }
+    return m;
+  };
+  const cur = bucket(current, from);
+  const pri = bucket(prior, priorFrom);
+  const keys = Array.from(new Set([...Object.keys(cur), ...Object.keys(pri)].map(Number))).sort((a, b) => a - b);
+  const monthly = keys.map((k) => ({ month_offset: k, current: cur[k] ?? 0, prior: pri[k] ?? 0 }));
+
+  return {
+    current_label: `${from} → ${to}`,
+    prior_label: `${priorFrom} → ${priorTo}`,
+    current_total,
+    prior_total,
+    pct_change: prior_total > 0 ? ((current_total - prior_total) / prior_total) * 100 : 0,
+    monthly,
+  };
+}
+
+function shiftYear(iso: string, years: number): string {
+  const d = new Date(iso);
+  d.setFullYear(d.getFullYear() + years);
+  return d.toISOString().slice(0, 10);
+}

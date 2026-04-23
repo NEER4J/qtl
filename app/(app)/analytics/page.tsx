@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +63,20 @@ export default async function AnalyticsHubPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
         <p className="text-sm text-muted-foreground">Business performance across all modules.</p>
       </div>
+
+      <PageHelp id="analytics-hub">
+        <p>Each section answers a different business question:</p>
+        <ul>
+          <li><strong>Sales & Revenue</strong> — where the money comes from. Revenue trends, top customers, comparisons between shops, year-over-year growth.</li>
+          <li><strong>Job Duration</strong> — how efficient the shop is. How long jobs take, busiest hours, fastest bay.</li>
+          <li><strong>Products & Services</strong> — your service mix. Oil change vs grease vs miscellaneous by volume and revenue.</li>
+          <li><strong>Expenses</strong> — where money goes. Breakdown by category, top vendors, month-by-month.</li>
+          <li><strong>Payroll</strong> — labour costs by week and shop, deductions, and payroll as a percentage of revenue.</li>
+        </ul>
+        <p>
+          Every page has date and shop filters, and a button to download the numbers as a spreadsheet.
+        </p>
+      </PageHelp>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {cards.map((c) => (

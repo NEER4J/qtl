@@ -32,6 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EmptyDropdownHint } from "@/components/help/empty-state";
 import { inviteUser } from "@/lib/actions/users";
 import { InviteUserInput } from "@/lib/schemas/users";
 import type { Location, UserRole } from "@/lib/db/types";
@@ -82,7 +83,11 @@ export function InviteUserDialog({
         }
         return;
       }
-      toast.success(`Invite sent to ${res.data.email}`);
+      toast.success(
+        res.data.existed
+          ? `${res.data.email} already existed — profile updated`
+          : `Invite sent to ${res.data.email}`,
+      );
       form.reset();
       onOpenChange(false);
     });
@@ -154,37 +159,46 @@ export function InviteUserDialog({
               )}
             />
 
-            {showLocation && (
-              <FormField
-                control={form.control}
-                name="location_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Location</FormLabel>
-                    <Select
-                      onValueChange={(v) => field.onChange(v || null)}
-                      value={field.value ?? ""}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Assign to a location" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {locations
-                          .filter((l) => l.active)
-                          .map((l) => (
-                            <SelectItem key={l.id} value={l.id}>
-                              {l.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
+            {showLocation && (() => {
+              const activeLocations = locations.filter((l) => l.active);
+              return (
+                <FormField
+                  control={form.control}
+                  name="location_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Location</FormLabel>
+                      {activeLocations.length === 0 ? (
+                        <EmptyDropdownHint
+                          message="No shop locations have been added yet. A Manager, Staff, or Employee must be assigned to a shop before you can invite them."
+                          actionLabel="Add a location first"
+                          href="/settings/locations"
+                        />
+                      ) : (
+                        <Select
+                          onValueChange={(v) => field.onChange(v || null)}
+                          value={field.value ?? ""}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Assign to a location" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {activeLocations.map((l) => (
+                              <SelectItem key={l.id} value={l.id}>
+                                {l.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              );
+            })()}
 
             {showExpensesFlag && (
               <FormField

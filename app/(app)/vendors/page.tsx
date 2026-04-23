@@ -1,3 +1,4 @@
+import { PageHelp } from "@/components/help/page-help";
 import { requireRole } from "@/lib/auth/require";
 import { listVendors } from "@/lib/actions/vendors";
 import { listActiveExpenseCategories } from "@/lib/actions/reference";
@@ -21,6 +22,17 @@ export default async function VendorsPage() {
           {vendors.length} vendor{vendors.length !== 1 ? "s" : ""} total
         </p>
       </div>
+      <PageHelp id="vendors-list">
+        <p>
+          Your vendor directory — one entry per supplier you pay. Like customers, vendors are created automatically when you type a new name on an expense.
+        </p>
+        <ul>
+          <li><strong>Category</strong> — the default expense type for this vendor. When you pick them on an expense form, this pre-fills (but you can change it).</li>
+          <li>Click any row to see the vendor profile: contact details, full expense history, balance owing, and a statement you can download.</li>
+          <li><strong>Deactivating</strong> a vendor hides them from the search box on forms but keeps all past expenses.</li>
+        </ul>
+      </PageHelp>
+
       <VendorsTable vendors={vendors} categories={categories} />
     </div>
   );

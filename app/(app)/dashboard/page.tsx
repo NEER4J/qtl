@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { getDashboardOverview, getOverdueJobs } from "@/lib/actions/dashboard";
 import { formatMoney } from "@/lib/utils/format";
@@ -36,6 +37,21 @@ export default async function DashboardPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground">{data.period_label}</p>
       </div>
+
+      <PageHelp id="dashboard">
+        <p>
+          Your <strong>month-to-date snapshot</strong>. Everything on this page covers the current calendar month and refreshes the moment a new sale or expense is saved.
+        </p>
+        <ul>
+          <li><strong>Sales revenue</strong> — total billed this month (sub-total plus HST).</li>
+          <li><strong>Expenses</strong> — total spent this month. Scheduled recurring expenses only count once they&apos;re actually generated.</li>
+          <li><strong>Net</strong> — sales minus expenses. This figure doesn&apos;t include payroll; for the full profit picture go to Reports → P&amp;L.</li>
+          <li><strong>Outstanding</strong> — money customers still owe. The amber panel below lists any invoice that&apos;s been unpaid for more than 30 days so you can follow up.</li>
+        </ul>
+        <p>
+          Owners and accountants see numbers for all three shops combined. Managers see only their own shop.
+        </p>
+      </PageHelp>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

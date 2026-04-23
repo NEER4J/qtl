@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PayrollWeekInput } from "@/lib/schemas/payroll";
+import { EmptyDropdownHint } from "@/components/help/empty-state";
 import { createPayrollWeek } from "@/lib/actions/payroll";
 import { listActiveLocations } from "@/lib/actions/reference";
 import { useEffect } from "react";
@@ -77,16 +78,24 @@ export function NewWeekDialog({ children }: { children: React.ReactNode }) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Location</FormLabel>
-                  <Select value={field.value ?? ""} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {locations.map((l) => (
-                        <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {locations.length === 0 ? (
+                    <EmptyDropdownHint
+                      message="No shop locations have been added yet."
+                      actionLabel="Add a location"
+                      href="/settings/locations"
+                    />
+                  ) : (
+                    <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {locations.map((l) => (
+                          <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}

@@ -2,7 +2,7 @@
 //   supabase gen types typescript --local > lib/db/types.ts
 // once `supabase start` has applied the migrations.
 
-export type UserRole = 'owner' | 'manager' | 'accountant' | 'staff' | 'employee';
+export type UserRole = 'owner' | 'manager' | 'accountant' | 'staff' | 'employee' | 'portal_customer';
 
 export type PaymentMode =
   | 'visa'
@@ -306,4 +306,112 @@ export interface AuditLogRow {
   ip_address: string | null;
   user_agent: string | null;
   at: string;
+}
+
+// ============================================================================
+// Phase 4 — Customer portal
+// ============================================================================
+
+export interface CustomerPortalAccess {
+  id: string;
+  profile_id: string;
+  customer_id: string;
+  created_at: string;
+  created_by: string | null;
+}
+
+// ============================================================================
+// Phase 4 — Recurring expenses
+// ============================================================================
+
+export type RecurringFrequency = 'monthly' | 'weekly' | 'annual';
+
+export interface RecurringExpense {
+  id: string;
+  location_id: string;
+  category_id: string;
+  subcategory_id: string | null;
+  vendor_id: string | null;
+  description: string | null;
+  amount: number;
+  hst_rate: number;
+  frequency: RecurringFrequency;
+  day_of_month: number | null;
+  day_of_week: number | null;
+  start_date: string;
+  end_date: string | null;
+  active: boolean;
+  last_generated_on: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+// ============================================================================
+// Phase 4 — Product & Pricing
+// ============================================================================
+
+export interface OilType {
+  id: string;
+  code: string;
+  name: string;
+  is_base: boolean;
+  bulk_cost_per_litre: number;
+  gallon_cost_per_litre: number;
+  sort_order: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EngineType {
+  id: string;
+  manufacturer: string;
+  model: string;
+  display_name: string;
+  oil_capacity_litres: number;
+  sort_order: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VolumeTier {
+  id: string;
+  oil_type_id: string;
+  min_litres: number;
+  premium: number;
+}
+
+export interface ServiceCost {
+  id: string;
+  code: string;
+  name: string;
+  cost: number;
+  active: boolean;
+  updated_at: string;
+}
+
+export interface Part {
+  id: string;
+  part_number: string;
+  brand: string;
+  category: string;
+  description: string | null;
+  cost: number;
+  list_price: number;
+  mhsw_fee: number;
+  service_cost_id: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EngineFilter {
+  id: string;
+  engine_type_id: string;
+  part_id: string;
+  quantity: number;
 }

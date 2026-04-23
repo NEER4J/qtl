@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { listSalesJobs } from "@/lib/actions/sales";
 import { listActiveLocations, listActiveServiceTypes } from "@/lib/actions/reference";
@@ -56,6 +57,21 @@ export default async function SalesListPage({
           </Button>
         )}
       </div>
+
+      <PageHelp id="sales-list">
+        <p>
+          Every job that comes through a bay is recorded here as an invoice. Click any row to see the full details, record a payment, edit, or download a PDF copy.
+        </p>
+        <ul>
+          <li><strong>New job</strong> opens the entry form. Fill in the customer, service type, amounts, and (optionally) start/end times.</li>
+          <li><strong>Filters</strong> narrow the list by date, location, service, payment mode, or status. You can bookmark or share any filtered view — the filters travel in the web address.</li>
+          <li><strong>Status labels</strong>: green &quot;Paid&quot;, amber &quot;Partial&quot;, red &quot;Outstanding&quot;. These update automatically as payments come in.</li>
+          <li><strong>Deactivating</strong> a job hides it from the list but keeps the history. Nothing is permanently erased. Only owners can deactivate.</li>
+        </ul>
+        <p>
+          Managers see only their own shop. Staff can create new jobs but can&apos;t edit them after saving — ask a manager or owner if something needs correcting.
+        </p>
+      </PageHelp>
 
       <SalesFilters
         initial={singleParams}

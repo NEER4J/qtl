@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
+import { PageHelp } from "@/components/help/page-help";
 import { SimpleBar, SimpleLine, SimplePie, StackedBar } from "@/components/analytics/charts";
 import { requireProfile } from "@/lib/auth/require";
 import { getExpenseAnalytics } from "@/lib/actions/analytics";
@@ -33,6 +34,15 @@ export default async function ExpenseAnalyticsPage({
         <h1 className="text-2xl font-semibold tracking-tight">Expense Analytics</h1>
         <p className="text-sm text-muted-foreground">{data.period_label}</p>
       </div>
+
+      <PageHelp id="analytics-expenses">
+        <p>Where the money goes for the selected period:</p>
+        <ul>
+          <li><strong>By category</strong> — shows at a glance if one category (repair, utility, purchase) is eating most of the budget.</li>
+          <li><strong>Top 10 vendors</strong> — your largest suppliers by spend. Helps identify where to negotiate.</li>
+          <li><strong>Paid vs outstanding</strong> — how much of each month&apos;s expenses is still unpaid. Pair with the Outstanding report when managing what you owe.</li>
+        </ul>
+      </PageHelp>
 
       <AnalyticsFilters
         locations={locations}

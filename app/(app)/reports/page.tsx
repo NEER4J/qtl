@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +62,17 @@ export default async function ReportsHubPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
         <p className="text-sm text-muted-foreground">Formatted reports with PDF and CSV exports.</p>
       </div>
+
+      <PageHelp id="reports-hub">
+        <p>Formatted reports you can export for business, accounting, and tax purposes.</p>
+        <ul>
+          <li><strong>HST Summary</strong> — what you collected versus what you paid. For filing your HST return with CRA.</li>
+          <li><strong>P&amp;L Report</strong> — the full profit-and-loss view. Includes payroll, unlike the dashboard snapshot.</li>
+          <li><strong>Outstanding Invoices</strong> — unpaid invoices grouped by how overdue they are. For following up with customers.</li>
+          <li><strong>Customer or Vendor Statement</strong> — a per-customer or per-vendor transaction history. Open any customer or vendor profile and click the statement button.</li>
+        </ul>
+        <p>Every report has a spreadsheet-download button.</p>
+      </PageHelp>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {reports.map((r) => (

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
+import { PageHelp } from "@/components/help/page-help";
 import { SimpleBar, SimpleLine, StackedBar } from "@/components/analytics/charts";
 import { requireProfile } from "@/lib/auth/require";
 import { getPayrollAnalytics } from "@/lib/actions/analytics";
@@ -34,6 +35,18 @@ export default async function PayrollAnalyticsPage({
         <h1 className="text-2xl font-semibold tracking-tight">Payroll Analytics</h1>
         <p className="text-sm text-muted-foreground">{data.period_label}</p>
       </div>
+
+      <PageHelp id="analytics-payroll">
+        <p>
+          Covers payroll weeks whose Monday falls inside the selected period. A week only counts once at least one entry has been added to it.
+        </p>
+        <ul>
+          <li><strong>Total cost</strong> — gross wages plus bonus, extras, and your share of benefits. This is what the week costs <em>you</em> as the employer, which is more than what lands in employees&apos; pockets.</li>
+          <li><strong>% of revenue</strong> — labour cost divided by sales. A key health-of-the-business number; watch for creep month to month.</li>
+          <li><strong>Deductions breakdown</strong> — EI, CPP, income tax, and benefit deductions by month. These are amounts you remit to CRA.</li>
+        </ul>
+        <p>Owner and accountant only. Managers don&apos;t see company-wide payroll totals.</p>
+      </PageHelp>
 
       <AnalyticsFilters locations={locations} canFilterLocation={profile.role !== "manager"} />
 

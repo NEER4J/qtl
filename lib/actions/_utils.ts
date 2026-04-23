@@ -102,6 +102,14 @@ function mapError(err: unknown): { error: string; code?: string; fieldErrors?: R
   }
   const pgErr = err as PostgrestError | undefined;
   if (pgErr && typeof pgErr === "object" && "code" in pgErr) {
+    // Always log the raw PG error server-side — the user-facing message is
+    // intentionally generic but we need the real detail for diagnosis.
+    console.error("[pgErr]", {
+      code: pgErr.code,
+      message: pgErr.message,
+      details: pgErr.details,
+      hint: pgErr.hint,
+    });
     switch (pgErr.code) {
       case "23505":
         // Unique violation — try to surface which column.
@@ -120,8 +128,12 @@ function mapError(err: unknown): { error: string; code?: string; fieldErrors?: R
           code: pgErr.code,
         };
       case "42501":
+        // Include the PG message so the client sees *which* rule blocked
+        // the write. Internal tool — no need to hide it.
         return {
-          error: "You are not authorised to perform this action.",
+          error: pgErr.message
+            ? `Not authorised: ${pgErr.message}`
+            : "You are not authorised to perform this action.",
           code: pgErr.code,
         };
       default:
@@ -131,8 +143,10 @@ function mapError(err: unknown): { error: string; code?: string; fieldErrors?: R
     }
   }
   if (err instanceof Error) {
+    console.error("[actionErr]", err);
     return { error: err.message };
   }
+  console.error("[actionErr] unknown", err);
   return { error: "Unexpected error." };
 }
 

@@ -1,3 +1,4 @@
+import { PageHelp } from "@/components/help/page-help";
 import { requireRole } from "@/lib/auth/require";
 import { listAllServiceTypes } from "@/lib/actions/services";
 
@@ -17,6 +18,17 @@ export default async function SettingsServicesPage() {
           Manage service types used when creating sales jobs (e.g. Oil Change, Pit Grease).
         </p>
       </div>
+      <PageHelp id="settings-services">
+        <p>
+          The kinds of jobs a truck can come in for: oil change (OC), premium grease (PG), full grease (FG), and miscellaneous. The short code appears in reports.
+        </p>
+        <ul>
+          <li>Every sales job has exactly one service type.</li>
+          <li>You can rename the display name any time. The short code stays the same.</li>
+          <li>Deactivating a service type hides it from the sales form but keeps it on any past jobs.</li>
+        </ul>
+      </PageHelp>
+
       <ServicesTable services={services} />
     </div>
   );

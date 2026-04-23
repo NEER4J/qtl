@@ -49,8 +49,13 @@ export function SalesTable({
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="py-8 text-center text-muted-foreground">
-                  No jobs match the current filters.
+                <TableCell colSpan={11} className="py-8 px-6 text-center text-muted-foreground">
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">No jobs to show.</p>
+                    <p className="text-sm">
+                      Either nothing matches your current filters, or no jobs have been recorded yet. Use <strong>New job</strong> to add your first one, or clear the filters above to see everything.
+                    </p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (

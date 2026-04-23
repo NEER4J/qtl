@@ -4,6 +4,8 @@ import { Plus, Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHelp } from "@/components/help/page-help";
+import { EmptyState } from "@/components/help/empty-state";
 import {
   Table,
   TableBody,
@@ -50,15 +52,33 @@ export default async function PayrollPage() {
         )}
       </div>
 
+      <PageHelp id="payroll-list">
+        <p>
+          Weekly pay cycles. You&apos;ll have one entry here for each shop&apos;s pay week — each is self-contained with its own employee entries and payment records.
+        </p>
+        <ul>
+          <li><strong>New week</strong> — pick a Monday and a shop. Each week moves through three states: Draft, Approved, Paid.</li>
+          <li><strong>Entries can only be edited while the week is in Draft.</strong> Once you approve or mark paid, the numbers are locked in.</li>
+          <li><strong>EI, CPP, and income tax</strong> are calculated automatically using the rates from Settings → Statutory Rates. Those rates change every January, so remember to update them at year-end.</li>
+          <li><strong>Employee vs management pay</strong> — management pay can include a cheque portion plus daily cash amounts; employee pay is just the standard fields.</li>
+        </ul>
+      </PageHelp>
+
       <Card>
         <CardHeader>
           <CardTitle>Pay weeks</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {weeks.length === 0 ? (
-            <div className="p-6 text-sm text-muted-foreground text-center">
-              No payroll weeks yet.
-            </div>
+            <EmptyState
+              icon={Calendar}
+              title="No pay weeks yet"
+              description={
+                canCreate
+                  ? "Start your first pay cycle by clicking New week above. Pick a Monday and a shop."
+                  : "Your manager or owner hasn't set up any pay weeks yet. Check back after they do."
+              }
+            />
           ) : (
             <Table>
               <TableHeader>

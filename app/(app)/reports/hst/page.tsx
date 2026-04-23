@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
+import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { getHstSummary } from "@/lib/actions/reports";
 import { listActiveLocations } from "@/lib/actions/reference";
@@ -37,6 +38,21 @@ export default async function HstSummaryPage({
         <h1 className="text-2xl font-semibold tracking-tight">HST Summary</h1>
         <p className="text-sm text-muted-foreground">{data.period_label}</p>
       </div>
+
+      <PageHelp id="reports-hst">
+        <p>Your HST remittance worksheet. For the selected period:</p>
+        <ul>
+          <li><strong>HST Collected</strong> — the 13% HST you charged customers on every sales invoice.</li>
+          <li><strong>HST Paid</strong> — the 13% HST you paid to vendors on your expenses (input tax credits).</li>
+          <li><strong>Net HST payable</strong> — what you owe CRA (collected minus paid). A negative number means CRA owes you.</li>
+        </ul>
+        <p>
+          The monthly breakdown makes it easy to fill out your quarterly or annual return. Owner and accountant only.
+        </p>
+        <p>
+          The default view covers the last month. Adjust the dates to match your filing period.
+        </p>
+      </PageHelp>
 
       <AnalyticsFilters
         locations={locations}

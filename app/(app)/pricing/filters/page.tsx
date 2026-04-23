@@ -1,0 +1,99 @@
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { PageHelp } from "@/components/help/page-help";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { requireProfile } from "@/lib/auth/require";
+import { listParts } from "@/lib/actions/pricing";
+import { formatMoney } from "@/lib/utils/format";
+
+export const dynamic = "force-dynamic";
+
+export default async function FilterListPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string>>;
+}) {
+  const profile = await requireProfile();
+  const sp = await searchParams;
+
+  const parts = await listParts({
+    category: sp.category,
+    brand: sp.brand,
+    q: sp.q,
+  });
+
+  const showCost = profile.role === "owner";
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Filter price list</h1>
+        <p className="text-sm text-muted-foreground">{parts.length} parts</p>
+      </div>
+
+      <PageHelp id="pricing-filters">
+        <ul>
+          <li>Search by part number or description. You can also narrow down by category or brand.</li>
+          <li><strong>List price</strong> is what you charge the customer at the counter.</li>
+          <li>The cost column is visible to the owner only. Everyone else sees sell prices.</li>
+        </ul>
+      </PageHelp>
+
+      <form className="flex flex-wrap gap-3">
+        <Input name="q" defaultValue={sp.q ?? ""} placeholder="Search by part number or description" className="w-[280px]" />
+        <Input name="category" defaultValue={sp.category ?? ""} placeholder="Category" className="w-[160px]" />
+        <Input name="brand" defaultValue={sp.brand ?? ""} placeholder="Brand" className="w-[160px]" />
+        <button type="submit" className="hidden" />
+      </form>
+
+      <Card>
+        <CardContent className="p-0 overflow-x-auto">
+          {parts.length === 0 ? (
+            <div className="p-8 text-sm text-muted-foreground text-center space-y-2">
+              <p className="font-medium text-foreground">No parts match your search.</p>
+              {(sp.q || sp.category || sp.brand) ? (
+                <p>Try clearing the filters above to see the full list.</p>
+              ) : (
+                <p>The catalogue appears to be empty. Filter parts are loaded once from your old pricing spreadsheet during setup — if you&apos;re seeing this, that step hasn&apos;t happened yet.</p>
+              )}
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Part #</TableHead>
+                  <TableHead>Brand</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Service</TableHead>
+                  {showCost && <TableHead className="text-right">Cost</TableHead>}
+                  <TableHead className="text-right">List price</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {parts.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-mono text-sm">{p.part_number}</TableCell>
+                    <TableCell>{p.brand}</TableCell>
+                    <TableCell className="text-sm">{p.category}</TableCell>
+                    <TableCell className="text-sm">{p.description ?? "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{p.service_cost_name ?? "—"}</TableCell>
+                    {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(p.cost)}</TableCell>}
+                    <TableCell className="text-right tabular-nums font-medium">{formatMoney(p.list_price)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHelp } from "@/components/help/page-help";
 import {
   Table,
   TableBody,
@@ -56,10 +57,30 @@ export default async function AuditLogPage({
         <p className="text-sm text-muted-foreground">{total.toLocaleString()} records</p>
       </div>
 
+      <PageHelp id="settings-audit">
+        <p>
+          Every create, edit, and deactivate across the system is logged here. The columns tell you:
+        </p>
+        <ul>
+          <li><strong>Time</strong> — when it happened.</li>
+          <li><strong>Table</strong> — the kind of record (a sales job, an expense, a user, a payroll entry, and so on).</li>
+          <li><strong>Action</strong> — whether the record was created, edited, deactivated, or reactivated.</li>
+          <li><strong>Record ID</strong> — the unique identifier of that record, so you can find it again.</li>
+          <li><strong>Actor</strong> — who did it. Blank means the record came in during the initial Excel import.</li>
+          <li><strong>Role</strong> — what role that person had when they did it.</li>
+        </ul>
+        <p>
+          A full before-and-after snapshot is stored with every entry for reference. Owner and accountant only.
+        </p>
+      </PageHelp>
+
       <Card>
         <CardContent className="p-0 overflow-x-auto">
           {rows.length === 0 ? (
-            <div className="p-6 text-sm text-muted-foreground text-center">No audit records.</div>
+            <div className="p-8 text-sm text-muted-foreground text-center">
+              <p className="font-medium text-foreground">Nothing to show yet.</p>
+              <p className="mt-1">Audit entries appear here as people create, edit, and deactivate records across the system.</p>
+            </div>
           ) : (
             <Table>
               <TableHeader>

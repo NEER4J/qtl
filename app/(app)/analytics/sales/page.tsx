@@ -8,9 +8,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
+import { PageHelp } from "@/components/help/page-help";
 import { SimpleArea, SimpleBar, SimplePie, StackedBar } from "@/components/analytics/charts";
 import { requireProfile } from "@/lib/auth/require";
-import { getSalesAnalytics } from "@/lib/actions/analytics";
+import { getSalesAnalytics, getSalesYoy } from "@/lib/actions/analytics";
 import { listActiveLocations } from "@/lib/actions/reference";
 import { formatMoney } from "@/lib/utils/format";
 
@@ -24,7 +25,7 @@ export default async function SalesAnalyticsPage({
   const profile = await requireProfile();
   const sp = await searchParams;
 
-  const [data, locations] = await Promise.all([
+  const [data, yoy, locations] = await Promise.all([
     getSalesAnalytics({
       from: sp.from,
       to: sp.to,
@@ -32,6 +33,7 @@ export default async function SalesAnalyticsPage({
       service_type_id: sp.service_type_id,
       payment_mode: sp.payment_mode,
     }),
+    getSalesYoy({ from: sp.from, to: sp.to, location_id: sp.location_id }),
     listActiveLocations(),
   ]);
 
@@ -41,6 +43,18 @@ export default async function SalesAnalyticsPage({
         <h1 className="text-2xl font-semibold tracking-tight">Sales & Revenue</h1>
         <p className="text-sm text-muted-foreground">{data.period_label}</p>
       </div>
+
+      <PageHelp id="analytics-sales">
+        <p>
+          The default view covers the last 30 days. Change the date pickers to look at any period; every chart on the page updates.
+        </p>
+        <ul>
+          <li><strong>Year-over-year</strong> — compares the selected period against the same period one year earlier. Useful for seeing real growth once seasonality is accounted for.</li>
+          <li><strong>Top customers</strong> — the trucking companies driving the most revenue in the period.</li>
+          <li><strong>Outstanding vs collected</strong> — shows how much of each month&apos;s billing has actually come in.</li>
+          <li>The <strong>CSV</strong> button downloads everything on this page as a spreadsheet.</li>
+        </ul>
+      </PageHelp>
 
       <AnalyticsFilters
         locations={locations}
@@ -55,6 +69,34 @@ export default async function SalesAnalyticsPage({
         <Stat label="Avg job value" value={formatMoney(data.avg_job_value)} />
         <Stat label="Outstanding" value={formatMoney(data.outstanding)} accent={data.outstanding > 0 ? "warn" : undefined} />
       </div>
+
+      {/* Year-over-year */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Year-over-year</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            {yoy.current_label} vs {yoy.prior_label}
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-baseline gap-6 flex-wrap">
+            <div>
+              <div className="text-xs text-muted-foreground">This period</div>
+              <div className="text-2xl font-bold tabular-nums">{formatMoney(yoy.current_total)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Prior period</div>
+              <div className="text-2xl font-bold tabular-nums text-muted-foreground">{formatMoney(yoy.prior_total)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Change</div>
+              <div className={`text-2xl font-bold tabular-nums ${yoy.pct_change >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                {yoy.pct_change >= 0 ? "+" : ""}{yoy.pct_change.toFixed(1)}%
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Daily trend */}
       <Card>

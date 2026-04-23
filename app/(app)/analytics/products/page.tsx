@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
+import { PageHelp } from "@/components/help/page-help";
 import { SimpleBar, SimplePie, StackedBar } from "@/components/analytics/charts";
 import { requireProfile } from "@/lib/auth/require";
 import { getProductsAnalytics } from "@/lib/actions/analytics";
@@ -32,6 +33,17 @@ export default async function ProductsAnalyticsPage({
         <h1 className="text-2xl font-semibold tracking-tight">Products & Services</h1>
         <p className="text-sm text-muted-foreground">{data.period_label}</p>
       </div>
+
+      <PageHelp id="analytics-products">
+        <p>
+          What you&apos;re selling. The four service types are oil change, premium grease, full grease, and miscellaneous.
+        </p>
+        <ul>
+          <li><strong>Count breakdown</strong> — how many of each service you&apos;ve performed.</li>
+          <li><strong>Revenue breakdown</strong> — which service brings in the most money. Sometimes this differs from count: miscellaneous jobs often have a higher ticket than standard oil changes.</li>
+          <li><strong>Trend by month</strong> — the mix shifting over time.</li>
+        </ul>
+      </PageHelp>
 
       <AnalyticsFilters locations={locations} canFilterLocation={profile.role !== "manager"} />
 

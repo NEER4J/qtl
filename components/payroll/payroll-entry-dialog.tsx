@@ -30,6 +30,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EmptyDropdownHint } from "@/components/help/empty-state";
+import { InfoTip } from "@/components/help/info-tip";
 import { PayrollEntryInput } from "@/lib/schemas/payroll";
 import { upsertPayrollEntry, listEmployees } from "@/lib/actions/payroll";
 import type { Employee, PayrollEntry } from "@/lib/db/types";
@@ -108,16 +110,24 @@ export function PayrollEntryDialog({ weekId, existing, children }: Props) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Employee</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange} disabled={isEdit}>
-                    <FormControl>
-                      <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {employees.map((e) => (
-                        <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {employees.length === 0 && !isEdit ? (
+                    <EmptyDropdownHint
+                      message="No active employees yet. You need to add your staff as employee records before you can put them on payroll."
+                      actionLabel="Add employees"
+                      href="/settings/users"
+                    />
+                  ) : (
+                    <Select value={field.value} onValueChange={field.onChange} disabled={isEdit}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {employees.map((e) => (
+                          <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -162,7 +172,12 @@ export function PayrollEntryDialog({ weekId, existing, children }: Props) {
                 name="misc_extra"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Misc extra ($)</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      Misc extra ($)
+                      <InfoTip>
+                        Other taxable extras — tool allowance, taxable reimbursements. These add to income tax but don&apos;t affect EI and CPP.
+                      </InfoTip>
+                    </FormLabel>
                     <FormControl><Input type="number" step="0.01" min="0" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
@@ -184,7 +199,12 @@ export function PayrollEntryDialog({ weekId, existing, children }: Props) {
                 name="cheque_amount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Cheque amount ($)</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      Cheque amount ($)
+                      <InfoTip>
+                        For management employees: the portion of their pay issued by cheque. The rest is paid as daily cash — tracked separately using the &quot;Cash&quot; button next to the entry. Leave at 0 for regular employees.
+                      </InfoTip>
+                    </FormLabel>
                     <FormControl><Input type="number" step="0.01" min="0" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>

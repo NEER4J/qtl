@@ -1,3 +1,4 @@
+import { PageHelp } from "@/components/help/page-help";
 import { requireRole } from "@/lib/auth/require";
 import {
   listAllExpenseCategories,
@@ -23,6 +24,18 @@ export default async function SettingsCategoriesPage() {
           Manage categories and subcategories used when creating expenses.
         </p>
       </div>
+      <PageHelp id="settings-categories">
+        <p>
+          Two-level tags for expenses. Every expense needs a category; a sub-category is optional but makes the reports more useful.
+        </p>
+        <ul>
+          <li>Start with the eight standard categories: Advertisement, Cleaning, Repair, Utility, Miscellaneous, Bank, Purchase, Office. Add more as you need them.</li>
+          <li>Each sub-category belongs to a specific category — pick the parent when you create it.</li>
+          <li>Deactivating a category hides it from the expense form but keeps any past expenses tagged with it.</li>
+          <li>Drag the handles to reorder the way they appear in the expense form.</li>
+        </ul>
+      </PageHelp>
+
       <CategoriesManager categories={categories} subcategories={subcategories} />
     </div>
   );

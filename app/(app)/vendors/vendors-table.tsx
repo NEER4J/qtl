@@ -89,8 +89,17 @@ export function VendorsTable({
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                  {search ? "No vendors match your search." : "No vendors yet."}
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8 px-6">
+                  {search ? (
+                    <p>No vendors match <strong>&quot;{search}&quot;</strong>. Try a shorter search, or clear the box.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      <p className="font-medium text-foreground">No vendors yet.</p>
+                      <p className="text-sm">
+                        Vendors are added automatically when you record an expense with a new supplier name — you don&apos;t usually need to add them manually here.
+                      </p>
+                    </div>
+                  )}
                 </TableCell>
               </TableRow>
             ) : (

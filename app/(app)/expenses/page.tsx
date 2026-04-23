@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { listExpenses } from "@/lib/actions/expenses";
 import {
@@ -65,6 +66,20 @@ export default async function ExpensesListPage({
           </Button>
         )}
       </div>
+
+      <PageHelp id="expenses-list">
+        <p>
+          Every outgoing payment — parts, utilities, rent, advertising, bank fees — is recorded here, one line per vendor invoice.
+        </p>
+        <ul>
+          <li><strong>Categories and sub-categories</strong> — every expense gets tagged with a category (Advertisement, Cleaning, Repair, Utility, and so on). You can manage the list under Settings → Expense Categories.</li>
+          <li><strong>Balance owing</strong> shows total minus what you&apos;ve paid. The same green / amber / red status tags as on sales.</li>
+          <li><strong>Recurring expenses</strong> (like a monthly radio ad or weekly cleaning contract) can be set up once under Settings → Recurring Expenses. The system then creates the expense lines on schedule.</li>
+        </ul>
+        <p>
+          Staff can enter expenses only if the owner has given them permission. Managers see their own shop; owners and accountants see everything.
+        </p>
+      </PageHelp>
 
       <ExpensesFilters
         initial={singleParams}

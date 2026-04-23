@@ -16,6 +16,7 @@ import {
 import { AddPaymentDialog } from "@/components/sales/add-payment-dialog";
 import { DownloadInvoiceButton } from "@/components/sales/download-invoice-button";
 import { StatusBadge } from "@/components/sales/status-badge";
+import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { getSalesJob } from "@/lib/actions/sales";
 import { formatDate, formatMoney, formatTime } from "@/lib/utils/format";
@@ -84,6 +85,18 @@ export default async function SalesJobDetailPage({
           )}
         </div>
       </div>
+
+      <PageHelp id="sales-detail">
+        <p>The full invoice. From here you can:</p>
+        <ul>
+          <li><strong>Download PDF</strong> — a branded invoice PDF you can email or print for the customer.</li>
+          <li><strong>Edit</strong> — owners, and managers at the same shop, can make changes. Every edit is recorded in the audit log so you know who changed what.</li>
+          <li><strong>Record payment</strong> — appears when there&apos;s an unpaid balance. You can add partial payments over time; the status moves from Outstanding to Partial to Paid automatically.</li>
+        </ul>
+        <p>
+          Staff see a read-only version. Deactivated invoices are tagged and hidden from lists and reports, but kept in the system for your records.
+        </p>
+      </PageHelp>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">

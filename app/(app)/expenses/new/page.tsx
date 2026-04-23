@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PageHelp } from "@/components/help/page-help";
 import { ExpenseForm } from "@/components/expenses/expense-form";
 import { requireProfile } from "@/lib/auth/require";
 import {
@@ -48,6 +49,15 @@ export default async function NewExpensePage() {
           Record a vendor bill. HST is calculated from the sub total.
         </p>
       </div>
+
+      <PageHelp id="expenses-new">
+        <ul>
+          <li><strong>Vendor</strong> — type to find an existing supplier. If they&apos;re new, just type their name and a vendor record is created when you save.</li>
+          <li><strong>Invoice number</strong> — optional. Use whatever the vendor put on their bill.</li>
+          <li><strong>Sub total / HST / Total</strong> — HST is calculated automatically at 13%. If the vendor charged a different tax amount, you can type over the HST box.</li>
+          <li><strong>Amount paid and mode</strong> — leave at 0 if you haven&apos;t paid yet. The bill shows up on the outstanding-payables report until you come back and record the payment.</li>
+        </ul>
+      </PageHelp>
 
       <ExpenseForm
         mode="create"

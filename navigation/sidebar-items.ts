@@ -10,6 +10,8 @@ import {
   Settings,
   UserCircle,
   BookText,
+  Package,
+  HelpCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -120,6 +122,17 @@ export const sidebarItems: NavGroup[] = [
         icon: Truck,
         roles: ["owner", "accountant", "manager"],
       },
+      {
+        title: "Pricing",
+        url: "/pricing",
+        icon: Package,
+        roles: ["owner", "manager", "accountant", "staff"],
+        subItems: [
+          { title: "Catalog", url: "/pricing" },
+          { title: "Filter price list", url: "/pricing/filters" },
+          { title: "Oil-change grid", url: "/pricing/oil-grid" },
+        ],
+      },
     ],
   },
   {
@@ -168,8 +181,15 @@ export const sidebarItems: NavGroup[] = [
           { title: "Locations", url: "/settings/locations" },
           { title: "Expense Categories", url: "/settings/categories" },
           { title: "Service Types", url: "/settings/services" },
+          { title: "Recurring Expenses", url: "/settings/recurring-expenses" },
+          { title: "Statutory Rates", url: "/settings/statutory-rates" },
           { title: "Audit Log", url: "/settings/audit-log", roles: ["owner", "accountant"] },
         ],
+      },
+      {
+        title: "Help",
+        url: "/help",
+        icon: HelpCircle,
       },
       {
         title: "Profile",

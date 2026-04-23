@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EmptyDropdownHint } from "@/components/help/empty-state";
 import { createExpense, updateExpense } from "@/lib/actions/expenses";
 import { ExpenseInput } from "@/lib/schemas/expenses";
 import type {
@@ -233,24 +234,32 @@ export function ExpenseForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Location</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                      disabled={!!lockedLocationId}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select…" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {locationOptions.map((l) => (
-                          <SelectItem key={l.id} value={l.id}>
-                            {l.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {locationOptions.length === 0 ? (
+                      <EmptyDropdownHint
+                        message="No shop locations have been added yet."
+                        actionLabel="Add a location"
+                        href="/settings/locations"
+                      />
+                    ) : (
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        disabled={!!lockedLocationId}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select…" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {locationOptions.map((l) => (
+                            <SelectItem key={l.id} value={l.id}>
+                              {l.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -261,20 +270,28 @@ export function ExpenseForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Category</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select…" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {categories.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {categories.length === 0 ? (
+                      <EmptyDropdownHint
+                        message="No expense categories have been set up yet."
+                        actionLabel="Add categories"
+                        href="/settings/categories"
+                      />
+                    ) : (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select…" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {categories.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

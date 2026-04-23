@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
+import { PageHelp } from "@/components/help/page-help";
 import { StackedBar } from "@/components/analytics/charts";
 import { requireProfile } from "@/lib/auth/require";
 import { getPnlReport } from "@/lib/actions/reports";
@@ -40,6 +41,15 @@ export default async function PnlReportPage({
         <h1 className="text-2xl font-semibold tracking-tight">P&amp;L Report</h1>
         <p className="text-sm text-muted-foreground">{data.period_label}</p>
       </div>
+
+      <PageHelp id="reports-pnl">
+        <p>Profit and loss. Net profit equals sales minus expenses minus payroll.</p>
+        <ul>
+          <li>Broken down by month and by shop so you can see which shop or which month is driving the numbers.</li>
+          <li>Sales and expenses include HST. Payroll includes gross wages plus bonus, extras, and your share of benefits.</li>
+          <li>Green net means profit, red means loss.</li>
+        </ul>
+      </PageHelp>
 
       <AnalyticsFilters
         locations={locations}

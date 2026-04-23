@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { getPayrollWeek, updatePayrollWeekStatus } from "@/lib/actions/payroll";
 import { formatDate, formatMoney } from "@/lib/utils/format";
@@ -78,6 +79,20 @@ export default async function PayrollWeekPage({
         )}
       </div>
 
+      <PageHelp id="payroll-detail">
+        <p>The weekly workflow:</p>
+        <ol>
+          <li><strong>Add entries</strong> (only while the week is in Draft) — one per employee working this week. Fill in hours, rate, bonus, extras, and benefits. EI / CPP / tax update as you type.</li>
+          <li><strong>Daily cash</strong> — for management employees, click the &quot;Cash&quot; button to log cash paid on each day. The total rolls up into the cash column.</li>
+          <li><strong>Approve</strong> — locks entries so the numbers can&apos;t change. Do this once hours are final.</li>
+          <li><strong>Record payment</strong> — log the actual cheque numbers, e-transfer references, etc. as they go out.</li>
+          <li><strong>Mark as paid</strong> — closes the week. From here on it counts in the payroll analytics.</li>
+        </ol>
+        <p>
+          The four stat boxes at the top show Gross, Deductions, Net, and Cash for the whole week.
+        </p>
+      </PageHelp>
+
       {/* Summary row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="Gross earnings" value={formatMoney(totalGross)} />
@@ -100,8 +115,13 @@ export default async function PayrollWeekPage({
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           {week.entries.length === 0 ? (
-            <div className="p-6 text-sm text-muted-foreground text-center">
-              No entries yet. Add your first employee.
+            <div className="p-8 text-sm text-muted-foreground text-center space-y-2">
+              <p className="font-medium text-foreground">No entries yet for this week.</p>
+              {canAddEntry ? (
+                <p>Click <strong>Add entry</strong> above and pick the employees who worked this week. You&apos;ll need at least one saved employee to pick from.</p>
+              ) : (
+                <p>You can&apos;t edit this week because it&apos;s {week.status === "approved" ? "already approved" : "marked as paid"}.</p>
+              )}
             </div>
           ) : (
             <Table>
@@ -190,7 +210,10 @@ export default async function PayrollWeekPage({
         </CardHeader>
         <CardContent className="p-0">
           {week.payments.length === 0 ? (
-            <div className="p-6 text-sm text-muted-foreground text-center">No payments recorded.</div>
+            <div className="p-8 text-sm text-muted-foreground text-center space-y-2">
+              <p className="font-medium text-foreground">No payments recorded.</p>
+              <p>When you actually pay employees (cheque, e-transfer, cash), click <strong>Record payment</strong> above so you have a paper trail.</p>
+            </div>
           ) : (
             <Table>
               <TableHeader>
