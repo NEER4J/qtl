@@ -1,40 +1,45 @@
 import { ReactNode } from "react";
 
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
+import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { createClient } from "@/lib/supabase/server";
 import { SearchDialog } from "@/components/sidebar/search-dialog";
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) {
-    // Redirect to login if not authenticated
-    return null;
+
+  if (!user) redirect("/auth/login");
+
+  const profile = await getCurrentProfile();
+  if (!profile) {
+    // Auth user exists but no profile yet (race) — send to login to retry.
+    redirect("/auth/login");
   }
-  
+  if (!profile.active) redirect("/auth/login?error=account_disabled");
+
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value === "true";
 
-  // Transform user data for the sidebar
   const userData = {
     id: user.id,
-    name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
-    email: user.email || '',
-    avatar: user.user_metadata?.avatar_url || '',
-    role: user.user_metadata?.role || 'user'
+    name: profile.full_name || user.email?.split("@")[0] || "User",
+    email: user.email || "",
+    avatar: (user.user_metadata?.avatar_url as string | undefined) || "",
   };
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
-      <AppSidebar 
-        variant="sidebar" 
+      <AppSidebar
+        variant="sidebar"
         collapsible="icon"
+        role={profile.role}
         user={{
           name: userData.name,
           email: userData.email,
@@ -48,8 +53,8 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
       >
         <header
           className={cn(
-            "flex h-12 shrink-0 items-center gap-2 border-b border-gray-200 dark:border-gray-800 transition-[width,height] ease-linear",
-            "sticky top-0 z-50 bg-white/50 dark:bg-gray-900/50 backdrop-blur-md",
+            "flex h-12 shrink-0 items-center gap-2 border-b border-border transition-[width,height] ease-linear",
+            "sticky top-0 z-50 bg-background/60 backdrop-blur-md",
           )}
         >
           <div className="flex w-full items-center justify-between px-4 lg:px-6">

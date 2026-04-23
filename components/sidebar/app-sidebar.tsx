@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { Command } from "lucide-react";
+import { Truck } from "lucide-react";
 
 import {
   Sidebar,
@@ -12,7 +12,8 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { APP_CONFIG } from "@/config/app-config";
-import { sidebarItems } from "@/navigation/sidebar-items";
+import { filterSidebarByRole } from "@/navigation/sidebar-items";
+import type { UserRole } from "@/lib/db/types";
 import { cn } from "@/lib/utils";
 
 import { NavMain } from "./nav-main";
@@ -20,6 +21,7 @@ import { NavUser } from "./nav-user";
 
 export function AppSidebar({
   user,
+  role,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   readonly user: {
@@ -27,13 +29,15 @@ export function AppSidebar({
     readonly email: string;
     readonly avatar: string;
   };
+  readonly role?: UserRole;
 }) {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
+  const items = filterSidebarByRole(role);
 
   return (
     <Sidebar {...props}>
-      <SidebarHeader className="h-12 border-b border-gray-200 dark:border-gray-800 p-0">
+      <SidebarHeader className="h-12 border-b border-border p-0">
         <Link
           href="/dashboard"
           className={cn(
@@ -41,10 +45,10 @@ export function AppSidebar({
             isCollapsed ? "justify-center px-2" : "gap-2 px-4"
           )}
         >
-          <Command className="size-5 shrink-0" />
+          <Truck className="size-5 shrink-0 text-primary" aria-hidden />
           <span
             className={cn(
-              "text-base font-semibold transition-opacity",
+              "text-base font-semibold text-foreground transition-opacity",
               isCollapsed && "hidden"
             )}
           >
@@ -53,7 +57,7 @@ export function AppSidebar({
         </Link>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={sidebarItems} />
+        <NavMain items={items} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={user} />

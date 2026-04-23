@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 
-import { Command } from "lucide-react";
+import { MapPin, Truck } from "lucide-react";
 
 import { Separator } from "@/components/ui/separator";
 import { APP_CONFIG } from "@/config/app-config";
@@ -9,27 +9,30 @@ export default function Layout({ children }: Readonly<{ children: ReactNode }>) 
   return (
     <main>
       <div className="grid h-dvh justify-center p-2 lg:grid-cols-2">
-        <div className="bg-blue-600 dark:bg-blue-500 relative order-2 hidden h-full rounded-3xl lg:flex overflow-hidden">
-         
-          
-          {/* Content overlay */}
-          <div className="relative z-10 flex flex-col w-full">
-            <div className="text-white absolute top-10 space-y-1 px-10">
-              <Command className="size-10" />
-              <h1 className="text-2xl font-medium">{APP_CONFIG.name}</h1>
-              <p className="text-sm">A starter template for shipping your SaaS faster.</p>
+        <div className="bg-primary relative order-2 hidden h-full overflow-hidden rounded-3xl lg:flex">
+          <div className="relative z-10 flex w-full flex-col">
+            <div className="text-primary-foreground absolute top-10 space-y-2 px-10">
+              <Truck className="size-10" aria-hidden />
+              <h1 className="text-2xl font-semibold tracking-tight">{APP_CONFIG.name}</h1>
+              <p className="text-primary-foreground/95 text-sm font-medium">{APP_CONFIG.fullName}</p>
+              <p className="text-primary-foreground/85 max-w-sm text-sm leading-relaxed">{APP_CONFIG.tagline}</p>
             </div>
 
             <div className="absolute bottom-10 flex w-full justify-between px-10">
-              <div className="text-white flex-1 space-y-1">
-                <h2 className="font-medium">Authentication included</h2>
-                <p className="text-sm">Email/password and Google OAuth via Supabase, plus verification and password reset flows.</p>
+              <div className="text-primary-foreground flex-1 space-y-1">
+                <div className="flex items-center gap-2 font-medium">
+                  <MapPin className="size-4 shrink-0 opacity-90" aria-hidden />
+                  Three locations
+                </div>
+                <p className="text-primary-foreground/85 text-sm">
+                  Ayr, Fort Erie, and Napanee — one system for jobs, invoices, expenses, and payroll.
+                </p>
               </div>
-              <Separator orientation="vertical" className="mx-3 !h-auto bg-white/20" />
-              <div className="text-white flex-1 space-y-1">
-                <h2 className="font-medium">Dashboard foundation</h2>
-                <p className="text-sm">
-                  A responsive sidebar layout and protected routes—ready for billing, teams, and your product features.
+              <Separator orientation="vertical" className="mx-3 !h-auto bg-primary-foreground/20" />
+              <div className="text-primary-foreground flex-1 space-y-1">
+                <h2 className="font-medium">Role-based access</h2>
+                <p className="text-primary-foreground/85 text-sm">
+                  Owners, managers, accountants, and staff each see the tools and data they need.
                 </p>
               </div>
             </div>

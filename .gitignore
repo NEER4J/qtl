@@ -40,3 +40,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# raw data (excel workbooks are operational data, not code)
+/scripts/migrate/data/
+/scripts/migrate/reports/
+/doc/raw/
+
+# supabase local stack artifacts
+/supabase/.branches
+/supabase/.temp

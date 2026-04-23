@@ -1,9 +1,14 @@
+import type { UserRole } from "@/lib/db/types";
+
 export interface AuthUser {
   id: string;
   email?: string;
   name?: string;
   avatar?: string;
-  role?: string;
+  role?: UserRole;
+  locationId?: string | null;
+  canEnterExpenses?: boolean;
+  active?: boolean;
 }
 
 export interface AuthContextType {

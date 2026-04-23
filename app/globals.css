@@ -3,10 +3,57 @@
 @tailwind utilities;
 
 @layer base {
-  * {
-    @apply border-gray-200 dark:border-gray-800;
+  :root {
+    --background: 45 33% 98%;
+    --foreground: 160 18% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 160 18% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 160 18% 11%;
+    /* Dark forest green — primary brand */
+    --primary: 158 58% 22%;
+    --primary-foreground: 144 45% 97%;
+    --secondary: 152 22% 92%;
+    --secondary-foreground: 158 32% 16%;
+    --muted: 150 16% 93%;
+    --muted-foreground: 160 10% 38%;
+    --accent: 152 28% 90%;
+    --accent-foreground: 158 40% 16%;
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 152 18% 86%;
+    --input: 152 18% 86%;
+    --ring: 158 48% 32%;
+    --radius: 0.5rem;
   }
+
+  .dark {
+    --background: 160 28% 7%;
+    --foreground: 144 22% 95%;
+    --card: 160 24% 10%;
+    --card-foreground: 144 22% 95%;
+    --popover: 160 24% 10%;
+    --popover-foreground: 144 22% 95%;
+    --primary: 158 42% 46%;
+    --primary-foreground: 160 32% 8%;
+    --secondary: 160 18% 15%;
+    --secondary-foreground: 144 18% 92%;
+    --muted: 160 16% 17%;
+    --muted-foreground: 152 12% 58%;
+    --accent: 160 20% 16%;
+    --accent-foreground: 144 35% 94%;
+    --destructive: 0 58% 42%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 160 16% 19%;
+    --input: 160 16% 19%;
+    --ring: 158 38% 40%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
   body {
-    @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-50;
+    @apply bg-background text-foreground antialiased;
   }
 }

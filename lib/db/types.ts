@@ -1,0 +1,309 @@
+// Hand-rolled placeholder. Replace with:
+//   supabase gen types typescript --local > lib/db/types.ts
+// once `supabase start` has applied the migrations.
+
+export type UserRole = 'owner' | 'manager' | 'accountant' | 'staff' | 'employee';
+
+export type PaymentMode =
+  | 'visa'
+  | 'mastercard'
+  | 'debit'
+  | 'cash'
+  | 'cheque'
+  | 'etransfer'
+  | 'oc'
+  | 'credit_card';
+
+export type PaymentStatus = 'paid' | 'partial' | 'outstanding';
+export type ServiceCode = 'OC' | 'PG' | 'FG' | 'MISC';
+export type AuditAction =
+  | 'insert'
+  | 'update'
+  | 'delete'
+  | 'deactivate'
+  | 'reactivate'
+  | 'login'
+  | 'export';
+
+export interface Location {
+  id: string;
+  code: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Profile {
+  id: string;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  location_id: string | null;
+  can_enter_expenses: boolean;
+  active: boolean;
+  last_login_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ServiceType {
+  id: string;
+  code: ServiceCode;
+  name: string;
+  sort_order: number;
+  active: boolean;
+}
+
+export interface ExpenseCategory {
+  id: string;
+  name: string;
+  sort_order: number;
+  active: boolean;
+}
+
+export interface ExpenseSubcategory {
+  id: string;
+  category_id: string;
+  name: string;
+  sort_order: number;
+  active: boolean;
+}
+
+export interface Customer {
+  id: string;
+  billing_name: string;
+  contact_no: string | null;
+  email: string | null;
+  license_plates: string[];
+  home_location_id: string | null;
+  notes: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+export interface Vendor {
+  id: string;
+  name: string;
+  contact_no: string | null;
+  email: string | null;
+  account_no: string | null;
+  account_type: string | null;
+  category_id: string | null;
+  notes: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+export interface SalesJob {
+  id: string;
+  location_id: string;
+  job_date: string;
+  bay_no: number | null;
+  upper_deck: string | null;
+  lower_deck: string | null;
+  invoice_no: string;
+  customer_id: string | null;
+  billing_name: string;
+  license_plate: string | null;
+  contact_no: string | null;
+  email: string | null;
+  odometer: number | null;
+  service_type_id: string;
+  carrier_name: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  duration_minutes: number | null;
+  comments: string | null;
+  sub_total: number;
+  hst: number;
+  total: number;
+  paid_amount: number;
+  outstanding: number;
+  payment_mode: PaymentMode | null;
+  payment_status: PaymentStatus;
+  batch_id: string | null;
+  deactivated_at: string | null;
+  deactivated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+export interface Expense {
+  id: string;
+  location_id: string;
+  expense_date: string;
+  category_id: string;
+  subcategory_id: string | null;
+  vendor_id: string | null;
+  vendor_name_snapshot: string | null;
+  invoice_no: string | null;
+  account_type: string | null;
+  account_number: string | null;
+  contact_no: string | null;
+  email: string | null;
+  sub_total: number;
+  hst: number;
+  total: number;
+  paid_amount: number;
+  balance: number;
+  payment_date: string | null;
+  payment_mode: PaymentMode | null;
+  transaction_id: string | null;
+  payment_status: PaymentStatus;
+  notes: string | null;
+  batch_id: string | null;
+  deactivated_at: string | null;
+  deactivated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+export interface AppSettings {
+  id: 1;
+  company_name: string;
+  hst_rate: number;
+  fiscal_year_start_month: number;
+  pay_week_start: number;
+  currency: string;
+  invoice_format: 'manual' | 'auto';
+  min_margin_alert_pct: number;
+  updated_at: string;
+}
+
+// ============================================================================
+// Phase 2 — Payroll
+// ============================================================================
+
+export type PayrollType = 'employee' | 'management';
+export type PayrollWeekStatus = 'draft' | 'approved' | 'paid';
+export type StatutoryRateType =
+  | 'ei_employee'
+  | 'ei_employer_multiplier'
+  | 'cpp_employee'
+  | 'cpp2_employee';
+
+export interface Employee {
+  id: string;
+  full_name: string;
+  sin_last4: string | null;
+  hire_date: string | null;
+  termination_date: string | null;
+  payroll_type: PayrollType;
+  default_hourly_rate: number;
+  location_id: string | null;
+  profile_id: string | null;
+  notes: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+export interface StatutoryRate {
+  id: string;
+  year: number;
+  type: StatutoryRateType;
+  rate: number;
+  annual_max_insurable: number | null;
+  annual_max_pensionable: number | null;
+  annual_max_pensionable2: number | null;
+  basic_exemption: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PayrollWeek {
+  id: string;
+  location_id: string;
+  week_start: string;
+  week_end: string;
+  status: PayrollWeekStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+export interface PayrollEntry {
+  id: string;
+  payroll_week_id: string;
+  employee_id: string;
+  hours: number;
+  rate: number;
+  gross_wages: number;
+  bonus: number;
+  misc_extra: number;
+  insurable_earnings: number;
+  ei_employee: number;
+  cpp_employee: number;
+  income_tax: number;
+  benefit_employee_deduction: number;
+  benefit_employer_contribution: number;
+  cheque_amount: number;
+  cash_total: number;
+  net_pay: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+export interface PayrollCashDaily {
+  id: string;
+  payroll_entry_id: string;
+  day: string;
+  amount: number;
+  notes: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface PayrollPayment {
+  id: string;
+  payroll_week_id: string;
+  employee_id: string;
+  paid_on: string;
+  amount: number;
+  mode: PaymentMode;
+  transaction_id: string | null;
+  notes: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+// ============================================================================
+// Phase 2 — Audit log (for UI)
+// ============================================================================
+
+export interface AuditLogRow {
+  id: number;
+  actor_id: string | null;
+  actor_role: string | null;
+  location_id: string | null;
+  table_name: string;
+  record_id: string;
+  action: AuditAction;
+  old_data: Record<string, unknown> | null;
+  new_data: Record<string, unknown> | null;
+  diff: Record<string, unknown> | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  at: string;
+}

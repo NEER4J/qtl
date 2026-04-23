@@ -1,0 +1,146 @@
+import "server-only";
+
+import { ZodError, type ZodType, type z } from "zod";
+import type { PostgrestError } from "@supabase/supabase-js";
+
+import { AuthorizationError, requireProfile, requireRole } from "@/lib/auth/require";
+import type { Profile, UserRole } from "@/lib/db/types";
+
+export type ActionResult<T> =
+  | { ok: true; data: T }
+  | {
+      ok: false;
+      error: string;
+      fieldErrors?: Record<string, string[]>;
+      code?: string;
+    };
+
+// Use the schema's OUTPUT type (post-parse) for the handler input.
+// z.infer<S> === z.output<S>.
+export interface WrapActionOptions<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  S extends ZodType<any, any, any>,
+  Output,
+> {
+  schema: S;
+  roles?: UserRole[];
+  handler: (input: z.infer<S>, profile: Profile) => Promise<Output>;
+}
+
+/**
+ * Common action wrapper:
+ *   1. Loads the caller profile.
+ *   2. Enforces role (optional).
+ *   3. Zod-parses input.
+ *   4. Runs handler.
+ *   5. Maps Postgres / Supabase errors to friendly messages.
+ *
+ * Usage:
+ *   export const createLocation = wrapAction({
+ *     schema: CreateLocationInput,
+ *     roles: ['owner'],
+ *     handler: async (input, profile) => { ... },
+ *   });
+ *
+ * Returns an async function `(input) => ActionResult<Output>`.
+ */
+export function wrapAction<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  S extends ZodType<any, any, any>,
+  Output,
+>({
+  schema,
+  roles,
+  handler,
+}: WrapActionOptions<S, Output>) {
+  return async (rawInput: unknown): Promise<ActionResult<Output>> => {
+    let profile: Profile;
+    try {
+      profile = roles?.length
+        ? await requireRole(...roles)
+        : await requireProfile();
+    } catch (err) {
+      if (err instanceof AuthorizationError) {
+        return { ok: false, error: err.message, code: "forbidden" };
+      }
+      throw err;
+    }
+
+    let parsed: z.infer<S>;
+    try {
+      parsed = schema.parse(rawInput);
+    } catch (err) {
+      if (err instanceof ZodError) {
+        const fieldErrors: Record<string, string[]> = {};
+        for (const issue of err.issues) {
+          const key = issue.path.join(".") || "_";
+          fieldErrors[key] = fieldErrors[key] ?? [];
+          fieldErrors[key].push(issue.message);
+        }
+        return {
+          ok: false,
+          error: "Please fix the highlighted fields.",
+          fieldErrors,
+          code: "validation",
+        };
+      }
+      throw err;
+    }
+
+    try {
+      const data = await handler(parsed, profile);
+      return { ok: true, data };
+    } catch (err) {
+      return { ok: false, ...mapError(err) };
+    }
+  };
+}
+
+function mapError(err: unknown): { error: string; code?: string; fieldErrors?: Record<string, string[]> } {
+  if (err instanceof AuthorizationError) {
+    return { error: err.message, code: "forbidden" };
+  }
+  const pgErr = err as PostgrestError | undefined;
+  if (pgErr && typeof pgErr === "object" && "code" in pgErr) {
+    switch (pgErr.code) {
+      case "23505":
+        // Unique violation — try to surface which column.
+        return {
+          error: "Duplicate value: a record with the same unique field already exists.",
+          code: pgErr.code,
+        };
+      case "23503":
+        return {
+          error: "Referenced record not found.",
+          code: pgErr.code,
+        };
+      case "23514":
+        return {
+          error: "Value violates a constraint.",
+          code: pgErr.code,
+        };
+      case "42501":
+        return {
+          error: "You are not authorised to perform this action.",
+          code: pgErr.code,
+        };
+      default:
+        if (pgErr.message) {
+          return { error: pgErr.message, code: pgErr.code };
+        }
+    }
+  }
+  if (err instanceof Error) {
+    return { error: err.message };
+  }
+  return { error: "Unexpected error." };
+}
+
+/**
+ * Shortcut for read-only queries that don't need schema validation.
+ * Still enforces the caller is signed in.
+ */
+export async function withProfile<T>(handler: (profile: Profile) => Promise<T>): Promise<T> {
+  const profile = await requireProfile();
+  return handler(profile);
+}

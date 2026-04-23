@@ -1,0 +1,629 @@
+"use client";
+
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { createSalesJob, updateSalesJob } from "@/lib/actions/sales";
+import { SalesJobInput } from "@/lib/schemas/sales";
+import type { Customer, Location, PaymentMode, ServiceType } from "@/lib/db/types";
+import { todayISO } from "@/lib/utils/format";
+
+import { CustomerComboBox } from "./customer-combobox";
+import { PreviousPendingAlert } from "./previous-pending-alert";
+import { CreateCustomerDialog } from "./create-customer-dialog";
+
+const PAYMENT_MODES: { value: PaymentMode; label: string }[] = [
+  { value: "cash", label: "Cash" },
+  { value: "cheque", label: "Cheque" },
+  { value: "debit", label: "Debit" },
+  { value: "visa", label: "Visa" },
+  { value: "mastercard", label: "Mastercard" },
+  { value: "etransfer", label: "E-Transfer" },
+  { value: "credit_card", label: "Credit Card" },
+  { value: "oc", label: "OC (Outstanding)" },
+];
+
+// Form values use strings for numeric inputs (html date/number/text) and
+// only get coerced + validated at submit time via the shared zod schema.
+interface FormValues {
+  location_id: string;
+  job_date: string;
+  bay_no: string;
+  upper_deck: string;
+  lower_deck: string;
+  invoice_no: string;
+  customer_id: string | null;
+  billing_name: string;
+  license_plate: string;
+  contact_no: string;
+  email: string;
+  odometer: string;
+  service_type_id: string;
+  carrier_name: string;
+  start_time: string;
+  end_time: string;
+  comments: string;
+  sub_total: string;
+  hst: string;
+  total: string;
+  paid_amount: string;
+  payment_mode: PaymentMode | "";
+}
+
+export interface SalesJobFormProps {
+  mode: "create" | "edit";
+  initial?: Partial<FormValues> & { id?: string };
+  locations: Location[];
+  serviceTypes: ServiceType[];
+  hstRate: number;
+  /** Force location to this value (staff role). */
+  lockedLocationId?: string | null;
+}
+
+export function SalesJobForm({
+  mode,
+  initial,
+  locations,
+  serviceTypes,
+  hstRate,
+  lockedLocationId,
+}: SalesJobFormProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
+  const [createCustomerName, setCreateCustomerName] = useState("");
+
+  const defaults: FormValues = {
+    location_id: lockedLocationId ?? initial?.location_id ?? locations[0]?.id ?? "",
+    job_date: initial?.job_date ?? todayISO(),
+    bay_no: initial?.bay_no ?? "",
+    upper_deck: initial?.upper_deck ?? "",
+    lower_deck: initial?.lower_deck ?? "",
+    invoice_no: initial?.invoice_no ?? "",
+    customer_id: initial?.customer_id ?? null,
+    billing_name: initial?.billing_name ?? "",
+    license_plate: initial?.license_plate ?? "",
+    contact_no: initial?.contact_no ?? "",
+    email: initial?.email ?? "",
+    odometer: initial?.odometer ?? "",
+    service_type_id: initial?.service_type_id ?? serviceTypes[0]?.id ?? "",
+    carrier_name: initial?.carrier_name ?? "",
+    start_time: initial?.start_time ?? "",
+    end_time: initial?.end_time ?? "",
+    comments: initial?.comments ?? "",
+    sub_total: initial?.sub_total ?? "",
+    hst: initial?.hst ?? "",
+    total: initial?.total ?? "",
+    paid_amount: initial?.paid_amount ?? "",
+    payment_mode: initial?.payment_mode ?? "",
+  };
+
+  const form = useForm<FormValues>({ defaultValues: defaults });
+
+  // --------------------------------------------------------------------------
+  // Live total computation: sub_total → hst + total
+  // --------------------------------------------------------------------------
+  const subTotalRaw = useWatch({ control: form.control, name: "sub_total" });
+  const paidRaw = useWatch({ control: form.control, name: "paid_amount" });
+
+  useEffect(() => {
+    const n = Number(subTotalRaw);
+    if (!Number.isFinite(n) || n <= 0) {
+      form.setValue("hst", "");
+      form.setValue("total", "");
+      return;
+    }
+    const hst = Math.round(n * hstRate * 100) / 100;
+    const total = Math.round((n + hst) * 100) / 100;
+    form.setValue("hst", hst.toFixed(2));
+    form.setValue("total", total.toFixed(2));
+  }, [subTotalRaw, hstRate, form]);
+
+  // --------------------------------------------------------------------------
+  // Customer picker sync — billing_name, plate, contact, email auto-fill
+  // --------------------------------------------------------------------------
+  const customerId = useWatch({ control: form.control, name: "customer_id" });
+
+  const applyCustomer = (c: Customer) => {
+    form.setValue("customer_id", c.id);
+    form.setValue("billing_name", c.billing_name);
+    if (c.license_plates?.length) {
+      form.setValue("license_plate", c.license_plates[0]);
+    }
+    if (c.contact_no) form.setValue("contact_no", c.contact_no);
+    if (c.email) form.setValue("email", c.email);
+  };
+
+  // --------------------------------------------------------------------------
+  // Submit
+  // --------------------------------------------------------------------------
+  const onSubmit = form.handleSubmit((values) => {
+    const payload = {
+      ...values,
+      bay_no: values.bay_no === "" ? null : Number(values.bay_no),
+      odometer: values.odometer === "" ? null : Number(values.odometer),
+      sub_total: Number(values.sub_total || 0),
+      hst: Number(values.hst || 0),
+      total: Number(values.total || 0),
+      paid_amount: Number(values.paid_amount || 0),
+      payment_mode: values.payment_mode === "" ? null : values.payment_mode,
+      start_time: values.start_time || null,
+      end_time: values.end_time || null,
+    };
+
+    const parsed = SalesJobInput.safeParse(payload);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        const path = issue.path.join(".");
+        form.setError(path as keyof FormValues, { message: issue.message });
+      }
+      return;
+    }
+
+    startTransition(async () => {
+      const res =
+        mode === "create"
+          ? await createSalesJob(parsed.data)
+          : await updateSalesJob({ ...parsed.data, id: initial?.id! });
+      if (!res.ok) {
+        toast.error(res.error);
+        if (res.fieldErrors) {
+          for (const [k, v] of Object.entries(res.fieldErrors)) {
+            form.setError(k as keyof FormValues, { message: v[0] });
+          }
+        }
+        return;
+      }
+      toast.success(mode === "create" ? "Job created" : "Job updated");
+      router.push(`/sales/${res.data.id}`);
+      router.refresh();
+    });
+  });
+
+  const locationOptions = useMemo(
+    () => locations.filter((l) => l.active),
+    [locations],
+  );
+
+  return (
+    <>
+      <Form {...form}>
+        <form onSubmit={onSubmit} className="space-y-6">
+          {/* ----------------------------------------------------------------
+               Step 1 — Customer
+          ---------------------------------------------------------------- */}
+          <section className="rounded-md border p-4 space-y-4">
+            <h2 className="text-sm font-semibold uppercase text-muted-foreground">
+              Customer
+            </h2>
+
+            <FormField
+              control={form.control}
+              name="customer_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Billing name</FormLabel>
+                  <FormControl>
+                    <CustomerComboBox
+                      value={field.value}
+                      billingName={form.getValues("billing_name")}
+                      onChange={(id) => field.onChange(id)}
+                      onSelectCustomer={applyCustomer}
+                      onCreateNew={(name) => {
+                        setCreateCustomerName(name);
+                        form.setValue("billing_name", name);
+                        setCreateCustomerOpen(true);
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <PreviousPendingAlert customerId={customerId ?? null} />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="billing_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Display name</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="As shown on invoice" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="license_plate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>License plate</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        className="font-mono uppercase"
+                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="contact_no"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contact</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </section>
+
+          {/* ----------------------------------------------------------------
+               Step 2 — Job
+          ---------------------------------------------------------------- */}
+          <section className="rounded-md border p-4 space-y-4">
+            <h2 className="text-sm font-semibold uppercase text-muted-foreground">
+              Job
+            </h2>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <FormField
+                control={form.control}
+                name="job_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Date</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="location_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Location</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      disabled={!!lockedLocationId}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {locationOptions.map((l) => (
+                          <SelectItem key={l.id} value={l.id}>
+                            {l.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="invoice_no"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Invoice #</FormLabel>
+                    <FormControl>
+                      <Input {...field} className="font-mono" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="bay_no"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Bay</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="1" max="20" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <FormField
+                control={form.control}
+                name="service_type_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Service</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {serviceTypes.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="carrier_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Carrier</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="odometer"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Odometer</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="0" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <FormField
+                control={form.control}
+                name="upper_deck"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Upper deck</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="lower_deck"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Lower deck</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="start_time"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Start</FormLabel>
+                    <FormControl>
+                      <Input type="datetime-local" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="end_time"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>End</FormLabel>
+                    <FormControl>
+                      <Input type="datetime-local" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="comments"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} rows={2} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </section>
+
+          {/* ----------------------------------------------------------------
+               Step 3 — Payment
+          ---------------------------------------------------------------- */}
+          <section className="rounded-md border p-4 space-y-4">
+            <h2 className="text-sm font-semibold uppercase text-muted-foreground">
+              Payment
+            </h2>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <FormField
+                control={form.control}
+                name="sub_total"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Sub Total</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" min="0" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="hst"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>HST ({(hstRate * 100).toFixed(0)}%)</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" min="0" readOnly className="bg-muted/50" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="total"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Total</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" min="0" readOnly className="bg-muted/50 font-semibold" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="paid_amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Paid</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" min="0" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="payment_mode"
+              render={({ field }) => (
+                <FormItem className="max-w-xs">
+                  <FormLabel>Payment mode</FormLabel>
+                  <Select
+                    onValueChange={(v) => field.onChange(v as PaymentMode | "")}
+                    value={field.value || ""}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="(Outstanding if blank)" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {PAYMENT_MODES.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {Number(paidRaw) === 0 && (
+              <p className="text-xs text-amber-600">
+                No payment recorded — this job will be marked Outstanding.
+              </p>
+            )}
+          </section>
+
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="outline" onClick={() => router.back()}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending ? "Saving…" : mode === "create" ? "Create job" : "Save changes"}
+            </Button>
+          </div>
+        </form>
+      </Form>
+
+      <CreateCustomerDialog
+        open={createCustomerOpen}
+        onOpenChange={setCreateCustomerOpen}
+        defaultName={createCustomerName}
+        defaultPlate={form.getValues("license_plate")}
+        onCreated={(c) => {
+          applyCustomer(c);
+          setCreateCustomerOpen(false);
+        }}
+      />
+    </>
+  );
+}

@@ -17,18 +17,29 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
+      position="bottom-right"
+      gap={8}
       icons={{
-        success: <CircleCheckIcon className="size-4" />,
-        info: <InfoIcon className="size-4" />,
-        warning: <TriangleAlertIcon className="size-4" />,
-        error: <OctagonXIcon className="size-4" />,
-        loading: <Loader2Icon className="size-4 animate-spin" />,
+        success: <CircleCheckIcon className="size-4 text-emerald-600" />,
+        info: <InfoIcon className="size-4 text-blue-500" />,
+        warning: <TriangleAlertIcon className="size-4 text-amber-500" />,
+        error: <OctagonXIcon className="size-4 text-red-500" />,
+        loading: <Loader2Icon className="size-4 animate-spin text-muted-foreground" />,
+      }}
+      toastOptions={{
+        classNames: {
+          toast:
+            "!bg-white dark:!bg-[hsl(160,24%,10%)] !border !border-[hsl(152,18%,86%)] dark:!border-[hsl(160,16%,19%)] !shadow-lg !shadow-black/10 dark:!shadow-black/40 !rounded-lg !text-[hsl(160,18%,11%)] dark:!text-[hsl(144,22%,95%)]",
+          title: "!font-semibold !text-sm",
+          description: "!text-xs !opacity-75",
+          success: "!border-l-4 !border-l-emerald-500",
+          error: "!border-l-4 !border-l-red-500",
+          warning: "!border-l-4 !border-l-amber-500",
+          info: "!border-l-4 !border-l-blue-500",
+        },
       }}
       style={
         {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
         } as React.CSSProperties
       }

@@ -47,10 +47,10 @@ export function RegisterForm() {
         description: error,
       });
     } else {
-      toast.success("Registration successful", {
-        description: "Please check your email to verify your account.",
+      toast.success("Account created", {
+        description: "Welcome! Redirecting to dashboard...",
       });
-      router.push("/auth/verify-email");
+      router.push("/dashboard");
     }
     
     setIsLoading(false);

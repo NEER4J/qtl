@@ -1,12 +1,14 @@
 const currentYear = new Date().getFullYear();
 
 export const APP_CONFIG = {
-  name: "SaaS Starter",
+  name: "QTL",
+  fullName: "Quick Truck Lube & Oil",
+  tagline: "Sales, expenses, payroll, and reporting — all three shops in one place.",
   version: "1.0.0",
-  copyright: `© ${currentYear}, Your Company.`,
+  copyright: `© ${currentYear} Quick Truck Lube & Oil Ltd.`,
   meta: {
-    title: "SaaS Starter - Next.js + Supabase",
+    title: "QTL — Quick Truck Lube & Oil",
     description:
-      "A modern SaaS starter template built with Next.js, Supabase Auth, Tailwind, and shadcn/ui. Includes authentication flows, protected routes, and a dashboard layout to help you ship faster.",
+      "Business management for Quick Truck Lube & Oil: daily jobs, invoices, expenses, payroll, and live dashboards across Ayr, Fort Erie, and Napanee.",
   },
 };
