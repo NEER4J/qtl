@@ -35,7 +35,10 @@ import { createVendor, updateVendor } from "@/lib/actions/vendors";
 import { CreateVendorInput } from "@/lib/schemas/vendors";
 import type { ExpenseCategory, Vendor } from "@/lib/db/types";
 
+const NO_CATEGORY = "__none__";
+
 type FormValues = {
+  code: string;
   name: string;
   contact_no: string;
   email: string;
@@ -62,12 +65,13 @@ export function VendorFormDialog({
 
   const form = useForm<FormValues>({
     defaultValues: {
+      code: "",
       name: "",
       contact_no: "",
       email: "",
       account_no: "",
       account_type: "",
-      category_id: "",
+      category_id: NO_CATEGORY,
       notes: "",
     },
   });
@@ -76,22 +80,24 @@ export function VendorFormDialog({
     if (open) {
       if (mode === "edit" && vendor) {
         form.reset({
+          code: vendor.code ?? "",
           name: vendor.name,
           contact_no: vendor.contact_no ?? "",
           email: vendor.email ?? "",
           account_no: vendor.account_no ?? "",
           account_type: vendor.account_type ?? "",
-          category_id: vendor.category_id ?? "",
+          category_id: vendor.category_id ?? NO_CATEGORY,
           notes: vendor.notes ?? "",
         });
       } else {
         form.reset({
+          code: "",
           name: "",
           contact_no: "",
           email: "",
           account_no: "",
           account_type: "",
-          category_id: "",
+          category_id: NO_CATEGORY,
           notes: "",
         });
       }
@@ -100,12 +106,16 @@ export function VendorFormDialog({
 
   const onSubmit = form.handleSubmit((values) => {
     const payload = {
+      code: values.code || null,
       name: values.name,
       contact_no: values.contact_no || null,
       email: values.email || null,
       account_no: values.account_no || null,
       account_type: values.account_type || null,
-      category_id: values.category_id || null,
+      category_id:
+        values.category_id && values.category_id !== NO_CATEGORY
+          ? values.category_id
+          : null,
       notes: values.notes || null,
     };
 
@@ -151,6 +161,19 @@ export function VendorFormDialog({
           <form onSubmit={onSubmit} className="space-y-4">
             <FormField
               control={form.control}
+              name="code"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Vendor code</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Auto-generated if blank" className="font-mono" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
@@ -168,7 +191,17 @@ export function VendorFormDialog({
               name="category_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Category</FormLabel>
+                  <div className="flex items-center justify-between">
+                    <FormLabel>Category</FormLabel>
+                    <a
+                      href="/settings/categories"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-muted-foreground hover:text-foreground underline"
+                    >
+                      Manage categories
+                    </a>
+                  </div>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -176,7 +209,7 @@ export function VendorFormDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">No category</SelectItem>
+                      <SelectItem value={NO_CATEGORY}>No category</SelectItem>
                       {categories.map((cat) => (
                         <SelectItem key={cat.id} value={cat.id}>
                           {cat.name}

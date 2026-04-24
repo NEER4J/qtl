@@ -64,6 +64,7 @@ export const createVendor = wrapAction({
     const { data, error } = await supabase
       .from("vendors")
       .insert({
+        code: input.code?.trim() || null,
         name: input.name,
         contact_no: input.contact_no || null,
         email: input.email || null,
@@ -110,9 +111,11 @@ export const updateVendor = wrapAction({
   roles: ["owner", "accountant", "manager"],
   handler: async (input, profile): Promise<Vendor> => {
     const supabase = await createClient();
+    const codeUpdate = input.code?.trim() ? { code: input.code.trim() } : {};
     const { data, error } = await supabase
       .from("vendors")
       .update({
+        ...codeUpdate,
         name: input.name,
         contact_no: input.contact_no || null,
         email: input.email || null,

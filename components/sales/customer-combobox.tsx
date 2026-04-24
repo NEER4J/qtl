@@ -78,6 +78,27 @@ export function CustomerComboBox({
             <CommandEmpty>
               {isPending ? "Searching…" : "No customer found."}
             </CommandEmpty>
+            {onCreateNew && (
+              <CommandGroup>
+                <CommandItem
+                  value={`__create__${q}`}
+                  onSelect={() => {
+                    onCreateNew(q.trim());
+                    setOpen(false);
+                  }}
+                  className="text-primary"
+                >
+                  <UserPlus className="mr-2 size-4" />
+                  <span>
+                    {q.trim().length > 0 ? (
+                      <>Add new customer: <strong>{q}</strong></>
+                    ) : (
+                      <>Add new customer</>
+                    )}
+                  </span>
+                </CommandItem>
+              </CommandGroup>
+            )}
             <CommandGroup heading="Customers">
               {results.map((c) => (
                 <CommandItem
@@ -106,18 +127,6 @@ export function CustomerComboBox({
                   </div>
                 </CommandItem>
               ))}
-              {onCreateNew && q.trim().length > 0 && (
-                <CommandItem
-                  value={`__create__${q}`}
-                  onSelect={() => {
-                    onCreateNew(q.trim());
-                    setOpen(false);
-                  }}
-                >
-                  <UserPlus className="mr-2 size-4" />
-                  <span>Create new: <strong>{q}</strong></span>
-                </CommandItem>
-              )}
             </CommandGroup>
           </CommandList>
         </Command>

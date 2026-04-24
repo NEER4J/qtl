@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PageHelp } from "@/components/help/page-help";
@@ -56,12 +58,27 @@ export default async function FilterListPage({
       <Card>
         <CardContent className="p-0 overflow-x-auto">
           {parts.length === 0 ? (
-            <div className="p-8 text-sm text-muted-foreground text-center space-y-2">
-              <p className="font-medium text-foreground">No parts match your search.</p>
+            <div className="p-8 text-sm text-muted-foreground text-center space-y-3">
+              <p className="font-medium text-foreground">
+                {(sp.q || sp.category || sp.brand) ? "No parts match your search." : "The catalogue is empty."}
+              </p>
               {(sp.q || sp.category || sp.brand) ? (
                 <p>Try clearing the filters above to see the full list.</p>
+              ) : profile.role === "owner" ? (
+                <>
+                  <p>No parts have been added yet. Add one from the pricing catalogue admin.</p>
+                  <div className="flex justify-center gap-2 pt-1">
+                    <Link href="/settings/pricing/parts" className="underline text-foreground font-medium">
+                      Add parts
+                    </Link>
+                    <span aria-hidden>·</span>
+                    <Link href="/settings/pricing" className="underline text-foreground font-medium">
+                      Pricing admin hub
+                    </Link>
+                  </div>
+                </>
               ) : (
-                <p>The catalogue appears to be empty. Filter parts are loaded once from your old pricing spreadsheet during setup — if you&apos;re seeing this, that step hasn&apos;t happened yet.</p>
+                <p>Ask the owner to add parts from the pricing catalogue admin before this list can be used.</p>
               )}
             </div>
           ) : (

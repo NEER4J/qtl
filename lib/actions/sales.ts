@@ -174,7 +174,7 @@ export const createSalesJob = wrapAction({
         bay_no: input.bay_no ?? null,
         upper_deck: input.upper_deck || null,
         lower_deck: input.lower_deck || null,
-        invoice_no: input.invoice_no,
+        invoice_no: input.invoice_no?.trim() || null,
         customer_id: input.customer_id ?? null,
         billing_name: input.billing_name,
         license_plate: input.license_plate || null,
@@ -229,6 +229,13 @@ export const updateSalesJob = wrapAction({
   handler: async (input, profile): Promise<SalesJob> => {
     const supabase = await createClient();
 
+    // Don't blank out an existing invoice_no — skip the column if the user
+    // cleared it. For a fresh value (insert path) the BEFORE INSERT trigger
+    // fills the blank; on update we preserve the stored value instead.
+    const invoiceNoUpdate = input.invoice_no?.trim()
+      ? { invoice_no: input.invoice_no.trim() }
+      : {};
+
     const { data, error } = await supabase
       .from("sales_jobs")
       .update({
@@ -237,7 +244,7 @@ export const updateSalesJob = wrapAction({
         bay_no: input.bay_no ?? null,
         upper_deck: input.upper_deck || null,
         lower_deck: input.lower_deck || null,
-        invoice_no: input.invoice_no,
+        ...invoiceNoUpdate,
         customer_id: input.customer_id ?? null,
         billing_name: input.billing_name,
         license_plate: input.license_plate || null,

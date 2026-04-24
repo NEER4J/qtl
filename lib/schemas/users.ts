@@ -26,8 +26,13 @@ const roleLocationRefine = (
 };
 
 // ----------------------------------------------------------------------------
-// Invite (admin creates + sends email)
+// Invite (admin creates user directly with a password)
 // ----------------------------------------------------------------------------
+const passwordField = z
+  .string()
+  .min(6, "Password must be at least 6 characters")
+  .max(72, "Password is too long");
+
 export const InviteUserInput = z
   .object({
     email: emailField,
@@ -35,6 +40,7 @@ export const InviteUserInput = z
     role: userRoleSchema,
     location_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
     can_enter_expenses: z.coerce.boolean().default(false),
+    password: passwordField,
   })
   .superRefine(roleLocationRefine);
 export type InviteUserInput = z.infer<typeof InviteUserInput>;
@@ -63,8 +69,10 @@ export const ToggleUserActive = z.object({
 });
 
 // ----------------------------------------------------------------------------
-// Password reset (sends email)
+// Set password directly (admin-set)
 // ----------------------------------------------------------------------------
-export const ResetUserPasswordInput = z.object({
+export const SetUserPasswordInput = z.object({
   id: z.string().uuid(),
+  password: passwordField,
 });
+export type SetUserPasswordInput = z.infer<typeof SetUserPasswordInput>;

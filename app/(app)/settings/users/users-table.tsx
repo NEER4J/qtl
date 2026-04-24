@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
+import { Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -26,7 +26,6 @@ import {
 } from "@/components/ui/table";
 import {
   deleteUser,
-  resetUserPassword,
   toggleUserActive,
   type UserListRow,
 } from "@/lib/actions/users";
@@ -34,6 +33,7 @@ import type { Location, UserRole } from "@/lib/db/types";
 
 import { InviteUserDialog } from "./invite-user-dialog";
 import { EditUserDialog } from "./edit-user-dialog";
+import { SetPasswordDialog } from "./set-password-dialog";
 
 const ROLE_LABELS: Record<UserRole, string> = {
   owner: "Owner",
@@ -54,6 +54,7 @@ export function UsersTable({
   const [inviting, setInviting] = useState(false);
   const [editing, setEditing] = useState<UserListRow | null>(null);
   const [deleting, setDeleting] = useState<UserListRow | null>(null);
+  const [settingPassword, setSettingPassword] = useState<UserListRow | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const handleToggle = (u: UserListRow) => {
@@ -81,22 +82,11 @@ export function UsersTable({
     });
   };
 
-  const handleResetPassword = (u: UserListRow) => {
-    startTransition(async () => {
-      const result = await resetUserPassword({ id: u.id });
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
-      }
-      toast.success(`Reset email sent to ${u.email}`);
-    });
-  };
-
   return (
     <>
       <div className="flex justify-end">
         <Button onClick={() => setInviting(true)}>
-          <Plus className="size-4" /> Invite user
+          <Plus className="size-4" /> Add user
         </Button>
       </div>
 
@@ -110,7 +100,7 @@ export function UsersTable({
               <TableHead>Location</TableHead>
               <TableHead className="w-20">Expenses</TableHead>
               <TableHead className="w-24">Status</TableHead>
-              <TableHead className="w-40 text-right">Actions</TableHead>
+              <TableHead className="w-48 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -120,7 +110,7 @@ export function UsersTable({
                   <div className="space-y-1">
                     <p className="font-medium text-foreground">Just you for now.</p>
                     <p className="text-sm">
-                      Click <strong>Invite user</strong> to add your team. Each person gets an email with a link to set their own password. Make sure you&apos;ve added your shop locations first — managers, staff, and employees all need a shop assigned.
+                      Click <strong>Add user</strong> to add your team. You&apos;ll set their password directly. Make sure you&apos;ve added your shop locations first — managers, staff, and employees all need a shop assigned.
                     </p>
                   </div>
                 </TableCell>
@@ -157,11 +147,10 @@ export function UsersTable({
                       <Button
                         variant="ghost"
                         size="icon"
-                        title="Send password reset"
-                        disabled={isPending}
-                        onClick={() => handleResetPassword(u)}
+                        title="Set password"
+                        onClick={() => setSettingPassword(u)}
                       >
-                        <KeyRound className="size-4" />
+                        <Lock className="size-4" />
                       </Button>
                       <Button
                         variant="outline"
@@ -200,6 +189,11 @@ export function UsersTable({
         onOpenChange={(open) => !open && setEditing(null)}
         user={editing ?? undefined}
         locations={locations}
+      />
+      <SetPasswordDialog
+        open={settingPassword !== null}
+        onOpenChange={(open) => !open && setSettingPassword(null)}
+        user={settingPassword ?? undefined}
       />
       <AlertDialog
         open={deleting !== null}

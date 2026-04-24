@@ -2,9 +2,17 @@ import { z } from "zod";
 
 import { moneySchema, paymentModeSchema, paymentStatusSchema } from "@/lib/schemas/common";
 
-// Accept either ISO datetime string or "HH:mm" converted on the client.
+// Accept either HTML datetime-local ("yyyy-mm-ddThh:mm" with optional seconds)
+// or full ISO 8601 with timezone. Empty strings become null.
+const datetimeLocalRegex =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/;
+
 const datetimeNullable = z
-  .union([z.string().datetime(), z.string().length(0), z.null()])
+  .union([
+    z.string().regex(datetimeLocalRegex, "Invalid datetime"),
+    z.string().length(0),
+    z.null(),
+  ])
   .nullable()
   .optional()
   .transform((v) => (v === "" ? null : (v ?? null)));
@@ -19,7 +27,7 @@ export const SalesJobInput = z
     upper_deck: z.string().trim().max(60).nullable().optional().or(z.literal("")),
     lower_deck: z.string().trim().max(60).nullable().optional().or(z.literal("")),
 
-    invoice_no: z.string().trim().min(1, "Invoice number is required").max(40),
+    invoice_no: z.string().trim().max(40).nullable().optional().or(z.literal("")),
 
     customer_id: z.string().uuid().nullable().optional(),
     billing_name: z.string().trim().min(1, "Billing name is required").max(200),

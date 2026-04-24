@@ -53,6 +53,7 @@ export const createEmployee = wrapAction({
       .from("employees")
       .insert({
         ...input,
+        code: input.code?.trim() || null,
         sin_last4: input.sin_last4 || null,
         hire_date: input.hire_date || null,
         termination_date: input.termination_date || null,
@@ -74,10 +75,11 @@ export const updateEmployee = wrapAction({
   roles: ["owner", "manager"],
   handler: async (input, profile): Promise<Employee> => {
     const supabase = await createClient();
-    const { id, ...rest } = input;
+    const { id, code, ...rest } = input;
+    const codeUpdate = code?.trim() ? { code: code.trim() } : {};
     const { data, error } = await supabase
       .from("employees")
-      .update({ ...rest, sin_last4: rest.sin_last4 || null, notes: rest.notes || null, updated_by: profile.id })
+      .update({ ...rest, ...codeUpdate, sin_last4: rest.sin_last4 || null, notes: rest.notes || null, updated_by: profile.id })
       .eq("id", id)
       .select("*")
       .single();

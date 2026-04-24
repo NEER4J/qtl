@@ -269,7 +269,17 @@ export function ExpenseForm({
                 name="category_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Category</FormLabel>
+                    <div className="flex items-center justify-between">
+                      <FormLabel>Category</FormLabel>
+                      <a
+                        href="/settings/categories"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-muted-foreground hover:text-foreground underline"
+                      >
+                        Manage
+                      </a>
+                    </div>
                     {categories.length === 0 ? (
                       <EmptyDropdownHint
                         message="No expense categories have been set up yet."
@@ -374,7 +384,7 @@ export function ExpenseForm({
                   <FormItem>
                     <FormLabel>Invoice #</FormLabel>
                     <FormControl>
-                      <Input {...field} className="font-mono" />
+                      <Input {...field} placeholder="Auto-generated if blank" className="font-mono" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -546,7 +556,7 @@ export function ExpenseForm({
                   <FormItem>
                     <FormLabel>Transaction ID</FormLabel>
                     <FormControl>
-                      <Input {...field} className="font-mono" />
+                      <Input {...field} placeholder="Auto-generated if blank" className="font-mono" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

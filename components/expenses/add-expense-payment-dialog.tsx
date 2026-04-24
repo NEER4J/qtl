@@ -184,7 +184,7 @@ export function AddExpensePaymentDialog({
                 <FormItem>
                   <FormLabel>Transaction ID</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <Input {...field} placeholder="Auto-generated if blank" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

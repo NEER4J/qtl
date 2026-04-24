@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
@@ -7,8 +9,9 @@ import { formatMoney } from "@/lib/utils/format";
 export const dynamic = "force-dynamic";
 
 export default async function OilGridPage() {
-  await requireProfile();
+  const profile = await requireProfile();
   const { engines, oilTypes, cells } = await getOilChangeGrid();
+  const isOwner = profile.role === "owner";
 
   return (
     <div className="flex flex-col gap-6">
@@ -35,14 +38,32 @@ export default async function OilGridPage() {
 
       {engines.length === 0 || oilTypes.length === 0 ? (
         <Card>
-          <CardContent className="pt-6 pb-6 text-sm text-muted-foreground text-center space-y-2 max-w-2xl mx-auto">
+          <CardContent className="pt-6 pb-6 text-sm text-muted-foreground text-center space-y-3 max-w-2xl mx-auto">
             <p className="text-base font-medium text-foreground">The price grid is empty.</p>
             <p>
-              Before prices can be shown, someone needs to load the filter parts, engine types, and oil types from your old pricing spreadsheet. This is a one-time setup task.
+              The grid needs at least one <strong>engine type</strong> and one <strong>oil type</strong> before it
+              can show prices.
             </p>
-            <p>
-              If the catalogue has already been loaded and you&apos;re still seeing this, get in touch — the data may not have been synced to this environment.
-            </p>
+            {isOwner ? (
+              <>
+                <p>Add them from the pricing catalogue admin:</p>
+                <div className="flex flex-wrap justify-center gap-2 pt-1">
+                  <Link href="/settings/pricing/engine-types" className="underline text-foreground font-medium">
+                    Add engine types
+                  </Link>
+                  <span aria-hidden>·</span>
+                  <Link href="/settings/pricing/oil-types" className="underline text-foreground font-medium">
+                    Add oil types
+                  </Link>
+                  <span aria-hidden>·</span>
+                  <Link href="/settings/pricing" className="underline text-foreground font-medium">
+                    Pricing admin hub
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <p>Ask the owner to add engine types and oil types from the pricing catalogue admin.</p>
+            )}
           </CardContent>
         </Card>
       ) : (

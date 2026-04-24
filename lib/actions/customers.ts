@@ -99,6 +99,7 @@ export const createCustomer = wrapAction({
     const { data, error } = await supabase
       .from("customers")
       .insert({
+        code: input.code?.trim() || null,
         billing_name: input.billing_name,
         contact_no: input.contact_no || null,
         email: input.email || null,
@@ -132,9 +133,12 @@ export const updateCustomer = wrapAction({
       ),
     );
 
+    const codeUpdate = input.code?.trim() ? { code: input.code.trim() } : {};
+
     const { data, error } = await supabase
       .from("customers")
       .update({
+        ...codeUpdate,
         billing_name: input.billing_name,
         contact_no: input.contact_no || null,
         email: input.email || null,

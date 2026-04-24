@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { wrapAction } from "@/lib/actions/_utils";
 import {
   InviteUserInput,
-  ResetUserPasswordInput,
+  SetUserPasswordInput,
   ToggleUserActive,
   UpdateUserInput,
 } from "@/lib/schemas/users";
@@ -49,13 +49,14 @@ export async function listUsers(): Promise<UserListRow[]> {
 export const inviteUser = wrapAction({
   schema: InviteUserInput,
   roles: ["owner"],
-  handler: async (input): Promise<{ id: string; email: string; existed: boolean }> => {
+  handler: async (
+    input,
+  ): Promise<{ id: string; email: string; existed: boolean }> => {
     const admin = createAdminClient();
-    const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/auth/reset-password`;
 
-    // Try to find an existing auth user with this email first. Idempotent:
-    // if the email was already invited (or the owner is retrying after a
-    // prior failure), we patch the existing profile instead of erroring.
+    // Idempotent: if the email already exists (e.g. retry after a prior
+    // failure), patch the existing user's password + profile instead of
+    // erroring.
     const { data: listData } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
     const existing = listData?.users.find(
       (u) => u.email?.toLowerCase() === input.email.toLowerCase(),
@@ -67,13 +68,19 @@ export const inviteUser = wrapAction({
     if (existing) {
       userId = existing.id;
       existed = true;
+      const { error: pwErr } = await admin.auth.admin.updateUserById(userId, {
+        password: input.password,
+      });
+      if (pwErr) throw pwErr;
     } else {
-      const { data, error } = await admin.auth.admin.inviteUserByEmail(input.email, {
-        data: { full_name: input.full_name },
-        redirectTo,
+      const { data, error } = await admin.auth.admin.createUser({
+        email: input.email,
+        password: input.password,
+        email_confirm: true,
+        user_metadata: { full_name: input.full_name },
       });
       if (error) throw error;
-      if (!data.user) throw new Error("Invite did not return a user");
+      if (!data.user) throw new Error("Create did not return a user");
       userId = data.user.id;
     }
 
@@ -190,22 +197,17 @@ export const deleteUser = wrapAction({
 });
 
 // ----------------------------------------------------------------------------
-// Reset password — sends a Supabase-hosted reset email to the user
+// Set password directly — owner sets a user's password from the dashboard
 // ----------------------------------------------------------------------------
-export const resetUserPassword = wrapAction({
-  schema: ResetUserPasswordInput,
+export const setUserPassword = wrapAction({
+  schema: SetUserPasswordInput,
   roles: ["owner"],
-  handler: async (input): Promise<{ sent: true }> => {
+  handler: async (input): Promise<{ updated: true }> => {
     const admin = createAdminClient();
-    const { data: { user }, error: getErr } = await admin.auth.admin.getUserById(input.id);
-    if (getErr) throw getErr;
-    if (!user?.email) throw new Error("User has no email on file");
-
-    // Use the public (non-admin) API to generate the recovery email — the
-    // admin API's generateLink also works but requires a more complex flow.
-    const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/auth/reset-password`;
-    const { error } = await admin.auth.resetPasswordForEmail(user.email, { redirectTo });
+    const { error } = await admin.auth.admin.updateUserById(input.id, {
+      password: input.password,
+    });
     if (error) throw error;
-    return { sent: true };
+    return { updated: true };
   },
 });

@@ -75,6 +75,7 @@ export interface ExpenseSubcategory {
 
 export interface Customer {
   id: string;
+  code: string | null;
   billing_name: string;
   contact_no: string | null;
   email: string | null;
@@ -90,6 +91,7 @@ export interface Customer {
 
 export interface Vendor {
   id: string;
+  code: string | null;
   name: string;
   contact_no: string | null;
   email: string | null;
@@ -198,6 +200,7 @@ export type StatutoryRateType =
 
 export interface Employee {
   id: string;
+  code: string | null;
   full_name: string;
   sin_last4: string | null;
   hire_date: string | null;
@@ -414,4 +417,22 @@ export interface EngineFilter {
   engine_type_id: string;
   part_id: string;
   quantity: number;
+}
+
+export interface PartCategory {
+  id: string;
+  name: string;
+  sort_order: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PartBrand {
+  id: string;
+  name: string;
+  sort_order: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
 }

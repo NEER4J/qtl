@@ -27,13 +27,14 @@ import {
 import { EmptyDropdownHint } from "@/components/help/empty-state";
 import { InfoTip } from "@/components/help/info-tip";
 import { createSalesJob, updateSalesJob } from "@/lib/actions/sales";
+import { createCustomer, getCustomer, updateCustomer } from "@/lib/actions/customers";
 import { SalesJobInput } from "@/lib/schemas/sales";
 import type { Customer, Location, PaymentMode, ServiceType } from "@/lib/db/types";
 import { todayISO } from "@/lib/utils/format";
 
 import { CustomerComboBox } from "./customer-combobox";
+import { PlateComboBox } from "./plate-combobox";
 import { PreviousPendingAlert } from "./previous-pending-alert";
-import { CreateCustomerDialog } from "./create-customer-dialog";
 
 const PAYMENT_MODES: { value: PaymentMode; label: string }[] = [
   { value: "cash", label: "Cash" },
@@ -93,8 +94,8 @@ export function SalesJobForm({
 }: SalesJobFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
-  const [createCustomerName, setCreateCustomerName] = useState("");
+  const [addingNewCustomer, setAddingNewCustomer] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const defaults: FormValues = {
     location_id: lockedLocationId ?? initial?.location_id ?? locations[0]?.id ?? "",
@@ -147,43 +148,136 @@ export function SalesJobForm({
   // --------------------------------------------------------------------------
   const customerId = useWatch({ control: form.control, name: "customer_id" });
 
+  // Edit mode — hydrate selectedCustomer from the existing customer_id so the
+  // read-only card and plate combobox have full data.
+  useEffect(() => {
+    if (mode === "edit" && initial?.customer_id && !selectedCustomer) {
+      (async () => {
+        const c = await getCustomer(initial.customer_id!);
+        if (c) setSelectedCustomer(c);
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const applyCustomer = (c: Customer) => {
+    setSelectedCustomer(c);
+    setAddingNewCustomer(false);
     form.setValue("customer_id", c.id);
     form.setValue("billing_name", c.billing_name);
-    if (c.license_plates?.length) {
-      form.setValue("license_plate", c.license_plates[0]);
-    }
-    if (c.contact_no) form.setValue("contact_no", c.contact_no);
-    if (c.email) form.setValue("email", c.email);
+    form.setValue(
+      "license_plate",
+      c.license_plates?.length ? c.license_plates[0] : "",
+    );
+    form.setValue("contact_no", c.contact_no ?? "");
+    form.setValue("email", c.email ?? "");
+  };
+
+  const clearCustomer = () => {
+    setSelectedCustomer(null);
+    setAddingNewCustomer(false);
+    form.setValue("customer_id", null);
+    form.setValue("billing_name", "");
+    form.setValue("license_plate", "");
+    form.setValue("contact_no", "");
+    form.setValue("email", "");
+  };
+
+  const startAddingNewCustomer = (name: string) => {
+    setSelectedCustomer(null);
+    setAddingNewCustomer(true);
+    form.setValue("customer_id", null);
+    form.setValue("billing_name", name);
+    form.setValue("license_plate", "");
+    form.setValue("contact_no", "");
+    form.setValue("email", "");
   };
 
   // --------------------------------------------------------------------------
   // Submit
   // --------------------------------------------------------------------------
   const onSubmit = form.handleSubmit((values) => {
-    const payload = {
-      ...values,
-      bay_no: values.bay_no === "" ? null : Number(values.bay_no),
-      odometer: values.odometer === "" ? null : Number(values.odometer),
-      sub_total: Number(values.sub_total || 0),
-      hst: Number(values.hst || 0),
-      total: Number(values.total || 0),
-      paid_amount: Number(values.paid_amount || 0),
-      payment_mode: values.payment_mode === "" ? null : values.payment_mode,
-      start_time: values.start_time || null,
-      end_time: values.end_time || null,
-    };
-
-    const parsed = SalesJobInput.safeParse(payload);
-    if (!parsed.success) {
-      for (const issue of parsed.error.issues) {
-        const path = issue.path.join(".");
-        form.setError(path as keyof FormValues, { message: issue.message });
-      }
+    if (addingNewCustomer && !values.billing_name.trim()) {
+      form.setError("billing_name", { message: "Billing name is required" });
       return;
     }
 
     startTransition(async () => {
+      let customerIdToUse = values.customer_id;
+      const platePicked = (values.license_plate || "").trim().toUpperCase();
+
+      // Step 1 — create the customer first if we're adding new.
+      if (addingNewCustomer) {
+        const custRes = await createCustomer({
+          billing_name: values.billing_name,
+          contact_no: values.contact_no || null,
+          email: values.email || null,
+          license_plates: platePicked ? [platePicked] : [],
+          home_location_id: null,
+          notes: null,
+        });
+        if (!custRes.ok) {
+          toast.error(`Couldn't create customer: ${custRes.error}`);
+          if (custRes.fieldErrors) {
+            for (const [k, v] of Object.entries(custRes.fieldErrors)) {
+              form.setError(k as keyof FormValues, { message: v[0] });
+            }
+          }
+          return;
+        }
+        customerIdToUse = custRes.data.id;
+        setSelectedCustomer(custRes.data);
+        setAddingNewCustomer(false);
+        form.setValue("customer_id", custRes.data.id);
+      } else if (
+        selectedCustomer &&
+        platePicked &&
+        !(selectedCustomer.license_plates ?? []).includes(platePicked)
+      ) {
+        // Step 1b — append a brand-new plate to an existing customer so next
+        // time it shows up in the plate combobox.
+        const existingPlates = selectedCustomer.license_plates ?? [];
+        const updRes = await updateCustomer({
+          id: selectedCustomer.id,
+          billing_name: selectedCustomer.billing_name,
+          contact_no: selectedCustomer.contact_no,
+          email: selectedCustomer.email,
+          license_plates: [...existingPlates, platePicked],
+          home_location_id: selectedCustomer.home_location_id,
+          notes: selectedCustomer.notes,
+        });
+        if (!updRes.ok) {
+          toast.error(`Couldn't save new plate: ${updRes.error}`);
+          return;
+        }
+        setSelectedCustomer(updRes.data);
+      }
+
+      // Step 2 — validate and submit the sales-job with the (possibly
+      // just-created) customer id.
+      const payload = {
+        ...values,
+        customer_id: customerIdToUse,
+        bay_no: values.bay_no === "" ? null : Number(values.bay_no),
+        odometer: values.odometer === "" ? null : Number(values.odometer),
+        sub_total: Number(values.sub_total || 0),
+        hst: Number(values.hst || 0),
+        total: Number(values.total || 0),
+        paid_amount: Number(values.paid_amount || 0),
+        payment_mode: values.payment_mode === "" ? null : values.payment_mode,
+        start_time: values.start_time || null,
+        end_time: values.end_time || null,
+      };
+
+      const parsed = SalesJobInput.safeParse(payload);
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          const path = issue.path.join(".");
+          form.setError(path as keyof FormValues, { message: issue.message });
+        }
+        return;
+      }
+
       const res =
         mode === "create"
           ? await createSalesJob(parsed.data)
@@ -220,90 +314,162 @@ export function SalesJobForm({
               Customer
             </h2>
 
-            <FormField
-              control={form.control}
-              name="customer_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Billing name</FormLabel>
-                  <FormControl>
-                    <CustomerComboBox
-                      value={field.value}
-                      billingName={form.getValues("billing_name")}
-                      onChange={(id) => field.onChange(id)}
-                      onSelectCustomer={applyCustomer}
-                      onCreateNew={(name) => {
-                        setCreateCustomerName(name);
-                        form.setValue("billing_name", name);
-                        setCreateCustomerOpen(true);
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <PreviousPendingAlert customerId={customerId ?? null} />
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Mode 1 — picker (no customer chosen yet, not adding new) */}
+            {!selectedCustomer && !addingNewCustomer && (
               <FormField
                 control={form.control}
-                name="billing_name"
+                name="customer_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Display name</FormLabel>
+                    <FormLabel>Find or add a customer</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="As shown on invoice" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="license_plate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>License plate</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        className="font-mono uppercase"
-                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                      <CustomerComboBox
+                        value={field.value}
+                        billingName={form.getValues("billing_name")}
+                        onChange={(id) => field.onChange(id)}
+                        onSelectCustomer={applyCustomer}
+                        onCreateNew={startAddingNewCustomer}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="contact_no"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Contact</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input type="email" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            )}
+
+            {/* Mode 2 — existing customer selected */}
+            {selectedCustomer && !addingNewCustomer && (
+              <div className="space-y-4">
+                <div className="rounded-md bg-muted/40 border border-dashed px-3 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{selectedCustomer.billing_name}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5 space-x-3">
+                        {selectedCustomer.contact_no && <span>{selectedCustomer.contact_no}</span>}
+                        {selectedCustomer.email && <span>{selectedCustomer.email}</span>}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <a
+                        href={`/customers/${selectedCustomer.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-muted-foreground hover:text-foreground underline"
+                      >
+                        Edit
+                      </a>
+                      <button
+                        type="button"
+                        onClick={clearCustomer}
+                        className="text-xs text-muted-foreground hover:text-foreground underline"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <PreviousPendingAlert customerId={customerId ?? null} />
+
+                <FormField
+                  control={form.control}
+                  name="license_plate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>License plate</FormLabel>
+                      <FormControl>
+                        <PlateComboBox
+                          value={field.value}
+                          plates={selectedCustomer.license_plates ?? []}
+                          onChange={(plate) => field.onChange(plate)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+
+            {/* Mode 3 — adding new customer inline */}
+            {addingNewCustomer && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    Enter the new customer&apos;s details.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={clearCustomer}
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                  >
+                    Pick existing instead
+                  </button>
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="billing_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Billing name *</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Acme Trucking Ltd." />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="contact_no"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Contact</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="(226) 555-0100" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input type="email" {...field} placeholder="billing@acme.ca" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="license_plate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>License plate</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          className="font-mono uppercase max-w-xs"
+                          placeholder="ABC 1234"
+                          onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
           </section>
 
           {/* ----------------------------------------------------------------
@@ -372,11 +538,11 @@ export function SalesJobForm({
                     <FormLabel className="flex items-center gap-1">
                       Invoice #
                       <InfoTip>
-                        Whatever you write on the paper invoice. It has to be unique within this shop — you can&apos;t reuse an invoice number you&apos;ve used before at the same location.
+                        Whatever you write on the paper invoice. It has to be unique within this shop — you can&apos;t reuse an invoice number you&apos;ve used before at the same location. Leave blank to auto-generate (INV-000001).
                       </InfoTip>
                     </FormLabel>
                     <FormControl>
-                      <Input {...field} className="font-mono" />
+                      <Input {...field} placeholder="Auto-generated if blank" className="font-mono" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -641,17 +807,6 @@ export function SalesJobForm({
           </div>
         </form>
       </Form>
-
-      <CreateCustomerDialog
-        open={createCustomerOpen}
-        onOpenChange={setCreateCustomerOpen}
-        defaultName={createCustomerName}
-        defaultPlate={form.getValues("license_plate")}
-        onCreated={(c) => {
-          applyCustomer(c);
-          setCreateCustomerOpen(false);
-        }}
-      />
     </>
   );
 }

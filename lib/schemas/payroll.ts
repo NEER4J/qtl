@@ -6,6 +6,7 @@ import { moneySchema, paymentModeSchema } from "@/lib/schemas/common";
 // ----------------------------------------------------------------------------
 
 export const EmployeeInput = z.object({
+  code: z.string().trim().max(40).nullable().optional().or(z.literal("")),
   full_name: z.string().trim().min(1, "Name is required").max(120),
   sin_last4: z.string().trim().length(4).regex(/^\d{4}$/, "Must be 4 digits").nullable().optional().or(z.literal("")),
   hire_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().or(z.literal("")),

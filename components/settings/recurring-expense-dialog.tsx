@@ -175,7 +175,17 @@ export function RecurringExpenseDialog({ locations, categories, vendors, existin
                 name="category_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Category</FormLabel>
+                    <div className="flex items-center justify-between">
+                      <FormLabel>Category</FormLabel>
+                      <a
+                        href="/settings/categories"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-muted-foreground hover:text-foreground underline"
+                      >
+                        Manage
+                      </a>
+                    </div>
                     {categories.length === 0 ? (
                       <EmptyDropdownHint
                         message="No expense categories yet."

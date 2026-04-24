@@ -1,8 +1,42 @@
 "use server";
 
+import { z } from "zod";
+import { revalidatePath } from "next/cache";
+
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/require";
-import type { EngineType, OilType, Part, ServiceCost, VolumeTier } from "@/lib/db/types";
+import { wrapAction } from "@/lib/actions/_utils";
+import type {
+  EngineFilter,
+  EngineType,
+  OilType,
+  Part,
+  PartBrand,
+  PartCategory,
+  ServiceCost,
+  StatutoryRate,
+  VolumeTier,
+} from "@/lib/db/types";
+import {
+  CreateEngineTypeInput,
+  CreateOilTypeInput,
+  CreatePartBrandInput,
+  CreatePartCategoryInput,
+  CreatePartInput,
+  CreateServiceCostInput,
+  CreateVolumeTierInput,
+  DeleteEngineFilterInput,
+  DeleteVolumeTierInput,
+  ToggleActiveInput,
+  UpdateEngineTypeInput,
+  UpdateOilTypeInput,
+  UpdatePartBrandInput,
+  UpdatePartCategoryInput,
+  UpdatePartInput,
+  UpdateServiceCostInput,
+  UpdateVolumeTierInput,
+  UpsertEngineFilterInput,
+} from "@/lib/schemas/pricing";
 
 // ============================================================================
 // Read-only catalog queries — RLS already allows SELECT to all authenticated.
@@ -148,10 +182,6 @@ export async function getOilChangeGrid(): Promise<{
 // ============================================================================
 // Statutory rate editor (Phase 4 — federal rate annual update)
 // ============================================================================
-import { wrapAction } from "@/lib/actions/_utils";
-import { z } from "zod";
-import { revalidatePath } from "next/cache";
-import type { StatutoryRate } from "@/lib/db/types";
 
 const StatutoryRateInput = z.object({
   year: z.coerce.number().int().min(2020).max(2100),
@@ -187,3 +217,723 @@ export async function listStatutoryRates(year?: number): Promise<StatutoryRate[]
   if (error) throw error;
   return (data ?? []) as StatutoryRate[];
 }
+
+// ============================================================================
+// Admin read helpers — unlike listOilTypes/listEngineTypes/listParts above,
+// these return BOTH active and inactive rows so the admin tables can show
+// deactivated entries with a toggle to re-activate them.
+// ============================================================================
+
+export async function listAllOilTypes(): Promise<OilType[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("oil_types")
+    .select("*")
+    .order("sort_order")
+    .order("name");
+  if (error) throw error;
+  return (data ?? []) as OilType[];
+}
+
+export async function listAllEngineTypes(): Promise<EngineType[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("engine_types")
+    .select("*")
+    .order("manufacturer")
+    .order("model");
+  if (error) throw error;
+  return (data ?? []) as EngineType[];
+}
+
+export async function listAllServiceCosts(): Promise<ServiceCost[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("service_costs")
+    .select("*")
+    .order("name");
+  if (error) throw error;
+  return (data ?? []) as ServiceCost[];
+}
+
+export interface AdminPartRow extends Part {
+  service_cost_name: string | null;
+}
+
+export async function listAllParts(filter?: {
+  category?: string;
+  brand?: string;
+  q?: string;
+}): Promise<AdminPartRow[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("parts")
+    .select("*, service_costs:service_cost_id(name)")
+    .order("category")
+    .order("brand")
+    .order("part_number")
+    .limit(2000);
+
+  if (filter?.category) query = query.eq("category", filter.category);
+  if (filter?.brand) query = query.eq("brand", filter.brand);
+  if (filter?.q) {
+    const term = `%${filter.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+    query = query.or(`part_number.ilike.${term},description.ilike.${term}`);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  type Row = Part & { service_costs: { name: string } | null };
+  return ((data ?? []) as unknown as Row[]).map((r) => ({
+    ...r,
+    service_cost_name: r.service_costs?.name ?? null,
+  }));
+}
+
+/**
+ * Active category/brand names, for dropdown suggestions in the Part form.
+ * Read from the managed `part_categories` / `part_brands` tables.
+ */
+export async function listPartCategories(): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("part_categories")
+    .select("name")
+    .eq("active", true)
+    .order("sort_order")
+    .order("name");
+  if (error) throw error;
+  return ((data ?? []) as { name: string }[]).map((r) => r.name);
+}
+
+export async function listPartBrands(): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("part_brands")
+    .select("name")
+    .eq("active", true)
+    .order("sort_order")
+    .order("name");
+  if (error) throw error;
+  return ((data ?? []) as { name: string }[]).map((r) => r.name);
+}
+
+/**
+ * Full rows (active + inactive) for the admin pages.
+ */
+export async function listAllPartCategories(): Promise<PartCategory[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("part_categories")
+    .select("*")
+    .order("sort_order")
+    .order("name");
+  if (error) throw error;
+  return (data ?? []) as PartCategory[];
+}
+
+export async function listAllPartBrands(): Promise<PartBrand[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("part_brands")
+    .select("*")
+    .order("sort_order")
+    .order("name");
+  if (error) throw error;
+  return (data ?? []) as PartBrand[];
+}
+
+export async function listPartsForPicker(q?: string): Promise<Part[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("parts")
+    .select("*")
+    .eq("active", true)
+    .order("brand")
+    .order("part_number")
+    .limit(50);
+  if (q && q.trim()) {
+    const term = `%${q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+    query = query.or(`part_number.ilike.${term},description.ilike.${term},brand.ilike.${term}`);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as Part[];
+}
+
+export interface EngineFilterRow extends EngineFilter {
+  part: Part;
+}
+
+export interface EngineTypeDetail {
+  engine: EngineType;
+  filters: EngineFilterRow[];
+}
+
+export async function getEngineTypeDetail(id: string): Promise<EngineTypeDetail | null> {
+  const supabase = await createClient();
+  const { data: engine, error: eErr } = await supabase
+    .from("engine_types")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (eErr) throw eErr;
+  if (!engine) return null;
+
+  const { data: filters, error: fErr } = await supabase
+    .from("engine_filters")
+    .select("*, part:part_id(*)")
+    .eq("engine_type_id", id)
+    .order("id");
+  if (fErr) throw fErr;
+
+  type Row = EngineFilter & { part: Part };
+  const rows = ((filters ?? []) as unknown as Row[]).map((r) => ({
+    ...r,
+    part: r.part,
+  }));
+
+  return { engine: engine as EngineType, filters: rows };
+}
+
+// ============================================================================
+// Shared revalidate helper — every pricing write can change the oil-change
+// grid, the filter list, the staff catalogue page, and the admin pages.
+// ============================================================================
+function revalidatePricing(entity?: string) {
+  revalidatePath("/pricing");
+  revalidatePath("/pricing/filters");
+  revalidatePath("/pricing/oil-grid");
+  revalidatePath("/settings/pricing");
+  if (entity) revalidatePath(`/settings/pricing/${entity}`);
+}
+
+// ============================================================================
+// oil_types — create / update / toggle active
+// ============================================================================
+
+export const createOilType = wrapAction({
+  schema: CreateOilTypeInput,
+  roles: ["owner"],
+  handler: async (input): Promise<OilType> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("oil_types")
+      .insert(input)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("oil-types");
+    return data as OilType;
+  },
+});
+
+export const updateOilType = wrapAction({
+  schema: UpdateOilTypeInput,
+  roles: ["owner"],
+  handler: async ({ id, ...fields }): Promise<OilType> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("oil_types")
+      .update(fields)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("oil-types");
+    return data as OilType;
+  },
+});
+
+export const toggleOilTypeActive = wrapAction({
+  schema: ToggleActiveInput,
+  roles: ["owner"],
+  handler: async (input): Promise<OilType> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("oil_types")
+      .update({ active: input.active })
+      .eq("id", input.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("oil-types");
+    return data as OilType;
+  },
+});
+
+// ============================================================================
+// engine_types — create / update / toggle active
+// ============================================================================
+
+export const createEngineType = wrapAction({
+  schema: CreateEngineTypeInput,
+  roles: ["owner"],
+  handler: async (input): Promise<EngineType> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("engine_types")
+      .insert(input)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("engine-types");
+    return data as EngineType;
+  },
+});
+
+export const updateEngineType = wrapAction({
+  schema: UpdateEngineTypeInput,
+  roles: ["owner"],
+  handler: async ({ id, ...fields }): Promise<EngineType> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("engine_types")
+      .update(fields)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("engine-types");
+    return data as EngineType;
+  },
+});
+
+export const toggleEngineTypeActive = wrapAction({
+  schema: ToggleActiveInput,
+  roles: ["owner"],
+  handler: async (input): Promise<EngineType> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("engine_types")
+      .update({ active: input.active })
+      .eq("id", input.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("engine-types");
+    return data as EngineType;
+  },
+});
+
+// ============================================================================
+// parts — create / update / toggle active
+// ============================================================================
+
+/**
+ * Side-effect: if the part references a category/brand name that isn't yet in
+ * the reference tables, upsert it so the dropdown picks it up next time.
+ * Runs after the main insert/update so a blocked write doesn't leave orphan
+ * reference rows.
+ */
+async function syncCategoryBrandRefs(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  category: string,
+  brand: string,
+) {
+  const cat = category.trim();
+  const br = brand.trim();
+  if (cat) {
+    const { error } = await supabase
+      .from("part_categories")
+      .upsert({ name: cat }, { onConflict: "name", ignoreDuplicates: true });
+    if (error) console.error("[syncCategoryBrandRefs] category", error);
+  }
+  if (br) {
+    const { error } = await supabase
+      .from("part_brands")
+      .upsert({ name: br }, { onConflict: "name", ignoreDuplicates: true });
+    if (error) console.error("[syncCategoryBrandRefs] brand", error);
+  }
+}
+
+export const createPart = wrapAction({
+  schema: CreatePartInput,
+  roles: ["owner"],
+  handler: async (input): Promise<Part> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("parts")
+      .insert(input)
+      .select("*")
+      .single();
+    if (error) throw error;
+    await syncCategoryBrandRefs(supabase, input.category, input.brand);
+    revalidatePricing("parts");
+    revalidatePath("/settings/pricing/categories");
+    revalidatePath("/settings/pricing/brands");
+    return data as Part;
+  },
+});
+
+export const updatePart = wrapAction({
+  schema: UpdatePartInput,
+  roles: ["owner"],
+  handler: async ({ id, ...fields }): Promise<Part> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("parts")
+      .update(fields)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    await syncCategoryBrandRefs(supabase, fields.category, fields.brand);
+    revalidatePricing("parts");
+    revalidatePath("/settings/pricing/categories");
+    revalidatePath("/settings/pricing/brands");
+    return data as Part;
+  },
+});
+
+export const togglePartActive = wrapAction({
+  schema: ToggleActiveInput,
+  roles: ["owner"],
+  handler: async (input): Promise<Part> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("parts")
+      .update({ active: input.active })
+      .eq("id", input.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("parts");
+    return data as Part;
+  },
+});
+
+// ============================================================================
+// service_costs — create / update / toggle active
+// ============================================================================
+
+export const createServiceCost = wrapAction({
+  schema: CreateServiceCostInput,
+  roles: ["owner"],
+  handler: async (input): Promise<ServiceCost> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("service_costs")
+      .insert(input)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("service-costs");
+    return data as ServiceCost;
+  },
+});
+
+export const updateServiceCost = wrapAction({
+  schema: UpdateServiceCostInput,
+  roles: ["owner"],
+  handler: async ({ id, ...fields }): Promise<ServiceCost> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("service_costs")
+      .update(fields)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("service-costs");
+    return data as ServiceCost;
+  },
+});
+
+export const toggleServiceCostActive = wrapAction({
+  schema: ToggleActiveInput,
+  roles: ["owner"],
+  handler: async (input): Promise<ServiceCost> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("service_costs")
+      .update({ active: input.active })
+      .eq("id", input.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("service-costs");
+    return data as ServiceCost;
+  },
+});
+
+// ============================================================================
+// volume_tiers — create / update / delete (no active flag on this table;
+// rows are cheap and FK-owned by oil_types via cascade).
+// ============================================================================
+
+export const createVolumeTier = wrapAction({
+  schema: CreateVolumeTierInput,
+  roles: ["owner"],
+  handler: async (input): Promise<VolumeTier> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("volume_tiers")
+      .insert(input)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("volume-tiers");
+    return data as VolumeTier;
+  },
+});
+
+export const updateVolumeTier = wrapAction({
+  schema: UpdateVolumeTierInput,
+  roles: ["owner"],
+  handler: async ({ id, ...fields }): Promise<VolumeTier> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("volume_tiers")
+      .update(fields)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("volume-tiers");
+    return data as VolumeTier;
+  },
+});
+
+export const deleteVolumeTier = wrapAction({
+  schema: DeleteVolumeTierInput,
+  roles: ["owner"],
+  handler: async (input): Promise<{ id: string }> => {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("volume_tiers")
+      .delete()
+      .eq("id", input.id);
+    if (error) throw error;
+    revalidatePricing("volume-tiers");
+    return { id: input.id };
+  },
+});
+
+// ============================================================================
+// engine_filters — upsert (by engine + part unique) and delete
+// ============================================================================
+
+export const upsertEngineFilter = wrapAction({
+  schema: UpsertEngineFilterInput,
+  roles: ["owner"],
+  handler: async (input): Promise<EngineFilter> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("engine_filters")
+      .upsert(input, { onConflict: "engine_type_id,part_id" })
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("engine-types");
+    return data as EngineFilter;
+  },
+});
+
+export const deleteEngineFilter = wrapAction({
+  schema: DeleteEngineFilterInput,
+  roles: ["owner"],
+  handler: async (input): Promise<{ id: string }> => {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("engine_filters")
+      .delete()
+      .eq("id", input.id);
+    if (error) throw error;
+    revalidatePricing("engine-types");
+    return { id: input.id };
+  },
+});
+
+// Search action used by the engine-detail part picker.
+export const searchPartsForEngine = wrapAction({
+  schema: z.object({ q: z.string().trim().max(100).optional() }),
+  roles: ["owner"],
+  handler: async (input): Promise<Part[]> => {
+    return listPartsForPicker(input.q);
+  },
+});
+
+// ============================================================================
+// part_categories — create / update (with cascade rename on parts) / toggle
+// ============================================================================
+
+export const createPartCategory = wrapAction({
+  schema: CreatePartCategoryInput,
+  roles: ["owner"],
+  handler: async (input): Promise<PartCategory> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("part_categories")
+      .insert({ ...input, name: input.name.trim() })
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("categories");
+    revalidatePath("/settings/pricing/parts");
+    return data as PartCategory;
+  },
+});
+
+export const updatePartCategory = wrapAction({
+  schema: UpdatePartCategoryInput,
+  roles: ["owner"],
+  handler: async ({ id, ...fields }): Promise<PartCategory> => {
+    const supabase = await createClient();
+    // Fetch the existing name so we can cascade the rename to parts.category.
+    const { data: prev, error: prevErr } = await supabase
+      .from("part_categories")
+      .select("name")
+      .eq("id", id)
+      .single();
+    if (prevErr) throw prevErr;
+
+    const nextName = fields.name.trim();
+    const { data, error } = await supabase
+      .from("part_categories")
+      .update({ ...fields, name: nextName })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+
+    if (prev && prev.name !== nextName) {
+      const { error: cascadeErr } = await supabase
+        .from("parts")
+        .update({ category: nextName })
+        .eq("category", prev.name);
+      if (cascadeErr) throw cascadeErr;
+    }
+
+    revalidatePricing("categories");
+    revalidatePath("/settings/pricing/parts");
+    return data as PartCategory;
+  },
+});
+
+export const togglePartCategoryActive = wrapAction({
+  schema: ToggleActiveInput,
+  roles: ["owner"],
+  handler: async (input): Promise<PartCategory> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("part_categories")
+      .update({ active: input.active })
+      .eq("id", input.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("categories");
+    revalidatePath("/settings/pricing/parts");
+    return data as PartCategory;
+  },
+});
+
+// ============================================================================
+// part_brands — create / update (with cascade rename on parts) / toggle
+// ============================================================================
+
+export const createPartBrand = wrapAction({
+  schema: CreatePartBrandInput,
+  roles: ["owner"],
+  handler: async (input): Promise<PartBrand> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("part_brands")
+      .insert({ ...input, name: input.name.trim() })
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("brands");
+    revalidatePath("/settings/pricing/parts");
+    return data as PartBrand;
+  },
+});
+
+export const updatePartBrand = wrapAction({
+  schema: UpdatePartBrandInput,
+  roles: ["owner"],
+  handler: async ({ id, ...fields }): Promise<PartBrand> => {
+    const supabase = await createClient();
+    const { data: prev, error: prevErr } = await supabase
+      .from("part_brands")
+      .select("name")
+      .eq("id", id)
+      .single();
+    if (prevErr) throw prevErr;
+
+    const nextName = fields.name.trim();
+    const { data, error } = await supabase
+      .from("part_brands")
+      .update({ ...fields, name: nextName })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+
+    if (prev && prev.name !== nextName) {
+      const { error: cascadeErr } = await supabase
+        .from("parts")
+        .update({ brand: nextName })
+        .eq("brand", prev.name);
+      if (cascadeErr) throw cascadeErr;
+    }
+
+    revalidatePricing("brands");
+    revalidatePath("/settings/pricing/parts");
+    return data as PartBrand;
+  },
+});
+
+export const togglePartBrandActive = wrapAction({
+  schema: ToggleActiveInput,
+  roles: ["owner"],
+  handler: async (input): Promise<PartBrand> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("part_brands")
+      .update({ active: input.active })
+      .eq("id", input.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("brands");
+    revalidatePath("/settings/pricing/parts");
+    return data as PartBrand;
+  },
+});
+
+/**
+ * Transparent upsert used when the user types a brand-new category/brand name
+ * in the Part form. Creates the row if missing; does nothing if it already
+ * exists. Returns the canonical name (trimmed).
+ */
+export const ensurePartCategory = wrapAction({
+  schema: z.object({ name: z.string().trim().min(1).max(80) }),
+  roles: ["owner"],
+  handler: async (input): Promise<{ name: string }> => {
+    const supabase = await createClient();
+    const name = input.name.trim();
+    const { error } = await supabase
+      .from("part_categories")
+      .upsert({ name }, { onConflict: "name", ignoreDuplicates: true });
+    if (error) throw error;
+    revalidatePricing("categories");
+    return { name };
+  },
+});
+
+export const ensurePartBrand = wrapAction({
+  schema: z.object({ name: z.string().trim().min(1).max(80) }),
+  roles: ["owner"],
+  handler: async (input): Promise<{ name: string }> => {
+    const supabase = await createClient();
+    const name = input.name.trim();
+    const { error } = await supabase
+      .from("part_brands")
+      .upsert({ name }, { onConflict: "name", ignoreDuplicates: true });
+    if (error) throw error;
+    revalidatePricing("brands");
+    return { name };
+  },
+});

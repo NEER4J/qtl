@@ -36,7 +36,10 @@ import { createCustomer, updateCustomer } from "@/lib/actions/customers";
 import { CreateCustomerInput } from "@/lib/schemas/customers";
 import type { Customer, Location } from "@/lib/db/types";
 
+const ANY_LOCATION = "__any__";
+
 type FormValues = {
+  code: string;
   billing_name: string;
   contact_no: string;
   email: string;
@@ -62,6 +65,7 @@ export function CustomerFormDialog({
 
   const form = useForm<FormValues>({
     defaultValues: {
+      code: "",
       billing_name: "",
       contact_no: "",
       email: "",
@@ -80,6 +84,7 @@ export function CustomerFormDialog({
     if (open) {
       if (mode === "edit" && customer) {
         form.reset({
+          code: customer.code ?? "",
           billing_name: customer.billing_name,
           contact_no: customer.contact_no ?? "",
           email: customer.email ?? "",
@@ -87,16 +92,17 @@ export function CustomerFormDialog({
             customer.license_plates.length > 0
               ? customer.license_plates.map((p) => ({ value: p }))
               : [{ value: "" }],
-          home_location_id: customer.home_location_id ?? "",
+          home_location_id: customer.home_location_id ?? ANY_LOCATION,
           notes: customer.notes ?? "",
         });
       } else {
         form.reset({
+          code: "",
           billing_name: "",
           contact_no: "",
           email: "",
           license_plates: [{ value: "" }],
-          home_location_id: "",
+          home_location_id: ANY_LOCATION,
           notes: "",
         });
       }
@@ -109,11 +115,15 @@ export function CustomerFormDialog({
       .filter(Boolean);
 
     const payload = {
+      code: values.code || null,
       billing_name: values.billing_name,
       contact_no: values.contact_no || null,
       email: values.email || null,
       license_plates: plates,
-      home_location_id: values.home_location_id || null,
+      home_location_id:
+        values.home_location_id && values.home_location_id !== ANY_LOCATION
+          ? values.home_location_id
+          : null,
       notes: values.notes || null,
     };
 
@@ -159,6 +169,19 @@ export function CustomerFormDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={onSubmit} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="code"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Customer code</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Auto-generated if blank" className="font-mono" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="billing_name"
@@ -248,7 +271,7 @@ export function CustomerFormDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Any location</SelectItem>
+                      <SelectItem value={ANY_LOCATION}>Any location</SelectItem>
                       {locations.map((loc) => (
                         <SelectItem key={loc.id} value={loc.id}>
                           {loc.name}

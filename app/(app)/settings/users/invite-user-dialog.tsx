@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -55,6 +55,8 @@ export function InviteUserDialog({
   locations: Location[];
 }) {
   const [isPending, startTransition] = useTransition();
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   const form = useForm<InviteUserInput>({
     resolver: zodResolver(InviteUserInput),
@@ -64,14 +66,27 @@ export function InviteUserDialog({
       role: "staff",
       location_id: null,
       can_enter_expenses: false,
+      password: "",
     },
   });
 
   const role = form.watch("role");
+  const password = form.watch("password") ?? "";
   const showLocation = role === "manager" || role === "staff" || role === "employee";
   const showExpensesFlag = role === "staff";
 
+  const resetState = () => {
+    form.reset();
+    setConfirmPassword("");
+    setConfirmError(null);
+  };
+
   const onSubmit = (values: InviteUserInput) => {
+    if (values.password !== confirmPassword) {
+      setConfirmError("Passwords do not match");
+      return;
+    }
+
     startTransition(async () => {
       const res = await inviteUser(values);
       if (!res.ok) {
@@ -85,21 +100,28 @@ export function InviteUserDialog({
       }
       toast.success(
         res.data.existed
-          ? `${res.data.email} already existed — profile updated`
-          : `Invite sent to ${res.data.email}`,
+          ? `${res.data.email} already existed — password updated`
+          : `${res.data.email} created`,
       );
-      form.reset();
+      resetState();
       onOpenChange(false);
     });
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) resetState();
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Invite a user</DialogTitle>
+          <DialogTitle>Add a user</DialogTitle>
           <DialogDescription>
-            An email invite will be sent. They set their own password via the link.
+            Create the account with a password you set now. The user can sign in
+            immediately.
           </DialogDescription>
         </DialogHeader>
 
@@ -170,7 +192,7 @@ export function InviteUserDialog({
                       <FormLabel>Location</FormLabel>
                       {activeLocations.length === 0 ? (
                         <EmptyDropdownHint
-                          message="No shop locations have been added yet. A Manager, Staff, or Employee must be assigned to a shop before you can invite them."
+                          message="No shop locations have been added yet. A Manager, Staff, or Employee must be assigned to a shop before you can add them."
                           actionLabel="Add a location first"
                           href="/settings/locations"
                         />
@@ -223,17 +245,59 @@ export function InviteUserDialog({
               />
             )}
 
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder="At least 6 characters"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormItem>
+              <FormLabel>Confirm password</FormLabel>
+              <FormControl>
+                <Input
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    if (confirmError) setConfirmError(null);
+                  }}
+                />
+              </FormControl>
+              {confirmError && (
+                <p className="text-sm text-destructive">{confirmError}</p>
+              )}
+              {!confirmError && password && confirmPassword && password !== confirmPassword && (
+                <p className="text-sm text-destructive">Passwords do not match</p>
+              )}
+            </FormItem>
+
             <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onOpenChange(false)}
+                onClick={() => {
+                  resetState();
+                  onOpenChange(false);
+                }}
                 disabled={isPending}
               >
                 Cancel
               </Button>
               <Button type="submit" disabled={isPending}>
-                {isPending ? "Sending invite…" : "Send invite"}
+                {isPending ? "Creating…" : "Create user"}
               </Button>
             </DialogFooter>
           </form>

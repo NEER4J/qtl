@@ -157,7 +157,7 @@ export function PayrollPaymentDialog({ weekId, employees, children }: Props) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Reference / transaction ID</FormLabel>
-                  <FormControl><Input {...field} value={field.value ?? ""} /></FormControl>
+                  <FormControl><Input {...field} value={field.value ?? ""} placeholder="Auto-generated if blank" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}

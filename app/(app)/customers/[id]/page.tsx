@@ -14,10 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatusBadge } from "@/components/sales/status-badge";
-import { requireProfile } from "@/lib/auth/require";
 import { getCustomer, getCustomerSalesHistory } from "@/lib/actions/customers";
-import { listPortalAccessForCustomer } from "@/lib/actions/portal";
-import { PortalAccessManager } from "@/components/portal/portal-access-manager";
 import { PageHelp } from "@/components/help/page-help";
 import { formatDate, formatMoney } from "@/lib/utils/format";
 
@@ -28,15 +25,12 @@ export default async function CustomerDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const profile = await requireProfile();
   const { id } = await params;
-  const [customer, jobs, portalUsers] = await Promise.all([
+  const [customer, jobs] = await Promise.all([
     getCustomer(id),
     getCustomerSalesHistory(id),
-    listPortalAccessForCustomer(id),
   ]);
   if (!customer) notFound();
-  const canManagePortal = profile.role === "owner" || profile.role === "manager";
 
   const totalSpent = jobs.reduce((s, j) => s + j.total, 0);
   const totalOutstanding = jobs.reduce((s, j) => s + j.outstanding, 0);
@@ -72,7 +66,6 @@ export default async function CustomerDetailPage({
         <ul>
           <li><strong>Statement CSV</strong> — download a spreadsheet of every invoice this customer has ever had. Useful for sending to their accounts-payable team.</li>
           <li><strong>Job history</strong> — every job for this customer, with outstanding balances highlighted in red. Click any row to open the invoice.</li>
-          <li><strong>Portal users</strong> — give someone at the trucking company a login so they can sign in and see only their own invoices. You can revoke access at any time.</li>
         </ul>
         <p>Nothing is ever permanently deleted — &quot;Deactivate&quot; just hides the customer; their history stays.</p>
       </PageHelp>
@@ -91,14 +84,6 @@ export default async function CustomerDetailPage({
           <Stat label="Outstanding" value={formatMoney(totalOutstanding)} highlight={totalOutstanding > 0} />
         </div>
       </div>
-
-      {canManagePortal && (
-        <Card>
-          <CardContent className="pt-6">
-            <PortalAccessManager customerId={customer.id} existing={portalUsers} />
-          </CardContent>
-        </Card>
-      )}
 
       <Card>
         <CardHeader>

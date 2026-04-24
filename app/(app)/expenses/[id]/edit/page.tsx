@@ -41,7 +41,7 @@ export default async function EditExpensePage({
   ]);
 
   return (
-    <div className="flex flex-col gap-4 max-w-5xl">
+    <div className="flex flex-col gap-4 max-w-5xl mx-auto">
       <div>
         <Button variant="ghost" size="sm" asChild className="-ml-3">
           <Link href={`/expenses/${exp.id}`}>

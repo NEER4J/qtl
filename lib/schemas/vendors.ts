@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const CreateVendorInput = z.object({
+  code: z.string().trim().max(40).nullable().optional().or(z.literal("")),
   name: z.string().trim().min(1, "Name is required").max(200),
   contact_no: z.string().trim().max(30).optional().nullable().or(z.literal("")),
   email: z

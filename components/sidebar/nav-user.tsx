@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 import { toast } from "sonner";
 import { EllipsisVertical, CircleUser, CreditCard, MessageSquareDot, LogOut, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
 import { getInitials } from "@/lib/utils";
-import { useAuth } from "@/lib/auth/use-auth";
 
 export function NavUser({
   user,
@@ -29,8 +28,7 @@ export function NavUser({
   };
 }) {
   const { isMobile } = useSidebar();
-  const { signOut } = useAuth();
-  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const { theme, setTheme } = useTheme();
 
   const handleThemeToggle = () => {
@@ -38,17 +36,27 @@ export function NavUser({
     setTheme(newTheme);
   };
 
-  const handleSignOut = async () => {
-    const { error } = await signOut();
-    
-    if (error) {
-      toast.error("Failed to sign out", {
-        description: error,
-      });
-    } else {
-      toast.success("Signed out successfully");
-      router.push("/auth/login");
-    }
+  const handleSignOut = () => {
+    startTransition(async () => {
+      try {
+        const res = await fetch("/auth/signout", {
+          method: "POST",
+          redirect: "manual",
+        });
+        // 303 redirects are followed automatically to /auth/login in most
+        // browsers; fall through to a hard redirect either way so the
+        // protected route's cached HTML is discarded.
+        if (res.ok || res.status === 0 || res.type === "opaqueredirect") {
+          window.location.assign("/auth/login");
+          return;
+        }
+        toast.error("Failed to sign out");
+      } catch (err) {
+        toast.error("Failed to sign out", {
+          description: err instanceof Error ? err.message : "Unknown error",
+        });
+      }
+    });
   };
 
   return (
@@ -110,9 +118,12 @@ export function NavUser({
               {theme === "dark" ? "Light Mode" : "Dark Mode"}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut}>
+            <DropdownMenuItem
+              onClick={handleSignOut}
+              disabled={isPending}
+            >
               <LogOut />
-              Log out
+              {isPending ? "Signing out…" : "Log out"}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
