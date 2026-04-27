@@ -294,6 +294,11 @@ export interface ProductsAnalytics {
   by_revenue: { code: string; name: string; total: number }[];
   trend: { month: string; [code: string]: number | string }[];
   by_location: { name: string; code: string; count: number }[];
+  by_oil_grade: { code: string; name: string; count: number; total: number }[];
+  by_engine: { name: string; count: number; total: number }[];
+  by_container: { container: string; count: number; total: number }[];
+  oil_change_linked: number;
+  oil_change_total: number;
 }
 
 export async function getProductsAnalytics(filter: AnalyticsFilter = {}): Promise<ProductsAnalytics> {
@@ -302,7 +307,7 @@ export async function getProductsAnalytics(filter: AnalyticsFilter = {}): Promis
 
   let q = supabase
     .from("sales_jobs")
-    .select("id, job_date, total, service_type_id, location_id, service_types:service_type_id(code, name), locations:location_id(name)")
+    .select("id, job_date, total, service_type_id, location_id, oil_type_id, engine_type_id, oil_container, service_types:service_type_id(code, name), locations:location_id(name), oil_types:oil_type_id(code, name), engine_types:engine_type_id(manufacturer, model)")
     .is("deactivated_at", null)
     .gte("job_date", from)
     .lte("job_date", to);
@@ -310,7 +315,15 @@ export async function getProductsAnalytics(filter: AnalyticsFilter = {}): Promis
 
   const { data, error } = await q;
   if (error) throw error;
-  type Row = { id: string; job_date: string; total: number; service_type_id: string; location_id: string; service_types: { code: string; name: string } | null; locations: { name: string } | null };
+  type Row = {
+    id: string; job_date: string; total: number;
+    service_type_id: string; location_id: string;
+    oil_type_id: string | null; engine_type_id: string | null; oil_container: string | null;
+    service_types: { code: string; name: string } | null;
+    locations: { name: string } | null;
+    oil_types: { code: string; name: string } | null;
+    engine_types: { manufacturer: string; model: string } | null;
+  };
   const rows = (data ?? []) as unknown as Row[];
 
   const countMap: Record<string, { code: string; name: string; count: number; total: number }> = {};
@@ -351,6 +364,40 @@ export async function getProductsAnalytics(filter: AnalyticsFilter = {}): Promis
   }
   const by_location = Object.values(locMap);
 
+  // Catalog-linked aggregations — only oil-change rows with engine + oil filled.
+  const ocRows = rows.filter((r) => r.service_types?.code === "OC");
+  const oilMap: Record<string, { code: string; name: string; count: number; total: number }> = {};
+  const engMap: Record<string, { name: string; count: number; total: number }> = {};
+  const cntMap: Record<string, { container: string; count: number; total: number }> = {};
+  let linked = 0;
+  let linkedTotal = 0;
+  for (const r of ocRows) {
+    if (r.oil_type_id && r.oil_types) {
+      const k = r.oil_type_id;
+      oilMap[k] = oilMap[k] ?? { code: r.oil_types.code, name: r.oil_types.name, count: 0, total: 0 };
+      oilMap[k].count += 1;
+      oilMap[k].total += Number(r.total);
+    }
+    if (r.engine_type_id && r.engine_types) {
+      const name = `${r.engine_types.manufacturer} ${r.engine_types.model}`;
+      engMap[name] = engMap[name] ?? { name, count: 0, total: 0 };
+      engMap[name].count += 1;
+      engMap[name].total += Number(r.total);
+    }
+    if (r.oil_container) {
+      cntMap[r.oil_container] = cntMap[r.oil_container] ?? { container: r.oil_container, count: 0, total: 0 };
+      cntMap[r.oil_container].count += 1;
+      cntMap[r.oil_container].total += Number(r.total);
+    }
+    if (r.engine_type_id && r.oil_type_id) {
+      linked += 1;
+      linkedTotal += Number(r.total);
+    }
+  }
+  const by_oil_grade = Object.values(oilMap).sort((a, b) => b.total - a.total);
+  const by_engine = Object.values(engMap).sort((a, b) => b.count - a.count).slice(0, 12);
+  const by_container = Object.values(cntMap);
+
   return {
     period_label: label,
     total_jobs: rows.length,
@@ -360,6 +407,11 @@ export async function getProductsAnalytics(filter: AnalyticsFilter = {}): Promis
     by_revenue,
     trend,
     by_location,
+    by_oil_grade,
+    by_engine,
+    by_container,
+    oil_change_linked: linked,
+    oil_change_total: ocRows.length,
   };
 }
 

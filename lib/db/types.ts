@@ -111,8 +111,8 @@ export interface SalesJob {
   location_id: string;
   job_date: string;
   bay_no: number | null;
-  upper_deck: string | null;
-  lower_deck: string | null;
+  upper_tech: string | null;
+  lower_tech: string | null;
   invoice_no: string;
   customer_id: string | null;
   billing_name: string;
@@ -133,6 +133,10 @@ export interface SalesJob {
   outstanding: number;
   payment_mode: PaymentMode | null;
   payment_status: PaymentStatus;
+  engine_type_id: string | null;
+  oil_type_id: string | null;
+  oil_container: 'bulk' | 'gallon' | null;
+  auto_priced_at: string | null;
   batch_id: string | null;
   deactivated_at: string | null;
   deactivated_by: string | null;

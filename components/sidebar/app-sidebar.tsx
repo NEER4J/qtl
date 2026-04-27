@@ -36,30 +36,25 @@ export function AppSidebar({
 
   return (
     <Sidebar {...props}>
-      <SidebarHeader className="h-12 border-b border-border p-0">
+      <SidebarHeader className="h-20 border-b border-border p-0">
         <Link
           href="/dashboard"
           className={cn(
-            "flex items-center h-full hover:opacity-80 transition-opacity",
-            isCollapsed ? "justify-center px-2" : "gap-2 px-4"
+            "flex items-center justify-center h-full hover:opacity-80 transition-opacity",
+            isCollapsed ? "px-1" : "px-3"
           )}
         >
           <Image
             src="/logo.png"
             alt={APP_CONFIG.name}
-            width={28}
-            height={28}
-            className="size-7 shrink-0 object-contain"
+            width={160}
+            height={120}
+            className={cn(
+              "object-contain",
+              isCollapsed ? "size-10" : "h-16 w-auto max-w-full"
+            )}
             priority
           />
-          <span
-            className={cn(
-              "text-base font-semibold text-foreground transition-opacity",
-              isCollapsed && "hidden"
-            )}
-          >
-            {APP_CONFIG.name}
-          </span>
         </Link>
       </SidebarHeader>
       <SidebarContent>

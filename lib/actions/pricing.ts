@@ -1017,3 +1017,169 @@ export const ensurePartBrand = wrapAction({
     return { name };
   },
 });
+
+// ============================================================================
+// Price history (audit log for cost / list-price / mhsw / oil cost / labour)
+// ============================================================================
+
+export interface PriceHistoryRow {
+  id: string;
+  entity_type: "part" | "oil_type" | "service_cost";
+  entity_id: string;
+  field: string;
+  old_value: number | null;
+  new_value: number | null;
+  changed_by: string | null;
+  changed_at: string;
+  entity_label: string;
+  changed_by_label: string | null;
+}
+
+export async function listPriceHistory(
+  limit = 200,
+): Promise<PriceHistoryRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("price_history")
+    .select("*")
+    .order("changed_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+
+  const rows = (data ?? []) as Omit<PriceHistoryRow, "entity_label" | "changed_by_label">[];
+  if (rows.length === 0) return [];
+
+  const partIds = rows.filter((r) => r.entity_type === "part").map((r) => r.entity_id);
+  const oilIds = rows.filter((r) => r.entity_type === "oil_type").map((r) => r.entity_id);
+  const svcIds = rows.filter((r) => r.entity_type === "service_cost").map((r) => r.entity_id);
+  const userIds = rows.map((r) => r.changed_by).filter((v): v is string => !!v);
+
+  const [parts, oils, svcs, users] = await Promise.all([
+    partIds.length
+      ? supabase.from("parts").select("id, part_number, brand").in("id", partIds)
+      : Promise.resolve({ data: [] }),
+    oilIds.length
+      ? supabase.from("oil_types").select("id, code, name").in("id", oilIds)
+      : Promise.resolve({ data: [] }),
+    svcIds.length
+      ? supabase.from("service_costs").select("id, code, name").in("id", svcIds)
+      : Promise.resolve({ data: [] }),
+    userIds.length
+      ? supabase.from("profiles").select("id, full_name, email").in("id", userIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const partMap = new Map(((parts.data ?? []) as { id: string; part_number: string; brand: string }[]).map((p) => [p.id, `${p.brand} ${p.part_number}`]));
+  const oilMap = new Map(((oils.data ?? []) as { id: string; code: string; name: string }[]).map((o) => [o.id, `${o.code} — ${o.name}`]));
+  const svcMap = new Map(((svcs.data ?? []) as { id: string; code: string; name: string }[]).map((s) => [s.id, `${s.code} — ${s.name}`]));
+  const userMap = new Map(((users.data ?? []) as { id: string; full_name: string | null; email: string }[]).map((u) => [u.id, u.full_name ?? u.email]));
+
+  return rows.map((r) => ({
+    ...r,
+    entity_label:
+      r.entity_type === "part"
+        ? partMap.get(r.entity_id) ?? "(deleted part)"
+        : r.entity_type === "oil_type"
+        ? oilMap.get(r.entity_id) ?? "(deleted oil type)"
+        : svcMap.get(r.entity_id) ?? "(deleted service cost)",
+    changed_by_label: r.changed_by ? userMap.get(r.changed_by) ?? null : null,
+  }));
+}
+
+// ============================================================================
+// Min-margin alerts — list active parts whose margin is below the configured
+// app_settings.min_margin_alert_pct threshold. Margin = list_price - cost - mhsw,
+// expressed as a fraction of list_price.
+// ============================================================================
+
+export interface LowMarginPart {
+  id: string;
+  part_number: string;
+  brand: string;
+  category: string;
+  cost: number;
+  list_price: number;
+  mhsw_fee: number;
+  margin_amount: number;
+  margin_pct: number;
+}
+
+export async function listLowMarginParts(): Promise<{
+  threshold_pct: number;
+  parts: LowMarginPart[];
+}> {
+  const supabase = await createClient();
+  const [{ data: settings, error: setErr }, { data: parts, error: partsErr }] = await Promise.all([
+    supabase.from("app_settings").select("min_margin_alert_pct").eq("id", 1).single(),
+    supabase.from("parts").select("id, part_number, brand, category, cost, list_price, mhsw_fee").eq("active", true),
+  ]);
+  if (setErr) throw setErr;
+  if (partsErr) throw partsErr;
+
+  const thresholdFrac = Number((settings as { min_margin_alert_pct: number } | null)?.min_margin_alert_pct ?? 0);
+  if (thresholdFrac <= 0) return { threshold_pct: 0, parts: [] };
+
+  const list = (parts ?? []) as { id: string; part_number: string; brand: string; category: string; cost: number; list_price: number; mhsw_fee: number }[];
+  const flagged: LowMarginPart[] = [];
+  for (const p of list) {
+    const lp = Number(p.list_price);
+    if (lp <= 0) continue;
+    const marginAmount = lp - Number(p.cost) - Number(p.mhsw_fee);
+    const marginFrac = marginAmount / lp;
+    if (marginFrac < thresholdFrac) {
+      flagged.push({
+        id: p.id,
+        part_number: p.part_number,
+        brand: p.brand,
+        category: p.category,
+        cost: Number(p.cost),
+        list_price: lp,
+        mhsw_fee: Number(p.mhsw_fee),
+        margin_amount: Math.round(marginAmount * 100) / 100,
+        margin_pct: Math.round(marginFrac * 1000) / 10,
+      });
+    }
+  }
+  flagged.sort((a, b) => a.margin_pct - b.margin_pct);
+  return { threshold_pct: Math.round(thresholdFrac * 1000) / 10, parts: flagged };
+}
+
+// ============================================================================
+// Sales-form auto-fill — wrapper around oil_change_price() RPC.
+// ============================================================================
+
+export const lookupOilChangePrice = wrapAction({
+  schema: z.object({
+    engine_type_id: z.string().uuid(),
+    oil_type_id: z.string().uuid(),
+    oil_container: z.enum(["bulk", "gallon"]),
+  }),
+  roles: ["owner", "manager", "staff"],
+  handler: async (input): Promise<{ sub_total: number | null }> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("oil_change_price", {
+      p_engine_id: input.engine_type_id,
+      p_oil_type_id: input.oil_type_id,
+      p_container: input.oil_container,
+    });
+    if (error) throw error;
+    return { sub_total: data == null ? null : Number(data) };
+  },
+});
+
+export const updateMinMarginAlertPct = wrapAction({
+  schema: z.object({ pct: z.coerce.number().min(0).max(100) }),
+  roles: ["owner"],
+  handler: async (input): Promise<{ pct: number }> => {
+    const supabase = await createClient();
+    const frac = Math.round((input.pct / 100) * 10000) / 10000;
+    const { error } = await supabase
+      .from("app_settings")
+      .update({ min_margin_alert_pct: frac })
+      .eq("id", 1);
+    if (error) throw error;
+    revalidatePath("/settings/pricing");
+    revalidatePath("/analytics/products");
+    return { pct: input.pct };
+  },
+});

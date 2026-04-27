@@ -144,7 +144,7 @@ async function run(ctx: StepContext): Promise<void> {
     const inserted = await sql<{ id: string }[]>`
       insert into public.sales_jobs (
         location_id, job_date,
-        bay_no, upper_deck, lower_deck,
+        bay_no, upper_tech, lower_tech,
         invoice_no, customer_id, billing_name,
         license_plate, contact_no, email, odometer,
         service_type_id, carrier_name, comments,

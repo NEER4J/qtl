@@ -12,18 +12,17 @@ export default function Layout({ children }: Readonly<{ children: ReactNode }>) 
       <div className="grid h-dvh justify-center p-2 lg:grid-cols-2">
         <div className="bg-primary relative order-2 hidden h-full overflow-hidden rounded-3xl lg:flex">
           <div className="relative z-10 flex w-full flex-col">
-            <div className="text-primary-foreground absolute top-10 space-y-2 px-10">
-              <div className="rounded-xl bg-white p-2 inline-block">
+            <div className="text-primary-foreground absolute top-10 space-y-3 px-10">
+              <div className="rounded-2xl bg-white p-4 inline-block">
                 <Image
                   src="/logo.png"
-                  alt={APP_CONFIG.name}
-                  width={72}
-                  height={72}
-                  className="size-16 object-contain"
+                  alt={APP_CONFIG.fullName}
+                  width={220}
+                  height={170}
+                  className="h-32 w-auto object-contain"
                   priority
                 />
               </div>
-              <h1 className="text-2xl font-semibold tracking-tight">{APP_CONFIG.name}</h1>
               <p className="text-primary-foreground/95 text-sm font-medium">{APP_CONFIG.fullName}</p>
               <p className="text-primary-foreground/85 max-w-sm text-sm leading-relaxed">{APP_CONFIG.tagline}</p>
             </div>

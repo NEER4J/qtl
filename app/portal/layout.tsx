@@ -26,17 +26,16 @@ export default async function PortalLayout({ children }: { children: ReactNode }
     <div className="min-h-dvh flex flex-col">
       <header className="border-b bg-card">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link href="/portal/invoices" className="flex items-center gap-2 font-semibold">
+          <Link href="/portal/invoices" className="flex items-center gap-3 font-semibold">
             <Image
               src="/logo.png"
               alt="Quick Truck Lube & Oil"
-              width={32}
-              height={32}
-              className="size-8 object-contain"
+              width={140}
+              height={105}
+              className="h-14 w-auto object-contain"
               priority
             />
-            <span>Quick Truck Lube & Oil</span>
-            <span className="text-muted-foreground text-xs ml-2 hidden sm:inline">Customer Portal</span>
+            <span className="text-muted-foreground text-xs hidden sm:inline">Customer Portal</span>
           </Link>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground hidden sm:inline">{profile.full_name}</span>

@@ -19,6 +19,7 @@ import type { PaymentMode, PaymentStatus, SalesJob } from "@/lib/db/types";
 export interface SalesJobRow extends SalesJob {
   location_code: string | null;
   service_type_code: string | null;
+  invoice_pdf_path: string | null;
 }
 
 export interface ListSalesJobsResult {
@@ -64,6 +65,7 @@ export async function listSalesJobs(
   if (error) throw error;
 
   type JoinedRow = SalesJob & {
+    invoice_pdf_path?: string | null;
     locations: { code: string | null } | { code: string | null }[] | null;
     service_types: { code: string | null } | { code: string | null }[] | null;
   };
@@ -71,12 +73,13 @@ export async function listSalesJobs(
   const rows: SalesJobRow[] = (data as JoinedRow[] | null ?? []).map((r) => {
     const loc = Array.isArray(r.locations) ? r.locations[0] : r.locations;
     const svc = Array.isArray(r.service_types) ? r.service_types[0] : r.service_types;
-    const { locations: _l, service_types: _s, ...rest } = r;
+    const { locations: _l, service_types: _s, invoice_pdf_path, ...rest } = r;
     void _l; void _s;
     return {
       ...(rest as SalesJob),
       location_code: loc?.code ?? null,
       service_type_code: svc?.code ?? null,
+      invoice_pdf_path: invoice_pdf_path ?? null,
     };
   });
 
@@ -172,8 +175,8 @@ export const createSalesJob = wrapAction({
         location_id: locationId,
         job_date: input.job_date,
         bay_no: input.bay_no ?? null,
-        upper_deck: input.upper_deck || null,
-        lower_deck: input.lower_deck || null,
+        upper_tech: input.upper_tech || null,
+        lower_tech: input.lower_tech || null,
         invoice_no: input.invoice_no?.trim() || null,
         customer_id: input.customer_id ?? null,
         billing_name: input.billing_name,
@@ -192,6 +195,10 @@ export const createSalesJob = wrapAction({
         paid_amount: input.paid_amount,
         payment_mode: input.payment_mode ?? null,
         payment_status: status,
+        engine_type_id: input.engine_type_id ?? null,
+        oil_type_id: input.oil_type_id ?? null,
+        oil_container: input.oil_container ?? null,
+        auto_priced_at: input.auto_priced_at ?? null,
         created_by: profile.id,
         updated_by: profile.id,
       })
@@ -242,8 +249,8 @@ export const updateSalesJob = wrapAction({
         location_id: input.location_id,
         job_date: input.job_date,
         bay_no: input.bay_no ?? null,
-        upper_deck: input.upper_deck || null,
-        lower_deck: input.lower_deck || null,
+        upper_tech: input.upper_tech || null,
+        lower_tech: input.lower_tech || null,
         ...invoiceNoUpdate,
         customer_id: input.customer_id ?? null,
         billing_name: input.billing_name,
@@ -260,6 +267,10 @@ export const updateSalesJob = wrapAction({
         hst: input.hst,
         total: input.total,
         payment_mode: input.payment_mode ?? null,
+        engine_type_id: input.engine_type_id ?? null,
+        oil_type_id: input.oil_type_id ?? null,
+        oil_container: input.oil_container ?? null,
+        auto_priced_at: input.auto_priced_at ?? null,
         updated_by: profile.id,
       })
       .eq("id", input.id)

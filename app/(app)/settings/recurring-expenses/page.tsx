@@ -36,12 +36,23 @@ export default async function RecurringExpensesPage() {
     listVendors(),
   ]);
 
+  const lastRunAt = rows.reduce<string | null>((max, r) => {
+    if (!r.last_generated_on) return max;
+    return !max || r.last_generated_on > max ? r.last_generated_on : max;
+  }, null);
+
   return (
     <div className="flex flex-col gap-6 max-w-5xl">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Recurring expenses</h1>
-          <p className="text-sm text-muted-foreground">Auto-generate expense rows on a schedule.</p>
+          <p className="text-sm text-muted-foreground">
+            Auto-generate expense rows on a schedule.
+            {" "}
+            {lastRunAt
+              ? <>Last auto-generation: <span className="font-medium text-foreground">{formatDate(lastRunAt)}</span>.</>
+              : <span className="italic">No auto-generated rows yet.</span>}
+          </p>
         </div>
         <div className="flex gap-2">
           <ProcessRecurringButton />

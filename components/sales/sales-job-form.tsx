@@ -28,8 +28,9 @@ import { EmptyDropdownHint } from "@/components/help/empty-state";
 import { InfoTip } from "@/components/help/info-tip";
 import { createSalesJob, updateSalesJob } from "@/lib/actions/sales";
 import { createCustomer, getCustomer, updateCustomer } from "@/lib/actions/customers";
+import { lookupOilChangePrice } from "@/lib/actions/pricing";
 import { SalesJobInput } from "@/lib/schemas/sales";
-import type { Customer, Location, PaymentMode, ServiceType } from "@/lib/db/types";
+import type { Customer, EngineType, Location, OilType, PaymentMode, ServiceType } from "@/lib/db/types";
 import { todayISO } from "@/lib/utils/format";
 
 import { CustomerComboBox } from "./customer-combobox";
@@ -53,8 +54,8 @@ interface FormValues {
   location_id: string;
   job_date: string;
   bay_no: string;
-  upper_deck: string;
-  lower_deck: string;
+  upper_tech: string;
+  lower_tech: string;
   invoice_no: string;
   customer_id: string | null;
   billing_name: string;
@@ -72,13 +73,18 @@ interface FormValues {
   total: string;
   paid_amount: string;
   payment_mode: PaymentMode | "";
+  engine_type_id: string;
+  oil_type_id: string;
+  oil_container: "bulk" | "gallon" | "";
 }
 
 export interface SalesJobFormProps {
   mode: "create" | "edit";
-  initial?: Partial<FormValues> & { id?: string };
+  initial?: Partial<FormValues> & { id?: string; auto_priced_at?: string | null };
   locations: Location[];
   serviceTypes: ServiceType[];
+  engineTypes: EngineType[];
+  oilTypes: OilType[];
   hstRate: number;
   /** Force location to this value (staff role). */
   lockedLocationId?: string | null;
@@ -89,6 +95,8 @@ export function SalesJobForm({
   initial,
   locations,
   serviceTypes,
+  engineTypes,
+  oilTypes,
   hstRate,
   lockedLocationId,
 }: SalesJobFormProps) {
@@ -96,13 +104,17 @@ export function SalesJobForm({
   const [isPending, startTransition] = useTransition();
   const [addingNewCustomer, setAddingNewCustomer] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  // Track the last auto-filled price so we can detect manual overrides on submit.
+  const [lastAutoPrice, setLastAutoPrice] = useState<string | null>(
+    initial?.auto_priced_at && initial?.sub_total ? initial.sub_total : null,
+  );
 
   const defaults: FormValues = {
     location_id: lockedLocationId ?? initial?.location_id ?? locations[0]?.id ?? "",
     job_date: initial?.job_date ?? todayISO(),
     bay_no: initial?.bay_no ?? "",
-    upper_deck: initial?.upper_deck ?? "",
-    lower_deck: initial?.lower_deck ?? "",
+    upper_tech: initial?.upper_tech ?? "",
+    lower_tech: initial?.lower_tech ?? "",
     invoice_no: initial?.invoice_no ?? "",
     customer_id: initial?.customer_id ?? null,
     billing_name: initial?.billing_name ?? "",
@@ -120,6 +132,9 @@ export function SalesJobForm({
     total: initial?.total ?? "",
     paid_amount: initial?.paid_amount ?? "",
     payment_mode: initial?.payment_mode ?? "",
+    engine_type_id: initial?.engine_type_id ?? "",
+    oil_type_id: initial?.oil_type_id ?? "",
+    oil_container: initial?.oil_container ?? "",
   };
 
   const form = useForm<FormValues>({ defaultValues: defaults });
@@ -142,6 +157,39 @@ export function SalesJobForm({
     form.setValue("hst", hst.toFixed(2));
     form.setValue("total", total.toFixed(2));
   }, [subTotalRaw, hstRate, form]);
+
+  // --------------------------------------------------------------------------
+  // Oil-change auto-pricing: when service_type is OC and engine + oil + container
+  // are all set, look up the catalog price and pre-fill sub_total.
+  // --------------------------------------------------------------------------
+  const serviceTypeId = useWatch({ control: form.control, name: "service_type_id" });
+  const engineTypeId = useWatch({ control: form.control, name: "engine_type_id" });
+  const oilTypeId = useWatch({ control: form.control, name: "oil_type_id" });
+  const oilContainer = useWatch({ control: form.control, name: "oil_container" });
+
+  const isOilChange = serviceTypes.find((s) => s.id === serviceTypeId)?.code === "OC";
+
+  useEffect(() => {
+    if (!isOilChange) return;
+    if (!engineTypeId || !oilTypeId || !oilContainer) return;
+    let cancelled = false;
+    (async () => {
+      const res = await lookupOilChangePrice({
+        engine_type_id: engineTypeId,
+        oil_type_id: oilTypeId,
+        oil_container: oilContainer as "bulk" | "gallon",
+      });
+      if (cancelled || !res.ok) return;
+      if (res.data.sub_total == null) {
+        toast.warning("No catalog price found for that engine + oil combo.");
+        return;
+      }
+      const formatted = res.data.sub_total.toFixed(2);
+      form.setValue("sub_total", formatted, { shouldDirty: true });
+      setLastAutoPrice(formatted);
+    })();
+    return () => { cancelled = true; };
+  }, [isOilChange, engineTypeId, oilTypeId, oilContainer, form]);
 
   // --------------------------------------------------------------------------
   // Customer picker sync — billing_name, plate, contact, email auto-fill
@@ -255,6 +303,9 @@ export function SalesJobForm({
 
       // Step 2 — validate and submit the sales-job with the (possibly
       // just-created) customer id.
+      const stillAutoPriced =
+        lastAutoPrice != null && Number(values.sub_total) === Number(lastAutoPrice);
+
       const payload = {
         ...values,
         customer_id: customerIdToUse,
@@ -267,6 +318,10 @@ export function SalesJobForm({
         payment_mode: values.payment_mode === "" ? null : values.payment_mode,
         start_time: values.start_time || null,
         end_time: values.end_time || null,
+        engine_type_id: values.engine_type_id || null,
+        oil_type_id: values.oil_type_id || null,
+        oil_container: values.oil_container || null,
+        auto_priced_at: stillAutoPriced ? new Date().toISOString() : null,
       };
 
       const parsed = SalesJobInput.safeParse(payload);
@@ -624,13 +679,95 @@ export function SalesJobForm({
               />
             </div>
 
+            {isOilChange && (
+              <div className="rounded-md bg-muted/40 border border-dashed p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">
+                    Catalog auto-pricing
+                  </p>
+                  {lastAutoPrice && Number(form.getValues("sub_total")) === Number(lastAutoPrice) ? (
+                    <span className="text-xs text-emerald-700">
+                      Sub total auto-filled — edit to override.
+                    </span>
+                  ) : lastAutoPrice ? (
+                    <span className="text-xs text-amber-700">Manually overridden.</span>
+                  ) : null}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <FormField
+                    control={form.control}
+                    name="engine_type_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Engine</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger><SelectValue placeholder="Select engine" /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {engineTypes.map((e) => (
+                              <SelectItem key={e.id} value={e.id}>
+                                {e.manufacturer} {e.model} ({e.oil_capacity_litres}L)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="oil_type_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Oil grade</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger><SelectValue placeholder="Select oil" /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {oilTypes.map((o) => (
+                              <SelectItem key={o.id} value={o.id}>
+                                {o.code} — {o.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="oil_container"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Container</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger><SelectValue placeholder="Bulk or Gallon" /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="bulk">Bulk (per litre)</SelectItem>
+                            <SelectItem value="gallon">Imperial gallon</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <FormField
                 control={form.control}
-                name="upper_deck"
+                name="upper_tech"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Upper deck</FormLabel>
+                    <FormLabel>Upper tech</FormLabel>
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
@@ -640,10 +777,10 @@ export function SalesJobForm({
               />
               <FormField
                 control={form.control}
-                name="lower_deck"
+                name="lower_tech"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Lower deck</FormLabel>
+                    <FormLabel>Lower tech</FormLabel>
                     <FormControl>
                       <Input {...field} />
                     </FormControl>

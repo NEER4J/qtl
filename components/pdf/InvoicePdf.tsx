@@ -13,7 +13,7 @@ import type { SalesJobDetail } from "@/lib/actions/sales";
 
 const LOGO_PATH = path.join(process.cwd(), "public", "logo.png");
 
-const ACCENT = "#1e3a5f";
+const ACCENT = "#a6192e";
 const MUTED = "#6b7280";
 const BORDER = "#e5e7eb";
 
@@ -102,8 +102,8 @@ export function buildInvoiceDoc(job: SalesJobDetail) {
             <View style={styles.row}><Text style={styles.label}>Service</Text><Text style={styles.value}>{job.service_type_name ?? "—"}</Text></View>
             {job.bay_no != null && <View style={styles.row}><Text style={styles.label}>Bay</Text><Text style={styles.value}>{job.bay_no}</Text></View>}
             {job.odometer != null && <View style={styles.row}><Text style={styles.label}>Odometer</Text><Text style={styles.value}>{job.odometer.toLocaleString()} km</Text></View>}
-            {job.upper_deck && <View style={styles.row}><Text style={styles.label}>Upper deck</Text><Text style={styles.value}>{job.upper_deck}</Text></View>}
-            {job.lower_deck && <View style={styles.row}><Text style={styles.label}>Lower deck</Text><Text style={styles.value}>{job.lower_deck}</Text></View>}
+            {job.upper_tech && <View style={styles.row}><Text style={styles.label}>Upper tech</Text><Text style={styles.value}>{job.upper_tech}</Text></View>}
+            {job.lower_tech && <View style={styles.row}><Text style={styles.label}>Lower tech</Text><Text style={styles.value}>{job.lower_tech}</Text></View>}
           </View>
         </View>
 

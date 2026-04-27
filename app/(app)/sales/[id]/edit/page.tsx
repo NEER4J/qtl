@@ -11,6 +11,7 @@ import {
   listActiveLocations,
   listActiveServiceTypes,
 } from "@/lib/actions/reference";
+import { listEngineTypes, listOilTypes } from "@/lib/actions/pricing";
 import { formatDate } from "@/lib/utils/format";
 
 export const dynamic = "force-dynamic";
@@ -32,10 +33,12 @@ export default async function EditSalesJobPage({
   if (!canEdit) redirect(`/sales/${id}`);
   if (job.deactivated_at) redirect(`/sales/${id}`);
 
-  const [locations, serviceTypes, settings] = await Promise.all([
+  const [locations, serviceTypes, settings, engineTypes, oilTypes] = await Promise.all([
     listActiveLocations(),
     listActiveServiceTypes(),
     getAppSettings(),
+    listEngineTypes(),
+    listOilTypes(),
   ]);
 
   return (
@@ -58,14 +61,16 @@ export default async function EditSalesJobPage({
         mode="edit"
         locations={locations}
         serviceTypes={serviceTypes}
+        engineTypes={engineTypes}
+        oilTypes={oilTypes}
         hstRate={Number(settings.hst_rate)}
         initial={{
           id: job.id,
           location_id: job.location_id,
           job_date: job.job_date,
           bay_no: job.bay_no?.toString() ?? "",
-          upper_deck: job.upper_deck ?? "",
-          lower_deck: job.lower_deck ?? "",
+          upper_tech: job.upper_tech ?? "",
+          lower_tech: job.lower_tech ?? "",
           invoice_no: job.invoice_no,
           customer_id: job.customer_id,
           billing_name: job.billing_name,
@@ -83,6 +88,10 @@ export default async function EditSalesJobPage({
           total: job.total.toString(),
           paid_amount: job.paid_amount.toString(),
           payment_mode: job.payment_mode ?? "",
+          engine_type_id: job.engine_type_id ?? "",
+          oil_type_id: job.oil_type_id ?? "",
+          oil_container: job.oil_container ?? "",
+          auto_priced_at: job.auto_priced_at,
         }}
       />
     </div>

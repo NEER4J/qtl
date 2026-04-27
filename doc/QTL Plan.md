@@ -250,8 +250,8 @@ Step 2 — Job Details:
 - Date (defaults to today)
 - Location (defaults to user's assigned location, locked for Staff)
 - Bay No (dropdown: 1, 2, 3, 4, etc.)
-- Upper Deck (optional)
-- Lower Deck (optional)
+- Upper Tech (optional)
+- Lower Tech (optional)
 - Invoice No (auto-generated or manual entry)
 - Billing Name (linked to customer)
 - License Plate

@@ -24,8 +24,8 @@ export const SalesJobInput = z
     job_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date is required"),
 
     bay_no: z.coerce.number().int().min(1).max(20).nullable().optional(),
-    upper_deck: z.string().trim().max(60).nullable().optional().or(z.literal("")),
-    lower_deck: z.string().trim().max(60).nullable().optional().or(z.literal("")),
+    upper_tech: z.string().trim().max(60).nullable().optional().or(z.literal("")),
+    lower_tech: z.string().trim().max(60).nullable().optional().or(z.literal("")),
 
     invoice_no: z.string().trim().max(40).nullable().optional().or(z.literal("")),
 
@@ -56,6 +56,11 @@ export const SalesJobInput = z
     total: moneySchema,
     paid_amount: moneySchema.default(0),
     payment_mode: paymentModeSchema.nullable().optional(),
+
+    engine_type_id: z.string().uuid().nullable().optional(),
+    oil_type_id: z.string().uuid().nullable().optional(),
+    oil_container: z.enum(["bulk", "gallon"]).nullable().optional(),
+    auto_priced_at: z.string().nullable().optional(),
   })
   .superRefine((val, ctx) => {
     if (Math.abs(val.total - (val.sub_total + val.hst)) > 0.02) {

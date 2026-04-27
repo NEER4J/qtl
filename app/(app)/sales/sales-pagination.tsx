@@ -8,16 +8,18 @@ import { Button } from "@/components/ui/button";
 export function SalesPagination({
   page,
   pageCount,
+  basePath = "/sales",
 }: {
   page: number;
   pageCount: number;
+  basePath?: string;
 }) {
   const params = useSearchParams();
 
   const buildHref = (nextPage: number) => {
     const sp = new URLSearchParams(params);
     sp.set("page", String(nextPage));
-    return `/sales?${sp.toString()}`;
+    return `${basePath}?${sp.toString()}`;
   };
 
   return (

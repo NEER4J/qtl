@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { ChevronRight, Droplet, FolderTree, Gauge, Layers, Package, Tag, Wrench } from "lucide-react";
+import { ChevronRight, Droplet, FolderTree, Gauge, History, Layers, Package, Tag, Wrench } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
+import { MinMarginThresholdCard } from "@/components/settings/min-margin-threshold-card";
 import { requireRole } from "@/lib/auth/require";
+import { getAppSettings } from "@/lib/actions/reference";
 
 export const dynamic = "force-dynamic";
 
@@ -50,10 +52,18 @@ const CARDS = [
     icon: Layers,
     description: "Flat premiums applied to oil-changes based on engine oil capacity.",
   },
+  {
+    title: "Price history",
+    href: "/settings/pricing/price-history",
+    icon: History,
+    description: "Audit log of every cost / list-price / labour change.",
+  },
 ];
 
 export default async function PricingAdminHubPage() {
   await requireRole("owner");
+  const settings = await getAppSettings();
+  const initialPct = Math.round(Number(settings.min_margin_alert_pct) * 1000) / 10;
   return (
     <div className="flex flex-col gap-6 max-w-5xl">
       <div>
@@ -81,6 +91,8 @@ export default async function PricingAdminHubPage() {
           via <code>npm run migrate</code>. Use these pages for ongoing additions and edits.
         </p>
       </PageHelp>
+
+      <MinMarginThresholdCard initialPct={initialPct} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {CARDS.map((c) => (

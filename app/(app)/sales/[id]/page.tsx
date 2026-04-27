@@ -134,8 +134,8 @@ export default async function SalesJobDetailPage({
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <Field label="Bay" value={job.bay_no != null ? String(job.bay_no) : null} />
-          <Field label="Upper deck" value={job.upper_deck} />
-          <Field label="Lower deck" value={job.lower_deck} />
+          <Field label="Upper tech" value={job.upper_tech} />
+          <Field label="Lower tech" value={job.lower_tech} />
           <Field
             label="Duration"
             value={job.duration_minutes != null ? `${job.duration_minutes} min` : null}

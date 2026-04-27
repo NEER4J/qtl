@@ -48,7 +48,11 @@ export default async function PayrollAnalyticsPage({
         <p>Owner and accountant only. Managers don&apos;t see company-wide payroll totals.</p>
       </PageHelp>
 
-      <AnalyticsFilters locations={locations} canFilterLocation={profile.role !== "manager"} />
+      <AnalyticsFilters
+        locations={locations}
+        canFilterLocation={profile.role !== "manager"}
+        exportHref="/api/export/payroll-analytics"
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="Total payroll cost" value={formatMoney(data.total_cost)} />

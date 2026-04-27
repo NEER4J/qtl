@@ -11,6 +11,7 @@ import {
   listActiveLocations,
   listActiveServiceTypes,
 } from "@/lib/actions/reference";
+import { listEngineTypes, listOilTypes } from "@/lib/actions/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +21,12 @@ export default async function NewSalesJobPage() {
     redirect("/sales");
   }
 
-  const [locations, serviceTypes, settings] = await Promise.all([
+  const [locations, serviceTypes, settings, engineTypes, oilTypes] = await Promise.all([
     listActiveLocations(),
     listActiveServiceTypes(),
     getAppSettings(),
+    listEngineTypes(),
+    listOilTypes(),
   ]);
 
   const lockedLocationId = profile.role === "staff" ? profile.location_id : null;
@@ -62,6 +65,8 @@ export default async function NewSalesJobPage() {
         mode="create"
         locations={locations}
         serviceTypes={serviceTypes}
+        engineTypes={engineTypes}
+        oilTypes={oilTypes}
         hstRate={Number(settings.hst_rate)}
         lockedLocationId={lockedLocationId}
       />

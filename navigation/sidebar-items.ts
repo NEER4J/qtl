@@ -82,7 +82,6 @@ export const sidebarItems: NavGroup[] = [
         url: "/invoices",
         icon: FileText,
         roles: ["owner", "manager", "accountant"],
-        comingSoon: true,
       },
       {
         title: "Expenses",
@@ -139,6 +138,7 @@ export const sidebarItems: NavGroup[] = [
           { title: "Part brands", url: "/settings/pricing/brands", roles: ["owner"] },
           { title: "Service costs", url: "/settings/pricing/service-costs", roles: ["owner"] },
           { title: "Volume tiers", url: "/settings/pricing/volume-tiers", roles: ["owner"] },
+          { title: "Price history", url: "/settings/pricing/price-history", roles: ["owner"] },
         ],
       },
     ],
