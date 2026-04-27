@@ -24,6 +24,12 @@ import { CreatableCombobox } from "@/components/pricing/creatable-combobox";
 
 import { PartFormDialog } from "./part-form-dialog";
 
+function formatMargin(p: Pick<AdminPartRow, "margin_type" | "margin_value">): string {
+  return p.margin_type === "percent"
+    ? `${p.margin_value.toFixed(2)}%`
+    : formatMoney(p.margin_value);
+}
+
 export function PartsTable({
   parts,
   serviceCosts,
@@ -135,6 +141,7 @@ export function PartsTable({
               <TableHead className="w-32">Service</TableHead>
               <TableHead className="w-24 text-right">Cost</TableHead>
               <TableHead className="w-24 text-right">MHSW</TableHead>
+              <TableHead className="w-24 text-right">Margin</TableHead>
               <TableHead className="w-24 text-right">List</TableHead>
               <TableHead className="w-20">Status</TableHead>
               <TableHead className="w-40 text-right">Actions</TableHead>
@@ -143,7 +150,7 @@ export function PartsTable({
           <TableBody>
             {parts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                   {filtersActive ? "No parts match your filter." : "No parts yet. Click New part to add one."}
                 </TableCell>
               </TableRow>
@@ -157,6 +164,7 @@ export function PartsTable({
                   <TableCell className="text-xs text-muted-foreground">{p.service_cost_name ?? "—"}</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(p.cost)}</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(p.mhsw_fee)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground">{formatMargin(p)}</TableCell>
                   <TableCell className="text-right tabular-nums font-medium">{formatMoney(p.list_price)}</TableCell>
                   <TableCell>
                     <Badge variant={p.active ? "default" : "secondary"}>{p.active ? "Active" : "Inactive"}</Badge>

@@ -38,11 +38,12 @@ export default async function PartsAdminPage({
       <PageHelp id="settings-pricing-parts">
         <p>
           The filter catalogue — everything you sell on the counter. Each part has a cost (what you pay),
-          a list price (what you charge), and optionally an MHSW environmental fee and a linked labour cost.
+          an MHSW environmental fee, and a margin. The list price is calculated automatically.
         </p>
         <ul>
           <li><strong>Part # + brand</strong> is unique — a single brand won&apos;t have two rows with the same number.</li>
-          <li><strong>List price</strong> appears on the filter price list that staff see.</li>
+          <li><strong>List price</strong> = cost + MHSW fee + margin, and it appears on the filter price list that staff see.</li>
+          <li><strong>Margin</strong> can be either a fixed dollar amount or a percent of the cost.</li>
           <li><strong>Service cost</strong> (optional) links this part to a labour charge. When the part is installed on an engine, that labour is added to the oil-change price automatically.</li>
           <li>Deactivate a part (never delete) — it stays on historical jobs but disappears from the price list.</li>
         </ul>

@@ -37,13 +37,14 @@ import {
   UpdateVolumeTierInput,
   UpsertEngineFilterInput,
 } from "@/lib/schemas/pricing";
+import { normalizePartPricing } from "@/lib/utils/part-pricing";
 
 // ============================================================================
 // Read-only catalog queries — RLS already allows SELECT to all authenticated.
 // Cost columns are stripped from the response for non-owners.
 // ============================================================================
 
-const CUSTOMER_VIEW_HIDDEN_KEYS: (keyof Part)[] = ["cost", "mhsw_fee"];
+const CUSTOMER_VIEW_HIDDEN_KEYS: (keyof Part)[] = ["cost", "mhsw_fee", "margin_value"];
 
 export async function listOilTypes(): Promise<OilType[]> {
   const supabase = await createClient();
@@ -104,7 +105,7 @@ export async function listParts(filter?: {
   type Row = Part & { service_costs: { name: string } | null };
   return ((data ?? []) as unknown as Row[]).map((r) => {
     const row: PriceListRow = {
-      ...r,
+      ...normalizePartPricing(r),
       service_cost_name: r.service_costs?.name ?? null,
     };
     if (hideCost) {
@@ -140,6 +141,8 @@ export async function listVolumeTiers(): Promise<VolumeTier[]> {
 // Oil-change price grid — engines × oil types, using the SQL function
 // oil_change_price(engine, oil, container).
 // ============================================================================
+const LITRES_PER_IMPERIAL_GALLON = 4.54609;
+
 export interface PriceGridCell {
   engine_id: string;
   oil_type_id: string;
@@ -152,29 +155,106 @@ export async function getOilChangeGrid(): Promise<{
   oilTypes: OilType[];
   cells: Map<string, PriceGridCell>;
 }> {
-  const [engines, oilTypes] = await Promise.all([listEngineTypes(), listOilTypes()]);
   const supabase = await createClient();
 
-  const cells = new Map<string, PriceGridCell>();
+  // Mirrors public.oil_change_price(): one batched read per table instead of
+  // engines×oil_types×containers RPCs (the prior approach overwhelmed the
+  // request pipeline and surfaced as RangeError on this page).
+  const [enginesRes, oilTypesRes, filtersRes, tiersRes] = await Promise.all([
+    supabase
+      .from("engine_types")
+      .select("*")
+      .eq("active", true)
+      .order("manufacturer")
+      .order("model"),
+    supabase
+      .from("oil_types")
+      .select("*")
+      .eq("active", true)
+      .order("sort_order")
+      .order("name"),
+    supabase
+      .from("engine_filters")
+      .select("engine_type_id, quantity, parts:part_id(cost, mhsw_fee, service_costs:service_cost_id(cost))"),
+    supabase.from("volume_tiers").select("oil_type_id, min_litres, premium"),
+  ]);
 
-  // Materialise all prices in parallel. 45 engines × 7 oil types × 2 containers
-  // ≈ 630 RPC calls — acceptable for a read-only catalog page.
-  await Promise.all(
-    engines.flatMap((e) =>
-      oilTypes.map(async (o) => {
-        const [bulk, gallon] = await Promise.all([
-          supabase.rpc("oil_change_price", { p_engine_id: e.id, p_oil_type_id: o.id, p_container: "bulk" }),
-          supabase.rpc("oil_change_price", { p_engine_id: e.id, p_oil_type_id: o.id, p_container: "gallon" }),
-        ]);
-        cells.set(`${e.id}|${o.id}`, {
-          engine_id: e.id,
-          oil_type_id: o.id,
-          bulk: bulk.data != null ? Number(bulk.data) : null,
-          gallon: gallon.data != null ? Number(gallon.data) : null,
-        });
-      }),
-    ),
-  );
+  if (enginesRes.error) throw enginesRes.error;
+  if (oilTypesRes.error) throw oilTypesRes.error;
+  if (filtersRes.error) throw filtersRes.error;
+  if (tiersRes.error) throw tiersRes.error;
+
+  const engines = (enginesRes.data ?? []) as EngineType[];
+  const oilTypes = (oilTypesRes.data ?? []) as OilType[];
+
+  type FilterRow = {
+    engine_type_id: string;
+    quantity: number;
+    parts: {
+      cost: number;
+      mhsw_fee: number;
+      service_costs: { cost: number } | null;
+    } | null;
+  };
+  const enginePartCost = new Map<string, number>();
+  const engineServiceCost = new Map<string, number>();
+  for (const f of (filtersRes.data ?? []) as unknown as FilterRow[]) {
+    if (!f.parts) continue;
+    const qty = Number(f.quantity) || 0;
+    const partCost = (Number(f.parts.cost) + Number(f.parts.mhsw_fee)) * qty;
+    const svcCost = Number(f.parts.service_costs?.cost ?? 0) * qty;
+    enginePartCost.set(f.engine_type_id, (enginePartCost.get(f.engine_type_id) ?? 0) + partCost);
+    engineServiceCost.set(f.engine_type_id, (engineServiceCost.get(f.engine_type_id) ?? 0) + svcCost);
+  }
+
+  type TierRow = { oil_type_id: string; min_litres: number; premium: number };
+  const tiersByOil = new Map<string, TierRow[]>();
+  for (const t of (tiersRes.data ?? []) as TierRow[]) {
+    const arr = tiersByOil.get(t.oil_type_id) ?? [];
+    arr.push(t);
+    tiersByOil.set(t.oil_type_id, arr);
+  }
+
+  const tierPremiumFor = (oilId: string, capacity: number): number => {
+    const tiers = tiersByOil.get(oilId);
+    if (!tiers || tiers.length === 0) return 0;
+    let best: TierRow | null = null;
+    for (const t of tiers) {
+      if (Number(t.min_litres) <= capacity && (!best || Number(t.min_litres) > Number(best.min_litres))) {
+        best = t;
+      }
+    }
+    return best ? Number(best.premium) || 0 : 0;
+  };
+
+  const round99 = (sell: number): number => Math.ceil(sell) - 0.01;
+
+  const cells = new Map<string, PriceGridCell>();
+  for (const e of engines) {
+    const capacity = Number(e.oil_capacity_litres);
+    const filterCost = enginePartCost.get(e.id) ?? 0;
+    const serviceCost = engineServiceCost.get(e.id) ?? 0;
+    if (!Number.isFinite(capacity) || capacity <= 0) {
+      for (const o of oilTypes) {
+        cells.set(`${e.id}|${o.id}`, { engine_id: e.id, oil_type_id: o.id, bulk: null, gallon: null });
+      }
+      continue;
+    }
+    for (const o of oilTypes) {
+      const tier = tierPremiumFor(o.id, capacity);
+      const bulkRate = Number(o.bulk_cost_per_litre);
+      // gallon_cost_per_litre stores price per Imperial gallon (Canada);
+      // convert to per-litre before multiplying by capacity.
+      const gallonRate = Number(o.gallon_cost_per_litre) / LITRES_PER_IMPERIAL_GALLON;
+      const bulk = Number.isFinite(bulkRate)
+        ? round99(bulkRate * capacity + filterCost + serviceCost + tier)
+        : null;
+      const gallon = Number.isFinite(gallonRate)
+        ? round99(gallonRate * capacity + filterCost + serviceCost + tier)
+        : null;
+      cells.set(`${e.id}|${o.id}`, { engine_id: e.id, oil_type_id: o.id, bulk, gallon });
+    }
+  }
 
   return { engines, oilTypes, cells };
 }
@@ -285,7 +365,7 @@ export async function listAllParts(filter?: {
   if (error) throw error;
   type Row = Part & { service_costs: { name: string } | null };
   return ((data ?? []) as unknown as Row[]).map((r) => ({
-    ...r,
+    ...normalizePartPricing(r),
     service_cost_name: r.service_costs?.name ?? null,
   }));
 }

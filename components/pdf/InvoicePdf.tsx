@@ -1,7 +1,9 @@
 // React-PDF invoice template — imported dynamically in lib/actions/invoices.ts
+import path from "path";
 import React from "react";
 import {
   Document,
+  Image,
   Page,
   Text,
   View,
@@ -9,14 +11,18 @@ import {
 } from "@react-pdf/renderer";
 import type { SalesJobDetail } from "@/lib/actions/sales";
 
+const LOGO_PATH = path.join(process.cwd(), "public", "logo.png");
+
 const ACCENT = "#1e3a5f";
 const MUTED = "#6b7280";
 const BORDER = "#e5e7eb";
 
 const styles = StyleSheet.create({
   page: { fontSize: 10, fontFamily: "Helvetica", padding: 40, color: "#111827" },
-  header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 28 },
-  companyBlock: { gap: 2 },
+  header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 28, alignItems: "flex-start" },
+  companyBlock: { gap: 2, flexDirection: "row", alignItems: "center" },
+  companyText: { gap: 2, marginLeft: 10 },
+  logo: { width: 50, height: 50, objectFit: "contain" },
   companyName: { fontSize: 16, fontFamily: "Helvetica-Bold", color: ACCENT },
   companyMeta: { fontSize: 8, color: MUTED },
   invoiceBlock: { alignItems: "flex-end", gap: 2 },
@@ -67,8 +73,11 @@ export function buildInvoiceDoc(job: SalesJobDetail) {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.companyBlock}>
-            <Text style={styles.companyName}>Quick Truck Lube &amp; Oil</Text>
-            <Text style={styles.companyMeta}>{job.location_name ?? ""}</Text>
+            <Image src={LOGO_PATH} style={styles.logo} />
+            <View style={styles.companyText}>
+              <Text style={styles.companyName}>Quick Truck Lube &amp; Oil</Text>
+              <Text style={styles.companyMeta}>{job.location_name ?? ""}</Text>
+            </View>
           </View>
           <View style={styles.invoiceBlock}>
             <Text style={styles.invoiceLabel}>INVOICE</Text>

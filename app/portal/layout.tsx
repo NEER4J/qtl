@@ -1,7 +1,8 @@
+import Image from "next/image";
 import Link from "next/link";
 import { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { LogOut, Truck } from "lucide-react";
+import { LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { requireProfile } from "@/lib/auth/require";
@@ -26,7 +27,14 @@ export default async function PortalLayout({ children }: { children: ReactNode }
       <header className="border-b bg-card">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <Link href="/portal/invoices" className="flex items-center gap-2 font-semibold">
-            <Truck className="size-5" />
+            <Image
+              src="/logo.png"
+              alt="Quick Truck Lube & Oil"
+              width={32}
+              height={32}
+              className="size-8 object-contain"
+              priority
+            />
             <span>Quick Truck Lube & Oil</span>
             <span className="text-muted-foreground text-xs ml-2 hidden sm:inline">Customer Portal</span>
           </Link>

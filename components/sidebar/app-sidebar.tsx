@@ -1,8 +1,7 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-
-import { Truck } from "lucide-react";
 
 import {
   Sidebar,
@@ -45,7 +44,14 @@ export function AppSidebar({
             isCollapsed ? "justify-center px-2" : "gap-2 px-4"
           )}
         >
-          <Truck className="size-5 shrink-0 text-primary" aria-hidden />
+          <Image
+            src="/logo.png"
+            alt={APP_CONFIG.name}
+            width={28}
+            height={28}
+            className="size-7 shrink-0 object-contain"
+            priority
+          />
           <span
             className={cn(
               "text-base font-semibold text-foreground transition-opacity",

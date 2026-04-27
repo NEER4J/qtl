@@ -75,7 +75,7 @@ export default async function OilGridPage() {
                   <th className="text-left p-2 sticky left-0 bg-muted/50 z-10">Engine</th>
                   <th className="text-right p-2 text-xs text-muted-foreground">Capacity</th>
                   {oilTypes.map((o) => (
-                    <th key={o.id} className="p-2 text-center min-w-[110px]" colSpan={2}>
+                    <th key={o.id} className="p-2 text-center min-w-[110px] border-l" colSpan={2}>
                       <div className="font-medium">{o.code}</div>
                       <div className="text-xs text-muted-foreground font-normal">{o.name}</div>
                     </th>
@@ -84,12 +84,10 @@ export default async function OilGridPage() {
                 <tr className="border-t text-xs text-muted-foreground">
                   <th />
                   <th />
-                  {oilTypes.map((o) => (
-                    <>
-                      <th key={`${o.id}-b`} className="p-1 text-right">Bulk</th>
-                      <th key={`${o.id}-g`} className="p-1 text-right">Gallon</th>
-                    </>
-                  ))}
+                  {oilTypes.flatMap((o) => [
+                    <th key={`${o.id}-b`} className="p-1 text-right border-l">Bulk</th>,
+                    <th key={`${o.id}-g`} className="p-1 text-right">Gallon</th>,
+                  ])}
                 </tr>
               </thead>
               <tbody>
@@ -97,18 +95,16 @@ export default async function OilGridPage() {
                   <tr key={e.id} className="border-t">
                     <td className="p-2 font-medium sticky left-0 bg-background z-10">{e.display_name}</td>
                     <td className="p-2 text-right text-xs text-muted-foreground tabular-nums">{Number(e.oil_capacity_litres).toFixed(1)}L</td>
-                    {oilTypes.map((o) => {
+                    {oilTypes.flatMap((o) => {
                       const c = cells.get(`${e.id}|${o.id}`);
-                      return (
-                        <>
-                          <td key={`${e.id}-${o.id}-b`} className="p-1 text-right tabular-nums text-sm">
-                            {c?.bulk != null ? formatMoney(c.bulk) : "—"}
-                          </td>
-                          <td key={`${e.id}-${o.id}-g`} className="p-1 text-right tabular-nums text-sm text-muted-foreground">
-                            {c?.gallon != null ? formatMoney(c.gallon) : "—"}
-                          </td>
-                        </>
-                      );
+                      return [
+                        <td key={`${o.id}-b`} className="p-1 text-right tabular-nums text-sm border-l">
+                          {c?.bulk != null ? formatMoney(c.bulk) : "—"}
+                        </td>,
+                        <td key={`${o.id}-g`} className="p-1 text-right tabular-nums text-sm text-muted-foreground">
+                          {c?.gallon != null ? formatMoney(c.gallon) : "—"}
+                        </td>,
+                      ];
                     })}
                   </tr>
                 ))}

@@ -1,9 +1,10 @@
-import { ReactNode } from "react";
+import { ReactNode, Suspense } from "react";
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import { TopProgressBar } from "@/components/top-progress-bar";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
@@ -37,6 +38,9 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
+      <Suspense fallback={null}>
+        <TopProgressBar />
+      </Suspense>
       <AppSidebar
         variant="sidebar"
         collapsible="icon"

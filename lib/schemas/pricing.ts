@@ -62,8 +62,9 @@ export const CreatePartInput = z.object({
   category: z.string().trim().min(1, "Category is required").max(60),
   description: trimmedOrNull,
   cost: z.coerce.number().min(0, "Must be ≥ 0"),
-  list_price: z.coerce.number().min(0, "Must be ≥ 0"),
   mhsw_fee: z.coerce.number().min(0, "Must be ≥ 0").default(0),
+  margin_type: z.enum(["fixed", "percent"]).default("fixed"),
+  margin_value: z.coerce.number().min(0, "Must be ≥ 0").default(0),
   service_cost_id: z
     .string()
     .uuid()

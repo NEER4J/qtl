@@ -397,6 +397,8 @@ export interface ServiceCost {
   updated_at: string;
 }
 
+export type PartMarginType = 'fixed' | 'percent';
+
 export interface Part {
   id: string;
   part_number: string;
@@ -406,6 +408,8 @@ export interface Part {
   cost: number;
   list_price: number;
   mhsw_fee: number;
+  margin_type: PartMarginType;
+  margin_value: number;
   service_cost_id: string | null;
   active: boolean;
   created_at: string;
