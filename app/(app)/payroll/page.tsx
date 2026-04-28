@@ -37,7 +37,7 @@ export default async function PayrollPage() {
   const canCreate = profile.role === "owner" || profile.role === "manager";
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl">
+    <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Payroll</h1>

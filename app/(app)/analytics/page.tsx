@@ -58,7 +58,7 @@ export default async function AnalyticsHubPage() {
   const cards = CARDS.filter((c) => (c.roles as readonly string[]).includes(profile.role));
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
         <p className="text-sm text-muted-foreground">Business performance across all modules.</p>

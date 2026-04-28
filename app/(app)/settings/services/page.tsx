@@ -11,7 +11,7 @@ export default async function SettingsServicesPage() {
   const services = await listAllServiceTypes();
 
   return (
-    <div className="flex flex-col gap-4 max-w-2xl">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Service types</h1>
         <p className="text-sm text-muted-foreground">

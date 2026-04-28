@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, Droplet, FolderTree, Gauge, History, Layers, Package, Tag, Wrench } from "lucide-react";
+import { Boxes, ChevronRight, Droplet, FolderTree, Gauge, History, Layers, Package, Tag, Wrench } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
@@ -27,6 +27,12 @@ const CARDS = [
     href: "/settings/pricing/parts",
     icon: Package,
     description: "The filter catalogue — part number, brand, cost, list price, MHSW fee.",
+  },
+  {
+    title: "Packages",
+    href: "/settings/pricing/packages",
+    icon: Boxes,
+    description: "Pre-defined bundles of parts you can drop onto a sales job in one click.",
   },
   {
     title: "Part categories",
@@ -65,7 +71,7 @@ export default async function PricingAdminHubPage() {
   const settings = await getAppSettings();
   const initialPct = Math.round(Number(settings.min_margin_alert_pct) * 1000) / 10;
   return (
-    <div className="flex flex-col gap-6 max-w-5xl">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Pricing catalogue</h1>
         <p className="text-sm text-muted-foreground">

@@ -11,7 +11,7 @@ export default async function PartCategoriesPage() {
   const categories = await listAllPartCategories();
 
   return (
-    <div className="flex flex-col gap-4 max-w-2xl">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Part categories</h1>
         <p className="text-sm text-muted-foreground">

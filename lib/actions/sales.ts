@@ -11,7 +11,13 @@ import {
   SalesJobInput,
   UpdateSalesJobInput,
 } from "@/lib/schemas/sales";
-import type { PaymentMode, PaymentStatus, SalesJob } from "@/lib/db/types";
+import type {
+  PaymentMode,
+  PaymentStatus,
+  SalesJob,
+  SalesJobItem,
+  UnitOfMeasure,
+} from "@/lib/db/types";
 
 // ----------------------------------------------------------------------------
 // List — with filters + pagination + joined service type + location
@@ -95,6 +101,14 @@ export interface SalesJobDetail extends SalesJob {
   service_type_name: string | null;
   customer_license_plates: string[] | null;
   payments: SalesPaymentRow[];
+  items: SalesJobItemRow[];
+}
+
+export interface SalesJobItemRow extends SalesJobItem {
+  part_number: string | null;
+  part_brand: string | null;
+  /** Unit of measure from the part's category, for qty display ("3 ltr"). */
+  unit_of_measure: UnitOfMeasure | null;
 }
 
 export interface SalesPaymentRow {
@@ -110,7 +124,11 @@ export interface SalesPaymentRow {
 
 export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
   const supabase = await createClient();
-  const [{ data: job, error: jobErr }, { data: payments, error: payErr }] = await Promise.all([
+  const [
+    { data: job, error: jobErr },
+    { data: payments, error: payErr },
+    { data: itemsData, error: itemsErr },
+  ] = await Promise.all([
     supabase
       .from("sales_jobs")
       .select(
@@ -124,10 +142,19 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
       .eq("sales_job_id", id)
       .order("paid_on", { ascending: false })
       .order("created_at", { ascending: false }),
+    supabase
+      .from("sales_job_items")
+      .select(
+        "*, parts:part_id(part_number, brand, part_categories:category_id(unit_of_measure))",
+      )
+      .eq("sales_job_id", id)
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: true }),
   ]);
 
   if (jobErr) throw jobErr;
   if (payErr) throw payErr;
+  if (itemsErr) throw itemsErr;
   if (!job) return null;
 
   type JoinedRow = SalesJob & {
@@ -142,6 +169,25 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
   const { locations: _l, service_types: _s, customers: _c, ...rest } = j;
   void _l; void _s; void _c;
 
+  type ItemJoined = SalesJobItem & {
+    parts: {
+      part_number: string | null;
+      brand: string | null;
+      part_categories: { unit_of_measure: UnitOfMeasure } | null;
+    } | null;
+  };
+  const items: SalesJobItemRow[] = ((itemsData ?? []) as unknown as ItemJoined[]).map(
+    (it) => {
+      const { parts: _p, ...rest } = it;
+      return {
+        ...(rest as SalesJobItem),
+        part_number: _p?.part_number ?? null,
+        part_brand: _p?.brand ?? null,
+        unit_of_measure: _p?.part_categories?.unit_of_measure ?? null,
+      };
+    },
+  );
+
   return {
     ...(rest as SalesJob),
     location_code: loc?.code ?? null,
@@ -149,6 +195,7 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
     service_type_name: svc?.name ?? null,
     customer_license_plates: cust?.license_plates ?? null,
     payments: (payments ?? []) as SalesPaymentRow[],
+    items,
   };
 }
 
@@ -180,6 +227,16 @@ export const createSalesJob = wrapAction({
         invoice_no: input.invoice_no?.trim() || null,
         customer_id: input.customer_id ?? null,
         billing_name: input.billing_name,
+        billing_address: input.billing_address || null,
+        business_phone: input.business_phone || null,
+        alt_phone: input.alt_phone || null,
+        customer_order_no: input.customer_order_no || null,
+        unit_no: input.unit_no || null,
+        vehicle_year: input.vehicle_year ?? null,
+        vehicle_make: input.vehicle_make || null,
+        vehicle_model: input.vehicle_model || null,
+        vin: input.vin || null,
+        engine_size: input.engine_size || null,
         license_plate: input.license_plate || null,
         contact_no: input.contact_no || null,
         email: input.email || null,
@@ -221,6 +278,8 @@ export const createSalesJob = wrapAction({
       if (payErr) throw payErr;
     }
 
+    await replaceJobItems(supabase, data.id, input.items, profile.id);
+
     revalidatePath("/sales");
     revalidatePath("/dashboard");
     return data as SalesJob;
@@ -254,6 +313,16 @@ export const updateSalesJob = wrapAction({
         ...invoiceNoUpdate,
         customer_id: input.customer_id ?? null,
         billing_name: input.billing_name,
+        billing_address: input.billing_address || null,
+        business_phone: input.business_phone || null,
+        alt_phone: input.alt_phone || null,
+        customer_order_no: input.customer_order_no || null,
+        unit_no: input.unit_no || null,
+        vehicle_year: input.vehicle_year ?? null,
+        vehicle_make: input.vehicle_make || null,
+        vehicle_model: input.vehicle_model || null,
+        vin: input.vin || null,
+        engine_size: input.engine_size || null,
         license_plate: input.license_plate || null,
         contact_no: input.contact_no || null,
         email: input.email || null,
@@ -277,6 +346,9 @@ export const updateSalesJob = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+
+    await replaceJobItems(supabase, input.id, input.items, profile.id);
+
     revalidatePath("/sales");
     revalidatePath(`/sales/${input.id}`);
     revalidatePath("/dashboard");
@@ -338,6 +410,48 @@ export const deactivateSalesJob = wrapAction({
 // ----------------------------------------------------------------------------
 // Helpers
 // ----------------------------------------------------------------------------
+async function replaceJobItems(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  salesJobId: string,
+  items:
+    | {
+        id?: string;
+        part_id?: string | null;
+        description: string;
+        quantity: number;
+        unit_price: number;
+        is_taxable?: boolean;
+        package_label?: string | null;
+      }[]
+    | undefined,
+  userId: string,
+): Promise<void> {
+  // Replace-all strategy: delete existing rows, insert the new set. Audit log
+  // preserves the prior version. The job has very few line items (typically
+  // <10) so the row churn is trivial.
+  const { error: delErr } = await supabase
+    .from("sales_job_items")
+    .delete()
+    .eq("sales_job_id", salesJobId);
+  if (delErr) throw delErr;
+
+  if (!items || items.length === 0) return;
+
+  const rows = items.map((it, idx) => ({
+    sales_job_id: salesJobId,
+    part_id: it.part_id ?? null,
+    description: it.description.trim(),
+    quantity: it.quantity,
+    unit_price: it.unit_price,
+    is_taxable: it.is_taxable ?? true,
+    package_label: it.package_label ?? null,
+    position: idx,
+    created_by: userId,
+  }));
+  const { error: insErr } = await supabase.from("sales_job_items").insert(rows);
+  if (insErr) throw insErr;
+}
+
 function deriveStatus(total: number, paid: number): PaymentStatus {
   if (paid <= 0) return "outstanding";
   if (paid < total) return "partial";

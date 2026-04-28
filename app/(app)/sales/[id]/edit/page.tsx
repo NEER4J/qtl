@@ -42,7 +42,7 @@ export default async function EditSalesJobPage({
   ]);
 
   return (
-    <div className="flex flex-col gap-4 max-w-5xl">
+    <div className="flex flex-col gap-4">
       <div>
         <Button variant="ghost" size="sm" asChild className="-ml-3">
           <Link href={`/sales/${job.id}`}>
@@ -64,6 +64,16 @@ export default async function EditSalesJobPage({
         engineTypes={engineTypes}
         oilTypes={oilTypes}
         hstRate={Number(settings.hst_rate)}
+        initialItems={job.items.map((it) => ({
+          key: it.id,
+          part_id: it.part_id,
+          description: it.description,
+          quantity: Number(it.quantity),
+          unit_price: Number(it.unit_price),
+          is_taxable: it.is_taxable,
+          unit_of_measure: it.unit_of_measure,
+          package_label: it.package_label ?? null,
+        }))}
         initial={{
           id: job.id,
           location_id: job.location_id,
@@ -74,6 +84,16 @@ export default async function EditSalesJobPage({
           invoice_no: job.invoice_no,
           customer_id: job.customer_id,
           billing_name: job.billing_name,
+          billing_address: job.billing_address ?? "",
+          business_phone: job.business_phone ?? "",
+          alt_phone: job.alt_phone ?? "",
+          customer_order_no: job.customer_order_no ?? "",
+          unit_no: job.unit_no ?? "",
+          vehicle_year: job.vehicle_year?.toString() ?? "",
+          vehicle_make: job.vehicle_make ?? "",
+          vehicle_model: job.vehicle_model ?? "",
+          vin: job.vin ?? "",
+          engine_size: job.engine_size ?? "",
           license_plate: job.license_plate ?? "",
           contact_no: job.contact_no ?? "",
           email: job.email ?? "",

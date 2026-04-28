@@ -27,7 +27,7 @@ export default async function EngineTypeDetailPage({
   const { engine, filters } = detail;
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl">
+    <div className="flex flex-col gap-6">
       <div>
         <Button variant="ghost" size="sm" asChild className="-ml-3">
           <Link href="/settings/pricing/engine-types">

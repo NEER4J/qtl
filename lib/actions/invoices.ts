@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/require";
 import { getSalesJob } from "@/lib/actions/sales";
+import { getAppSettings } from "@/lib/actions/reference";
 
 // ============================================================================
 // PDF generation + Storage upload
@@ -26,11 +27,15 @@ export async function generateInvoicePdf(
   const job = await getSalesJob(jobId);
   if (!job) throw new Error("Sales job not found");
 
+  const settings = await getAppSettings();
+
   // Dynamically import to keep the PDF renderer out of the initial bundle.
   const { renderToBuffer } = await import("@react-pdf/renderer");
   const { buildInvoiceDoc } = await import("@/components/pdf/InvoicePdf");
 
-  const buffer = await renderToBuffer(buildInvoiceDoc(job));
+  const buffer = await renderToBuffer(
+    buildInvoiceDoc(job, { hstRate: Number(settings.hst_rate) }),
+  );
 
   const storagePath = `${job.location_code}/${job.invoice_no.replace(/[^A-Za-z0-9-_]/g, "_")}.pdf`;
 

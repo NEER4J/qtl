@@ -11,7 +11,7 @@ export default async function EngineTypesPage() {
   const engineTypes = await listAllEngineTypes();
 
   return (
-    <div className="flex flex-col gap-4 max-w-5xl">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Engine types</h1>
         <p className="text-sm text-muted-foreground">

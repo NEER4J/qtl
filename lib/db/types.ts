@@ -116,6 +116,16 @@ export interface SalesJob {
   invoice_no: string;
   customer_id: string | null;
   billing_name: string;
+  billing_address: string | null;
+  business_phone: string | null;
+  alt_phone: string | null;
+  customer_order_no: string | null;
+  unit_no: string | null;
+  vehicle_year: number | null;
+  vehicle_make: string | null;
+  vehicle_model: string | null;
+  vin: string | null;
+  engine_size: string | null;
   license_plate: string | null;
   contact_no: string | null;
   email: string | null;
@@ -144,6 +154,25 @@ export interface SalesJob {
   updated_at: string;
   created_by: string | null;
   updated_by: string | null;
+}
+
+export interface SalesJobItem {
+  id: string;
+  sales_job_id: string;
+  part_id: string | null;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+  /** Whether this line contributes to the HST taxable subtotal. Snapshot at
+   *  insert time so historical invoices stay stable when a part's taxability
+   *  is later toggled. */
+  is_taxable: boolean;
+  position: number;
+  /** Snapshot of the package name this line was expanded from. */
+  package_label: string | null;
+  created_at: string;
+  created_by: string | null;
 }
 
 export interface Expense {
@@ -367,11 +396,16 @@ export interface OilType {
   is_base: boolean;
   bulk_cost_per_litre: number;
   gallon_cost_per_litre: number;
+  /** Litres per gallon container for this specific oil. Imperial = 4.546,
+   *  US = 3.785, metric = 4.000. */
+  litres_per_gallon: number;
   sort_order: number;
   active: boolean;
   created_at: string;
   updated_at: string;
 }
+
+export type UnitOfMeasure = 'ltr' | 'gallon' | 'kg' | 'pcs' | 'hours' | 'each';
 
 export interface EngineType {
   id: string;
@@ -407,7 +441,12 @@ export interface Part {
   id: string;
   part_number: string;
   brand: string;
+  /** FK to part_categories. */
+  category_id: string;
+  /** Joined display name of the category (filled by the action layer). */
   category: string;
+  /** Joined unit of measure from the category (filled by the action layer). */
+  unit_of_measure: UnitOfMeasure;
   description: string | null;
   cost: number;
   list_price: number;
@@ -415,6 +454,7 @@ export interface Part {
   margin_type: PartMarginType;
   margin_value: number;
   service_cost_id: string | null;
+  is_taxable: boolean;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -430,6 +470,7 @@ export interface EngineFilter {
 export interface PartCategory {
   id: string;
   name: string;
+  unit_of_measure: UnitOfMeasure;
   sort_order: number;
   active: boolean;
   created_at: string;
@@ -443,4 +484,44 @@ export interface PartBrand {
   active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface PartPackage {
+  id: string;
+  name: string;
+  description: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+export interface PartPackageItem {
+  id: string;
+  package_id: string;
+  part_id: string;
+  quantity: number;
+  /** Override; null means use parts.list_price at expansion. */
+  unit_price: number | null;
+  position: number;
+  created_at: string;
+}
+
+export interface PartPackageItemRow extends PartPackageItem {
+  part: Pick<
+    Part,
+    | "id"
+    | "brand"
+    | "part_number"
+    | "description"
+    | "list_price"
+    | "category"
+    | "unit_of_measure"
+    | "is_taxable"
+  >;
+}
+
+export interface PartPackageWithItems extends PartPackage {
+  items: PartPackageItemRow[];
 }

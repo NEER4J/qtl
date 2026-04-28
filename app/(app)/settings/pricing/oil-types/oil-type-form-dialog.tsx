@@ -32,6 +32,7 @@ type FormValues = {
   is_base: boolean;
   bulk_cost_per_litre: string;
   gallon_cost_per_litre: string;
+  litres_per_gallon: string;
   sort_order: string;
   active: boolean;
 };
@@ -42,6 +43,7 @@ const blank: FormValues = {
   is_base: false,
   bulk_cost_per_litre: "0",
   gallon_cost_per_litre: "0",
+  litres_per_gallon: "4.546",
   sort_order: "100",
   active: true,
 };
@@ -70,6 +72,7 @@ export function OilTypeFormDialog({
             is_base: oilType.is_base,
             bulk_cost_per_litre: String(oilType.bulk_cost_per_litre),
             gallon_cost_per_litre: String(oilType.gallon_cost_per_litre),
+            litres_per_gallon: String(oilType.litres_per_gallon),
             sort_order: String(oilType.sort_order),
             active: oilType.active,
           }
@@ -85,6 +88,7 @@ export function OilTypeFormDialog({
         is_base: values.is_base,
         bulk_cost_per_litre: Number(values.bulk_cost_per_litre),
         gallon_cost_per_litre: Number(values.gallon_cost_per_litre),
+        litres_per_gallon: Number(values.litres_per_gallon),
         sort_order: Number(values.sort_order),
         active: values.active,
       };
@@ -182,7 +186,7 @@ export function OilTypeFormDialog({
                 name="gallon_cost_per_litre"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Gallon $ / litre *</FormLabel>
+                    <FormLabel>Gallon $ / gallon *</FormLabel>
                     <FormControl>
                       <Input type="number" min="0" step="0.0001" {...field} />
                     </FormControl>
@@ -191,6 +195,24 @@ export function OilTypeFormDialog({
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="litres_per_gallon"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Litres per gallon *</FormLabel>
+                  <FormControl>
+                    <Input type="number" min="0.1" step="0.001" {...field} />
+                  </FormControl>
+                  <FormDescription className="text-xs">
+                    4.546 = Imperial gallon, 3.785 = US gallon, 4.000 = metric. Used to convert
+                    the per-gallon price into a per-litre rate when pricing oil-change jobs.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

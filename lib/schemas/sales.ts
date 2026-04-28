@@ -17,6 +17,17 @@ const datetimeNullable = z
   .optional()
   .transform((v) => (v === "" ? null : (v ?? null)));
 
+export const SalesJobItemInput = z.object({
+  id: z.string().uuid().optional(),
+  part_id: z.string().uuid().nullable().optional(),
+  description: z.string().trim().min(1, "Description required").max(300),
+  quantity: z.coerce.number().positive("Qty must be > 0").max(99999),
+  unit_price: z.coerce.number().min(0, "Price must be ≥ 0").max(9999999),
+  is_taxable: z.coerce.boolean().default(true),
+  package_label: z.string().trim().max(120).nullable().optional(),
+});
+export type SalesJobItemInput = z.infer<typeof SalesJobItemInput>;
+
 export const SalesJobInput = z
   .object({
     id: z.string().uuid().optional(),
@@ -31,6 +42,16 @@ export const SalesJobInput = z
 
     customer_id: z.string().uuid().nullable().optional(),
     billing_name: z.string().trim().min(1, "Billing name is required").max(200),
+    billing_address: z.string().trim().max(500).nullable().optional().or(z.literal("")),
+    business_phone: z.string().trim().max(30).nullable().optional().or(z.literal("")),
+    alt_phone: z.string().trim().max(30).nullable().optional().or(z.literal("")),
+    customer_order_no: z.string().trim().max(60).nullable().optional().or(z.literal("")),
+    unit_no: z.string().trim().max(40).nullable().optional().or(z.literal("")),
+    vehicle_year: z.coerce.number().int().min(1900).max(2100).nullable().optional(),
+    vehicle_make: z.string().trim().max(60).nullable().optional().or(z.literal("")),
+    vehicle_model: z.string().trim().max(60).nullable().optional().or(z.literal("")),
+    vin: z.string().trim().toUpperCase().max(40).nullable().optional().or(z.literal("")),
+    engine_size: z.string().trim().max(40).nullable().optional().or(z.literal("")),
     license_plate: z.string().trim().toUpperCase().max(15).nullable().optional().or(z.literal("")),
     contact_no: z.string().trim().max(30).nullable().optional().or(z.literal("")),
     email: z
@@ -61,6 +82,7 @@ export const SalesJobInput = z
     oil_type_id: z.string().uuid().nullable().optional(),
     oil_container: z.enum(["bulk", "gallon"]).nullable().optional(),
     auto_priced_at: z.string().nullable().optional(),
+    items: z.array(SalesJobItemInput).optional(),
   })
   .superRefine((val, ctx) => {
     if (Math.abs(val.total - (val.sub_total + val.hst)) > 0.02) {

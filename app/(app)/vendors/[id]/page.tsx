@@ -43,7 +43,7 @@ export default async function VendorDetailPage({
   const totalBalance = expenses.reduce((s, e) => s + e.balance, 0);
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl">
+    <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <Button variant="ghost" size="sm" asChild className="-ml-3">

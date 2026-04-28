@@ -9,6 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -17,12 +24,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { togglePartActive } from "@/lib/actions/pricing";
-import type { AdminPartRow } from "@/lib/actions/pricing";
+import type { AdminPartRow, PartCategoryOption } from "@/lib/actions/pricing";
 import type { ServiceCost } from "@/lib/db/types";
 import { formatMoney } from "@/lib/utils/format";
 import { CreatableCombobox } from "@/components/pricing/creatable-combobox";
 
 import { PartFormDialog } from "./part-form-dialog";
+
+const ANY_CATEGORY = "__any__";
 
 function formatMargin(p: Pick<AdminPartRow, "margin_type" | "margin_value">): string {
   return p.margin_type === "percent"
@@ -39,9 +48,9 @@ export function PartsTable({
 }: {
   parts: AdminPartRow[];
   serviceCosts: ServiceCost[];
-  categories: string[];
+  categories: PartCategoryOption[];
   brands: string[];
-  initialFilters: { q: string; category: string; brand: string };
+  initialFilters: { q: string; category_id: string; brand: string };
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -50,7 +59,7 @@ export function PartsTable({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const [q, setQ] = useState(initialFilters.q);
-  const [category, setCategory] = useState(initialFilters.category);
+  const [categoryId, setCategoryId] = useState(initialFilters.category_id);
   const [brand, setBrand] = useState(initialFilters.brand);
 
   const onFilter = (e: React.FormEvent) => {
@@ -58,14 +67,14 @@ export function PartsTable({
     const params = new URLSearchParams(searchParams.toString());
     const set = (k: string, v: string) => (v ? params.set(k, v) : params.delete(k));
     set("q", q.trim());
-    set("category", category.trim());
+    set("category_id", categoryId);
     set("brand", brand.trim());
     router.push(`?${params.toString()}`);
   };
 
   const onClear = () => {
     setQ("");
-    setCategory("");
+    setCategoryId("");
     setBrand("");
     router.push("?");
   };
@@ -80,7 +89,7 @@ export function PartsTable({
     });
   };
 
-  const filtersActive = q || category || brand;
+  const filtersActive = q || categoryId || brand;
 
   return (
     <>
@@ -91,17 +100,23 @@ export function PartsTable({
           onChange={(e) => setQ(e.target.value)}
           className="w-[280px]"
         />
-        <div className="w-[200px]">
-          <CreatableCombobox
-            value={category}
-            onChange={setCategory}
-            suggestions={categories}
-            placeholder="Any category"
-            searchPlaceholder="Filter by category…"
-            emptyLabel="No categories yet."
-            addLabel="Add category"
-            allowClear
-          />
+        <div className="w-[220px]">
+          <Select
+            value={categoryId === "" ? ANY_CATEGORY : categoryId}
+            onValueChange={(v) => setCategoryId(v === ANY_CATEGORY ? "" : v)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Any category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY_CATEGORY}>Any category</SelectItem>
+              {categories.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name} ({c.unit_of_measure})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="w-[180px]">
           <CreatableCombobox
@@ -136,13 +151,14 @@ export function PartsTable({
             <TableRow>
               <TableHead className="w-32">Part #</TableHead>
               <TableHead className="w-28">Brand</TableHead>
-              <TableHead className="w-32">Category</TableHead>
+              <TableHead className="w-40">Category</TableHead>
               <TableHead>Description</TableHead>
               <TableHead className="w-32">Service</TableHead>
               <TableHead className="w-24 text-right">Cost</TableHead>
               <TableHead className="w-24 text-right">MHSW</TableHead>
               <TableHead className="w-24 text-right">Margin</TableHead>
               <TableHead className="w-24 text-right">List</TableHead>
+              <TableHead className="w-20">Tax</TableHead>
               <TableHead className="w-20">Status</TableHead>
               <TableHead className="w-40 text-right">Actions</TableHead>
             </TableRow>
@@ -150,7 +166,7 @@ export function PartsTable({
           <TableBody>
             {parts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                   {filtersActive ? "No parts match your filter." : "No parts yet. Click New part to add one."}
                 </TableCell>
               </TableRow>
@@ -159,13 +175,23 @@ export function PartsTable({
                 <TableRow key={p.id} className={!p.active ? "opacity-60" : undefined}>
                   <TableCell className="font-mono text-sm">{p.part_number}</TableCell>
                   <TableCell>{p.brand}</TableCell>
-                  <TableCell className="text-sm">{p.category}</TableCell>
+                  <TableCell className="text-sm">
+                    {p.category}{" "}
+                    <span className="text-xs text-muted-foreground">
+                      ({p.unit_of_measure})
+                    </span>
+                  </TableCell>
                   <TableCell className="text-sm">{p.description ?? "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{p.service_cost_name ?? "—"}</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(p.cost)}</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(p.mhsw_fee)}</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">{formatMargin(p)}</TableCell>
                   <TableCell className="text-right tabular-nums font-medium">{formatMoney(p.list_price)}</TableCell>
+                  <TableCell>
+                    <Badge variant={p.is_taxable ? "default" : "secondary"}>
+                      {p.is_taxable ? "Taxable" : "Exempt"}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
                     <Badge variant={p.active ? "default" : "secondary"}>{p.active ? "Active" : "Inactive"}</Badge>
                   </TableCell>

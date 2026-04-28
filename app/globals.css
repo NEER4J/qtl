@@ -11,21 +11,21 @@
     --card-foreground: 0 0% 9%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 9%;
-    /* Deep brand red */
-    --primary: 351 75% 38%;
+    /* Neutral black/gray primary; red reserved for destructive actions */
+    --primary: 0 0% 10%;
     --primary-foreground: 40 30% 98%;
-    --secondary: 40 30% 94%;
+    --secondary: 40 20% 94%;
     --secondary-foreground: 0 0% 12%;
-    --muted: 36 18% 93%;
-    --muted-foreground: 0 0% 38%;
-    /* Gold oil-drop accent */
+    --muted: 36 14% 93%;
+    --muted-foreground: 0 0% 40%;
+    /* Subtle gold oil-drop accent */
     --accent: 44 95% 92%;
     --accent-foreground: 28 80% 22%;
-    --destructive: 0 72% 46%;
+    --destructive: 351 75% 38%;
     --destructive-foreground: 0 0% 98%;
-    --border: 36 14% 86%;
-    --input: 36 14% 86%;
-    --ring: 351 70% 44%;
+    --border: 36 12% 86%;
+    --input: 36 12% 86%;
+    --ring: 0 0% 25%;
     --radius: 0.5rem;
   }
 
@@ -36,19 +36,19 @@
     --card-foreground: 40 30% 96%;
     --popover: 0 0% 11%;
     --popover-foreground: 40 30% 96%;
-    --primary: 351 70% 50%;
-    --primary-foreground: 40 30% 98%;
+    --primary: 40 30% 96%;
+    --primary-foreground: 0 0% 10%;
     --secondary: 0 0% 16%;
     --secondary-foreground: 40 25% 92%;
     --muted: 0 0% 18%;
     --muted-foreground: 36 10% 64%;
     --accent: 44 80% 18%;
     --accent-foreground: 44 95% 86%;
-    --destructive: 0 62% 46%;
+    --destructive: 351 70% 48%;
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 20%;
     --input: 0 0% 20%;
-    --ring: 351 70% 52%;
+    --ring: 0 0% 70%;
   }
 
   * {

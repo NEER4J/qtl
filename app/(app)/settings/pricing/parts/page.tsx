@@ -20,7 +20,7 @@ export default async function PartsAdminPage({
   const sp = await searchParams;
 
   const [parts, serviceCosts, categories, brands] = await Promise.all([
-    listAllParts({ category: sp.category, brand: sp.brand, q: sp.q }),
+    listAllParts({ category_id: sp.category_id, brand: sp.brand, q: sp.q }),
     listAllServiceCosts(),
     listPartCategories(),
     listPartBrands(),
@@ -31,7 +31,7 @@ export default async function PartsAdminPage({
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Parts catalogue</h1>
         <p className="text-sm text-muted-foreground">
-          {parts.length} part{parts.length === 1 ? "" : "s"} {sp.q || sp.category || sp.brand ? "(filtered)" : "total"}
+          {parts.length} part{parts.length === 1 ? "" : "s"} {sp.q || sp.category_id || sp.brand ? "(filtered)" : "total"}
         </p>
       </div>
 
@@ -54,7 +54,7 @@ export default async function PartsAdminPage({
         serviceCosts={serviceCosts}
         categories={categories}
         brands={brands}
-        initialFilters={{ q: sp.q ?? "", category: sp.category ?? "", brand: sp.brand ?? "" }}
+        initialFilters={{ q: sp.q ?? "", category_id: sp.category_id ?? "", brand: sp.brand ?? "" }}
       />
     </div>
   );

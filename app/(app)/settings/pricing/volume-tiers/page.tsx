@@ -22,7 +22,7 @@ export default async function VolumeTiersPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Volume tiers</h1>
         <p className="text-sm text-muted-foreground">

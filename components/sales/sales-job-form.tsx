@@ -36,6 +36,13 @@ import { todayISO } from "@/lib/utils/format";
 import { CustomerComboBox } from "./customer-combobox";
 import { PlateComboBox } from "./plate-combobox";
 import { PreviousPendingAlert } from "./previous-pending-alert";
+import {
+  SalesLineItems,
+  lineItemsSubTotal,
+  lineItemsTaxableSubTotal,
+  newLineItem,
+  type LineItem,
+} from "./sales-line-items";
 
 const PAYMENT_MODES: { value: PaymentMode; label: string }[] = [
   { value: "cash", label: "Cash" },
@@ -59,6 +66,16 @@ interface FormValues {
   invoice_no: string;
   customer_id: string | null;
   billing_name: string;
+  billing_address: string;
+  business_phone: string;
+  alt_phone: string;
+  customer_order_no: string;
+  unit_no: string;
+  vehicle_year: string;
+  vehicle_make: string;
+  vehicle_model: string;
+  vin: string;
+  engine_size: string;
   license_plate: string;
   contact_no: string;
   email: string;
@@ -88,6 +105,8 @@ export interface SalesJobFormProps {
   hstRate: number;
   /** Force location to this value (staff role). */
   lockedLocationId?: string | null;
+  /** Existing line items (edit mode). */
+  initialItems?: LineItem[];
 }
 
 export function SalesJobForm({
@@ -99,6 +118,7 @@ export function SalesJobForm({
   oilTypes,
   hstRate,
   lockedLocationId,
+  initialItems,
 }: SalesJobFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -108,6 +128,7 @@ export function SalesJobForm({
   const [lastAutoPrice, setLastAutoPrice] = useState<string | null>(
     initial?.auto_priced_at && initial?.sub_total ? initial.sub_total : null,
   );
+  const [lineItems, setLineItems] = useState<LineItem[]>(initialItems ?? []);
 
   const defaults: FormValues = {
     location_id: lockedLocationId ?? initial?.location_id ?? locations[0]?.id ?? "",
@@ -118,6 +139,16 @@ export function SalesJobForm({
     invoice_no: initial?.invoice_no ?? "",
     customer_id: initial?.customer_id ?? null,
     billing_name: initial?.billing_name ?? "",
+    billing_address: initial?.billing_address ?? "",
+    business_phone: initial?.business_phone ?? "",
+    alt_phone: initial?.alt_phone ?? "",
+    customer_order_no: initial?.customer_order_no ?? "",
+    unit_no: initial?.unit_no ?? "",
+    vehicle_year: initial?.vehicle_year ?? "",
+    vehicle_make: initial?.vehicle_make ?? "",
+    vehicle_model: initial?.vehicle_model ?? "",
+    vin: initial?.vin ?? "",
+    engine_size: initial?.engine_size ?? "",
     license_plate: initial?.license_plate ?? "",
     contact_no: initial?.contact_no ?? "",
     email: initial?.email ?? "",
@@ -140,7 +171,21 @@ export function SalesJobForm({
   const form = useForm<FormValues>({ defaultValues: defaults });
 
   // --------------------------------------------------------------------------
+  // Line items drive sub_total whenever there is at least one row.
+  // --------------------------------------------------------------------------
+  const itemsHaveRows = lineItems.length > 0;
+  useEffect(() => {
+    if (!itemsHaveRows) return;
+    const sum = lineItemsSubTotal(lineItems);
+    form.setValue("sub_total", sum.toFixed(2), { shouldDirty: true });
+    // Items take over: any prior auto-priced flag no longer applies.
+    setLastAutoPrice(null);
+  }, [lineItems, itemsHaveRows, form]);
+
+  // --------------------------------------------------------------------------
   // Live total computation: sub_total → hst + total
+  // When line items exist, HST is computed only on the taxable subset; without
+  // items (e.g. catalog-priced oil change), the whole sub_total is taxable.
   // --------------------------------------------------------------------------
   const subTotalRaw = useWatch({ control: form.control, name: "sub_total" });
   const paidRaw = useWatch({ control: form.control, name: "paid_amount" });
@@ -152,11 +197,12 @@ export function SalesJobForm({
       form.setValue("total", "");
       return;
     }
-    const hst = Math.round(n * hstRate * 100) / 100;
+    const taxableBase = itemsHaveRows ? lineItemsTaxableSubTotal(lineItems) : n;
+    const hst = Math.round(taxableBase * hstRate * 100) / 100;
     const total = Math.round((n + hst) * 100) / 100;
     form.setValue("hst", hst.toFixed(2));
     form.setValue("total", total.toFixed(2));
-  }, [subTotalRaw, hstRate, form]);
+  }, [subTotalRaw, hstRate, form, itemsHaveRows, lineItems]);
 
   // --------------------------------------------------------------------------
   // Oil-change auto-pricing: when service_type is OC and engine + oil + container
@@ -171,6 +217,7 @@ export function SalesJobForm({
 
   useEffect(() => {
     if (!isOilChange) return;
+    if (itemsHaveRows) return;
     if (!engineTypeId || !oilTypeId || !oilContainer) return;
     let cancelled = false;
     (async () => {
@@ -189,7 +236,7 @@ export function SalesJobForm({
       setLastAutoPrice(formatted);
     })();
     return () => { cancelled = true; };
-  }, [isOilChange, engineTypeId, oilTypeId, oilContainer, form]);
+  }, [isOilChange, itemsHaveRows, engineTypeId, oilTypeId, oilContainer, form]);
 
   // --------------------------------------------------------------------------
   // Customer picker sync — billing_name, plate, contact, email auto-fill
@@ -322,14 +369,43 @@ export function SalesJobForm({
         oil_type_id: values.oil_type_id || null,
         oil_container: values.oil_container || null,
         auto_priced_at: stillAutoPriced ? new Date().toISOString() : null,
+        items: lineItems.map((it) => ({
+          part_id: it.part_id,
+          description: it.description,
+          quantity: Number(it.quantity) || 0,
+          unit_price: Number(it.unit_price) || 0,
+          is_taxable: it.is_taxable,
+          package_label: it.package_label ?? null,
+        })),
       };
 
       const parsed = SalesJobInput.safeParse(payload);
       if (!parsed.success) {
+        // Some fields aren't always rendered (e.g. billing_name when no
+        // customer is picked; items.* live outside react-hook-form). Surface
+        // those via toast so the click doesn't feel silently dropped.
+        const REGISTERED: ReadonlySet<string> = new Set([
+          "location_id", "job_date", "bay_no", "upper_tech", "lower_tech",
+          "invoice_no", "billing_name", "license_plate", "contact_no", "email",
+          "odometer", "service_type_id", "carrier_name", "start_time", "end_time",
+          "comments", "sub_total", "hst", "total", "paid_amount", "payment_mode",
+          "engine_type_id", "oil_type_id", "oil_container",
+        ]);
+        const stray: string[] = [];
         for (const issue of parsed.error.issues) {
           const path = issue.path.join(".");
-          form.setError(path as keyof FormValues, { message: issue.message });
+          const top = String(issue.path[0] ?? "");
+          if (REGISTERED.has(top) && (selectedCustomer || addingNewCustomer || top !== "billing_name")) {
+            form.setError(path as keyof FormValues, { message: issue.message });
+          } else if (top === "billing_name") {
+            stray.push("Pick a customer or add a new one before saving.");
+          } else if (top === "items") {
+            stray.push(`Line item ${Number(issue.path[1]) + 1}: ${issue.message}`);
+          } else {
+            stray.push(`${path || "Form"}: ${issue.message}`);
+          }
         }
+        if (stray.length > 0) toast.error(stray[0], { description: stray.slice(1).join("\n") || undefined });
         return;
       }
 
@@ -525,6 +601,150 @@ export function SalesJobForm({
                 />
               </div>
             )}
+          </section>
+
+          {/* ----------------------------------------------------------------
+               Step 1b — Bill-to address & vehicle (printed on invoice)
+          ---------------------------------------------------------------- */}
+          <section className="rounded-md border p-4 space-y-4">
+            <h2 className="text-sm font-semibold uppercase text-muted-foreground">
+              Bill-to & vehicle
+              <span className="ml-2 text-xs font-normal normal-case text-muted-foreground">
+                Optional — appears on the printed invoice.
+              </span>
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="billing_address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Billing address</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        rows={3}
+                        placeholder={"1050 Heritage Rd\nBurlington, Ontario\nL7L 4X9"}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="business_phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Business phone</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="alt_phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Other phone</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="customer_order_no"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>Customer order #</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <FormField
+                control={form.control}
+                name="unit_no"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Unit no.</FormLabel>
+                    <FormControl><Input {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="vehicle_year"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Year</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="1900" max="2100" step="1" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="vehicle_make"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Make</FormLabel>
+                    <FormControl><Input placeholder="FRHT" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="vehicle_model"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Model</FormLabel>
+                    <FormControl><Input placeholder="FM2" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="vin"
+                render={({ field }) => (
+                  <FormItem className="col-span-2">
+                    <FormLabel>VIN</FormLabel>
+                    <FormControl>
+                      <Input
+                        className="font-mono uppercase"
+                        {...field}
+                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="engine_size"
+                render={({ field }) => (
+                  <FormItem className="col-span-2">
+                    <FormLabel>Engine size</FormLabel>
+                    <FormControl><Input placeholder="e.g. DD15" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
           </section>
 
           {/* ----------------------------------------------------------------
@@ -832,6 +1052,23 @@ export function SalesJobForm({
           </section>
 
           {/* ----------------------------------------------------------------
+               Step 2b — Line items / products
+          ---------------------------------------------------------------- */}
+          <section className="rounded-md border p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase text-muted-foreground">
+                Line items
+              </h2>
+              {itemsHaveRows && (
+                <span className="text-xs text-muted-foreground">
+                  Sub total is calculated from items below.
+                </span>
+              )}
+            </div>
+            <SalesLineItems items={lineItems} onChange={setLineItems} />
+          </section>
+
+          {/* ----------------------------------------------------------------
                Step 3 — Payment
           ---------------------------------------------------------------- */}
           <section className="rounded-md border p-4 space-y-4">
@@ -847,7 +1084,14 @@ export function SalesJobForm({
                   <FormItem>
                     <FormLabel>Sub Total</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" min="0" {...field} />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        readOnly={itemsHaveRows}
+                        className={itemsHaveRows ? "bg-muted/50" : undefined}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

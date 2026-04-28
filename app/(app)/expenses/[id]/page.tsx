@@ -53,7 +53,7 @@ export default async function ExpenseDetailPage({
     (profile.role === "manager" && profile.location_id === exp.location_id);
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl">
+    <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <Button variant="ghost" size="sm" asChild className="-ml-3">

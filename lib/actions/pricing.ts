@@ -13,6 +13,9 @@ import type {
   Part,
   PartBrand,
   PartCategory,
+  PartPackage,
+  PartPackageItemRow,
+  PartPackageWithItems,
   ServiceCost,
   StatutoryRate,
   VolumeTier,
@@ -23,6 +26,7 @@ import {
   CreatePartBrandInput,
   CreatePartCategoryInput,
   CreatePartInput,
+  CreatePartPackageInput,
   CreateServiceCostInput,
   CreateVolumeTierInput,
   DeleteEngineFilterInput,
@@ -33,6 +37,7 @@ import {
   UpdatePartBrandInput,
   UpdatePartCategoryInput,
   UpdatePartInput,
+  UpdatePartPackageInput,
   UpdateServiceCostInput,
   UpdateVolumeTierInput,
   UpsertEngineFilterInput,
@@ -45,6 +50,27 @@ import { normalizePartPricing } from "@/lib/utils/part-pricing";
 // ============================================================================
 
 const CUSTOMER_VIEW_HIDDEN_KEYS: (keyof Part)[] = ["cost", "mhsw_fee", "margin_value"];
+
+// Shape returned by Supabase when we select a parts row joined to its category.
+type PartJoinRow = Omit<Part, "category" | "unit_of_measure"> & {
+  part_categories: {
+    name: string;
+    unit_of_measure: Part["unit_of_measure"];
+  } | null;
+};
+
+const PART_SELECT = "*, part_categories:category_id(name, unit_of_measure)";
+
+function mergePartCategory<T extends PartJoinRow>(
+  row: T,
+): T & Pick<Part, "category" | "unit_of_measure"> {
+  const cat = row.part_categories;
+  return {
+    ...row,
+    category: cat?.name ?? "",
+    unit_of_measure: cat?.unit_of_measure ?? "pcs",
+  };
+}
 
 export async function listOilTypes(): Promise<OilType[]> {
   const supabase = await createClient();
@@ -75,7 +101,7 @@ export interface PriceListRow extends Part {
 }
 
 export async function listParts(filter?: {
-  category?: string;
+  category_id?: string;
   brand?: string;
   q?: string;
 }): Promise<PriceListRow[]> {
@@ -84,14 +110,13 @@ export async function listParts(filter?: {
 
   let q = supabase
     .from("parts")
-    .select("*, service_costs:service_cost_id(name)")
+    .select(`${PART_SELECT}, service_costs:service_cost_id(name)`)
     .eq("active", true)
-    .order("category")
     .order("brand")
     .order("part_number")
     .limit(2000);
 
-  if (filter?.category) q = q.eq("category", filter.category);
+  if (filter?.category_id) q = q.eq("category_id", filter.category_id);
   if (filter?.brand) q = q.eq("brand", filter.brand);
   if (filter?.q) {
     const term = `%${filter.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
@@ -102,10 +127,11 @@ export async function listParts(filter?: {
   if (error) throw error;
 
   const hideCost = profile.role !== "owner";
-  type Row = Part & { service_costs: { name: string } | null };
+  type Row = PartJoinRow & { service_costs: { name: string } | null };
   return ((data ?? []) as unknown as Row[]).map((r) => {
+    const merged = mergePartCategory(r);
     const row: PriceListRow = {
-      ...normalizePartPricing(r),
+      ...normalizePartPricing(merged),
       service_cost_name: r.service_costs?.name ?? null,
     };
     if (hideCost) {
@@ -141,7 +167,6 @@ export async function listVolumeTiers(): Promise<VolumeTier[]> {
 // Oil-change price grid — engines × oil types, using the SQL function
 // oil_change_price(engine, oil, container).
 // ============================================================================
-const LITRES_PER_IMPERIAL_GALLON = 4.54609;
 
 export interface PriceGridCell {
   engine_id: string;
@@ -243,9 +268,14 @@ export async function getOilChangeGrid(): Promise<{
     for (const o of oilTypes) {
       const tier = tierPremiumFor(o.id, capacity);
       const bulkRate = Number(o.bulk_cost_per_litre);
-      // gallon_cost_per_litre stores price per Imperial gallon (Canada);
-      // convert to per-litre before multiplying by capacity.
-      const gallonRate = Number(o.gallon_cost_per_litre) / LITRES_PER_IMPERIAL_GALLON;
+      // gallon_cost_per_litre stores price per gallon container; divide by the
+      // oil's own litres_per_gallon to get $/litre. Different oils ship in
+      // different gallon sizes (Imperial 4.546, US 3.785, metric 4.0).
+      const lpg = Number(o.litres_per_gallon);
+      const gallonRate =
+        Number.isFinite(lpg) && lpg > 0
+          ? Number(o.gallon_cost_per_litre) / lpg
+          : NaN;
       const bulk = Number.isFinite(bulkRate)
         ? round99(bulkRate * capacity + filterCost + serviceCost + tier)
         : null;
@@ -341,20 +371,19 @@ export interface AdminPartRow extends Part {
 }
 
 export async function listAllParts(filter?: {
-  category?: string;
+  category_id?: string;
   brand?: string;
   q?: string;
 }): Promise<AdminPartRow[]> {
   const supabase = await createClient();
   let query = supabase
     .from("parts")
-    .select("*, service_costs:service_cost_id(name)")
-    .order("category")
+    .select(`${PART_SELECT}, service_costs:service_cost_id(name)`)
     .order("brand")
     .order("part_number")
     .limit(2000);
 
-  if (filter?.category) query = query.eq("category", filter.category);
+  if (filter?.category_id) query = query.eq("category_id", filter.category_id);
   if (filter?.brand) query = query.eq("brand", filter.brand);
   if (filter?.q) {
     const term = `%${filter.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
@@ -363,27 +392,36 @@ export async function listAllParts(filter?: {
 
   const { data, error } = await query;
   if (error) throw error;
-  type Row = Part & { service_costs: { name: string } | null };
-  return ((data ?? []) as unknown as Row[]).map((r) => ({
-    ...normalizePartPricing(r),
-    service_cost_name: r.service_costs?.name ?? null,
-  }));
+  type Row = PartJoinRow & { service_costs: { name: string } | null };
+  return ((data ?? []) as unknown as Row[]).map((r) => {
+    const merged = mergePartCategory(r);
+    return {
+      ...normalizePartPricing(merged),
+      service_cost_name: r.service_costs?.name ?? null,
+    };
+  });
 }
 
 /**
- * Active category/brand names, for dropdown suggestions in the Part form.
- * Read from the managed `part_categories` / `part_brands` tables.
+ * Active categories for dropdown suggestions in the Part form. Returns the
+ * id (so a Select can submit a category_id), the name, and the unit_of_measure
+ * so the UI can show "Filters (pcs)" etc.
  */
-export async function listPartCategories(): Promise<string[]> {
+export type PartCategoryOption = Pick<
+  PartCategory,
+  "id" | "name" | "unit_of_measure"
+>;
+
+export async function listPartCategories(): Promise<PartCategoryOption[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("part_categories")
-    .select("name")
+    .select("id, name, unit_of_measure")
     .eq("active", true)
     .order("sort_order")
     .order("name");
   if (error) throw error;
-  return ((data ?? []) as { name: string }[]).map((r) => r.name);
+  return (data ?? []) as PartCategoryOption[];
 }
 
 export async function listPartBrands(): Promise<string[]> {
@@ -427,7 +465,7 @@ export async function listPartsForPicker(q?: string): Promise<Part[]> {
   const supabase = await createClient();
   let query = supabase
     .from("parts")
-    .select("*")
+    .select(PART_SELECT)
     .eq("active", true)
     .order("brand")
     .order("part_number")
@@ -438,7 +476,7 @@ export async function listPartsForPicker(q?: string): Promise<Part[]> {
   }
   const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []) as Part[];
+  return ((data ?? []) as unknown as PartJoinRow[]).map(mergePartCategory);
 }
 
 export interface EngineFilterRow extends EngineFilter {
@@ -462,15 +500,15 @@ export async function getEngineTypeDetail(id: string): Promise<EngineTypeDetail 
 
   const { data: filters, error: fErr } = await supabase
     .from("engine_filters")
-    .select("*, part:part_id(*)")
+    .select("*, part:part_id(*, part_categories:category_id(name, unit_of_measure))")
     .eq("engine_type_id", id)
     .order("id");
   if (fErr) throw fErr;
 
-  type Row = EngineFilter & { part: Part };
+  type Row = EngineFilter & { part: PartJoinRow };
   const rows = ((filters ?? []) as unknown as Row[]).map((r) => ({
     ...r,
-    part: r.part,
+    part: mergePartCategory(r.part),
   }));
 
   return { engine: engine as EngineType, filters: rows };
@@ -601,30 +639,20 @@ export const toggleEngineTypeActive = wrapAction({
 // ============================================================================
 
 /**
- * Side-effect: if the part references a category/brand name that isn't yet in
- * the reference tables, upsert it so the dropdown picks it up next time.
- * Runs after the main insert/update so a blocked write doesn't leave orphan
- * reference rows.
+ * Side-effect: if the part references a brand name that isn't yet in the
+ * `part_brands` lookup, upsert it so the dropdown picks it up next time.
+ * Categories are now FK-linked so they can't drift.
  */
-async function syncCategoryBrandRefs(
+async function syncBrandRef(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  category: string,
   brand: string,
 ) {
-  const cat = category.trim();
   const br = brand.trim();
-  if (cat) {
-    const { error } = await supabase
-      .from("part_categories")
-      .upsert({ name: cat }, { onConflict: "name", ignoreDuplicates: true });
-    if (error) console.error("[syncCategoryBrandRefs] category", error);
-  }
-  if (br) {
-    const { error } = await supabase
-      .from("part_brands")
-      .upsert({ name: br }, { onConflict: "name", ignoreDuplicates: true });
-    if (error) console.error("[syncCategoryBrandRefs] brand", error);
-  }
+  if (!br) return;
+  const { error } = await supabase
+    .from("part_brands")
+    .upsert({ name: br }, { onConflict: "name", ignoreDuplicates: true });
+  if (error) console.error("[syncBrandRef]", error);
 }
 
 export const createPart = wrapAction({
@@ -635,14 +663,14 @@ export const createPart = wrapAction({
     const { data, error } = await supabase
       .from("parts")
       .insert(input)
-      .select("*")
+      .select(PART_SELECT)
       .single();
     if (error) throw error;
-    await syncCategoryBrandRefs(supabase, input.category, input.brand);
+    await syncBrandRef(supabase, input.brand);
     revalidatePricing("parts");
     revalidatePath("/settings/pricing/categories");
     revalidatePath("/settings/pricing/brands");
-    return data as Part;
+    return mergePartCategory(data as unknown as PartJoinRow);
   },
 });
 
@@ -655,14 +683,14 @@ export const updatePart = wrapAction({
       .from("parts")
       .update(fields)
       .eq("id", id)
-      .select("*")
+      .select(PART_SELECT)
       .single();
     if (error) throw error;
-    await syncCategoryBrandRefs(supabase, fields.category, fields.brand);
+    await syncBrandRef(supabase, fields.brand);
     revalidatePricing("parts");
     revalidatePath("/settings/pricing/categories");
     revalidatePath("/settings/pricing/brands");
-    return data as Part;
+    return mergePartCategory(data as unknown as PartJoinRow);
   },
 });
 
@@ -675,11 +703,11 @@ export const togglePartActive = wrapAction({
       .from("parts")
       .update({ active: input.active })
       .eq("id", input.id)
-      .select("*")
+      .select(PART_SELECT)
       .single();
     if (error) throw error;
     revalidatePricing("parts");
-    return data as Part;
+    return mergePartCategory(data as unknown as PartJoinRow);
   },
 });
 
@@ -860,31 +888,15 @@ export const updatePartCategory = wrapAction({
   roles: ["owner"],
   handler: async ({ id, ...fields }): Promise<PartCategory> => {
     const supabase = await createClient();
-    // Fetch the existing name so we can cascade the rename to parts.category.
-    const { data: prev, error: prevErr } = await supabase
-      .from("part_categories")
-      .select("name")
-      .eq("id", id)
-      .single();
-    if (prevErr) throw prevErr;
-
-    const nextName = fields.name.trim();
     const { data, error } = await supabase
       .from("part_categories")
-      .update({ ...fields, name: nextName })
+      .update({ ...fields, name: fields.name.trim() })
       .eq("id", id)
       .select("*")
       .single();
     if (error) throw error;
-
-    if (prev && prev.name !== nextName) {
-      const { error: cascadeErr } = await supabase
-        .from("parts")
-        .update({ category: nextName })
-        .eq("category", prev.name);
-      if (cascadeErr) throw cascadeErr;
-    }
-
+    // Parts are FK-linked, so a name change is automatically visible on every
+    // part — no cascade needed.
     revalidatePricing("categories");
     revalidatePath("/settings/pricing/parts");
     return data as PartCategory;
@@ -1111,7 +1123,12 @@ export async function listLowMarginParts(): Promise<{
   const supabase = await createClient();
   const [{ data: settings, error: setErr }, { data: parts, error: partsErr }] = await Promise.all([
     supabase.from("app_settings").select("min_margin_alert_pct").eq("id", 1).single(),
-    supabase.from("parts").select("id, part_number, brand, category, cost, list_price, mhsw_fee").eq("active", true),
+    supabase
+      .from("parts")
+      .select(
+        "id, part_number, brand, cost, list_price, mhsw_fee, part_categories:category_id(name)",
+      )
+      .eq("active", true),
   ]);
   if (setErr) throw setErr;
   if (partsErr) throw partsErr;
@@ -1119,7 +1136,16 @@ export async function listLowMarginParts(): Promise<{
   const thresholdFrac = Number((settings as { min_margin_alert_pct: number } | null)?.min_margin_alert_pct ?? 0);
   if (thresholdFrac <= 0) return { threshold_pct: 0, parts: [] };
 
-  const list = (parts ?? []) as { id: string; part_number: string; brand: string; category: string; cost: number; list_price: number; mhsw_fee: number }[];
+  type Row = {
+    id: string;
+    part_number: string;
+    brand: string;
+    cost: number;
+    list_price: number;
+    mhsw_fee: number;
+    part_categories: { name: string } | null;
+  };
+  const list = (parts ?? []) as unknown as Row[];
   const flagged: LowMarginPart[] = [];
   for (const p of list) {
     const lp = Number(p.list_price);
@@ -1131,7 +1157,7 @@ export async function listLowMarginParts(): Promise<{
         id: p.id,
         part_number: p.part_number,
         brand: p.brand,
-        category: p.category,
+        category: p.part_categories?.name ?? "",
         cost: Number(p.cost),
         list_price: lp,
         mhsw_fee: Number(p.mhsw_fee),
@@ -1181,5 +1207,201 @@ export const updateMinMarginAlertPct = wrapAction({
     revalidatePath("/settings/pricing");
     revalidatePath("/analytics/products");
     return { pct: input.pct };
+  },
+});
+
+// ============================================================================
+// part_packages — pre-defined bundles of parts the user can drop onto a job
+// ============================================================================
+
+function revalidatePartPackages() {
+  revalidatePath("/settings/pricing");
+  revalidatePath("/settings/pricing/packages");
+  revalidatePath("/sales/new");
+}
+
+async function fetchPackageItems(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  packageIds: string[],
+): Promise<Map<string, PartPackageItemRow[]>> {
+  const out = new Map<string, PartPackageItemRow[]>();
+  if (packageIds.length === 0) return out;
+  const { data, error } = await supabase
+    .from("part_package_items")
+    .select(
+      "id, package_id, part_id, quantity, unit_price, position, created_at, part:parts(id, brand, part_number, description, list_price, is_taxable, part_categories:category_id(name, unit_of_measure))",
+    )
+    .in("package_id", packageIds)
+    .order("position");
+  if (error) throw error;
+  type RowFromDb = Omit<PartPackageItemRow, "part"> & {
+    part: {
+      id: string;
+      brand: string;
+      part_number: string;
+      description: string | null;
+      list_price: number;
+      is_taxable: boolean;
+      part_categories: {
+        name: string;
+        unit_of_measure: Part["unit_of_measure"];
+      } | null;
+    };
+  };
+  for (const row of (data ?? []) as unknown as RowFromDb[]) {
+    const cat = row.part.part_categories;
+    const merged: PartPackageItemRow = {
+      ...row,
+      part: {
+        id: row.part.id,
+        brand: row.part.brand,
+        part_number: row.part.part_number,
+        description: row.part.description,
+        list_price: Number(row.part.list_price),
+        is_taxable: row.part.is_taxable,
+        category: cat?.name ?? "",
+        unit_of_measure: cat?.unit_of_measure ?? "pcs",
+      },
+    };
+    const arr = out.get(row.package_id) ?? [];
+    arr.push(merged);
+    out.set(row.package_id, arr);
+  }
+  return out;
+}
+
+export async function listAllPartPackages(): Promise<PartPackageWithItems[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("part_packages")
+    .select("*")
+    .order("active", { ascending: false })
+    .order("name");
+  if (error) throw error;
+  const packages = (data ?? []) as PartPackage[];
+  const itemsByPkg = await fetchPackageItems(supabase, packages.map((p) => p.id));
+  return packages.map((p) => ({ ...p, items: itemsByPkg.get(p.id) ?? [] }));
+}
+
+export async function getPartPackage(id: string): Promise<PartPackageWithItems | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("part_packages")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const itemsByPkg = await fetchPackageItems(supabase, [id]);
+  return { ...(data as PartPackage), items: itemsByPkg.get(id) ?? [] };
+}
+
+export async function listPackagesForPicker(q?: string): Promise<PartPackageWithItems[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("part_packages")
+    .select("*")
+    .eq("active", true)
+    .order("name")
+    .limit(50);
+  if (q && q.trim()) {
+    const term = `%${q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+    query = query.or(`name.ilike.${term},description.ilike.${term}`);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  const packages = (data ?? []) as PartPackage[];
+  const itemsByPkg = await fetchPackageItems(supabase, packages.map((p) => p.id));
+  return packages.map((p) => ({ ...p, items: itemsByPkg.get(p.id) ?? [] }));
+}
+
+export const createPartPackage = wrapAction({
+  schema: CreatePartPackageInput,
+  roles: ["owner"],
+  handler: async (input, profile): Promise<PartPackage> => {
+    const supabase = await createClient();
+    const { data: pkg, error: pkgErr } = await supabase
+      .from("part_packages")
+      .insert({
+        name: input.name.trim(),
+        description: input.description ?? null,
+        active: input.active,
+        created_by: profile.id,
+        updated_by: profile.id,
+      })
+      .select("*")
+      .single();
+    if (pkgErr) throw pkgErr;
+
+    const rows = input.items.map((it, i) => ({
+      package_id: (pkg as PartPackage).id,
+      part_id: it.part_id,
+      quantity: it.quantity,
+      unit_price: it.unit_price ?? null,
+      position: i,
+    }));
+    const { error: itemsErr } = await supabase.from("part_package_items").insert(rows);
+    if (itemsErr) throw itemsErr;
+
+    revalidatePartPackages();
+    return pkg as PartPackage;
+  },
+});
+
+export const updatePartPackage = wrapAction({
+  schema: UpdatePartPackageInput,
+  roles: ["owner"],
+  handler: async ({ id, items, ...fields }, profile): Promise<PartPackage> => {
+    const supabase = await createClient();
+    const { data: pkg, error: pkgErr } = await supabase
+      .from("part_packages")
+      .update({
+        name: fields.name.trim(),
+        description: fields.description ?? null,
+        active: fields.active,
+        updated_by: profile.id,
+      })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (pkgErr) throw pkgErr;
+
+    // Replace-all items: delete then insert in fresh order. Same pattern as
+    // replaceJobItems in lib/actions/sales.ts.
+    const { error: delErr } = await supabase
+      .from("part_package_items")
+      .delete()
+      .eq("package_id", id);
+    if (delErr) throw delErr;
+
+    const rows = items.map((it, i) => ({
+      package_id: id,
+      part_id: it.part_id,
+      quantity: it.quantity,
+      unit_price: it.unit_price ?? null,
+      position: i,
+    }));
+    const { error: insErr } = await supabase.from("part_package_items").insert(rows);
+    if (insErr) throw insErr;
+
+    revalidatePartPackages();
+    return pkg as PartPackage;
+  },
+});
+
+export const togglePartPackageActive = wrapAction({
+  schema: ToggleActiveInput,
+  roles: ["owner"],
+  handler: async (input, profile): Promise<PartPackage> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("part_packages")
+      .update({ active: input.active, updated_by: profile.id })
+      .eq("id", input.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePartPackages();
+    return data as PartPackage;
   },
 });

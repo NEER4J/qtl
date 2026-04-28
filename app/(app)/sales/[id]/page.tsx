@@ -55,7 +55,7 @@ export default async function SalesJobDetailPage({
       profile.location_id === job.location_id);
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl">
+    <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <Button variant="ghost" size="sm" asChild className="-ml-3">
@@ -161,6 +161,54 @@ export default async function SalesJobDetailPage({
           </CardContent>
         )}
       </Card>
+
+      {job.items.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Line items</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="w-24 text-right">Qty</TableHead>
+                  <TableHead className="w-32 text-right">Unit price</TableHead>
+                  <TableHead className="w-32 text-right">Line total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {job.items.map((it) => (
+                  <TableRow key={it.id}>
+                    <TableCell>
+                      <div className="font-medium">{it.description}</div>
+                      {it.part_id && (
+                        <div className="text-xs text-muted-foreground">
+                          Catalog: {it.part_brand} {it.part_number}
+                        </div>
+                      )}
+                      {it.package_label && (
+                        <div className="text-xs text-muted-foreground italic">
+                          from {it.package_label}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {Number(it.quantity)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatMoney(it.unit_price)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">
+                      {formatMoney(it.line_total)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

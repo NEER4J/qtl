@@ -32,7 +32,7 @@ export default async function NewSalesJobPage() {
   const lockedLocationId = profile.role === "staff" ? profile.location_id : null;
 
   return (
-    <div className="flex flex-col gap-4 max-w-5xl">
+    <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
           <Button variant="ghost" size="sm" asChild className="-ml-3">

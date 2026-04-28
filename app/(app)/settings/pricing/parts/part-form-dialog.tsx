@@ -18,6 +18,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -33,33 +34,35 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createPart, updatePart } from "@/lib/actions/pricing";
-import type { AdminPartRow } from "@/lib/actions/pricing";
+import type { AdminPartRow, PartCategoryOption } from "@/lib/actions/pricing";
 import type { PartMarginType, ServiceCost } from "@/lib/db/types";
 import { calculatePartListPrice } from "@/lib/utils/part-pricing";
 
 type FormValues = {
   part_number: string;
   brand: string;
-  category: string;
+  category_id: string;
   description: string;
   cost: string;
   mhsw_fee: string;
   margin_type: PartMarginType;
   margin_value: string;
   service_cost_id: string | null;
+  is_taxable: boolean;
   active: boolean;
 };
 
 const blank: FormValues = {
   part_number: "",
   brand: "",
-  category: "",
+  category_id: "",
   description: "",
   cost: "0",
   mhsw_fee: "0",
   margin_type: "fixed",
   margin_value: "0",
   service_cost_id: null,
+  is_taxable: true,
   active: true,
 };
 
@@ -77,15 +80,15 @@ export function PartFormDialog({
   mode: "create" | "edit";
   part?: AdminPartRow;
   serviceCosts: ServiceCost[];
-  categories: string[];
+  categories: PartCategoryOption[];
   brands: string[];
 }) {
   const [isPending, startTransition] = useTransition();
   const form = useForm<FormValues>({ defaultValues: blank });
-  const [cost = "0", mhswFee = "0", marginType = "fixed", marginValue = "0"] =
+  const [cost = "0", mhswFee = "0", marginType = "fixed", marginValue = "0", categoryId] =
     useWatch({
       control: form.control,
-      name: ["cost", "mhsw_fee", "margin_type", "margin_value"],
+      name: ["cost", "mhsw_fee", "margin_type", "margin_value", "category_id"],
     });
 
   const calculatedListPrice = calculatePartListPrice({
@@ -95,6 +98,8 @@ export function PartFormDialog({
     margin_value: Number(marginValue),
   });
 
+  const selectedCategory = categories.find((c) => c.id === categoryId);
+
   useEffect(() => {
     if (!open) return;
     form.reset(
@@ -102,13 +107,14 @@ export function PartFormDialog({
         ? {
             part_number: part.part_number,
             brand: part.brand,
-            category: part.category,
+            category_id: part.category_id,
             description: part.description ?? "",
             cost: String(part.cost),
             mhsw_fee: String(part.mhsw_fee),
             margin_type: part.margin_type,
             margin_value: String(part.margin_value),
             service_cost_id: part.service_cost_id,
+            is_taxable: part.is_taxable,
             active: part.active,
           }
         : blank,
@@ -120,13 +126,14 @@ export function PartFormDialog({
       const payload = {
         part_number: values.part_number.trim(),
         brand: values.brand.trim(),
-        category: values.category.trim(),
+        category_id: values.category_id,
         description: values.description.trim() === "" ? null : values.description.trim(),
         cost: Number(values.cost),
         mhsw_fee: Number(values.mhsw_fee),
         margin_type: values.margin_type,
         margin_value: Number(values.margin_value),
         service_cost_id: values.service_cost_id || null,
+        is_taxable: values.is_taxable,
         active: values.active,
       };
       const res =
@@ -194,21 +201,32 @@ export function PartFormDialog({
 
             <FormField
               control={form.control}
-              name="category"
+              name="category_id"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Category *</FormLabel>
-                  <FormControl>
-                    <CreatableCombobox
-                      value={field.value}
-                      onChange={field.onChange}
-                      suggestions={categories}
-                      placeholder="Pick category or add new"
-                      searchPlaceholder="Search categories or type a new one…"
-                      emptyLabel="No categories yet."
-                      addLabel="Add category"
-                    />
-                  </FormControl>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pick a category" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {categories.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}{" "}
+                          <span className="text-muted-foreground">
+                            ({c.unit_of_measure})
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedCategory && (
+                    <FormDescription>
+                      Quantities of this part will be shown in <strong>{selectedCategory.unit_of_measure}</strong>.
+                    </FormDescription>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -314,6 +332,24 @@ export function PartFormDialog({
                     />
                   </FormControl>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="is_taxable"
+              render={({ field }) => (
+                <FormItem className="flex items-center gap-2 space-y-0">
+                  <FormControl>
+                    <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />
+                  </FormControl>
+                  <div className="leading-none">
+                    <FormLabel className="cursor-pointer">HST taxable</FormLabel>
+                    <FormDescription className="text-xs">
+                      Uncheck for HST-exempt parts. Applies to the list price on every job that uses this part.
+                    </FormDescription>
+                  </div>
                 </FormItem>
               )}
             />

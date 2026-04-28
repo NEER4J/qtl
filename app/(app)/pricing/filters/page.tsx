@@ -26,7 +26,7 @@ export default async function FilterListPage({
   const sp = await searchParams;
 
   const parts = await listParts({
-    category: sp.category,
+    category_id: sp.category_id_id,
     brand: sp.brand,
     q: sp.q,
   });
@@ -50,7 +50,6 @@ export default async function FilterListPage({
 
       <form className="flex flex-wrap gap-3">
         <Input name="q" defaultValue={sp.q ?? ""} placeholder="Search by part number or description" className="w-[280px]" />
-        <Input name="category" defaultValue={sp.category ?? ""} placeholder="Category" className="w-[160px]" />
         <Input name="brand" defaultValue={sp.brand ?? ""} placeholder="Brand" className="w-[160px]" />
         <button type="submit" className="hidden" />
       </form>
@@ -60,9 +59,9 @@ export default async function FilterListPage({
           {parts.length === 0 ? (
             <div className="p-8 text-sm text-muted-foreground text-center space-y-3">
               <p className="font-medium text-foreground">
-                {(sp.q || sp.category || sp.brand) ? "No parts match your search." : "The catalogue is empty."}
+                {(sp.q || sp.category_id || sp.brand) ? "No parts match your search." : "The catalogue is empty."}
               </p>
-              {(sp.q || sp.category || sp.brand) ? (
+              {(sp.q || sp.category_id || sp.brand) ? (
                 <p>Try clearing the filters above to see the full list.</p>
               ) : profile.role === "owner" ? (
                 <>
@@ -99,7 +98,12 @@ export default async function FilterListPage({
                   <TableRow key={p.id}>
                     <TableCell className="font-mono text-sm">{p.part_number}</TableCell>
                     <TableCell>{p.brand}</TableCell>
-                    <TableCell className="text-sm">{p.category}</TableCell>
+                    <TableCell className="text-sm">
+                      {p.category}{" "}
+                      <span className="text-xs text-muted-foreground">
+                        ({p.unit_of_measure})
+                      </span>
+                    </TableCell>
                     <TableCell className="text-sm">{p.description ?? "—"}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{p.service_cost_name ?? "—"}</TableCell>
                     {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(p.cost)}</TableCell>}

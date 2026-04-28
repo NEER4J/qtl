@@ -51,7 +51,7 @@ export default async function AuditLogPage({
   const totalPages = Math.ceil(total / 50);
 
   return (
-    <div className="flex flex-col gap-6 max-w-7xl">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
         <p className="text-sm text-muted-foreground">{total.toLocaleString()} records</p>

@@ -23,11 +23,32 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { createPartCategory, updatePartCategory } from "@/lib/actions/pricing";
+import {
+  UNIT_OF_MEASURE_OPTIONS,
+  type UnitOfMeasureValue,
+} from "@/lib/schemas/pricing";
 import type { PartCategory } from "@/lib/db/types";
 
-type FormValues = { name: string; sort_order: string; active: boolean };
-const blank: FormValues = { name: "", sort_order: "100", active: true };
+type FormValues = {
+  name: string;
+  unit_of_measure: UnitOfMeasureValue;
+  sort_order: string;
+  active: boolean;
+};
+const blank: FormValues = {
+  name: "",
+  unit_of_measure: "pcs",
+  sort_order: "100",
+  active: true,
+};
 
 export function PartCategoryFormDialog({
   open,
@@ -47,7 +68,12 @@ export function PartCategoryFormDialog({
     if (!open) return;
     form.reset(
       mode === "edit" && category
-        ? { name: category.name, sort_order: String(category.sort_order), active: category.active }
+        ? {
+            name: category.name,
+            unit_of_measure: category.unit_of_measure,
+            sort_order: String(category.sort_order),
+            active: category.active,
+          }
         : blank,
     );
   }, [open, mode, category, form]);
@@ -56,6 +82,7 @@ export function PartCategoryFormDialog({
     startTransition(async () => {
       const payload = {
         name: values.name.trim(),
+        unit_of_measure: values.unit_of_measure,
         sort_order: Number(values.sort_order),
         active: values.active,
       };
@@ -98,9 +125,39 @@ export function PartCategoryFormDialog({
                   </FormControl>
                   {nameChanged && (
                     <FormDescription className="text-amber-600 dark:text-amber-500">
-                      Every part currently in <strong>{category!.name}</strong> will be updated to the new name.
+                      Every part in this category will display the new name immediately.
                     </FormDescription>
                   )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="unit_of_measure"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Unit of measure *</FormLabel>
+                  <Select
+                    value={field.value}
+                    onValueChange={(v) => field.onChange(v as UnitOfMeasureValue)}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {UNIT_OF_MEASURE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    How parts in this category are counted on invoices and line items.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

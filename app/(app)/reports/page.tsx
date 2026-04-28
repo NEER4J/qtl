@@ -57,7 +57,7 @@ export default async function ReportsHubPage() {
   const reports = REPORTS.filter((r) => (r.roles as readonly string[]).includes(profile.role));
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
         <p className="text-sm text-muted-foreground">Formatted reports with PDF and CSV exports.</p>

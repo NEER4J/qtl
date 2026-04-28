@@ -33,7 +33,7 @@ export default async function HstSummaryPage({
   ]);
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">HST Summary</h1>
         <p className="text-sm text-muted-foreground">{data.period_label}</p>
