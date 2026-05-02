@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  CalendarDays,
   FileText,
   ReceiptText,
   ScrollText,
@@ -15,6 +16,13 @@ import { requireProfile } from "@/lib/auth/require";
 export const dynamic = "force-dynamic";
 
 const REPORTS = [
+  {
+    title: "Daily job report",
+    href: "/reports/daily",
+    icon: CalendarDays,
+    description: "Single-day jobs, parts used, revenue by hour, customer mix.",
+    roles: ["owner", "manager", "accountant", "staff"],
+  },
   {
     title: "HST Summary",
     href: "/reports/hst",

@@ -83,6 +83,7 @@ export default async function EditSalesJobPage({
           lower_tech: job.lower_tech ?? "",
           invoice_no: job.invoice_no,
           customer_id: job.customer_id,
+          vehicle_id: job.vehicle_id ?? null,
           billing_name: job.billing_name,
           billing_address: job.billing_address ?? "",
           business_phone: job.business_phone ?? "",
@@ -99,9 +100,10 @@ export default async function EditSalesJobPage({
           email: job.email ?? "",
           odometer: job.odometer?.toString() ?? "",
           service_type_id: job.service_type_id,
-          carrier_name: job.carrier_name ?? "",
-          start_time: job.start_time ? toDatetimeLocal(job.start_time) : "",
-          end_time: job.end_time ? toDatetimeLocal(job.end_time) : "",
+          advisor_name: job.advisor_name ?? "",
+          job_time: job.job_time ?? (job.start_time ? toTimeOfDay(job.start_time) : ""),
+          free_grease_applied: job.free_grease_applied ?? false,
+          free_grease_override_reason: job.free_grease_override_reason ?? "",
           comments: job.comments ?? "",
           sub_total: job.sub_total.toString(),
           hst: job.hst.toString(),
@@ -118,10 +120,12 @@ export default async function EditSalesJobPage({
   );
 }
 
-// <input type="datetime-local" /> wants "YYYY-MM-DDTHH:mm" with no timezone.
-function toDatetimeLocal(iso: string): string {
+// Pull HH:mm from a stored timestamptz so legacy rows surface a time on edit.
+function toTimeOfDay(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
 }
+

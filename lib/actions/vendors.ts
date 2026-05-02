@@ -10,7 +10,11 @@ import {
   SearchVendorsInput,
   UpdateVendorInput,
 } from "@/lib/schemas/vendors";
-import type { Expense, Vendor } from "@/lib/db/types";
+import {
+  DeleteVendorLocationInput,
+  UpsertVendorLocationInput,
+} from "@/lib/schemas/vendor-locations";
+import type { Expense, Vendor, VendorLocation } from "@/lib/db/types";
 
 // ----------------------------------------------------------------------------
 // Search
@@ -163,3 +167,81 @@ export async function getVendorExpenseHistory(
   if (error) throw error;
   return (data ?? []) as Expense[];
 }
+
+// ----------------------------------------------------------------------------
+// Vendor per-location data (item #16)
+// ----------------------------------------------------------------------------
+export async function getVendorLocations(vendorId: string): Promise<VendorLocation[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("vendor_locations")
+    .select("*")
+    .eq("vendor_id", vendorId);
+  if (error) throw error;
+  return (data ?? []) as VendorLocation[];
+}
+
+// Pull a single (vendor, location) row — used by the expense form when a
+// vendor + location are both chosen so the per-location account number / sales
+// rep prefills.
+export async function getVendorLocationDetails(
+  vendorId: string,
+  locationId: string,
+): Promise<VendorLocation | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("vendor_locations")
+    .select("*")
+    .eq("vendor_id", vendorId)
+    .eq("location_id", locationId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as VendorLocation | null) ?? null;
+}
+
+export const upsertVendorLocation = wrapAction({
+  schema: UpsertVendorLocationInput,
+  roles: ["owner", "accountant", "manager"],
+  handler: async (input, profile): Promise<VendorLocation> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("vendor_locations")
+      .upsert(
+        {
+          vendor_id: input.vendor_id,
+          location_id: input.location_id,
+          account_no: input.account_no,
+          account_type: input.account_type,
+          contact_no: input.contact_no,
+          email: input.email,
+          sales_rep_name: input.sales_rep_name,
+          notes: input.notes,
+          updated_by: profile.id,
+          created_by: profile.id,
+        },
+        { onConflict: "vendor_id,location_id" },
+      )
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePath("/vendors");
+    revalidatePath(`/vendors/${input.vendor_id}`);
+    return data as VendorLocation;
+  },
+});
+
+export const deleteVendorLocation = wrapAction({
+  schema: DeleteVendorLocationInput,
+  roles: ["owner", "accountant"],
+  handler: async (input): Promise<{ vendor_id: string; location_id: string }> => {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("vendor_locations")
+      .delete()
+      .eq("vendor_id", input.vendor_id)
+      .eq("location_id", input.location_id);
+    if (error) throw error;
+    revalidatePath(`/vendors/${input.vendor_id}`);
+    return input;
+  },
+});

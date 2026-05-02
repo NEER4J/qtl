@@ -16,16 +16,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toggleVendorActive } from "@/lib/actions/vendors";
-import type { ExpenseCategory, Vendor } from "@/lib/db/types";
+import type { ExpenseCategory, Location, Vendor } from "@/lib/db/types";
 
 import { VendorFormDialog } from "./vendor-form-dialog";
 
 export function VendorsTable({
   vendors,
   categories,
+  locations = [],
 }: {
   vendors: Vendor[];
   categories: ExpenseCategory[];
+  locations?: Location[];
 }) {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Vendor | null>(null);
@@ -144,6 +146,7 @@ export function VendorsTable({
         onOpenChange={setCreating}
         mode="create"
         categories={categories}
+        locations={locations}
       />
       <VendorFormDialog
         open={editing !== null}
@@ -151,6 +154,7 @@ export function VendorsTable({
         mode="edit"
         vendor={editing ?? undefined}
         categories={categories}
+        locations={locations}
       />
     </>
   );

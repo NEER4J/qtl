@@ -73,16 +73,109 @@ export interface ExpenseSubcategory {
   active: boolean;
 }
 
+export type CustomerStatus = 'new' | 'regular' | 'old';
+export type ContactMethod = 'mail' | 'email' | 'phone' | 'sms';
+
 export interface Customer {
   id: string;
   code: string | null;
-  billing_name: string;
+  // legacy single field — derivable from first_name + last_or_company
+  billing_name: string | null;
+  // CARS-style name parts
+  salutation: string | null;
+  first_name: string | null;
+  last_or_company: string | null;
+  // address
+  address_1: string | null;
+  address_2: string | null;
+  city: string | null;
+  province: string | null;
+  country: string;
+  postal_code: string | null;
+  // phones
   contact_no: string | null;
+  phone_home: string | null;
+  phone_cell: string | null;
+  phone_business: string | null;
+  phone_business_ext: string | null;
+  phone_fax: string | null;
+  phone_alt_1: string | null;
+  phone_alt_2: string | null;
+  phone_notes: Record<string, string>;
+  phone_search: string;
+  // contact / classification
   email: string | null;
+  other_contact: string | null;
+  comments: string | null;
+  contact_method: ContactMethod | null;
+  customer_type: string | null;
+  status: CustomerStatus;
+  // billing options
+  default_pay_method: PaymentMode | null;
+  cod_required: boolean;
+  labour_discount_pct: number;
+  parts_discount_pct: number;
+  late_payment_pct: number;
+  late_payment_days: number;
+  calc_interest_from: string | null;
+  special_hst_rate_pct: number | null;
+  pays_hst: boolean;
+  // free grease
+  free_grease_until: string | null;
+  free_grease_overridden_at: string | null;
+  free_grease_override_note: string | null;
+  // legacy / context
   license_plates: string[];
   home_location_id: string | null;
   notes: string | null;
   active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+export interface Vehicle {
+  id: string;
+  customer_id: string;
+  license_plate: string;
+  vin: string | null;
+  year: number | null;
+  make: string | null;
+  model: string | null;
+  engine_size: string | null;
+  engine_serial: string | null;
+  unit_number: string | null;
+  cab_card_number: string | null;
+  drive_clean_date: string | null;
+  colour: string | null;
+  expiry_date: string | null;
+  license_renewal_date: string | null;
+  follow_up_date: string | null;
+  mileage: number | null;
+  last_contacted_at: string | null;
+  carrier_name: string | null;
+  comments: string | null;
+  printed_comments: string | null;
+  vehicle_comments: string | null;
+  deactivated_at: string | null;
+  deactivated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+export interface VendorLocation {
+  id: string;
+  vendor_id: string;
+  location_id: string;
+  account_no: string | null;
+  account_type: string | null;
+  contact_no: string | null;
+  email: string | null;
+  sales_rep_name: string | null;
+  notes: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -135,6 +228,12 @@ export interface SalesJob {
   start_time: string | null;
   end_time: string | null;
   duration_minutes: number | null;
+  // New fields (0037): single time, advisor, vehicle link, free-grease.
+  vehicle_id: string | null;
+  job_time: string | null;
+  advisor_name: string | null;
+  free_grease_applied: boolean;
+  free_grease_override_reason: string | null;
   comments: string | null;
   sub_total: number;
   hst: number;

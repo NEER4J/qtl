@@ -25,6 +25,7 @@ import type {
 export interface SalesJobRow extends SalesJob {
   location_code: string | null;
   service_type_code: string | null;
+  customer_status: string | null;
   invoice_pdf_path: string | null;
 }
 
@@ -47,7 +48,7 @@ export async function listSalesJobs(
   let query = supabase
     .from("sales_jobs")
     .select(
-      "*, locations:location_id(code), service_types:service_type_id(code)",
+      "*, locations:location_id(code), service_types:service_type_id(code), customers:customer_id(status)",
       { count: "exact" },
     )
     .is("deactivated_at", null)
@@ -60,6 +61,7 @@ export async function listSalesJobs(
   if (input.location_id) query = query.eq("location_id", input.location_id);
   if (input.service_type_id) query = query.eq("service_type_id", input.service_type_id);
   if (input.payment_status) query = query.eq("payment_status", input.payment_status);
+  if (input.customer_status) query = query.eq("customers.status", input.customer_status);
   if (input.q) {
     const term = `%${input.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
     query = query.or(
@@ -74,17 +76,20 @@ export async function listSalesJobs(
     invoice_pdf_path?: string | null;
     locations: { code: string | null } | { code: string | null }[] | null;
     service_types: { code: string | null } | { code: string | null }[] | null;
+    customers: { status: string | null } | { status: string | null }[] | null;
   };
 
   const rows: SalesJobRow[] = (data as JoinedRow[] | null ?? []).map((r) => {
     const loc = Array.isArray(r.locations) ? r.locations[0] : r.locations;
     const svc = Array.isArray(r.service_types) ? r.service_types[0] : r.service_types;
-    const { locations: _l, service_types: _s, invoice_pdf_path, ...rest } = r;
-    void _l; void _s;
+    const cus = Array.isArray(r.customers) ? r.customers[0] : r.customers;
+    const { locations: _l, service_types: _s, customers: _c, invoice_pdf_path, ...rest } = r;
+    void _l; void _s; void _c;
     return {
       ...(rest as SalesJob),
       location_code: loc?.code ?? null,
       service_type_code: svc?.code ?? null,
+      customer_status: cus?.status ?? null,
       invoice_pdf_path: invoice_pdf_path ?? null,
     };
   });
@@ -221,11 +226,13 @@ export const createSalesJob = wrapAction({
       .insert({
         location_id: locationId,
         job_date: input.job_date,
+        job_time: input.job_time,
         bay_no: input.bay_no ?? null,
         upper_tech: input.upper_tech || null,
         lower_tech: input.lower_tech || null,
         invoice_no: input.invoice_no?.trim() || null,
         customer_id: input.customer_id ?? null,
+        vehicle_id: input.vehicle_id ?? null,
         billing_name: input.billing_name,
         billing_address: input.billing_address || null,
         business_phone: input.business_phone || null,
@@ -242,9 +249,7 @@ export const createSalesJob = wrapAction({
         email: input.email || null,
         odometer: input.odometer ?? null,
         service_type_id: input.service_type_id,
-        carrier_name: input.carrier_name || null,
-        start_time: input.start_time,
-        end_time: input.end_time,
+        advisor_name: input.advisor_name || null,
         comments: input.comments || null,
         sub_total: input.sub_total,
         hst: input.hst,
@@ -252,6 +257,8 @@ export const createSalesJob = wrapAction({
         paid_amount: input.paid_amount,
         payment_mode: input.payment_mode ?? null,
         payment_status: status,
+        free_grease_applied: input.free_grease_applied,
+        free_grease_override_reason: input.free_grease_override_reason || null,
         engine_type_id: input.engine_type_id ?? null,
         oil_type_id: input.oil_type_id ?? null,
         oil_container: input.oil_container ?? null,
@@ -307,11 +314,13 @@ export const updateSalesJob = wrapAction({
       .update({
         location_id: input.location_id,
         job_date: input.job_date,
+        job_time: input.job_time,
         bay_no: input.bay_no ?? null,
         upper_tech: input.upper_tech || null,
         lower_tech: input.lower_tech || null,
         ...invoiceNoUpdate,
         customer_id: input.customer_id ?? null,
+        vehicle_id: input.vehicle_id ?? null,
         billing_name: input.billing_name,
         billing_address: input.billing_address || null,
         business_phone: input.business_phone || null,
@@ -328,14 +337,14 @@ export const updateSalesJob = wrapAction({
         email: input.email || null,
         odometer: input.odometer ?? null,
         service_type_id: input.service_type_id,
-        carrier_name: input.carrier_name || null,
-        start_time: input.start_time,
-        end_time: input.end_time,
+        advisor_name: input.advisor_name || null,
         comments: input.comments || null,
         sub_total: input.sub_total,
         hst: input.hst,
         total: input.total,
         payment_mode: input.payment_mode ?? null,
+        free_grease_applied: input.free_grease_applied,
+        free_grease_override_reason: input.free_grease_override_reason || null,
         engine_type_id: input.engine_type_id ?? null,
         oil_type_id: input.oil_type_id ?? null,
         oil_container: input.oil_container ?? null,

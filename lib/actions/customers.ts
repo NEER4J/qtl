@@ -8,9 +8,61 @@ import { wrapAction } from "@/lib/actions/_utils";
 import {
   CreateCustomerInput,
   SearchCustomersInput,
+  SetCustomerStatusInput,
   UpdateCustomerInput,
 } from "@/lib/schemas/customers";
 import type { Customer, SalesJob } from "@/lib/db/types";
+import { digitsOnly } from "@/lib/utils/phone";
+
+// Pull only the fields we want to write — the rest come from defaults / triggers.
+function customerWritablePayload(input: z.infer<typeof CreateCustomerInput>) {
+  // billing_name fallback — composed from first + last/company if not given
+  const composed = [input.first_name, input.last_or_company]
+    .filter((s) => !!s && s.trim() !== "")
+    .join(" ")
+    .trim();
+  const billing_name = input.billing_name ?? (composed.length > 0 ? composed : null);
+
+  return {
+    code: input.code ?? null,
+    salutation: input.salutation,
+    first_name: input.first_name,
+    last_or_company: input.last_or_company,
+    billing_name,
+    address_1: input.address_1,
+    address_2: input.address_2,
+    city: input.city,
+    province: input.province,
+    country: input.country,
+    postal_code: input.postal_code,
+    contact_no: input.contact_no,
+    phone_home: input.phone_home,
+    phone_cell: input.phone_cell,
+    phone_business: input.phone_business,
+    phone_business_ext: input.phone_business_ext,
+    phone_fax: input.phone_fax,
+    phone_alt_1: input.phone_alt_1,
+    phone_alt_2: input.phone_alt_2,
+    phone_notes: input.phone_notes ?? {},
+    email: input.email,
+    other_contact: input.other_contact,
+    comments: input.comments,
+    contact_method: input.contact_method,
+    customer_type: input.customer_type,
+    status: input.status,
+    default_pay_method: input.default_pay_method ?? null,
+    cod_required: input.cod_required,
+    labour_discount_pct: input.labour_discount_pct,
+    parts_discount_pct: input.parts_discount_pct,
+    late_payment_pct: input.late_payment_pct,
+    late_payment_days: input.late_payment_days,
+    calc_interest_from: input.calc_interest_from,
+    special_hst_rate_pct: input.special_hst_rate_pct ?? null,
+    pays_hst: input.pays_hst,
+    home_location_id: input.home_location_id,
+    notes: input.notes,
+  };
+}
 
 // ----------------------------------------------------------------------------
 // List — used by /customers page
@@ -45,8 +97,28 @@ export const toggleCustomerActive = wrapAction({
   },
 });
 
+// Item #9 — change a customer's status (new/regular/old).
+export const setCustomerStatus = wrapAction({
+  schema: SetCustomerStatusInput,
+  roles: ["owner", "manager", "staff"],
+  handler: async (input, profile): Promise<Customer> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("customers")
+      .update({ status: input.status, updated_by: profile.id })
+      .eq("id", input.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePath("/customers");
+    revalidatePath(`/customers/${input.id}`);
+    return data as Customer;
+  },
+});
+
 // ----------------------------------------------------------------------------
 // Search — used by the customer combobox on sales/new
+// Item #8: also matches against customers.phone_search (digits-only).
 // ----------------------------------------------------------------------------
 export const searchCustomers = wrapAction({
   schema: SearchCustomersInput,
@@ -59,13 +131,24 @@ export const searchCustomers = wrapAction({
       .order("billing_name")
       .limit(input.limit);
 
+    if (input.status) query = query.eq("status", input.status);
+
     if (input.q) {
-      // ilike for billing_name, plus a license-plate array contains
       const term = `%${input.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
       const plateUpper = input.q.toUpperCase();
-      query = query.or(
-        `billing_name.ilike.${term},license_plates.cs.{${plateUpper}}`,
-      );
+      const phoneDigits = digitsOnly(input.q);
+
+      const ors = [
+        `billing_name.ilike.${term}`,
+        `last_or_company.ilike.${term}`,
+        `first_name.ilike.${term}`,
+        `license_plates.cs.{${plateUpper}}`,
+      ];
+      if (phoneDigits.length >= 3) {
+        ors.push(`phone_search.like.%${phoneDigits}%`);
+      }
+
+      query = query.or(ors.join(","));
     }
 
     const { data, error } = await query;
@@ -83,8 +166,6 @@ export const createCustomer = wrapAction({
   handler: async (input, profile): Promise<Customer> => {
     const supabase = await createClient();
 
-    // If creating customer as staff/manager without an explicit home location,
-    // default to their location so RLS reads stay scoped.
     const homeLocation = input.home_location_id
       ?? (profile.role === "owner" ? null : profile.location_id);
 
@@ -96,16 +177,14 @@ export const createCustomer = wrapAction({
       ),
     );
 
+    const payload = customerWritablePayload(input);
+
     const { data, error } = await supabase
       .from("customers")
       .insert({
-        code: input.code?.trim() || null,
-        billing_name: input.billing_name,
-        contact_no: input.contact_no || null,
-        email: input.email || null,
-        license_plates: plates,
+        ...payload,
         home_location_id: homeLocation,
-        notes: input.notes || null,
+        license_plates: plates,
         created_by: profile.id,
         updated_by: profile.id,
       })
@@ -122,7 +201,7 @@ export const createCustomer = wrapAction({
 // ----------------------------------------------------------------------------
 export const updateCustomer = wrapAction({
   schema: UpdateCustomerInput,
-  roles: ["owner", "manager"],
+  roles: ["owner", "manager", "staff"],
   handler: async (input, profile): Promise<Customer> => {
     const supabase = await createClient();
     const plates = Array.from(
@@ -133,18 +212,13 @@ export const updateCustomer = wrapAction({
       ),
     );
 
-    const codeUpdate = input.code?.trim() ? { code: input.code.trim() } : {};
+    const payload = customerWritablePayload(input);
 
     const { data, error } = await supabase
       .from("customers")
       .update({
-        ...codeUpdate,
-        billing_name: input.billing_name,
-        contact_no: input.contact_no || null,
-        email: input.email || null,
+        ...payload,
         license_plates: plates,
-        home_location_id: input.home_location_id,
-        notes: input.notes || null,
         updated_by: profile.id,
       })
       .eq("id", input.id)
@@ -152,6 +226,7 @@ export const updateCustomer = wrapAction({
       .single();
     if (error) throw error;
     revalidatePath("/customers");
+    revalidatePath(`/customers/${input.id}`);
     return data as Customer;
   },
 });
@@ -233,3 +308,7 @@ export async function getCustomerSalesHistory(
   if (error) throw error;
   return (data ?? []) as SalesJob[];
 }
+
+// Free-grease eligibility helper has moved to lib/utils/free-grease.ts so it
+// can be imported by client components (this file is "use server").
+// Re-export removed deliberately — import from "@/lib/utils/free-grease".

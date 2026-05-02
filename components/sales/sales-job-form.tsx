@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Form,
   FormControl,
@@ -27,14 +28,24 @@ import {
 import { EmptyDropdownHint } from "@/components/help/empty-state";
 import { InfoTip } from "@/components/help/info-tip";
 import { createSalesJob, updateSalesJob } from "@/lib/actions/sales";
-import { createCustomer, getCustomer, updateCustomer } from "@/lib/actions/customers";
+import { createCustomer, getCustomer } from "@/lib/actions/customers";
+import { getCustomerVehicles } from "@/lib/actions/vehicles";
+import { isFreeGreaseEligible } from "@/lib/utils/free-grease";
 import { lookupOilChangePrice } from "@/lib/actions/pricing";
 import { SalesJobInput } from "@/lib/schemas/sales";
-import type { Customer, EngineType, Location, OilType, PaymentMode, ServiceType } from "@/lib/db/types";
-import { todayISO } from "@/lib/utils/format";
+import type {
+  Customer,
+  EngineType,
+  Location,
+  OilType,
+  PaymentMode,
+  ServiceType,
+  Vehicle,
+} from "@/lib/db/types";
+import { todayISO, formatDate } from "@/lib/utils/format";
+import { formatPhone } from "@/lib/utils/phone";
 
 import { CustomerComboBox } from "./customer-combobox";
-import { PlateComboBox } from "./plate-combobox";
 import { PreviousPendingAlert } from "./previous-pending-alert";
 import {
   SalesLineItems,
@@ -60,11 +71,13 @@ const PAYMENT_MODES: { value: PaymentMode; label: string }[] = [
 interface FormValues {
   location_id: string;
   job_date: string;
+  job_time: string;
   bay_no: string;
   upper_tech: string;
   lower_tech: string;
   invoice_no: string;
   customer_id: string | null;
+  vehicle_id: string | null;
   billing_name: string;
   billing_address: string;
   business_phone: string;
@@ -81,9 +94,9 @@ interface FormValues {
   email: string;
   odometer: string;
   service_type_id: string;
-  carrier_name: string;
-  start_time: string;
-  end_time: string;
+  advisor_name: string;
+  free_grease_applied: boolean;
+  free_grease_override_reason: string;
   comments: string;
   sub_total: string;
   hst: string;
@@ -124,6 +137,8 @@ export function SalesJobForm({
   const [isPending, startTransition] = useTransition();
   const [addingNewCustomer, setAddingNewCustomer] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerVehicles, setCustomerVehicles] = useState<Vehicle[]>([]);
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   // Track the last auto-filled price so we can detect manual overrides on submit.
   const [lastAutoPrice, setLastAutoPrice] = useState<string | null>(
     initial?.auto_priced_at && initial?.sub_total ? initial.sub_total : null,
@@ -133,11 +148,13 @@ export function SalesJobForm({
   const defaults: FormValues = {
     location_id: lockedLocationId ?? initial?.location_id ?? locations[0]?.id ?? "",
     job_date: initial?.job_date ?? todayISO(),
+    job_time: initial?.job_time ?? "",
     bay_no: initial?.bay_no ?? "",
     upper_tech: initial?.upper_tech ?? "",
     lower_tech: initial?.lower_tech ?? "",
     invoice_no: initial?.invoice_no ?? "",
     customer_id: initial?.customer_id ?? null,
+    vehicle_id: initial?.vehicle_id ?? null,
     billing_name: initial?.billing_name ?? "",
     billing_address: initial?.billing_address ?? "",
     business_phone: initial?.business_phone ?? "",
@@ -154,9 +171,9 @@ export function SalesJobForm({
     email: initial?.email ?? "",
     odometer: initial?.odometer ?? "",
     service_type_id: initial?.service_type_id ?? serviceTypes[0]?.id ?? "",
-    carrier_name: initial?.carrier_name ?? "",
-    start_time: initial?.start_time ?? "",
-    end_time: initial?.end_time ?? "",
+    advisor_name: initial?.advisor_name ?? "",
+    free_grease_applied: initial?.free_grease_applied ?? false,
+    free_grease_override_reason: initial?.free_grease_override_reason ?? "",
     comments: initial?.comments ?? "",
     sub_total: initial?.sub_total ?? "",
     hst: initial?.hst ?? "",
@@ -243,39 +260,89 @@ export function SalesJobForm({
   // --------------------------------------------------------------------------
   const customerId = useWatch({ control: form.control, name: "customer_id" });
 
-  // Edit mode — hydrate selectedCustomer from the existing customer_id so the
-  // read-only card and plate combobox have full data.
+  // Edit mode — hydrate selectedCustomer + vehicles from existing job.
   useEffect(() => {
     if (mode === "edit" && initial?.customer_id && !selectedCustomer) {
       (async () => {
-        const c = await getCustomer(initial.customer_id!);
+        const [c, vs] = await Promise.all([
+          getCustomer(initial.customer_id!),
+          getCustomerVehicles(initial.customer_id!),
+        ]);
         if (c) setSelectedCustomer(c);
+        setCustomerVehicles(vs);
+        if (initial.vehicle_id) {
+          const v = vs.find((x) => x.id === initial.vehicle_id) ?? null;
+          setSelectedVehicle(v);
+        }
       })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const applyCustomer = (c: Customer) => {
+  const applyVehicle = (v: Vehicle | null) => {
+    setSelectedVehicle(v);
+    form.setValue("vehicle_id", v?.id ?? null);
+    form.setValue("license_plate", v?.license_plate ?? "");
+    form.setValue("vin", v?.vin ?? "");
+    form.setValue("vehicle_year", v?.year != null ? String(v.year) : "");
+    form.setValue("vehicle_make", v?.make ?? "");
+    form.setValue("vehicle_model", v?.model ?? "");
+    form.setValue("engine_size", v?.engine_size ?? "");
+    form.setValue("unit_no", v?.unit_number ?? "");
+    if (v?.mileage != null) form.setValue("odometer", String(v.mileage));
+  };
+
+  const applyCustomer = async (c: Customer) => {
     setSelectedCustomer(c);
     setAddingNewCustomer(false);
     form.setValue("customer_id", c.id);
-    form.setValue("billing_name", c.billing_name);
     form.setValue(
-      "license_plate",
-      c.license_plates?.length ? c.license_plates[0] : "",
+      "billing_name",
+      c.billing_name ??
+        [c.first_name, c.last_or_company].filter(Boolean).join(" ") ??
+        "",
     );
-    form.setValue("contact_no", c.contact_no ?? "");
+    form.setValue("contact_no", formatPhone(c.phone_cell ?? c.contact_no));
     form.setValue("email", c.email ?? "");
+
+    // Pull billing address (item #3 — billing options live on customer)
+    const addr = [
+      c.address_1,
+      c.address_2,
+      [c.city, c.province].filter(Boolean).join(", "),
+      c.postal_code,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    form.setValue("billing_address", addr);
+    form.setValue("business_phone", formatPhone(c.phone_business));
+    form.setValue("alt_phone", formatPhone(c.phone_alt_1 ?? c.phone_home));
+
+    // Pull default pay method
+    if (c.default_pay_method) form.setValue("payment_mode", c.default_pay_method);
+
+    // Free grease default — checked when eligible
+    form.setValue("free_grease_applied", isFreeGreaseEligible(c));
+
+    // Load vehicles for picker
+    const vs = await getCustomerVehicles(c.id);
+    setCustomerVehicles(vs);
+    if (vs.length === 1) applyVehicle(vs[0]);
   };
 
   const clearCustomer = () => {
     setSelectedCustomer(null);
     setAddingNewCustomer(false);
+    setCustomerVehicles([]);
+    setSelectedVehicle(null);
     form.setValue("customer_id", null);
+    form.setValue("vehicle_id", null);
     form.setValue("billing_name", "");
     form.setValue("license_plate", "");
     form.setValue("contact_no", "");
     form.setValue("email", "");
+    form.setValue("free_grease_applied", false);
+    form.setValue("free_grease_override_reason", "");
   };
 
   const startAddingNewCustomer = (name: string) => {
@@ -305,11 +372,21 @@ export function SalesJobForm({
       if (addingNewCustomer) {
         const custRes = await createCustomer({
           billing_name: values.billing_name,
+          last_or_company: values.billing_name.toUpperCase(),
           contact_no: values.contact_no || null,
           email: values.email || null,
           license_plates: platePicked ? [platePicked] : [],
           home_location_id: null,
           notes: null,
+          country: "CA",
+          status: "new",
+          phone_notes: {},
+          cod_required: false,
+          labour_discount_pct: 0,
+          parts_discount_pct: 0,
+          late_payment_pct: 0,
+          late_payment_days: 0,
+          pays_hst: true,
         });
         if (!custRes.ok) {
           toast.error(`Couldn't create customer: ${custRes.error}`);
@@ -324,28 +401,6 @@ export function SalesJobForm({
         setSelectedCustomer(custRes.data);
         setAddingNewCustomer(false);
         form.setValue("customer_id", custRes.data.id);
-      } else if (
-        selectedCustomer &&
-        platePicked &&
-        !(selectedCustomer.license_plates ?? []).includes(platePicked)
-      ) {
-        // Step 1b — append a brand-new plate to an existing customer so next
-        // time it shows up in the plate combobox.
-        const existingPlates = selectedCustomer.license_plates ?? [];
-        const updRes = await updateCustomer({
-          id: selectedCustomer.id,
-          billing_name: selectedCustomer.billing_name,
-          contact_no: selectedCustomer.contact_no,
-          email: selectedCustomer.email,
-          license_plates: [...existingPlates, platePicked],
-          home_location_id: selectedCustomer.home_location_id,
-          notes: selectedCustomer.notes,
-        });
-        if (!updRes.ok) {
-          toast.error(`Couldn't save new plate: ${updRes.error}`);
-          return;
-        }
-        setSelectedCustomer(updRes.data);
       }
 
       // Step 2 — validate and submit the sales-job with the (possibly
@@ -356,15 +411,16 @@ export function SalesJobForm({
       const payload = {
         ...values,
         customer_id: customerIdToUse,
+        vehicle_id: values.vehicle_id ?? null,
         bay_no: values.bay_no === "" ? null : Number(values.bay_no),
         odometer: values.odometer === "" ? null : Number(values.odometer),
+        vehicle_year: values.vehicle_year === "" ? null : Number(values.vehicle_year),
         sub_total: Number(values.sub_total || 0),
         hst: Number(values.hst || 0),
         total: Number(values.total || 0),
         paid_amount: Number(values.paid_amount || 0),
         payment_mode: values.payment_mode === "" ? null : values.payment_mode,
-        start_time: values.start_time || null,
-        end_time: values.end_time || null,
+        job_time: values.job_time || null,
         engine_type_id: values.engine_type_id || null,
         oil_type_id: values.oil_type_id || null,
         oil_container: values.oil_container || null,
@@ -385,10 +441,11 @@ export function SalesJobForm({
         // customer is picked; items.* live outside react-hook-form). Surface
         // those via toast so the click doesn't feel silently dropped.
         const REGISTERED: ReadonlySet<string> = new Set([
-          "location_id", "job_date", "bay_no", "upper_tech", "lower_tech",
+          "location_id", "job_date", "job_time", "bay_no", "upper_tech", "lower_tech",
           "invoice_no", "billing_name", "license_plate", "contact_no", "email",
-          "odometer", "service_type_id", "carrier_name", "start_time", "end_time",
+          "odometer", "service_type_id", "advisor_name",
           "comments", "sub_total", "hst", "total", "paid_amount", "payment_mode",
+          "free_grease_applied", "free_grease_override_reason",
           "engine_type_id", "oil_type_id", "oil_container",
         ]);
         const stray: string[] = [];
@@ -502,23 +559,60 @@ export function SalesJobForm({
 
                 <PreviousPendingAlert customerId={customerId ?? null} />
 
-                <FormField
-                  control={form.control}
-                  name="license_plate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>License plate</FormLabel>
-                      <FormControl>
-                        <PlateComboBox
-                          value={field.value}
-                          plates={selectedCustomer.license_plates ?? []}
-                          onChange={(plate) => field.onChange(plate)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {/* Vehicle picker (item #4 — multiple trucks) */}
+                <FormItem>
+                  <FormLabel>Vehicle</FormLabel>
+                  <FormControl>
+                    {customerVehicles.length === 0 ? (
+                      <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                        This customer has no registered vehicles.{" "}
+                        <a
+                          href={`/customers/${selectedCustomer.id}/vehicles/new`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary underline"
+                        >
+                          Add a vehicle
+                        </a>{" "}
+                        first, then refresh this page.
+                      </div>
+                    ) : (
+                      <Select
+                        value={selectedVehicle?.id ?? ""}
+                        onValueChange={(vid) => {
+                          const v = customerVehicles.find((x) => x.id === vid) ?? null;
+                          applyVehicle(v);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a vehicle" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {customerVehicles.map((v) => (
+                            <SelectItem key={v.id} value={v.id}>
+                              <span className="font-mono">{v.license_plate}</span>
+                              {v.year || v.make || v.model
+                                ? ` — ${[v.year, v.make, v.model].filter(Boolean).join(" ")}`
+                                : ""}
+                              {v.carrier_name ? ` · ${v.carrier_name}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </FormControl>
+                </FormItem>
+
+                {/* Free grease banner — item #15 */}
+                {isFreeGreaseEligible(selectedCustomer) && (
+                  <FreeGreaseBanner
+                    until={selectedCustomer.free_grease_until!}
+                    applied={form.watch("free_grease_applied")}
+                    overrideReason={form.watch("free_grease_override_reason")}
+                    onChangeApplied={(v) => form.setValue("free_grease_applied", v)}
+                    onChangeReason={(v) => form.setValue("free_grease_override_reason", v)}
+                  />
+                )}
               </div>
             )}
 
@@ -604,148 +698,57 @@ export function SalesJobForm({
           </section>
 
           {/* ----------------------------------------------------------------
-               Step 1b — Bill-to address & vehicle (printed on invoice)
+               Step 1b — Bill-to & vehicle summary (auto-filled from selection)
+               These fields snapshot onto the invoice. Edit billing on the
+               customer page; edit vehicle specs on the customer's vehicle.
           ---------------------------------------------------------------- */}
-          <section className="rounded-md border p-4 space-y-4">
-            <h2 className="text-sm font-semibold uppercase text-muted-foreground">
-              Bill-to & vehicle
-              <span className="ml-2 text-xs font-normal normal-case text-muted-foreground">
-                Optional — appears on the printed invoice.
-              </span>
-            </h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="billing_address"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Billing address</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        rows={3}
-                        placeholder={"1050 Heritage Rd\nBurlington, Ontario\nL7L 4X9"}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="business_phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Business phone</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="alt_phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Other phone</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+          {(selectedCustomer || selectedVehicle) && (
+            <section className="rounded-md border bg-muted/30 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold uppercase text-muted-foreground">
+                  Invoice snapshot
+                </h2>
+                <span className="text-xs text-muted-foreground">
+                  Auto-filled from customer + vehicle. Edit on the source record.
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <div className="mb-1 text-xs font-medium text-muted-foreground">
+                    Bill-to
+                  </div>
+                  <div className="whitespace-pre-line rounded-md border bg-background px-3 py-2 text-sm">
+                    {form.watch("billing_address") || (
+                      <span className="text-muted-foreground">No address on file.</span>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <ReadField label="Business phone" value={form.watch("business_phone")} />
+                  <ReadField label="Other phone" value={form.watch("alt_phone")} />
+                  <ReadField label="Unit no." value={form.watch("unit_no")} />
+                  <ReadField label="Year" value={form.watch("vehicle_year")} />
+                  <ReadField label="Make" value={form.watch("vehicle_make")} />
+                  <ReadField label="Model" value={form.watch("vehicle_model")} />
+                  <ReadField label="VIN" value={form.watch("vin")} mono />
+                  <ReadField label="Engine size" value={form.watch("engine_size")} />
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
                 <FormField
                   control={form.control}
                   name="customer_order_no"
                   render={({ field }) => (
-                    <FormItem className="col-span-2">
-                      <FormLabel>Customer order #</FormLabel>
+                    <FormItem>
+                      <FormLabel>Customer order # (this job)</FormLabel>
                       <FormControl><Input {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <FormField
-                control={form.control}
-                name="unit_no"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Unit no.</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="vehicle_year"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Year</FormLabel>
-                    <FormControl>
-                      <Input type="number" min="1900" max="2100" step="1" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="vehicle_make"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Make</FormLabel>
-                    <FormControl><Input placeholder="FRHT" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="vehicle_model"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Model</FormLabel>
-                    <FormControl><Input placeholder="FM2" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="vin"
-                render={({ field }) => (
-                  <FormItem className="col-span-2">
-                    <FormLabel>VIN</FormLabel>
-                    <FormControl>
-                      <Input
-                        className="font-mono uppercase"
-                        {...field}
-                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="engine_size"
-                render={({ field }) => (
-                  <FormItem className="col-span-2">
-                    <FormLabel>Engine size</FormLabel>
-                    <FormControl><Input placeholder="e.g. DD15" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </section>
+            </section>
+          )}
 
           {/* ----------------------------------------------------------------
                Step 2 — Job
@@ -873,12 +876,12 @@ export function SalesJobForm({
               />
               <FormField
                 control={form.control}
-                name="carrier_name"
+                name="advisor_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Carrier</FormLabel>
+                    <FormLabel>Advisor</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input placeholder="Service advisor" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1010,25 +1013,12 @@ export function SalesJobForm({
               />
               <FormField
                 control={form.control}
-                name="start_time"
+                name="job_time"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Start</FormLabel>
+                    <FormLabel>Time</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="end_time"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>End</FormLabel>
-                    <FormControl>
-                      <Input type="datetime-local" {...field} />
+                      <Input type="time" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1189,5 +1179,75 @@ export function SalesJobForm({
         </form>
       </Form>
     </>
+  );
+}
+
+function ReadField({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value?: string | null;
+  mono?: boolean;
+}) {
+  return (
+    <div>
+      <div className="mb-0.5 text-xs text-muted-foreground">{label}</div>
+      <div
+        className={`min-h-9 rounded-md border bg-background px-2 py-1.5 text-sm ${mono ? "font-mono" : ""}`}
+      >
+        {value && value.length > 0 ? (
+          value
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FreeGreaseBanner({
+  until,
+  applied,
+  overrideReason,
+  onChangeApplied,
+  onChangeReason,
+}: {
+  until: string;
+  applied: boolean;
+  overrideReason: string;
+  onChangeApplied: (v: boolean) => void;
+  onChangeReason: (v: string) => void;
+}) {
+  return (
+    <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-900/60 dark:bg-emerald-950/30">
+      <div className="flex items-start gap-3">
+        <Checkbox
+          id="free_grease_applied"
+          checked={applied}
+          onCheckedChange={(v) => onChangeApplied(Boolean(v))}
+          className="mt-0.5"
+        />
+        <div className="flex-1">
+          <label htmlFor="free_grease_applied" className="block cursor-pointer text-sm font-medium text-emerald-900 dark:text-emerald-200">
+            Apply free-grease offer (eligible until {formatDate(until)})
+          </label>
+          <p className="mt-1 text-xs text-emerald-800/80 dark:text-emerald-300/70">
+            Customer is in their first 30 days. When applied, the grease line is invoiced at $0.
+            If you uncheck, leave a quick reason so the override is auditable.
+          </p>
+          {!applied && (
+            <Textarea
+              rows={2}
+              value={overrideReason}
+              onChange={(e) => onChangeReason(e.target.value)}
+              placeholder="Reason for not applying (e.g. customer declined, offer already redeemed)"
+              className="mt-2"
+            />
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

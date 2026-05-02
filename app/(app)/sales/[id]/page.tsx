@@ -110,6 +110,12 @@ export default async function SalesJobDetailPage({
             <Field label="Email" value={job.email} />
             <Field label="Odometer" value={job.odometer?.toLocaleString() ?? null} />
             <Field label="Carrier" value={job.carrier_name} />
+            {job.free_grease_applied && (
+              <Field label="Free grease" value="Applied" />
+            )}
+            {!job.free_grease_applied && job.free_grease_override_reason && (
+              <Field label="Grease override" value={job.free_grease_override_reason} />
+            )}
           </CardContent>
         </Card>
 
@@ -134,25 +140,27 @@ export default async function SalesJobDetailPage({
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <Field label="Bay" value={job.bay_no != null ? String(job.bay_no) : null} />
+          <Field
+            label="Time"
+            value={
+              job.job_time
+                ? job.job_time.slice(0, 5)
+                : job.start_time
+                ? formatTime(job.start_time)
+                : null
+            }
+          />
+          <Field label="Advisor" value={job.advisor_name} />
           <Field label="Upper tech" value={job.upper_tech} />
           <Field label="Lower tech" value={job.lower_tech} />
-          <Field
-            label="Duration"
-            value={job.duration_minutes != null ? `${job.duration_minutes} min` : null}
-          />
-          <Field
-            label="Start"
-            value={job.start_time ? `${formatDate(job.start_time)} ${formatTime(job.start_time)}` : null}
-          />
-          <Field
-            label="End"
-            value={job.end_time ? `${formatDate(job.end_time)} ${formatTime(job.end_time)}` : null}
-          />
           <Field label="Batch" value={job.batch_id} mono />
           <Field
             label="Payment mode"
             value={job.payment_mode ? PAYMENT_MODE_LABELS[job.payment_mode] : null}
           />
+          {job.duration_minutes != null && (
+            <Field label="Duration (legacy)" value={`${job.duration_minutes} min`} />
+          )}
         </CardContent>
         {job.comments && (
           <CardContent className="border-t pt-4">

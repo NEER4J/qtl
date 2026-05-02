@@ -17,8 +17,17 @@ import {
 } from "@/components/ui/table";
 import { toggleCustomerActive } from "@/lib/actions/customers";
 import type { Customer, Location } from "@/lib/db/types";
+import { digitsOnly, formatPhone } from "@/lib/utils/phone";
 
 import { CustomerFormDialog } from "./customer-form-dialog";
+
+function customerDisplayName(c: Customer): string {
+  return (
+    c.billing_name ??
+    [c.first_name, c.last_or_company].filter(Boolean).join(" ") ??
+    "(no name)"
+  );
+}
 
 export function CustomersTable({
   customers,
@@ -37,11 +46,13 @@ export function CustomersTable({
   const filtered = customers.filter((c) => {
     if (!search) return true;
     const q = search.toLowerCase();
+    const phoneDigits = digitsOnly(search);
+    const name = customerDisplayName(c).toLowerCase();
     return (
-      c.billing_name.toLowerCase().includes(q) ||
-      c.contact_no?.toLowerCase().includes(q) ||
+      name.includes(q) ||
       c.email?.toLowerCase().includes(q) ||
-      c.license_plates.some((p) => p.toLowerCase().includes(q))
+      c.license_plates.some((p) => p.toLowerCase().includes(q)) ||
+      (phoneDigits.length >= 3 && (c.phone_search ?? "").includes(phoneDigits))
     );
   });
 
@@ -105,7 +116,7 @@ export function CustomersTable({
             ) : (
               filtered.map((c) => (
                 <TableRow key={c.id} className={!c.active ? "opacity-60" : undefined}>
-                  <TableCell className="font-medium">{c.billing_name}</TableCell>
+                  <TableCell className="font-medium">{customerDisplayName(c)}</TableCell>
                   <TableCell>
                     {c.license_plates.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
@@ -119,7 +130,7 @@ export function CustomersTable({
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell>{c.contact_no ?? "—"}</TableCell>
+                  <TableCell>{formatPhone(c.phone_cell ?? c.contact_no) || "—"}</TableCell>
                   <TableCell>{c.email ?? "—"}</TableCell>
                   <TableCell>
                     {c.home_location_id ? (locationMap[c.home_location_id] ?? "—") : "—"}

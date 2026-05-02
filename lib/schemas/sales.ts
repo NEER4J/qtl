@@ -2,21 +2,6 @@ import { z } from "zod";
 
 import { moneySchema, paymentModeSchema, paymentStatusSchema } from "@/lib/schemas/common";
 
-// Accept either HTML datetime-local ("yyyy-mm-ddThh:mm" with optional seconds)
-// or full ISO 8601 with timezone. Empty strings become null.
-const datetimeLocalRegex =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/;
-
-const datetimeNullable = z
-  .union([
-    z.string().regex(datetimeLocalRegex, "Invalid datetime"),
-    z.string().length(0),
-    z.null(),
-  ])
-  .nullable()
-  .optional()
-  .transform((v) => (v === "" ? null : (v ?? null)));
-
 export const SalesJobItemInput = z.object({
   id: z.string().uuid().optional(),
   part_id: z.string().uuid().nullable().optional(),
@@ -28,11 +13,23 @@ export const SalesJobItemInput = z.object({
 });
 export type SalesJobItemInput = z.infer<typeof SalesJobItemInput>;
 
+// HH:mm or HH:mm:ss; empty becomes null.
+const timeNullable = z
+  .union([
+    z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, "Invalid time"),
+    z.string().length(0),
+    z.null(),
+  ])
+  .nullable()
+  .optional()
+  .transform((v) => (v === "" || v == null ? null : (v.length === 5 ? `${v}:00` : v)));
+
 export const SalesJobInput = z
   .object({
     id: z.string().uuid().optional(),
     location_id: z.string().uuid("Select a location"),
     job_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date is required"),
+    job_time: timeNullable,                                            // item #6 — single time
 
     bay_no: z.coerce.number().int().min(1).max(20).nullable().optional(),
     upper_tech: z.string().trim().max(60).nullable().optional().or(z.literal("")),
@@ -41,6 +38,7 @@ export const SalesJobInput = z
     invoice_no: z.string().trim().max(40).nullable().optional().or(z.literal("")),
 
     customer_id: z.string().uuid().nullable().optional(),
+    vehicle_id: z.string().uuid().nullable().optional(),               // item #4 link
     billing_name: z.string().trim().min(1, "Billing name is required").max(200),
     billing_address: z.string().trim().max(500).nullable().optional().or(z.literal("")),
     business_phone: z.string().trim().max(30).nullable().optional().or(z.literal("")),
@@ -65,10 +63,7 @@ export const SalesJobInput = z
     odometer: z.coerce.number().int().min(0).max(9999999).nullable().optional(),
 
     service_type_id: z.string().uuid("Select a service type"),
-    carrier_name: z.string().trim().max(120).nullable().optional().or(z.literal("")),
-
-    start_time: datetimeNullable,
-    end_time: datetimeNullable,
+    advisor_name: z.string().trim().max(120).nullable().optional().or(z.literal("")),  // item #7
 
     comments: z.string().trim().max(2000).nullable().optional().or(z.literal("")),
 
@@ -77,6 +72,16 @@ export const SalesJobInput = z
     total: moneySchema,
     paid_amount: moneySchema.default(0),
     payment_mode: paymentModeSchema.nullable().optional(),
+
+    // Free grease (item #15)
+    free_grease_applied: z.coerce.boolean().default(false),
+    free_grease_override_reason: z
+      .string()
+      .trim()
+      .max(500)
+      .nullable()
+      .optional()
+      .or(z.literal("")),
 
     engine_type_id: z.string().uuid().nullable().optional(),
     oil_type_id: z.string().uuid().nullable().optional(),
@@ -97,13 +102,6 @@ export const SalesJobInput = z
         code: z.ZodIssueCode.custom,
         path: ["paid_amount"],
         message: "Paid amount cannot exceed Total",
-      });
-    }
-    if (val.start_time && val.end_time && new Date(val.end_time) < new Date(val.start_time)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["end_time"],
-        message: "End time cannot be before start time",
       });
     }
   });
@@ -135,6 +133,7 @@ export const ListSalesJobsInput = z.object({
   location_id: z.string().uuid().optional(),
   service_type_id: z.string().uuid().optional(),
   payment_status: paymentStatusSchema.optional(),
+  customer_status: z.enum(["new", "regular", "old"]).optional(),     // item #9 — report filter
   q: z.string().trim().max(100).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(25),

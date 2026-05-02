@@ -75,6 +75,11 @@ export const sidebarItems: NavGroup[] = [
         subItems: [
           { title: "All Jobs", url: "/sales" },
           { title: "New Job", url: "/sales/new", roles: ["owner", "manager", "staff"] },
+            {
+        title: "Customers",
+        url: "/customers",
+        roles: ["owner", "manager", "staff"],
+      },
         ],
       },
       {
@@ -169,6 +174,7 @@ export const sidebarItems: NavGroup[] = [
         roles: ["owner", "manager", "accountant"],
         subItems: [
           { title: "All reports", url: "/reports" },
+          { title: "Daily job report", url: "/reports/daily" },
           { title: "HST Summary", url: "/reports/hst", roles: ["owner", "accountant"] },
           { title: "P&L", url: "/reports/pnl" },
           { title: "Outstanding Invoices", url: "/reports/outstanding" },

@@ -435,3 +435,293 @@ export async function getVendorStatement(
     total_outstanding: rows.reduce((s, r) => s + r.balance, 0),
   };
 }
+
+// ============================================================================
+// Daily Job Report (item #11)
+// One-day snapshot for a single date and (optionally) a single location.
+// Returns: per-job rows, aggregated parts list, service-type breakdown,
+// per-hour totals (using job_time), and customer-status mix.
+// ============================================================================
+export interface DailyJobReportRow {
+  id: string;
+  invoice_no: string;
+  job_time: string | null;
+  service_code: string | null;
+  service_name: string | null;
+  location_code: string | null;
+  customer_name: string | null;
+  customer_status: string | null;
+  vehicle_label: string | null;
+  advisor_name: string | null;
+  total: number;
+  outstanding: number;
+  payment_status: string;
+}
+
+export interface DailyJobReportPart {
+  part_id: string | null;
+  part_number: string | null;
+  brand: string | null;
+  description: string;
+  qty_total: number;
+  revenue: number;
+}
+
+export interface DailyJobReport {
+  date: string;
+  location_id: string | null;
+  totals: {
+    job_count: number;
+    sub_total: number;
+    hst: number;
+    total: number;
+    paid: number;
+    outstanding: number;
+  };
+  jobs: DailyJobReportRow[];
+  parts_used: DailyJobReportPart[];
+  by_service: Array<{ code: string; name: string; count: number; revenue: number }>;
+  by_hour: Array<{ hour: number; count: number; revenue: number }>;
+  by_customer_status: Array<{ status: string; count: number }>;
+}
+
+export async function getDailyJobReport(
+  date: string,
+  locationId: string | null = null,
+): Promise<DailyJobReport> {
+  await requireProfile();
+  const supabase = await createClient();
+
+  let query = supabase
+    .from("sales_jobs")
+    .select(
+      `id, invoice_no, job_time, start_time, total, paid_amount, outstanding,
+       payment_status, sub_total, hst, advisor_name, customer_id,
+       license_plate, billing_name,
+       locations:location_id(code),
+       service_types:service_type_id(code, name),
+       customers:customer_id(status, billing_name, last_or_company, first_name),
+       vehicles:vehicle_id(license_plate, year, make, model, carrier_name)`,
+    )
+    .is("deactivated_at", null)
+    .eq("job_date", date);
+  if (locationId) query = query.eq("location_id", locationId);
+
+  const { data: jobsData, error: jobsErr } = await query;
+  if (jobsErr) throw jobsErr;
+
+  type Joined = {
+    id: string;
+    invoice_no: string;
+    job_time: string | null;
+    start_time: string | null;
+    total: number;
+    paid_amount: number;
+    outstanding: number;
+    payment_status: string;
+    sub_total: number;
+    hst: number;
+    advisor_name: string | null;
+    customer_id: string | null;
+    license_plate: string | null;
+    billing_name: string | null;
+    locations: { code: string | null } | { code: string | null }[] | null;
+    service_types:
+      | { code: string | null; name: string | null }
+      | { code: string | null; name: string | null }[]
+      | null;
+    customers:
+      | {
+          status: string | null;
+          billing_name: string | null;
+          last_or_company: string | null;
+          first_name: string | null;
+        }
+      | {
+          status: string | null;
+          billing_name: string | null;
+          last_or_company: string | null;
+          first_name: string | null;
+        }[]
+      | null;
+    vehicles:
+      | {
+          license_plate: string | null;
+          year: number | null;
+          make: string | null;
+          model: string | null;
+          carrier_name: string | null;
+        }
+      | {
+          license_plate: string | null;
+          year: number | null;
+          make: string | null;
+          model: string | null;
+          carrier_name: string | null;
+        }[]
+      | null;
+  };
+  const rows = (jobsData ?? []) as unknown as Joined[];
+  const jobIds = rows.map((r) => r.id);
+
+  // Aggregated parts list (only if any jobs)
+  let parts: DailyJobReportPart[] = [];
+  if (jobIds.length > 0) {
+    const { data: items, error: itemsErr } = await supabase
+      .from("sales_job_items")
+      .select(
+        "part_id, description, quantity, line_total, parts:part_id(part_number, brand)",
+      )
+      .in("sales_job_id", jobIds);
+    if (itemsErr) throw itemsErr;
+    type Item = {
+      part_id: string | null;
+      description: string;
+      quantity: number;
+      line_total: number;
+      parts:
+        | { part_number: string | null; brand: string | null }
+        | { part_number: string | null; brand: string | null }[]
+        | null;
+    };
+    const map = new Map<string, DailyJobReportPart>();
+    for (const it of (items ?? []) as unknown as Item[]) {
+      const partRel = Array.isArray(it.parts) ? it.parts[0] : it.parts;
+      const key = it.part_id ?? `desc:${it.description}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.qty_total += Number(it.quantity);
+        existing.revenue += Number(it.line_total);
+      } else {
+        map.set(key, {
+          part_id: it.part_id,
+          part_number: partRel?.part_number ?? null,
+          brand: partRel?.brand ?? null,
+          description: it.description,
+          qty_total: Number(it.quantity),
+          revenue: Number(it.line_total),
+        });
+      }
+    }
+    parts = Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
+  }
+
+  const totals = {
+    job_count: rows.length,
+    sub_total: rows.reduce((s, r) => s + Number(r.sub_total ?? 0), 0),
+    hst: rows.reduce((s, r) => s + Number(r.hst ?? 0), 0),
+    total: rows.reduce((s, r) => s + Number(r.total ?? 0), 0),
+    paid: rows.reduce((s, r) => s + Number(r.paid_amount ?? 0), 0),
+    outstanding: rows.reduce((s, r) => s + Number(r.outstanding ?? 0), 0),
+  };
+
+  function pickRel<T>(rel: T | T[] | null | undefined): T | null {
+    if (!rel) return null;
+    if (Array.isArray(rel)) return rel[0] ?? null;
+    return rel;
+  }
+
+  function customerName(c: Joined["customers"]): string | null {
+    const cc = pickRel(c);
+    if (!cc) return null;
+    return (
+      cc.billing_name ??
+      [cc.first_name, cc.last_or_company].filter(Boolean).join(" ") ??
+      null
+    );
+  }
+
+  function vehicleLabel(j: Joined): string | null {
+    const v = pickRel(j.vehicles);
+    if (v && v.license_plate) {
+      const trim = [v.year, v.make, v.model].filter(Boolean).join(" ");
+      return trim ? `${v.license_plate} · ${trim}` : v.license_plate;
+    }
+    return j.license_plate;
+  }
+
+  function hourFromJobTime(t: string | null, st: string | null): number | null {
+    if (t) return Number(t.slice(0, 2));
+    if (st) {
+      const d = new Date(st);
+      if (!Number.isNaN(d.getTime())) return d.getHours();
+    }
+    return null;
+  }
+
+  const jobs: DailyJobReportRow[] = rows.map((r) => {
+    const loc = pickRel(r.locations);
+    const svc = pickRel(r.service_types);
+    return {
+      id: r.id,
+      invoice_no: r.invoice_no,
+      job_time: r.job_time,
+      service_code: svc?.code ?? null,
+      service_name: svc?.name ?? null,
+      location_code: loc?.code ?? null,
+      customer_name: customerName(r.customers),
+      customer_status: pickRel(r.customers)?.status ?? null,
+      vehicle_label: vehicleLabel(r),
+      advisor_name: r.advisor_name,
+      total: Number(r.total ?? 0),
+      outstanding: Number(r.outstanding ?? 0),
+      payment_status: r.payment_status,
+    };
+  });
+
+  // by_service
+  const svcMap = new Map<string, { code: string; name: string; count: number; revenue: number }>();
+  for (const j of jobs) {
+    const code = j.service_code ?? "—";
+    const name = j.service_name ?? "—";
+    const k = code;
+    const existing = svcMap.get(k);
+    if (existing) {
+      existing.count += 1;
+      existing.revenue += j.total;
+    } else {
+      svcMap.set(k, { code, name, count: 1, revenue: j.total });
+    }
+  }
+  const by_service = Array.from(svcMap.values()).sort((a, b) => b.revenue - a.revenue);
+
+  // by_hour (0-23). Skip jobs with no usable time.
+  const hourBuckets = new Map<number, { count: number; revenue: number }>();
+  for (const r of rows) {
+    const h = hourFromJobTime(r.job_time, r.start_time);
+    if (h == null) continue;
+    const existing = hourBuckets.get(h);
+    const total = Number(r.total ?? 0);
+    if (existing) {
+      existing.count += 1;
+      existing.revenue += total;
+    } else {
+      hourBuckets.set(h, { count: 1, revenue: total });
+    }
+  }
+  const by_hour = Array.from(hourBuckets.entries())
+    .map(([hour, v]) => ({ hour, ...v }))
+    .sort((a, b) => a.hour - b.hour);
+
+  // by_customer_status
+  const statusMap = new Map<string, number>();
+  for (const j of jobs) {
+    const s = j.customer_status ?? "unknown";
+    statusMap.set(s, (statusMap.get(s) ?? 0) + 1);
+  }
+  const by_customer_status = Array.from(statusMap.entries()).map(([status, count]) => ({
+    status,
+    count,
+  }));
+
+  return {
+    date,
+    location_id: locationId,
+    totals,
+    jobs,
+    parts_used: parts,
+    by_service,
+    by_hour,
+    by_customer_status,
+  };
+}
