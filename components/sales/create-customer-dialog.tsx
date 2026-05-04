@@ -81,7 +81,6 @@ export function CreateCustomerDialog({
       contact_no: values.contact_no || null,
       email: values.email || null,
       license_plates: plates,
-      home_location_id: null,
       notes: null,
     });
     if (!parsed.success) {

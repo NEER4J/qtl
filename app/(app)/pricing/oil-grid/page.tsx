@@ -10,15 +10,19 @@ export const dynamic = "force-dynamic";
 
 export default async function OilGridPage() {
   const profile = await requireProfile();
-  const { engines, oilTypes, cells } = await getOilChangeGrid();
+  const { engines, oilTypes, cells, hstRate } = await getOilChangeGrid();
   const isOwner = profile.role === "owner";
+  const hstPct = Math.round(hstRate * 1000) / 10;
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Oil-change price grid</h1>
         <p className="text-sm text-muted-foreground">
-          {engines.length} engine{engines.length !== 1 ? "s" : ""} × {oilTypes.length} oil grade{oilTypes.length !== 1 ? "s" : ""}. Bulk / Gallon.
+          {engines.length} engine{engines.length !== 1 ? "s" : ""} × {oilTypes.length} oil grade{oilTypes.length !== 1 ? "s" : ""}. Bulk / Gallon.{" "}
+          <Link href="/pricing/oil-grid/detail" className="underline text-foreground">
+            See per-brand filter + labour + grease breakdown
+          </Link>
         </p>
       </div>
 
@@ -32,7 +36,7 @@ export default async function OilGridPage() {
         <ul>
           <li>When the owner updates an oil cost, every price in that column updates right away.</li>
           <li>When a filter cost changes or a filter set on an engine changes, that row updates.</li>
-          <li>Prices shown here are before HST. Add 13% at invoice time.</li>
+          <li>Bulk prices are pre-tax. For oils flagged taxable, the gallon column shows pre-tax and a smaller post-HST ({hstPct}%) figure underneath. Non-taxable gallons show only the pre-tax figure.</li>
         </ul>
       </PageHelp>
 
@@ -102,7 +106,18 @@ export default async function OilGridPage() {
                           {c?.bulk != null ? formatMoney(c.bulk) : "—"}
                         </td>,
                         <td key={`${o.id}-g`} className="p-1 text-right tabular-nums text-sm text-muted-foreground">
-                          {c?.gallon != null ? formatMoney(c.gallon) : "—"}
+                          {c?.gallon != null ? (
+                            <div className="flex flex-col items-end leading-tight">
+                              <span>{formatMoney(c.gallon)}</span>
+                              {c.gallon_with_tax != null && (
+                                <span className="text-[10px] text-muted-foreground/70">
+                                  +tax {formatMoney(c.gallon_with_tax)}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            "—"
+                          )}
                         </td>,
                       ];
                     })}

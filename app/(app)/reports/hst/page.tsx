@@ -88,7 +88,7 @@ export default async function HstSummaryPage({
             <div className="p-6 text-sm text-muted-foreground text-center">No HST activity for the selected period.</div>
           ) : (
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Month</TableHead>
                   <TableHead className="text-right">HST Collected</TableHead>
@@ -122,7 +122,7 @@ export default async function HstSummaryPage({
           <CardHeader><CardTitle>By location</CardTitle></CardHeader>
           <CardContent className="p-0">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Location</TableHead>
                   <TableHead className="text-right">HST Collected</TableHead>

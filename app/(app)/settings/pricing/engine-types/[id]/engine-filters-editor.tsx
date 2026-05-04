@@ -128,7 +128,7 @@ export function EngineFiltersEditor({
     <div className="space-y-4">
       <div className="rounded-md border">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead className="w-40">Part #</TableHead>
               <TableHead className="w-32">Brand</TableHead>

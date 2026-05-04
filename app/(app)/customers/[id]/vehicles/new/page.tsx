@@ -18,9 +18,7 @@ export default async function NewVehiclePage({
   const customer = await getCustomer(id);
   if (!customer) notFound();
 
-  const displayName =
-    customer.billing_name ??
-    [customer.first_name, customer.last_or_company].filter(Boolean).join(" ");
+  const displayName = customer.billing_name ?? customer.last_or_company ?? "";
 
   return (
     <div className="flex flex-col gap-6">

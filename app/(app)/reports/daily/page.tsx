@@ -89,7 +89,7 @@ export default async function DailyReportPage({
             </div>
           ) : (
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Time</TableHead>
                   <TableHead>Invoice</TableHead>
@@ -150,7 +150,7 @@ export default async function DailyReportPage({
             <div className="p-6 text-center text-sm text-muted-foreground">No parts logged.</div>
           ) : (
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Part #</TableHead>
                   <TableHead>Brand</TableHead>

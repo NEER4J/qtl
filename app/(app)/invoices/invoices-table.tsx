@@ -31,9 +31,9 @@ export function InvoicesTable({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-md border">
+      <div className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead className="w-28">Date</TableHead>
               <TableHead>Invoice #</TableHead>

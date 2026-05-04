@@ -19,9 +19,7 @@ export default async function EditVehiclePage({
   const [customer, vehicle] = await Promise.all([getCustomer(id), getVehicle(vid)]);
   if (!customer || !vehicle || vehicle.customer_id !== id) notFound();
 
-  const displayName =
-    customer.billing_name ??
-    [customer.first_name, customer.last_or_company].filter(Boolean).join(" ");
+  const displayName = customer.billing_name ?? customer.last_or_company ?? "";
 
   return (
     <div className="flex flex-col gap-6">

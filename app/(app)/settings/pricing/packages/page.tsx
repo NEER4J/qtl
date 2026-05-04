@@ -1,5 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requireProfile, requireRole } from "@/lib/auth/require";
 import { listAllPartPackages } from "@/lib/actions/pricing";
 
 import { PartPackagesTable } from "./part-packages-table";
@@ -8,7 +8,9 @@ export const dynamic = "force-dynamic";
 
 export default async function PartPackagesPage() {
   await requireRole("owner");
+  const profile = await requireProfile();
   const packages = await listAllPartPackages();
+  const isOwner = profile.role === "owner";
 
   return (
     <div className="flex flex-col gap-4">
@@ -33,7 +35,7 @@ export default async function PartPackagesPage() {
         </ul>
       </PageHelp>
 
-      <PartPackagesTable packages={packages} />
+      <PartPackagesTable packages={packages} isOwner={isOwner} />
     </div>
   );
 }

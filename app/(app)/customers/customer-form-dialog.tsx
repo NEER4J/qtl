@@ -11,20 +11,18 @@ import {
 } from "@/components/ui/dialog";
 import { CustomerForm } from "@/components/customers/customer-form";
 import { getCustomerVehicles } from "@/lib/actions/vehicles";
-import type { Customer, Location, Vehicle } from "@/lib/db/types";
+import type { Customer, Vehicle } from "@/lib/db/types";
 
 export function CustomerFormDialog({
   open,
   onOpenChange,
   mode,
   customer,
-  locations,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "create" | "edit";
   customer?: Customer;
-  locations: Location[];
 }) {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
 
@@ -51,7 +49,6 @@ export function CustomerFormDialog({
         <CustomerForm
           customer={customer}
           initialVehicles={vehicles}
-          locations={locations}
           onSaved={() => onOpenChange(false)}
           onCancel={() => onOpenChange(false)}
         />

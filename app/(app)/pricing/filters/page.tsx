@@ -82,7 +82,7 @@ export default async function FilterListPage({
             </div>
           ) : (
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Part #</TableHead>
                   <TableHead>Brand</TableHead>

@@ -81,7 +81,7 @@ export default async function ProductsAnalyticsPage({
           </CardHeader>
           <CardContent className="p-0">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Part</TableHead>
                   <TableHead>Brand</TableHead>

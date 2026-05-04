@@ -16,7 +16,13 @@ import {
 import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { getVendor, getVendorExpenseHistory } from "@/lib/actions/vendors";
+import { listVendorPartsForVendor } from "@/lib/actions/vendor-parts";
+import { listVendorInvoicesForVendor } from "@/lib/actions/vendor-invoices";
+import { listParts } from "@/lib/actions/pricing";
 import { formatDate, formatMoney } from "@/lib/utils/format";
+
+import { VendorPartsSection } from "./vendor-parts-section";
+import { VendorInvoicesSection } from "./vendor-invoices-section";
 
 export const dynamic = "force-dynamic";
 
@@ -33,9 +39,12 @@ export default async function VendorDetailPage({
 }) {
   await requireProfile();
   const { id } = await params;
-  const [vendor, expenses] = await Promise.all([
+  const [vendor, expenses, vendorParts, allParts, vendorInvoices] = await Promise.all([
     getVendor(id),
     getVendorExpenseHistory(id),
+    listVendorPartsForVendor(id),
+    listParts({}),
+    listVendorInvoicesForVendor(id),
   ]);
   if (!vendor) notFound();
 
@@ -85,6 +94,38 @@ export default async function VendorDetailPage({
           <Stat label="Balance owing" value={formatMoney(totalBalance)} highlight={totalBalance > 0} />
         </div>
       </div>
+
+      {/* Item #24 — parts supplied by this vendor with per-vendor cost. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Parts supplied</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <VendorPartsSection
+            vendorId={vendor.id}
+            initialRows={vendorParts}
+            parts={allParts.map((p) => ({
+              id: p.id,
+              brand: p.brand,
+              part_number: p.part_number,
+              description: p.description,
+            }))}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Item #24c — purchase invoices we owe this vendor. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Purchase invoices</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <VendorInvoicesSection
+            vendorId={vendor.id}
+            invoices={vendorInvoices}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

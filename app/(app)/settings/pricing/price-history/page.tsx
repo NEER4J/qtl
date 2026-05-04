@@ -58,7 +58,7 @@ export default async function PriceHistoryPage() {
             </div>
           ) : (
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="w-44">When</TableHead>
                   <TableHead className="w-32">Type</TableHead>

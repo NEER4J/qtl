@@ -62,11 +62,9 @@ const phoneOptional = z
 export const CreateCustomerInput = z.object({
   code: textOptional(40),
 
-  // Name (CARS layout: salutation + first + last/company)
+  // Name
   salutation: textOptional(20),
-  first_name: upperOptional(120),
   last_or_company: upperOptional(200),
-  // Legacy single field; kept for backward compat. New form derives it from first + last.
   billing_name: z
     .string()
     .trim()
@@ -76,13 +74,13 @@ export const CreateCustomerInput = z.object({
     .or(z.literal(""))
     .transform((v) => (v === "" || v == null ? null : v)),
 
-  // Address (item #2)
-  address_1: textOptional(200),
-  address_2: textOptional(200),
-  city: textOptional(80),
-  province: textOptional(60),
+  // Address (item #2) — uppercase-locked at the form & schema level
+  address_1: upperOptional(200),
+  address_2: upperOptional(200),
+  city: upperOptional(80),
+  province: upperOptional(60),
   country: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).default("CA"),
-  postal_code: textOptional(20),
+  postal_code: upperOptional(20),
 
   // Phones (item #13 — display formatted client-side)
   contact_no: phoneOptional,
@@ -105,7 +103,9 @@ export const CreateCustomerInput = z.object({
     .optional()
     .transform((v) => v ?? null),
   customer_type: textOptional(60),
-  status: z.enum(["new", "regular", "old"]).default("new"),
+
+  // Item #23 — carrier/customer-level card number
+  card_number: upperOptional(60),
 
   // Billing options (item #3)
   default_pay_method: paymentModeSchema.nullable().optional(),
@@ -122,8 +122,9 @@ export const CreateCustomerInput = z.object({
   // form may carry it for display but the server ignores incoming value
   // unless the role is owner.
   free_grease_until: dateNullable,
+  // Item #29 — 30-day free oil-change offer; same shape as free_grease_until.
+  free_oil_change_until: dateNullable,
 
-  home_location_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
   notes: textOptional(2000),
 
   // Legacy plates array — still accepted on input; server splits new plates
@@ -138,11 +139,5 @@ export const UpdateCustomerInput = CreateCustomerInput.extend({
 
 export const SearchCustomersInput = z.object({
   q: z.string().trim().max(100).default(""),
-  status: z.enum(["new", "regular", "old"]).nullable().optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
-});
-
-export const SetCustomerStatusInput = z.object({
-  id: z.string().uuid(),
-  status: z.enum(["new", "regular", "old"]),
 });

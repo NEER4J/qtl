@@ -133,7 +133,6 @@ export const ListSalesJobsInput = z.object({
   location_id: z.string().uuid().optional(),
   service_type_id: z.string().uuid().optional(),
   payment_status: paymentStatusSchema.optional(),
-  customer_status: z.enum(["new", "regular", "old"]).optional(),     // item #9 — report filter
   q: z.string().trim().max(100).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(25),

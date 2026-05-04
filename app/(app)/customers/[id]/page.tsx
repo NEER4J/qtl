@@ -21,9 +21,11 @@ import {
   getCustomerSalesHistory,
 } from "@/lib/actions/customers";
 import { getCustomerVehicles } from "@/lib/actions/vehicles";
-import { listLocations } from "@/lib/actions/locations";
 import { isFreeGreaseEligible } from "@/lib/utils/free-grease";
+import { isFreeOilChangeEligible } from "@/lib/utils/free-oil-change";
 import { formatDate, formatMoney } from "@/lib/utils/format";
+
+import { GrantFreeOilChangeButton } from "./grant-free-oil-change-button";
 
 export const dynamic = "force-dynamic";
 
@@ -33,11 +35,10 @@ export default async function CustomerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [customer, jobs, vehicles, locations] = await Promise.all([
+  const [customer, jobs, vehicles] = await Promise.all([
     getCustomer(id),
     getCustomerSalesHistory(id),
     getCustomerVehicles(id),
-    listLocations(),
   ]);
   if (!customer) notFound();
 
@@ -45,11 +46,10 @@ export default async function CustomerDetailPage({
   const totalOutstanding = jobs.reduce((s, j) => s + j.outstanding, 0);
 
   const displayName =
-    customer.billing_name ??
-    [customer.first_name, customer.last_or_company].filter(Boolean).join(" ") ??
-    "(no name)";
+    customer.billing_name ?? customer.last_or_company ?? "(no name)";
 
   const greaseEligible = isFreeGreaseEligible(customer);
+  const oilChangeEligible = isFreeOilChangeEligible(customer);
 
   return (
     <div className="flex flex-col gap-6">
@@ -60,20 +60,26 @@ export default async function CustomerDetailPage({
               <ChevronLeft className="size-4" /> Back to customers
             </Link>
           </Button>
-          <div className="mt-2 flex items-center gap-3">
+          <div className="mt-2 flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight">{displayName}</h1>
             {!customer.active && <Badge variant="secondary">Inactive</Badge>}
-            <Badge variant="outline" className="capitalize">
-              {customer.status}
-            </Badge>
             {greaseEligible && (
               <Badge className="bg-emerald-600 hover:bg-emerald-700">
                 Free grease until {formatDate(customer.free_grease_until!)}
               </Badge>
             )}
+            {oilChangeEligible && (
+              <Badge className="bg-amber-600 hover:bg-amber-700">
+                Free oil change until {formatDate(customer.free_oil_change_until!)}
+              </Badge>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <GrantFreeOilChangeButton
+            customerId={customer.id}
+            alreadyEligible={oilChangeEligible}
+          />
           <AddVehicleButton customerId={customer.id} />
           <Button asChild variant="outline" size="sm">
             <a href={`/api/export/customer-statement?customer_id=${customer.id}`} download>
@@ -102,7 +108,6 @@ export default async function CustomerDetailPage({
           <CustomerForm
             customer={customer}
             initialVehicles={vehicles}
-            locations={locations}
           />
         </CardContent>
       </Card>
@@ -118,7 +123,7 @@ export default async function CustomerDetailPage({
             </div>
           ) : (
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Invoice</TableHead>

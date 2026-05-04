@@ -500,7 +500,7 @@ export async function getDailyJobReport(
        license_plate, billing_name,
        locations:location_id(code),
        service_types:service_type_id(code, name),
-       customers:customer_id(status, billing_name, last_or_company, first_name),
+       customers:customer_id(status, billing_name, last_or_company),
        vehicles:vehicle_id(license_plate, year, make, model, carrier_name)`,
     )
     .is("deactivated_at", null)
@@ -535,13 +535,11 @@ export async function getDailyJobReport(
           status: string | null;
           billing_name: string | null;
           last_or_company: string | null;
-          first_name: string | null;
         }
       | {
           status: string | null;
           billing_name: string | null;
           last_or_company: string | null;
-          first_name: string | null;
         }[]
       | null;
     vehicles:
@@ -624,11 +622,7 @@ export async function getDailyJobReport(
   function customerName(c: Joined["customers"]): string | null {
     const cc = pickRel(c);
     if (!cc) return null;
-    return (
-      cc.billing_name ??
-      [cc.first_name, cc.last_or_company].filter(Boolean).join(" ") ??
-      null
-    );
+    return cc.billing_name ?? cc.last_or_company ?? null;
   }
 
   function vehicleLabel(j: Joined): string | null {

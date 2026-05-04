@@ -68,10 +68,12 @@ export function PackagePickerButton({
                     {pkg.items.length === 0
                       ? "(empty package)"
                       : pkg.items
-                          .map(
-                            (it) =>
-                              `${Number(it.quantity)}× ${it.part.brand} ${it.part.part_number}`,
-                          )
+                          .map((it) => {
+                            const qty = Number(it.quantity);
+                            if (it.part) return `${qty}× ${it.part.brand} ${it.part.part_number}`;
+                            if (it.oil_type) return `${qty}× ${it.oil_type.code}`;
+                            return `${qty}× —`;
+                          })
                           .join(", ")}
                   </div>
                 </CommandItem>

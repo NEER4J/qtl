@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Pencil, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
@@ -16,32 +17,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toggleCustomerActive } from "@/lib/actions/customers";
-import type { Customer, Location } from "@/lib/db/types";
+import type { Customer } from "@/lib/db/types";
 import { digitsOnly, formatPhone } from "@/lib/utils/phone";
 
 import { CustomerFormDialog } from "./customer-form-dialog";
 
 function customerDisplayName(c: Customer): string {
-  return (
-    c.billing_name ??
-    [c.first_name, c.last_or_company].filter(Boolean).join(" ") ??
-    "(no name)"
-  );
+  return c.billing_name ?? c.last_or_company ?? "(no name)";
 }
 
-export function CustomersTable({
-  customers,
-  locations,
-}: {
-  customers: Customer[];
-  locations: Location[];
-}) {
+export function CustomersTable({ customers }: { customers: Customer[] }) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Customer | null>(null);
   const [creating, setCreating] = useState(false);
   const [isPending, startTransition] = useTransition();
-
-  const locationMap = Object.fromEntries(locations.map((l) => [l.id, l.name]));
 
   const filtered = customers.filter((c) => {
     if (!search) return true;
@@ -84,23 +74,21 @@ export function CustomersTable({
         </Button>
       </div>
 
-      <div className="rounded-md border">
+      <div className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Plates</TableHead>
               <TableHead>Phone</TableHead>
               <TableHead>Email</TableHead>
-              <TableHead>Home location</TableHead>
-              <TableHead className="w-24">Status</TableHead>
               <TableHead className="w-32 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8 px-6">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8 px-6">
                   {search ? (
                     <p>No customers match <strong>&quot;{search}&quot;</strong>. Try a shorter search, or clear the box.</p>
                   ) : (
@@ -115,7 +103,11 @@ export function CustomersTable({
               </TableRow>
             ) : (
               filtered.map((c) => (
-                <TableRow key={c.id} className={!c.active ? "opacity-60" : undefined}>
+                <TableRow
+                  key={c.id}
+                  className={`cursor-pointer ${!c.active ? "opacity-60" : ""}`}
+                  onDoubleClick={() => router.push(`/customers/${c.id}`)}
+                >
                   <TableCell className="font-medium">{customerDisplayName(c)}</TableCell>
                   <TableCell>
                     {c.license_plates.length > 0 ? (
@@ -132,14 +124,6 @@ export function CustomersTable({
                   </TableCell>
                   <TableCell>{formatPhone(c.phone_cell ?? c.contact_no) || "—"}</TableCell>
                   <TableCell>{c.email ?? "—"}</TableCell>
-                  <TableCell>
-                    {c.home_location_id ? (locationMap[c.home_location_id] ?? "—") : "—"}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={c.active ? "default" : "secondary"}>
-                      {c.active ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button variant="ghost" size="icon" onClick={() => setEditing(c)}>
@@ -166,14 +150,12 @@ export function CustomersTable({
         open={creating}
         onOpenChange={setCreating}
         mode="create"
-        locations={locations}
       />
       <CustomerFormDialog
         open={editing !== null}
         onOpenChange={(open) => !open && setEditing(null)}
         mode="edit"
         customer={editing ?? undefined}
-        locations={locations}
       />
     </>
   );

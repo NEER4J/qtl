@@ -25,7 +25,6 @@ import type {
 export interface SalesJobRow extends SalesJob {
   location_code: string | null;
   service_type_code: string | null;
-  customer_status: string | null;
   invoice_pdf_path: string | null;
 }
 
@@ -48,7 +47,7 @@ export async function listSalesJobs(
   let query = supabase
     .from("sales_jobs")
     .select(
-      "*, locations:location_id(code), service_types:service_type_id(code), customers:customer_id(status)",
+      "*, locations:location_id(code), service_types:service_type_id(code)",
       { count: "exact" },
     )
     .is("deactivated_at", null)
@@ -61,7 +60,6 @@ export async function listSalesJobs(
   if (input.location_id) query = query.eq("location_id", input.location_id);
   if (input.service_type_id) query = query.eq("service_type_id", input.service_type_id);
   if (input.payment_status) query = query.eq("payment_status", input.payment_status);
-  if (input.customer_status) query = query.eq("customers.status", input.customer_status);
   if (input.q) {
     const term = `%${input.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
     query = query.or(
@@ -76,20 +74,17 @@ export async function listSalesJobs(
     invoice_pdf_path?: string | null;
     locations: { code: string | null } | { code: string | null }[] | null;
     service_types: { code: string | null } | { code: string | null }[] | null;
-    customers: { status: string | null } | { status: string | null }[] | null;
   };
 
   const rows: SalesJobRow[] = (data as JoinedRow[] | null ?? []).map((r) => {
     const loc = Array.isArray(r.locations) ? r.locations[0] : r.locations;
     const svc = Array.isArray(r.service_types) ? r.service_types[0] : r.service_types;
-    const cus = Array.isArray(r.customers) ? r.customers[0] : r.customers;
-    const { locations: _l, service_types: _s, customers: _c, invoice_pdf_path, ...rest } = r;
-    void _l; void _s; void _c;
+    const { locations: _l, service_types: _s, invoice_pdf_path, ...rest } = r;
+    void _l; void _s;
     return {
       ...(rest as SalesJob),
       location_code: loc?.code ?? null,
       service_type_code: svc?.code ?? null,
-      customer_status: cus?.status ?? null,
       invoice_pdf_path: invoice_pdf_path ?? null,
     };
   });

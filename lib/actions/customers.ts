@@ -8,7 +8,6 @@ import { wrapAction } from "@/lib/actions/_utils";
 import {
   CreateCustomerInput,
   SearchCustomersInput,
-  SetCustomerStatusInput,
   UpdateCustomerInput,
 } from "@/lib/schemas/customers";
 import type { Customer, SalesJob } from "@/lib/db/types";
@@ -16,17 +15,11 @@ import { digitsOnly } from "@/lib/utils/phone";
 
 // Pull only the fields we want to write — the rest come from defaults / triggers.
 function customerWritablePayload(input: z.infer<typeof CreateCustomerInput>) {
-  // billing_name fallback — composed from first + last/company if not given
-  const composed = [input.first_name, input.last_or_company]
-    .filter((s) => !!s && s.trim() !== "")
-    .join(" ")
-    .trim();
-  const billing_name = input.billing_name ?? (composed.length > 0 ? composed : null);
+  const billing_name = input.billing_name ?? input.last_or_company ?? null;
 
   return {
     code: input.code ?? null,
     salutation: input.salutation,
-    first_name: input.first_name,
     last_or_company: input.last_or_company,
     billing_name,
     address_1: input.address_1,
@@ -49,7 +42,7 @@ function customerWritablePayload(input: z.infer<typeof CreateCustomerInput>) {
     comments: input.comments,
     contact_method: input.contact_method,
     customer_type: input.customer_type,
-    status: input.status,
+    card_number: input.card_number,
     default_pay_method: input.default_pay_method ?? null,
     cod_required: input.cod_required,
     labour_discount_pct: input.labour_discount_pct,
@@ -59,10 +52,33 @@ function customerWritablePayload(input: z.infer<typeof CreateCustomerInput>) {
     calc_interest_from: input.calc_interest_from,
     special_hst_rate_pct: input.special_hst_rate_pct ?? null,
     pays_hst: input.pays_hst,
-    home_location_id: input.home_location_id,
+    free_oil_change_until: input.free_oil_change_until,
     notes: input.notes,
   };
 }
+
+// Item #29 — owner/manager grants a 30-day free oil-change offer.
+export const grantFreeOilChange = wrapAction({
+  schema: z.object({ customer_id: z.string().uuid() }),
+  roles: ["owner", "manager"],
+  handler: async (input, profile): Promise<Customer> => {
+    const supabase = await createClient();
+    const until = new Date();
+    until.setDate(until.getDate() + 30);
+    const untilISO = until.toISOString().slice(0, 10);
+
+    const { data, error } = await supabase
+      .from("customers")
+      .update({ free_oil_change_until: untilISO, updated_by: profile.id })
+      .eq("id", input.customer_id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePath("/customers");
+    revalidatePath(`/customers/${input.customer_id}`);
+    return data as Customer;
+  },
+});
 
 // ----------------------------------------------------------------------------
 // List — used by /customers page
@@ -97,25 +113,6 @@ export const toggleCustomerActive = wrapAction({
   },
 });
 
-// Item #9 — change a customer's status (new/regular/old).
-export const setCustomerStatus = wrapAction({
-  schema: SetCustomerStatusInput,
-  roles: ["owner", "manager", "staff"],
-  handler: async (input, profile): Promise<Customer> => {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("customers")
-      .update({ status: input.status, updated_by: profile.id })
-      .eq("id", input.id)
-      .select("*")
-      .single();
-    if (error) throw error;
-    revalidatePath("/customers");
-    revalidatePath(`/customers/${input.id}`);
-    return data as Customer;
-  },
-});
-
 // ----------------------------------------------------------------------------
 // Search — used by the customer combobox on sales/new
 // Item #8: also matches against customers.phone_search (digits-only).
@@ -131,8 +128,6 @@ export const searchCustomers = wrapAction({
       .order("billing_name")
       .limit(input.limit);
 
-    if (input.status) query = query.eq("status", input.status);
-
     if (input.q) {
       const term = `%${input.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
       const plateUpper = input.q.toUpperCase();
@@ -141,7 +136,6 @@ export const searchCustomers = wrapAction({
       const ors = [
         `billing_name.ilike.${term}`,
         `last_or_company.ilike.${term}`,
-        `first_name.ilike.${term}`,
         `license_plates.cs.{${plateUpper}}`,
       ];
       if (phoneDigits.length >= 3) {
@@ -166,9 +160,6 @@ export const createCustomer = wrapAction({
   handler: async (input, profile): Promise<Customer> => {
     const supabase = await createClient();
 
-    const homeLocation = input.home_location_id
-      ?? (profile.role === "owner" ? null : profile.location_id);
-
     const plates = Array.from(
       new Set(
         input.license_plates
@@ -179,11 +170,51 @@ export const createCustomer = wrapAction({
 
     const payload = customerWritablePayload(input);
 
+    // Item #25 — dedup on billing_name + any phone match before inserting.
+    // If a candidate exists, return it instead of creating a duplicate row.
+    // Match is case-insensitive on the name and digits-only on phones.
+    const candidateName = (payload.billing_name ?? payload.last_or_company ?? "").trim();
+    const phonesToMatch = [
+      payload.contact_no,
+      payload.phone_cell,
+      payload.phone_home,
+      payload.phone_business,
+    ].filter((p): p is string => !!p && p.length === 10);
+
+    if (candidateName && phonesToMatch.length > 0) {
+      const { data: matches } = await supabase
+        .from("customers")
+        .select("*")
+        .ilike("billing_name", candidateName)
+        .eq("active", true);
+      const hit = (matches as Customer[] | null ?? []).find((c) =>
+        phonesToMatch.some(
+          (p) =>
+            p === c.contact_no ||
+            p === c.phone_cell ||
+            p === c.phone_home ||
+            p === c.phone_business,
+        ),
+      );
+      if (hit) {
+        // Merge in any new license plates the caller passed.
+        const merged = Array.from(new Set([...hit.license_plates, ...plates]));
+        if (merged.length > hit.license_plates.length) {
+          await supabase
+            .from("customers")
+            .update({ license_plates: merged, updated_by: profile.id })
+            .eq("id", hit.id);
+          hit.license_plates = merged;
+        }
+        revalidatePath("/customers");
+        return hit;
+      }
+    }
+
     const { data, error } = await supabase
       .from("customers")
       .insert({
         ...payload,
-        home_location_id: homeLocation,
         license_plates: plates,
         created_by: profile.id,
         updated_by: profile.id,

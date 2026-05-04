@@ -83,7 +83,7 @@ export default async function AuditLogPage({
             </div>
           ) : (
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Time</TableHead>
                   <TableHead>Table</TableHead>

@@ -1,7 +1,6 @@
 import { PageHelp } from "@/components/help/page-help";
 import { requireRole } from "@/lib/auth/require";
 import { listCustomers } from "@/lib/actions/customers";
-import { listActiveLocations } from "@/lib/actions/reference";
 
 import { CustomersTable } from "./customers-table";
 
@@ -9,10 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CustomersPage() {
   await requireRole("owner", "manager", "staff");
-  const [customers, locations] = await Promise.all([
-    listCustomers(),
-    listActiveLocations(),
-  ]);
+  const customers = await listCustomers();
 
   return (
     <div className="flex flex-col gap-4">
@@ -28,13 +24,12 @@ export default async function CustomersPage() {
         </p>
         <ul>
           <li><strong>License plates</strong> — one customer can have several trucks. When you&apos;re filling out a sales job, you can search by any of their plates.</li>
-          <li><strong>Home location</strong> is just a default; customers can still have jobs at any of the three shops.</li>
           <li><strong>Deactivating</strong> a customer hides them from the search box on forms but keeps all their history.</li>
-          <li>Click any row to open the customer profile — contact info, job history, outstanding balance, and the ability to give them a login so they can see their own invoices.</li>
+          <li>Double-click any row to open the customer profile — contact info, job history, outstanding balance, and the ability to give them a login so they can see their own invoices.</li>
         </ul>
       </PageHelp>
 
-      <CustomersTable customers={customers} locations={locations} />
+      <CustomersTable customers={customers} />
     </div>
   );
 }

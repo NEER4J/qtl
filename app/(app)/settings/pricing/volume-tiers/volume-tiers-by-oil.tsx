@@ -66,7 +66,7 @@ export function VolumeTiersByOil({
             </p>
           ) : (
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="w-40 text-right">Min litres (≥)</TableHead>
                   <TableHead className="w-40 text-right">Premium</TableHead>

@@ -43,13 +43,8 @@ type FormValues = {
   make: string;
   model: string;
   engine_size: string;
-  engine_serial: string;
   unit_number: string;
-  cab_card_number: string;
-  drive_clean_date: string;
   colour: string;
-  expiry_date: string;
-  license_renewal_date: string;
   follow_up_date: string;
   mileage: string;
   carrier_name: string;
@@ -65,13 +60,8 @@ const initial: FormValues = {
   make: "",
   model: "",
   engine_size: "",
-  engine_serial: "",
   unit_number: "",
-  cab_card_number: "",
-  drive_clean_date: "",
   colour: "",
-  expiry_date: "",
-  license_renewal_date: "",
   follow_up_date: "",
   mileage: "",
   carrier_name: "",
@@ -136,13 +126,8 @@ export function VehicleForm({
           make: vehicle.make ?? "",
           model: vehicle.model ?? "",
           engine_size: vehicle.engine_size ?? "",
-          engine_serial: vehicle.engine_serial ?? "",
           unit_number: vehicle.unit_number ?? "",
-          cab_card_number: vehicle.cab_card_number ?? "",
-          drive_clean_date: vehicle.drive_clean_date ?? "",
           colour: vehicle.colour ?? "",
-          expiry_date: vehicle.expiry_date ?? "",
-          license_renewal_date: vehicle.license_renewal_date ?? "",
           follow_up_date: vehicle.follow_up_date ?? "",
           mileage: vehicle.mileage?.toString() ?? "",
           carrier_name: vehicle.carrier_name ?? "",
@@ -158,13 +143,8 @@ export function VehicleForm({
             make: initialStaged.make ?? "",
             model: initialStaged.model ?? "",
             engine_size: initialStaged.engine_size ?? "",
-            engine_serial: initialStaged.engine_serial ?? "",
             unit_number: initialStaged.unit_number ?? "",
-            cab_card_number: initialStaged.cab_card_number ?? "",
-            drive_clean_date: initialStaged.drive_clean_date ?? "",
             colour: initialStaged.colour ?? "",
-            expiry_date: initialStaged.expiry_date ?? "",
-            license_renewal_date: initialStaged.license_renewal_date ?? "",
             follow_up_date: initialStaged.follow_up_date ?? "",
             mileage:
               initialStaged.mileage != null ? String(initialStaged.mileage) : "",
@@ -186,13 +166,8 @@ export function VehicleForm({
       make: values.make || null,
       model: values.model || null,
       engine_size: values.engine_size || null,
-      engine_serial: values.engine_serial || null,
       unit_number: values.unit_number || null,
-      cab_card_number: values.cab_card_number || null,
-      drive_clean_date: values.drive_clean_date || null,
       colour: values.colour || null,
-      expiry_date: values.expiry_date || null,
-      license_renewal_date: values.license_renewal_date || null,
       follow_up_date: values.follow_up_date || null,
       mileage: values.mileage ? Number(values.mileage) : null,
       carrier_name: values.carrier_name || null,
@@ -393,16 +368,6 @@ export function VehicleForm({
           />
           <FormField
             control={form.control}
-            name="engine_serial"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Engine serial #</FormLabel>
-                <FormControl><Input {...field} /></FormControl>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
             name="unit_number"
             render={({ field }) => (
               <FormItem>
@@ -428,46 +393,6 @@ export function VehicleForm({
               <FormItem className="md:col-span-2">
                 <FormLabel>Carrier</FormLabel>
                 <FormControl><Input placeholder="e.g. SOMA Transport" {...field} /></FormControl>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="cab_card_number"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>CAB card #</FormLabel>
-                <FormControl><Input {...field} /></FormControl>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="drive_clean_date"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Drive Clean</FormLabel>
-                <FormControl><Input type="date" {...field} /></FormControl>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="expiry_date"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Expiry</FormLabel>
-                <FormControl><Input type="date" {...field} /></FormControl>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="license_renewal_date"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>License renewal</FormLabel>
-                <FormControl><Input type="date" {...field} /></FormControl>
               </FormItem>
             )}
           />

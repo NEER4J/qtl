@@ -81,7 +81,7 @@ export default async function PayrollPage() {
             />
           ) : (
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Week</TableHead>
                   <TableHead>Location</TableHead>

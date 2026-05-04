@@ -43,19 +43,18 @@ import {
 } from "@/lib/actions/vehicles";
 import { CreateCustomerInput } from "@/lib/schemas/customers";
 import { postalPlaceholder } from "@/lib/data/regions";
-import type { Customer, Location, Vehicle } from "@/lib/db/types";
+import type { Customer, Vehicle } from "@/lib/db/types";
 import type { StagedVehicleInput } from "@/app/(app)/customers/[id]/vehicles/vehicle-form";
 
 import { VehicleFormDialog } from "./vehicle-form-dialog";
 
-const ANY_LOCATION = "__any__";
 const NO_PAY_METHOD = "__none__";
 
 type FormValues = {
   code: string;
   salutation: string;
-  first_name: string;
   last_or_company: string;
+  card_number: string;
   address_1: string;
   address_2: string;
   city: string;
@@ -70,13 +69,11 @@ type FormValues = {
   phone_alt_1: string;
   phone_alt_2: string;
   contact_no: string;
-  email: string;
   other_contact: string;
   comments: string;
   phone_notes: Record<string, string>;
   contact_method: "mail" | "email" | "phone" | "sms" | "";
   customer_type: string;
-  status: "new" | "regular" | "old";
   default_pay_method: string;
   cod_required: boolean;
   labour_discount_pct: number;
@@ -86,15 +83,14 @@ type FormValues = {
   calc_interest_from: string;
   special_hst_rate_pct: string;
   pays_hst: boolean;
-  home_location_id: string;
   notes: string;
 };
 
 const empty: FormValues = {
   code: "",
   salutation: "",
-  first_name: "",
   last_or_company: "",
+  card_number: "",
   address_1: "",
   address_2: "",
   city: "",
@@ -109,13 +105,11 @@ const empty: FormValues = {
   phone_alt_1: "",
   phone_alt_2: "",
   contact_no: "",
-  email: "",
   other_contact: "",
   comments: "",
   phone_notes: {},
   contact_method: "email",
   customer_type: "",
-  status: "new",
   default_pay_method: NO_PAY_METHOD,
   cod_required: false,
   labour_discount_pct: 0,
@@ -125,7 +119,6 @@ const empty: FormValues = {
   calc_interest_from: "",
   special_hst_rate_pct: "",
   pays_hst: true,
-  home_location_id: ANY_LOCATION,
   notes: "",
 };
 
@@ -133,8 +126,8 @@ function valuesFromCustomer(c: Customer): FormValues {
   return {
     code: c.code ?? "",
     salutation: c.salutation ?? "",
-    first_name: c.first_name ?? "",
     last_or_company: c.last_or_company ?? c.billing_name ?? "",
+    card_number: c.card_number ?? "",
     address_1: c.address_1 ?? "",
     address_2: c.address_2 ?? "",
     city: c.city ?? "",
@@ -149,13 +142,11 @@ function valuesFromCustomer(c: Customer): FormValues {
     phone_alt_1: c.phone_alt_1 ?? "",
     phone_alt_2: c.phone_alt_2 ?? "",
     contact_no: c.contact_no ?? "",
-    email: c.email ?? "",
     other_contact: c.other_contact ?? "",
     comments: c.comments ?? "",
     phone_notes: c.phone_notes ?? {},
     contact_method: c.contact_method ?? "email",
     customer_type: c.customer_type ?? "",
-    status: c.status ?? "new",
     default_pay_method: c.default_pay_method ?? NO_PAY_METHOD,
     cod_required: c.cod_required ?? false,
     labour_discount_pct: Number(c.labour_discount_pct ?? 0),
@@ -165,7 +156,6 @@ function valuesFromCustomer(c: Customer): FormValues {
     calc_interest_from: c.calc_interest_from ?? "",
     special_hst_rate_pct: c.special_hst_rate_pct?.toString() ?? "",
     pays_hst: c.pays_hst ?? true,
-    home_location_id: c.home_location_id ?? ANY_LOCATION,
     notes: c.notes ?? "",
   };
 }
@@ -175,7 +165,6 @@ export interface CustomerFormProps {
   customer?: Customer;
   /** Initial vehicles list (edit-mode only). */
   initialVehicles?: Vehicle[];
-  locations: Location[];
   /** Called after a successful save with the saved record. */
   onSaved?: (customer: Customer) => void;
   /** Called when user cancels (e.g. close dialog). */
@@ -194,7 +183,6 @@ function makeClientId(): string {
 export function CustomerForm({
   customer,
   initialVehicles = [],
-  locations,
   onSaved,
   onCancel,
 }: CustomerFormProps) {
@@ -236,8 +224,8 @@ export function CustomerForm({
     const payload = {
       code: values.code || null,
       salutation: values.salutation || null,
-      first_name: values.first_name || null,
       last_or_company: values.last_or_company || null,
+      card_number: values.card_number || null,
       billing_name: null,
       address_1: values.address_1 || null,
       address_2: values.address_2 || null,
@@ -253,13 +241,11 @@ export function CustomerForm({
       phone_alt_1: values.phone_alt_1 || null,
       phone_alt_2: values.phone_alt_2 || null,
       contact_no: values.contact_no || null,
-      email: values.email || null,
       other_contact: values.other_contact || null,
       comments: values.comments || null,
       phone_notes: values.phone_notes ?? {},
       contact_method: values.contact_method || null,
       customer_type: values.customer_type || null,
-      status: values.status,
       default_pay_method:
         values.default_pay_method && values.default_pay_method !== NO_PAY_METHOD
           ? values.default_pay_method
@@ -274,10 +260,6 @@ export function CustomerForm({
         ? Number(values.special_hst_rate_pct)
         : null,
       pays_hst: values.pays_hst,
-      home_location_id:
-        values.home_location_id && values.home_location_id !== ANY_LOCATION
-          ? values.home_location_id
-          : null,
       notes: values.notes || null,
       license_plates: customer?.license_plates ?? [],
     };
@@ -394,20 +376,9 @@ export function CustomerForm({
               />
               <FormField
                 control={form.control}
-                name="first_name"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-4">
-                    <FormLabel>First name</FormLabel>
-                    <FormControl><UppercaseInput {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
                 name="last_or_company"
                 render={({ field }) => (
-                  <FormItem className="md:col-span-6">
+                  <FormItem className="md:col-span-10">
                     <FormLabel>Last / Company name *</FormLabel>
                     <FormControl>
                       <UppercaseInput placeholder="ACME TRUCKING LTD." {...field} />
@@ -418,26 +389,7 @@ export function CustomerForm({
               />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="new">New</SelectItem>
-                        <SelectItem value="regular">Regular</SelectItem>
-                        <SelectItem value="old">Old</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
-                )}
-              />
+            <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
                 name="customer_type"
@@ -452,21 +404,13 @@ export function CustomerForm({
               />
               <FormField
                 control={form.control}
-                name="home_location_id"
+                name="card_number"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Home location</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value={ANY_LOCATION}>Any location</SelectItem>
-                        {locations.map((loc) => (
-                          <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>Card number</FormLabel>
+                    <FormControl>
+                      <UppercaseInput placeholder="(carrier or fleet card #)" {...field} />
+                    </FormControl>
                   </FormItem>
                 )}
               />
@@ -482,7 +426,7 @@ export function CustomerForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Address 1</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
+                  <FormControl><UppercaseInput {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -493,7 +437,7 @@ export function CustomerForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Address 2</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
+                  <FormControl><UppercaseInput {...field} /></FormControl>
                 </FormItem>
               )}
             />
@@ -504,7 +448,7 @@ export function CustomerForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>City / Town</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
+                    <FormControl><UppercaseInput {...field} /></FormControl>
                   </FormItem>
                 )}
               />
@@ -515,7 +459,7 @@ export function CustomerForm({
                   <FormItem>
                     <FormLabel>Postal / ZIP</FormLabel>
                     <FormControl>
-                      <Input placeholder={postalPlaceholder(country)} {...field} />
+                      <UppercaseInput placeholder={postalPlaceholder(country)} {...field} />
                     </FormControl>
                   </FormItem>
                 )}
@@ -579,18 +523,7 @@ export function CustomerForm({
               <PhoneSlot form={form} name="phone_alt_2" label="Alternate 2" notesKey="alt_2" />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl><Input type="email" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
                 name="contact_method"
@@ -616,7 +549,7 @@ export function CustomerForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Other contact</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
+                    <FormControl><UppercaseInput {...field} /></FormControl>
                   </FormItem>
                 )}
               />
@@ -800,7 +733,7 @@ export function CustomerForm({
             {customer && vehicles.length > 0 && (
               <div className="rounded-md border">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow>
                       <TableHead>License</TableHead>
                       <TableHead>VIN</TableHead>
@@ -857,7 +790,7 @@ export function CustomerForm({
             {!customer && stagedVehicles.length > 0 && (
               <div className="rounded-md border">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow>
                       <TableHead>License</TableHead>
                       <TableHead>VIN</TableHead>

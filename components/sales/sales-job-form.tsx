@@ -31,6 +31,7 @@ import { createSalesJob, updateSalesJob } from "@/lib/actions/sales";
 import { createCustomer, getCustomer } from "@/lib/actions/customers";
 import { getCustomerVehicles } from "@/lib/actions/vehicles";
 import { isFreeGreaseEligible } from "@/lib/utils/free-grease";
+import { isFreeOilChangeEligible } from "@/lib/utils/free-oil-change";
 import { lookupOilChangePrice } from "@/lib/actions/pricing";
 import { SalesJobInput } from "@/lib/schemas/sales";
 import type {
@@ -179,7 +180,7 @@ export function SalesJobForm({
     hst: initial?.hst ?? "",
     total: initial?.total ?? "",
     paid_amount: initial?.paid_amount ?? "",
-    payment_mode: initial?.payment_mode ?? "",
+    payment_mode: initial?.payment_mode ?? "oc",
     engine_type_id: initial?.engine_type_id ?? "",
     oil_type_id: initial?.oil_type_id ?? "",
     oil_container: initial?.oil_container ?? "",
@@ -298,9 +299,7 @@ export function SalesJobForm({
     form.setValue("customer_id", c.id);
     form.setValue(
       "billing_name",
-      c.billing_name ??
-        [c.first_name, c.last_or_company].filter(Boolean).join(" ") ??
-        "",
+      c.billing_name ?? c.last_or_company ?? "",
     );
     form.setValue("contact_no", formatPhone(c.phone_cell ?? c.contact_no));
     form.setValue("email", c.email ?? "");
@@ -376,10 +375,8 @@ export function SalesJobForm({
           contact_no: values.contact_no || null,
           email: values.email || null,
           license_plates: platePicked ? [platePicked] : [],
-          home_location_id: null,
           notes: null,
           country: "CA",
-          status: "new",
           phone_notes: {},
           cod_required: false,
           labour_discount_pct: 0,
@@ -612,6 +609,16 @@ export function SalesJobForm({
                     onChangeApplied={(v) => form.setValue("free_grease_applied", v)}
                     onChangeReason={(v) => form.setValue("free_grease_override_reason", v)}
                   />
+                )}
+
+                {/* Free oil-change banner — item #29. Informational; actual
+                    discount application is handled at line-item entry time. */}
+                {isFreeOilChangeEligible(selectedCustomer) && (
+                  <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                    <strong>Free oil change available</strong> until{" "}
+                    {formatDate(selectedCustomer.free_oil_change_until!)}. When the service is OC,
+                    set the oil-change line price to zero to apply the offer.
+                  </div>
                 )}
               </div>
             )}

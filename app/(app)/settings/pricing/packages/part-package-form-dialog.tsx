@@ -60,18 +60,22 @@ export function PartPackageFormDialog({
         active: pkg.active,
       });
       setItems(
-        pkg.items.map((it) => ({
-          part_id: it.part_id,
-          quantity: Number(it.quantity),
-          unit_price: it.unit_price == null ? "" : String(Number(it.unit_price)),
-          part: {
-            brand: it.part.brand,
-            part_number: it.part.part_number,
-            description: it.part.description,
-            list_price: Number(it.part.list_price),
-            unit_of_measure: it.part.unit_of_measure,
-          },
-        })),
+        pkg.items
+          // Skip oil-typed package items in this editor — they are managed
+          // through the oil grid linkage and surface only at expansion time.
+          .filter((it) => it.part != null && it.part_id != null)
+          .map((it) => ({
+            part_id: it.part_id as string,
+            quantity: Number(it.quantity),
+            unit_price: it.unit_price == null ? "" : String(Number(it.unit_price)),
+            part: {
+              brand: it.part!.brand,
+              part_number: it.part!.part_number,
+              description: it.part!.description,
+              list_price: Number(it.part!.list_price),
+              unit_of_measure: it.part!.unit_of_measure,
+            },
+          })),
       );
     } else {
       form.reset(blank);

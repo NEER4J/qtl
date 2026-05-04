@@ -14,6 +14,7 @@ import type {
   PartBrand,
   PartCategory,
   PartPackage,
+  PartPackageItem,
   PartPackageItemRow,
   PartPackageWithItems,
   ServiceCost,
@@ -172,20 +173,24 @@ export interface PriceGridCell {
   engine_id: string;
   oil_type_id: string;
   bulk: number | null;
+  /** Gallon price BEFORE tax. */
   gallon: number | null;
+  /** Gallon price WITH HST applied — null when oil_types.is_taxable is false. */
+  gallon_with_tax: number | null;
 }
 
 export async function getOilChangeGrid(): Promise<{
   engines: EngineType[];
   oilTypes: OilType[];
   cells: Map<string, PriceGridCell>;
+  hstRate: number;
 }> {
   const supabase = await createClient();
 
   // Mirrors public.oil_change_price(): one batched read per table instead of
   // engines×oil_types×containers RPCs (the prior approach overwhelmed the
   // request pipeline and surfaced as RangeError on this page).
-  const [enginesRes, oilTypesRes, filtersRes, tiersRes] = await Promise.all([
+  const [enginesRes, oilTypesRes, filtersRes, tiersRes, settingsRes] = await Promise.all([
     supabase
       .from("engine_types")
       .select("*")
@@ -202,12 +207,14 @@ export async function getOilChangeGrid(): Promise<{
       .from("engine_filters")
       .select("engine_type_id, quantity, parts:part_id(cost, mhsw_fee, service_costs:service_cost_id(cost))"),
     supabase.from("volume_tiers").select("oil_type_id, min_litres, premium"),
+    supabase.from("app_settings").select("hst_rate").eq("id", 1).single(),
   ]);
 
   if (enginesRes.error) throw enginesRes.error;
   if (oilTypesRes.error) throw oilTypesRes.error;
   if (filtersRes.error) throw filtersRes.error;
   if (tiersRes.error) throw tiersRes.error;
+  const hstRate = Number(settingsRes.data?.hst_rate ?? 0.13);
 
   const engines = (enginesRes.data ?? []) as EngineType[];
   const oilTypes = (oilTypesRes.data ?? []) as OilType[];
@@ -261,7 +268,13 @@ export async function getOilChangeGrid(): Promise<{
     const serviceCost = engineServiceCost.get(e.id) ?? 0;
     if (!Number.isFinite(capacity) || capacity <= 0) {
       for (const o of oilTypes) {
-        cells.set(`${e.id}|${o.id}`, { engine_id: e.id, oil_type_id: o.id, bulk: null, gallon: null });
+        cells.set(`${e.id}|${o.id}`, {
+          engine_id: e.id,
+          oil_type_id: o.id,
+          bulk: null,
+          gallon: null,
+          gallon_with_tax: null,
+        });
       }
       continue;
     }
@@ -282,11 +295,120 @@ export async function getOilChangeGrid(): Promise<{
       const gallon = Number.isFinite(gallonRate)
         ? round99(gallonRate * capacity + filterCost + serviceCost + tier)
         : null;
-      cells.set(`${e.id}|${o.id}`, { engine_id: e.id, oil_type_id: o.id, bulk, gallon });
+      // Item #21 — apply HST when the oil type is flagged taxable.
+      const gallon_with_tax =
+        gallon != null && o.is_taxable
+          ? Math.round(gallon * (1 + hstRate) * 100) / 100
+          : null;
+      cells.set(`${e.id}|${o.id}`, {
+        engine_id: e.id,
+        oil_type_id: o.id,
+        bulk,
+        gallon,
+        gallon_with_tax,
+      });
     }
   }
 
-  return { engines, oilTypes, cells };
+  return { engines, oilTypes, cells, hstRate };
+}
+
+// ============================================================================
+// Item #19 — Detailed oil-change pricing breakdown.
+//
+// For each engine we expose every filter brand option separately, plus a
+// labour line (sum of service_costs across the engine's filter rows) and a
+// grease/extras line picked up from any service_cost row whose code matches
+// 'GREASE' (case-insensitive). The shape is intentionally wide so the page can
+// pivot rows = engines × columns = brand variants without re-querying.
+// ============================================================================
+
+export interface OilChangeDetailBrand {
+  brand: string;
+  filter_cost: number;
+  labour: number;
+  parts: Array<{ part_number: string; quantity: number; cost: number; mhsw_fee: number }>;
+}
+
+export interface OilChangeDetailRow {
+  engine: EngineType;
+  brands: OilChangeDetailBrand[];
+  grease: number;
+}
+
+export async function getOilChangeDetails(): Promise<{
+  rows: OilChangeDetailRow[];
+  hstRate: number;
+}> {
+  const supabase = await createClient();
+
+  const [enginesRes, filtersRes, settingsRes, greaseRes] = await Promise.all([
+    supabase
+      .from("engine_types")
+      .select("*")
+      .eq("active", true)
+      .order("manufacturer")
+      .order("model"),
+    supabase
+      .from("engine_filters")
+      .select(
+        "engine_type_id, quantity, parts:part_id(brand, part_number, cost, mhsw_fee, service_costs:service_cost_id(cost))",
+      ),
+    supabase.from("app_settings").select("hst_rate").eq("id", 1).single(),
+    supabase.from("service_costs").select("cost").ilike("code", "%grease%").maybeSingle(),
+  ]);
+
+  if (enginesRes.error) throw enginesRes.error;
+  if (filtersRes.error) throw filtersRes.error;
+  const hstRate = Number(settingsRes.data?.hst_rate ?? 0.13);
+  const grease = Number(greaseRes.data?.cost ?? 0);
+
+  type FilterJoin = {
+    engine_type_id: string;
+    quantity: number;
+    parts: {
+      brand: string;
+      part_number: string;
+      cost: number;
+      mhsw_fee: number;
+      service_costs: { cost: number } | null;
+    } | null;
+  };
+
+  const grouped = new Map<string, Map<string, OilChangeDetailBrand>>();
+  for (const r of (filtersRes.data ?? []) as unknown as FilterJoin[]) {
+    if (!r.parts) continue;
+    const qty = Number(r.quantity) || 0;
+    const part = r.parts;
+    const brand = part.brand ?? "(none)";
+    const filterCost = (Number(part.cost) + Number(part.mhsw_fee)) * qty;
+    const labourCost = Number(part.service_costs?.cost ?? 0) * qty;
+
+    const byEngine = grouped.get(r.engine_type_id) ?? new Map<string, OilChangeDetailBrand>();
+    const slot =
+      byEngine.get(brand) ??
+      ({ brand, filter_cost: 0, labour: 0, parts: [] } satisfies OilChangeDetailBrand);
+    slot.filter_cost += filterCost;
+    slot.labour += labourCost;
+    slot.parts.push({
+      part_number: part.part_number,
+      quantity: qty,
+      cost: Number(part.cost),
+      mhsw_fee: Number(part.mhsw_fee),
+    });
+    byEngine.set(brand, slot);
+    grouped.set(r.engine_type_id, byEngine);
+  }
+
+  const rows: OilChangeDetailRow[] = ((enginesRes.data ?? []) as EngineType[]).map((e) => ({
+    engine: e,
+    brands: Array.from(grouped.get(e.id)?.values() ?? []).sort((a, b) =>
+      a.brand.localeCompare(b.brand),
+    ),
+    grease,
+  }));
+
+  return { rows, hstRate };
 }
 
 // ============================================================================
@@ -1229,39 +1351,69 @@ async function fetchPackageItems(
   const { data, error } = await supabase
     .from("part_package_items")
     .select(
-      "id, package_id, part_id, quantity, unit_price, position, created_at, part:parts(id, brand, part_number, description, list_price, is_taxable, part_categories:category_id(name, unit_of_measure))",
+      "id, package_id, part_id, quantity, unit_price, position, created_at, oil_type_id, litres, oil_container, " +
+        "part:parts(id, brand, part_number, description, list_price, cost, mhsw_fee, is_taxable, part_categories:category_id(name, unit_of_measure)), " +
+        "oil_type:oil_types(id, code, name, bulk_cost_per_litre, gallon_cost_per_litre, litres_per_gallon, is_taxable)",
     )
     .in("package_id", packageIds)
     .order("position");
   if (error) throw error;
-  type RowFromDb = Omit<PartPackageItemRow, "part"> & {
-    part: {
-      id: string;
-      brand: string;
-      part_number: string;
-      description: string | null;
-      list_price: number;
-      is_taxable: boolean;
-      part_categories: {
-        name: string;
-        unit_of_measure: Part["unit_of_measure"];
-      } | null;
-    };
+  type PartShape = {
+    id: string;
+    brand: string;
+    part_number: string;
+    description: string | null;
+    list_price: number;
+    cost: number;
+    mhsw_fee: number;
+    is_taxable: boolean;
+    part_categories: {
+      name: string;
+      unit_of_measure: Part["unit_of_measure"];
+    } | null;
+  };
+  type OilShape = {
+    id: string;
+    code: string;
+    name: string;
+    bulk_cost_per_litre: number;
+    gallon_cost_per_litre: number;
+    litres_per_gallon: number;
+    is_taxable: boolean;
+  };
+  type RowFromDb = Omit<PartPackageItem, "id"> & {
+    id: string;
+    part: PartShape | null;
+    oil_type: OilShape | null;
   };
   for (const row of (data ?? []) as unknown as RowFromDb[]) {
-    const cat = row.part.part_categories;
+    const cat = row.part?.part_categories;
     const merged: PartPackageItemRow = {
-      ...row,
-      part: {
-        id: row.part.id,
-        brand: row.part.brand,
-        part_number: row.part.part_number,
-        description: row.part.description,
-        list_price: Number(row.part.list_price),
-        is_taxable: row.part.is_taxable,
-        category: cat?.name ?? "",
-        unit_of_measure: cat?.unit_of_measure ?? "pcs",
-      },
+      id: row.id,
+      package_id: row.package_id,
+      part_id: row.part_id,
+      quantity: row.quantity,
+      unit_price: row.unit_price,
+      position: row.position,
+      created_at: row.created_at,
+      oil_type_id: row.oil_type_id,
+      litres: row.litres,
+      oil_container: row.oil_container,
+      part: row.part
+        ? {
+            id: row.part.id,
+            brand: row.part.brand,
+            part_number: row.part.part_number,
+            description: row.part.description,
+            list_price: Number(row.part.list_price),
+            cost: Number(row.part.cost),
+            mhsw_fee: Number(row.part.mhsw_fee),
+            is_taxable: row.part.is_taxable,
+            category: cat?.name ?? "",
+            unit_of_measure: cat?.unit_of_measure ?? "pcs",
+          }
+        : null,
+      oil_type: row.oil_type ?? null,
     };
     const arr = out.get(row.package_id) ?? [];
     arr.push(merged);

@@ -177,7 +177,7 @@ export default async function SalesJobDetailPage({
           </CardHeader>
           <CardContent>
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Description</TableHead>
                   <TableHead className="w-24 text-right">Qty</TableHead>
@@ -234,7 +234,7 @@ export default async function SalesJobDetailPage({
             <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
           ) : (
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="w-28">Date</TableHead>
                   <TableHead>Mode</TableHead>

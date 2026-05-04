@@ -110,6 +110,8 @@ export interface Customer {
   contact_method: ContactMethod | null;
   customer_type: string | null;
   status: CustomerStatus;
+  // item #23 — carrier/customer-level card number
+  card_number: string | null;
   // billing options
   default_pay_method: PaymentMode | null;
   cod_required: boolean;
@@ -124,6 +126,8 @@ export interface Customer {
   free_grease_until: string | null;
   free_grease_overridden_at: string | null;
   free_grease_override_note: string | null;
+  // item #29 — 30-day free oil-change offer (same pattern as free grease)
+  free_oil_change_until: string | null;
   // legacy / context
   license_plates: string[];
   home_location_id: string | null;
@@ -197,6 +201,60 @@ export interface Vendor {
   updated_at: string;
   created_by: string | null;
   updated_by: string | null;
+}
+
+// Item #24a — vendor ↔ part many-to-many with per-vendor cost.
+export interface VendorPart {
+  id: string;
+  vendor_id: string;
+  part_id: string;
+  vendor_part_number: string | null;
+  cost: number;
+  is_preferred: boolean;
+  notes: string | null;
+  deactivated_at: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+export interface VendorPartRow extends VendorPart {
+  part: Pick<Part, "id" | "brand" | "part_number" | "description" | "cost" | "list_price"> | null;
+  vendor: Pick<Vendor, "id" | "name" | "code"> | null;
+}
+
+// Item #24c — vendor purchase invoices.
+export interface VendorInvoice {
+  id: string;
+  vendor_id: string;
+  location_id: string;
+  invoice_no: string | null;
+  invoice_date: string;
+  sub_total: number;
+  hst: number;
+  total: number;
+  paid_amount: number;
+  balance: number;
+  payment_status: PaymentStatus;
+  notes: string | null;
+  deactivated_at: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+export interface VendorInvoiceItem {
+  id: string;
+  invoice_id: string;
+  vendor_part_id: string | null;
+  description: string | null;
+  quantity: number;
+  unit_cost: number;
+  line_total: number;
+  position: number;
+  created_at: string;
 }
 
 export interface SalesJob {
@@ -498,6 +556,8 @@ export interface OilType {
   /** Litres per gallon container for this specific oil. Imperial = 4.546,
    *  US = 3.785, metric = 4.000. */
   litres_per_gallon: number;
+  /** Item #21 — gallon oil sales attract HST when true. */
+  is_taxable: boolean;
   sort_order: number;
   active: boolean;
   created_at: string;
@@ -599,26 +659,39 @@ export interface PartPackage {
 export interface PartPackageItem {
   id: string;
   package_id: string;
-  part_id: string;
+  /** When `oil_type_id` is set, this is null (item #18 link). */
+  part_id: string | null;
   quantity: number;
-  /** Override; null means use parts.list_price at expansion. */
+  /** Override; null means use parts.list_price (or oil_types rate × litres) at expansion. */
   unit_price: number | null;
   position: number;
   created_at: string;
+  // Item #18 — alternative pricing source: link straight to oil_types so
+  // package pricing matches the oil-change grid for oil items.
+  oil_type_id: string | null;
+  litres: number | null;
+  oil_container: "bulk" | "gallon" | null;
 }
 
 export interface PartPackageItemRow extends PartPackageItem {
-  part: Pick<
-    Part,
-    | "id"
-    | "brand"
-    | "part_number"
-    | "description"
-    | "list_price"
-    | "category"
-    | "unit_of_measure"
-    | "is_taxable"
-  >;
+  part:
+    | Pick<
+        Part,
+        | "id"
+        | "brand"
+        | "part_number"
+        | "description"
+        | "list_price"
+        | "cost"
+        | "mhsw_fee"
+        | "category"
+        | "unit_of_measure"
+        | "is_taxable"
+      >
+    | null;
+  oil_type:
+    | Pick<OilType, "id" | "code" | "name" | "bulk_cost_per_litre" | "gallon_cost_per_litre" | "litres_per_gallon" | "is_taxable">
+    | null;
 }
 
 export interface PartPackageWithItems extends PartPackage {

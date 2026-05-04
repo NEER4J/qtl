@@ -33,6 +33,7 @@ type FormValues = {
   bulk_cost_per_litre: string;
   gallon_cost_per_litre: string;
   litres_per_gallon: string;
+  is_taxable: boolean;
   sort_order: string;
   active: boolean;
 };
@@ -44,6 +45,7 @@ const blank: FormValues = {
   bulk_cost_per_litre: "0",
   gallon_cost_per_litre: "0",
   litres_per_gallon: "4.546",
+  is_taxable: true,
   sort_order: "100",
   active: true,
 };
@@ -73,6 +75,7 @@ export function OilTypeFormDialog({
             bulk_cost_per_litre: String(oilType.bulk_cost_per_litre),
             gallon_cost_per_litre: String(oilType.gallon_cost_per_litre),
             litres_per_gallon: String(oilType.litres_per_gallon),
+            is_taxable: oilType.is_taxable,
             sort_order: String(oilType.sort_order),
             active: oilType.active,
           }
@@ -89,6 +92,7 @@ export function OilTypeFormDialog({
         bulk_cost_per_litre: Number(values.bulk_cost_per_litre),
         gallon_cost_per_litre: Number(values.gallon_cost_per_litre),
         litres_per_gallon: Number(values.litres_per_gallon),
+        is_taxable: values.is_taxable,
         sort_order: Number(values.sort_order),
         active: values.active,
       };
@@ -225,6 +229,24 @@ export function OilTypeFormDialog({
                   <div className="leading-none">
                     <FormLabel className="cursor-pointer">Base grade</FormLabel>
                     <FormDescription className="text-xs">Typically 15W40. Only mark one oil as base.</FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="is_taxable"
+              render={({ field }) => (
+                <FormItem className="flex items-center gap-2 space-y-0">
+                  <FormControl>
+                    <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />
+                  </FormControl>
+                  <div className="leading-none">
+                    <FormLabel className="cursor-pointer">Taxable (gallon)</FormLabel>
+                    <FormDescription className="text-xs">
+                      When checked, gallon oil sales of this grade attract HST. The price grid shows pre- and post-tax columns.
+                    </FormDescription>
                   </div>
                 </FormItem>
               )}

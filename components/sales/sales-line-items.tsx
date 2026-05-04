@@ -92,21 +92,49 @@ export function SalesLineItems({
   };
   const addPackage = (pkg: PartPackageWithItems) => {
     const rows = pkg.items.map((it) => {
-      // Override on the package wins; otherwise use catalog list_price.
-      const price =
-        it.unit_price != null ? Number(it.unit_price) : Number(it.part.list_price);
-      return newLineItem({
-        part_id: it.part_id,
-        description: `${it.part.brand} ${it.part.part_number}${
+      // Item #18 — when this row is linked to an oil_type, price flows from the
+      // oil-types catalogue (the same source as the oil-change grid). Otherwise
+      // use the override on the package, falling back to parts.list_price.
+      let price: number;
+      let description: string;
+      let isTaxable: boolean;
+      let unitOfMeasure: LineItem["unit_of_measure"];
+      if (it.oil_type_id && it.oil_type) {
+        const lpg = Number(it.oil_type.litres_per_gallon) || 4.546;
+        const ratePerLitre =
+          it.oil_container === "gallon"
+            ? Number(it.oil_type.gallon_cost_per_litre) / lpg
+            : Number(it.oil_type.bulk_cost_per_litre);
+        const litres = Number(it.litres ?? 0);
+        const computed =
+          it.unit_price != null ? Number(it.unit_price) : ratePerLitre * litres;
+        price = Number.isFinite(computed) ? computed : 0;
+        description = `${it.oil_type.code} — ${it.oil_type.name}${
+          it.oil_container ? ` (${it.oil_container})` : ""
+        }${litres ? ` × ${litres}L` : ""}`;
+        isTaxable = it.oil_type.is_taxable;
+        unitOfMeasure = "ltr";
+      } else if (it.part) {
+        price = it.unit_price != null ? Number(it.unit_price) : Number(it.part.list_price);
+        description = `${it.part.brand} ${it.part.part_number}${
           it.part.description ? ` — ${it.part.description}` : ""
-        }`,
+        }`;
+        isTaxable = it.part.is_taxable;
+        unitOfMeasure = it.part.unit_of_measure;
+      } else {
+        // Defensive — should not happen due to part_package_items constraint.
+        return null;
+      }
+      return newLineItem({
+        part_id: it.part_id ?? null,
+        description,
         quantity: Number(it.quantity) || 1,
         unit_price: Number.isFinite(price) ? price : 0,
-        is_taxable: it.part.is_taxable,
-        unit_of_measure: it.part.unit_of_measure,
+        is_taxable: isTaxable,
+        unit_of_measure: unitOfMeasure,
         package_label: pkg.name,
       });
-    });
+    }).filter((row): row is LineItem => row !== null);
     onChange([...items, ...rows]);
   };
 

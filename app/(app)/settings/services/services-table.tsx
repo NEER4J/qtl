@@ -40,9 +40,9 @@ export function ServicesTable({ services }: { services: ServiceType[] }) {
         </Button>
       </div>
 
-      <div className="rounded-md border">
+      <div className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead className="w-24">Code</TableHead>
               <TableHead>Name</TableHead>
