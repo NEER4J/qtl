@@ -50,7 +50,7 @@ type FormValues = {
   service_cost_id: string | null;
   is_taxable: boolean;
   active: boolean;
-  duplicate_unit_price: string;
+  extra_price: string;
 };
 
 const blank: FormValues = {
@@ -65,7 +65,7 @@ const blank: FormValues = {
   service_cost_id: null,
   is_taxable: true,
   active: true,
-  duplicate_unit_price: "",
+  extra_price: "0",
 };
 
 export function PartFormDialog({
@@ -118,8 +118,7 @@ export function PartFormDialog({
             service_cost_id: part.service_cost_id,
             is_taxable: part.is_taxable,
             active: part.active,
-            duplicate_unit_price:
-              part.duplicate_unit_price == null ? "" : String(part.duplicate_unit_price),
+            extra_price: String(part.extra_price ?? 0),
           }
         : blank,
     );
@@ -127,7 +126,7 @@ export function PartFormDialog({
 
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
-      const dupTrimmed = values.duplicate_unit_price.trim();
+      const extraTrimmed = values.extra_price.trim();
       const payload = {
         part_number: values.part_number.trim(),
         brand: values.brand.trim(),
@@ -140,7 +139,7 @@ export function PartFormDialog({
         service_cost_id: values.service_cost_id || null,
         is_taxable: values.is_taxable,
         active: values.active,
-        duplicate_unit_price: dupTrimmed === "" ? null : Number(dupTrimmed),
+        extra_price: extraTrimmed === "" ? 0 : Number(extraTrimmed),
       };
       const res =
         mode === "create"
@@ -344,21 +343,20 @@ export function PartFormDialog({
 
             <FormField
               control={form.control}
-              name="duplicate_unit_price"
+              name="extra_price"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Duplicate price</FormLabel>
+                  <FormLabel>Extra price (signed delta)</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
-                      min="0"
                       step="0.01"
-                      placeholder="Leave blank to use list price"
+                      placeholder="0.00"
                       {...field}
                     />
                   </FormControl>
                   <FormDescription className="text-xs">
-                    Used for the 2nd+ occurrence of this part on a single sales job. Leave blank to fall back to the list price.
+                    Applied as an upcharge (positive) or credit (negative) to the matching same-category line on a job when this part is added via a package. Default 0 = no adjustment.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

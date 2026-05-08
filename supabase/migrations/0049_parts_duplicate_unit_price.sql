@@ -1,11 +1,11 @@
 -- 0049_parts_duplicate_unit_price.sql
--- Optional price applied to the 2nd+ occurrence of a part on a single sales
--- job (e.g. a discounted rate when the customer needs the same filter twice).
--- NULL = use list_price for duplicates as well.
+-- Adds parts.extra_price — a signed delta (can be negative) applied to an
+-- existing same-category line on a sales job when this part appears in a
+-- package the owner drops onto the job. Positive = upgrade fee added to
+-- the original line; negative = credit subtracted.
 
 alter table public.parts
-  add column if not exists duplicate_unit_price numeric(10,2)
-    check (duplicate_unit_price is null or duplicate_unit_price >= 0);
+  add column if not exists extra_price numeric(10,2) not null default 0;
 
-comment on column public.parts.duplicate_unit_price is
-  'Price used for the 2nd+ occurrence of this part on one sales job. NULL = use list_price.';
+comment on column public.parts.extra_price is
+  'Signed delta applied to an existing same-category line when this part is added via a package. Positive = upcharge, negative = credit.';

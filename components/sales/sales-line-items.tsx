@@ -18,7 +18,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { PartPickerButton } from "@/components/pricing/part-picker";
 import { PackagePickerButton } from "@/components/sales/package-picker-button";
-import type { Part, PartPackageWithItems, UnitOfMeasure } from "@/lib/db/types";
+import type {
+  Part,
+  PartPackageItemRow,
+  PartPackageWithItems,
+  UnitOfMeasure,
+} from "@/lib/db/types";
 import { formatMoney } from "@/lib/utils/format";
 import {
   effectiveCatalogPriceForItem,
@@ -42,6 +47,8 @@ export interface LineItem {
   package_label?: string | null;
   /** True when the customer brought the part themselves; line_total forced to 0. */
   is_customer_supplied?: boolean;
+  /** Category id of the linked part — used for same-category dup detection. */
+  part_category_id?: string | null;
 }
 
 export function newLineItem(partial: Partial<LineItem> = {}): LineItem {
@@ -58,6 +65,7 @@ export function newLineItem(partial: Partial<LineItem> = {}): LineItem {
     unit_of_measure: null,
     package_label: null,
     is_customer_supplied: false,
+    part_category_id: null,
     ...partial,
   };
 }
@@ -85,14 +93,25 @@ export function lineItemsTaxableSubTotal(items: LineItem[]): number {
   return Math.round(total * 100) / 100;
 }
 
-type PendingPart = { kind: "part"; part: Part };
-type PendingPackage = {
-  kind: "package";
-  pkg: PartPackageWithItems;
-  /** part_ids of items already on the job that would create a duplicate. */
-  dupePartIds: Set<string>;
+/**
+ * One same-category collision between an item already on the job and a
+ * part-row inside the package the user just dropped.
+ */
+type CategoryMatch = {
+  /** key of the existing job line being upcharged. */
+  existingKey: string;
+  /** Snapshot of the existing row label (for the dialog). */
+  existingLabel: string;
+  /** The package item that triggered the match. */
+  pkgItem: PartPackageItemRow;
+  /** parts.extra_price — signed delta to apply to the existing line. */
+  delta: number;
 };
-type PendingAdd = PendingPart | PendingPackage | null;
+
+type PendingPackage = {
+  pkg: PartPackageWithItems;
+  matches: CategoryMatch[];
+};
 
 export function SalesLineItems({
   items,
@@ -101,7 +120,7 @@ export function SalesLineItems({
   items: LineItem[];
   onChange: (items: LineItem[]) => void;
 }) {
-  const [pending, setPending] = useState<PendingAdd>(null);
+  const [pending, setPending] = useState<PendingPackage | null>(null);
 
   const update = (key: string, patch: Partial<LineItem>) => {
     onChange(items.map((it) => (it.key === key ? { ...it, ...patch } : it)));
@@ -109,44 +128,36 @@ export function SalesLineItems({
   const remove = (key: string) => onChange(items.filter((it) => it.key !== key));
   const addCustom = () => onChange([...items, newLineItem()]);
 
-  const partAlreadyOnJob = (partId: string) =>
-    items.some((it) => it.part_id === partId);
-
-  const partUnitPrice = (p: Part, isDuplicate: boolean): number => {
-    if (isDuplicate && p.duplicate_unit_price != null) {
-      return Number(p.duplicate_unit_price);
-    }
-    return Number(p.list_price) || 0;
+  const addPart = (p: Part) => {
+    onChange([
+      ...items,
+      newLineItem({
+        part_id: p.id,
+        description: `${p.brand} ${p.part_number}${p.description ? ` — ${p.description}` : ""}`,
+        quantity: 1,
+        unit_price: Number(p.list_price) || 0,
+        is_taxable: p.is_taxable,
+        unit_of_measure: p.unit_of_measure,
+        part_category_id: p.category_id,
+      }),
+    ]);
   };
 
-  const lineFromPart = (p: Part, isDuplicate: boolean): LineItem =>
-    newLineItem({
-      part_id: p.id,
-      description: `${p.brand} ${p.part_number}${p.description ? ` — ${p.description}` : ""}`,
-      quantity: 1,
-      unit_price: partUnitPrice(p, isDuplicate),
-      is_taxable: p.is_taxable,
-      unit_of_measure: p.unit_of_measure,
-    });
-
-  const expandPackage = (
+  const buildPackageRows = (
     pkg: PartPackageWithItems,
-    options: { skipDupes: boolean; dupePartIds: Set<string> },
+    skipPkgItemIds: Set<string>,
   ): LineItem[] => {
     const locked = isPartPackageLocked(pkg);
     const rows: LineItem[] = [];
     for (const it of pkg.items) {
-      const isPartDupe =
-        it.part_id != null && options.dupePartIds.has(it.part_id);
-      if (options.skipDupes && isPartDupe) continue;
+      if (skipPkgItemIds.has(it.id)) continue;
 
       let price: number;
       let description: string;
       let isTaxable: boolean;
       let unitOfMeasure: LineItem["unit_of_measure"];
+      let categoryId: string | null;
       if (it.oil_type_id && it.oil_type) {
-        // Item #18 — oil-type rows price from the oil-types catalogue (matches
-        // the oil grid). Locks override that with the snapshot.
         price = locked
           ? effectiveLockedPriceForItem(it)
           : effectiveCatalogPriceForItem(it);
@@ -156,23 +167,17 @@ export function SalesLineItems({
         }${litres ? ` × ${litres}L` : ""}`;
         isTaxable = it.oil_type.is_taxable;
         unitOfMeasure = "ltr";
+        categoryId = null;
       } else if (it.part) {
-        if (locked) {
-          price = effectiveLockedPriceForItem(it);
-        } else if (isPartDupe && it.part.duplicate_unit_price != null) {
-          // Confirmed duplicate AND no manual override → fall back to dup price.
-          price =
-            it.unit_price != null
-              ? Number(it.unit_price)
-              : Number(it.part.duplicate_unit_price);
-        } else {
-          price = effectiveCatalogPriceForItem(it);
-        }
+        price = locked
+          ? effectiveLockedPriceForItem(it)
+          : effectiveCatalogPriceForItem(it);
         description = `${it.part.brand} ${it.part.part_number}${
           it.part.description ? ` — ${it.part.description}` : ""
         }`;
         isTaxable = it.part.is_taxable;
         unitOfMeasure = it.part.unit_of_measure;
+        categoryId = it.part.category_id ?? null;
       } else {
         continue;
       }
@@ -185,11 +190,12 @@ export function SalesLineItems({
           is_taxable: isTaxable,
           unit_of_measure: unitOfMeasure,
           package_label: pkg.name,
+          part_category_id: categoryId,
         }),
       );
     }
 
-    // Labor line (item #2) — added once per package, regardless of duplicates.
+    // Labor line — added once per package, regardless of duplicates.
     const laborSell = locked
       ? Number(pkg.labor_locked_selling_price ?? pkg.labor_selling_price) || 0
       : Number(pkg.labor_selling_price) || 0;
@@ -209,54 +215,73 @@ export function SalesLineItems({
     return rows;
   };
 
-  const addPart = (p: Part) => {
-    if (partAlreadyOnJob(p.id)) {
-      setPending({ kind: "part", part: p });
-      return;
+  const findCategoryMatches = (pkg: PartPackageWithItems): CategoryMatch[] => {
+    // Build "first existing line per category" so each existing line is
+    // upcharged at most once even if the package has multiple items in the
+    // same category.
+    const claimedKeys = new Set<string>();
+    const matches: CategoryMatch[] = [];
+    for (const pkgItem of pkg.items) {
+      if (!pkgItem.part || !pkgItem.part.category_id) continue;
+      const cat = pkgItem.part.category_id;
+      const existing = items.find(
+        (it) =>
+          it.part_category_id != null &&
+          it.part_category_id === cat &&
+          !claimedKeys.has(it.key),
+      );
+      if (!existing) continue;
+      claimedKeys.add(existing.key);
+      matches.push({
+        existingKey: existing.key,
+        existingLabel: existing.description || "(no description)",
+        pkgItem,
+        delta: Number(pkgItem.part.extra_price ?? 0),
+      });
     }
-    onChange([...items, lineFromPart(p, false)]);
+    return matches;
   };
 
   const addPackage = (pkg: PartPackageWithItems) => {
-    const dupePartIds = new Set<string>();
-    for (const it of pkg.items) {
-      if (it.part_id && partAlreadyOnJob(it.part_id)) dupePartIds.add(it.part_id);
-    }
-    if (dupePartIds.size > 0) {
-      setPending({ kind: "package", pkg, dupePartIds });
+    const matches = findCategoryMatches(pkg);
+    if (matches.length > 0) {
+      setPending({ pkg, matches });
       return;
     }
-    onChange([...items, ...expandPackage(pkg, { skipDupes: false, dupePartIds })]);
+    onChange([...items, ...buildPackageRows(pkg, new Set())]);
   };
 
+  /**
+   * Apply the extra-price delta to the matched existing lines AND skip those
+   * package items from being added as new rows. Labor + remaining package
+   * items still flow in.
+   */
   const confirmPending = () => {
     if (!pending) return;
-    if (pending.kind === "part") {
-      onChange([...items, lineFromPart(pending.part, true)]);
-    } else {
-      onChange([
-        ...items,
-        ...expandPackage(pending.pkg, {
-          skipDupes: false,
-          dupePartIds: pending.dupePartIds,
-        }),
-      ]);
+    const skip = new Set<string>(pending.matches.map((m) => m.pkgItem.id));
+
+    // Bump unit_price on existing lines.
+    const deltaByKey = new Map<string, number>();
+    for (const m of pending.matches) {
+      const prev = deltaByKey.get(m.existingKey) ?? 0;
+      deltaByKey.set(m.existingKey, prev + m.delta);
     }
+    const adjusted = items.map((it) => {
+      const d = deltaByKey.get(it.key);
+      if (d == null || d === 0) return it;
+      const newPrice = Math.max(0, Math.round((Number(it.unit_price) + d) * 100) / 100);
+      return { ...it, unit_price: newPrice };
+    });
+
+    onChange([...adjusted, ...buildPackageRows(pending.pkg, skip)]);
     setPending(null);
   };
 
+  /** Skip the matched package items entirely; don't touch existing lines. */
   const declinePending = () => {
     if (!pending) return;
-    if (pending.kind === "package") {
-      // Drop just the duplicate rows; expand the rest (and labor).
-      onChange([
-        ...items,
-        ...expandPackage(pending.pkg, {
-          skipDupes: true,
-          dupePartIds: pending.dupePartIds,
-        }),
-      ]);
-    }
+    const skip = new Set<string>(pending.matches.map((m) => m.pkgItem.id));
+    onChange([...items, ...buildPackageRows(pending.pkg, skip)]);
     setPending(null);
   };
 
@@ -408,7 +433,7 @@ export function SalesLineItems({
         </Button>
       </div>
 
-      <DuplicateConfirmDialog
+      <CategoryDuplicateDialog
         pending={pending}
         onConfirm={confirmPending}
         onDecline={declinePending}
@@ -418,67 +443,23 @@ export function SalesLineItems({
   );
 }
 
-function DuplicateConfirmDialog({
+function CategoryDuplicateDialog({
   pending,
   onConfirm,
   onDecline,
   onCancel,
 }: {
-  pending: PendingAdd;
+  pending: PendingPackage | null;
   onConfirm: () => void;
   onDecline: () => void;
   onCancel: () => void;
 }) {
   if (!pending) return null;
 
-  const isPart = pending.kind === "part";
-  const title = isPart
-    ? "Part already on this job"
-    : "Package contains parts already on this job";
-
-  let description: React.ReactNode;
-  if (isPart) {
-    const p = pending.part;
-    const dupPrice = p.duplicate_unit_price != null ? formatMoney(p.duplicate_unit_price) : null;
-    description = (
-      <>
-        <strong>
-          {p.brand} {p.part_number}
-        </strong>{" "}
-        is already on this job. Adding it again will use{" "}
-        {dupPrice ? (
-          <>the duplicate price <strong>{dupPrice}</strong></>
-        ) : (
-          <>the list price (no duplicate price set)</>
-        )}.
-      </>
-    );
-  } else {
-    const dupes = pending.pkg.items.filter(
-      (it) => it.part_id != null && pending.dupePartIds.has(it.part_id),
-    );
-    description = (
-      <>
-        These parts in <strong>{pending.pkg.name}</strong> are already on this job:
-        <ul className="list-disc pl-5 mt-2 space-y-0.5 text-sm">
-          {dupes.map((it) => (
-            <li key={it.id}>
-              {it.part?.brand} {it.part?.part_number}
-              {it.part?.duplicate_unit_price != null && (
-                <span className="text-muted-foreground">
-                  {" "}
-                  · duplicate price {formatMoney(it.part.duplicate_unit_price)}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 text-sm">
-          Add the duplicates anyway, or skip them and add the rest of the package?
-        </p>
-      </>
-    );
-  }
+  const totalDelta =
+    Math.round(
+      pending.matches.reduce((s, m) => s + (Number.isFinite(m.delta) ? m.delta : 0), 0) * 100,
+    ) / 100;
 
   return (
     <AlertDialog
@@ -487,26 +468,63 @@ function DuplicateConfirmDialog({
     >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogTitle>
+            Same-category parts already on this job
+          </AlertDialogTitle>
           <AlertDialogDescription asChild>
-            <div>{description}</div>
+            <div className="space-y-2 text-sm">
+              <p>
+                <strong>{pending.pkg.name}</strong> contains parts in the same
+                category as lines already on this job. Apply the extra-price
+                delta to the existing line (recommended for variant upgrades),
+                or skip the package&rsquo;s same-category items entirely.
+              </p>
+              <ul className="list-disc pl-5 space-y-1">
+                {pending.matches.map((m) => (
+                  <li key={m.pkgItem.id}>
+                    <strong>{m.existingLabel}</strong> ←{" "}
+                    {m.pkgItem.part?.brand} {m.pkgItem.part?.part_number}{" "}
+                    <span
+                      className={
+                        m.delta > 0
+                          ? "text-rose-600"
+                          : m.delta < 0
+                          ? "text-emerald-600"
+                          : "text-muted-foreground"
+                      }
+                    >
+                      ({m.delta > 0 ? "+" : ""}
+                      {formatMoney(m.delta)})
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground">
+                Net change to existing lines if applied:{" "}
+                <span
+                  className={
+                    totalDelta > 0
+                      ? "text-rose-600"
+                      : totalDelta < 0
+                      ? "text-emerald-600"
+                      : ""
+                  }
+                >
+                  {totalDelta > 0 ? "+" : ""}
+                  {formatMoney(totalDelta)}
+                </span>
+                . The remaining (non-matching) package items and labor are
+                added either way.
+              </p>
+            </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          {isPart ? (
-            <>
-              <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={onConfirm}>Add anyway</AlertDialogAction>
-            </>
-          ) : (
-            <>
-              <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
-              <Button type="button" variant="outline" onClick={onDecline}>
-                Skip duplicates
-              </Button>
-              <AlertDialogAction onClick={onConfirm}>Add all</AlertDialogAction>
-            </>
-          )}
+          <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
+          <Button type="button" variant="outline" onClick={onDecline}>
+            Skip duplicates
+          </Button>
+          <AlertDialogAction onClick={onConfirm}>Apply deltas</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

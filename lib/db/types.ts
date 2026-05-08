@@ -626,8 +626,8 @@ export interface Part {
   description: string | null;
   cost: number;
   list_price: number;
-  /** Used for the 2nd+ occurrence of this part on a single sales job. NULL = use list_price. */
-  duplicate_unit_price: number | null;
+  /** Signed delta applied to an existing same-category line when this part is added via a package. Positive = upcharge, negative = credit. */
+  extra_price: number;
   mhsw_fee: number;
   margin_type: PartMarginType;
   margin_value: number;
@@ -669,9 +669,7 @@ export interface PartPackage {
   name: string;
   description: string | null;
   active: boolean;
-  /** Owner-only labor cost used for profit roll-up; not billed. */
-  labor_cost: number;
-  /** Labor amount billed when the package is expanded onto a job. */
+  /** Labor charge added on top of the package parts. Billed as its own line when expanded onto a job. */
   labor_selling_price: number;
   /** Optional description for the labor line; defaults to "Labor". */
   labor_description: string | null;
@@ -713,7 +711,8 @@ export interface PartPackageItemRow extends PartPackageItem {
         | "part_number"
         | "description"
         | "list_price"
-        | "duplicate_unit_price"
+        | "extra_price"
+        | "category_id"
         | "cost"
         | "mhsw_fee"
         | "category"

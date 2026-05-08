@@ -36,12 +36,12 @@ import { PartPackageFormDialog } from "./part-package-form-dialog";
 //
 // Cost = sum(parts.cost + parts.mhsw_fee) × quantity for part rows,
 //        plus oil-type rate × litres for oil-typed rows (rate matches the
-//        oil grid so package totals reconcile with the grid),
-//        plus pkg.labor_cost.
+//        oil grid so package totals reconcile with the grid).
+//        Labor is treated as pure margin — no internal cost is tracked.
 // List = sum(unit_price override OR parts.list_price OR computed oil price)
-//        × quantity, plus pkg.labor_selling_price.
+//        × quantity, plus pkg.labor_selling_price (the labor charge).
 // While locked, List uses locked_unit_price snapshots and labor_locked_selling_price.
-// Profit = List - Cost.
+// Profit = List - Cost (so the labor charge flows through as profit).
 
 function lineCost(it: PartPackageItemRow): number {
   const qty = Number(it.quantity) || 0;
@@ -68,13 +68,13 @@ function rollUp(pkg: PartPackageWithItems): {
     ? packageLockedItemsTotal(pkg.items)
     : packageCatalogItemsTotal(pkg.items);
   const labor = Number(pkg.labor_selling_price) || 0;
-  const labelEff =
+  const laborEff =
     isPartPackageLocked(pkg) && pkg.labor_locked_selling_price != null
       ? Number(pkg.labor_locked_selling_price)
       : labor;
   return {
-    cost: itemsCost + (Number(pkg.labor_cost) || 0),
-    list: itemsList + labelEff,
+    cost: itemsCost,
+    list: itemsList + laborEff,
     catalogList: packageCatalogItemsTotal(pkg.items) + labor,
   };
 }
@@ -395,12 +395,10 @@ function PackageBreakdown({
     locked && pkg.labor_locked_selling_price != null
       ? Number(pkg.labor_locked_selling_price)
       : Number(pkg.labor_selling_price) || 0;
-  const laborCost = Number(pkg.labor_cost) || 0;
 
   const totalSell =
     itemRows.reduce((s, r) => s + r.lineSell, 0) + laborSell;
-  const totalCost =
-    itemRows.reduce((s, r) => s + r.lineCostTotal, 0) + laborCost;
+  const totalCost = itemRows.reduce((s, r) => s + r.lineCostTotal, 0);
 
   return (
     <div className="px-6 py-3">
@@ -445,33 +443,29 @@ function PackageBreakdown({
               )}
             </tr>
           ))}
-          <tr className="border-b last:border-0 bg-amber-50/50 dark:bg-amber-950/20">
-            <td className="py-1.5 pr-2 font-medium">
-              {pkg.labor_description ?? "Labor"}
-            </td>
-            <td className="text-right tabular-nums py-1.5 px-2">
-              1<span className="text-[10px] uppercase text-muted-foreground ml-1">each</span>
-            </td>
-            {isOwner && (
-              <td className="text-right tabular-nums py-1.5 px-2 text-muted-foreground">
-                {formatMoney(laborCost)}
+          {laborSell > 0 && (
+            <tr className="border-b last:border-0 bg-amber-50/50 dark:bg-amber-950/20">
+              <td className="py-1.5 pr-2 font-medium">
+                {pkg.labor_description ?? "Labor"}
               </td>
-            )}
-            <td className="text-right tabular-nums py-1.5 px-2">{formatMoney(laborSell)}</td>
-            {isOwner && (
-              <td className="text-right tabular-nums py-1.5 px-2 text-muted-foreground">
-                {formatMoney(laborCost)}
-              </td>
-            )}
-            <td className="text-right tabular-nums py-1.5 px-2">{formatMoney(laborSell)}</td>
-            {isOwner && (
               <td className="text-right tabular-nums py-1.5 px-2">
-                <span className={laborSell - laborCost < 0 ? "text-rose-600" : undefined}>
-                  {formatMoney(laborSell - laborCost)}
-                </span>
+                1<span className="text-[10px] uppercase text-muted-foreground ml-1">each</span>
               </td>
-            )}
-          </tr>
+              {isOwner && (
+                <td className="text-right tabular-nums py-1.5 px-2 text-muted-foreground">—</td>
+              )}
+              <td className="text-right tabular-nums py-1.5 px-2">{formatMoney(laborSell)}</td>
+              {isOwner && (
+                <td className="text-right tabular-nums py-1.5 px-2 text-muted-foreground">—</td>
+              )}
+              <td className="text-right tabular-nums py-1.5 px-2">{formatMoney(laborSell)}</td>
+              {isOwner && (
+                <td className="text-right tabular-nums py-1.5 px-2">
+                  {formatMoney(laborSell)}
+                </td>
+              )}
+            </tr>
+          )}
           <tr className="font-semibold">
             <td className="py-1.5 pr-2 text-right" colSpan={isOwner ? 4 : 3}>
               Totals

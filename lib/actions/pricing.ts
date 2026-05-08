@@ -1359,7 +1359,7 @@ async function fetchPackageItems(
     .from("part_package_items")
     .select(
       "id, package_id, part_id, quantity, unit_price, locked_unit_price, position, created_at, oil_type_id, litres, oil_container, " +
-        "part:parts(id, brand, part_number, description, list_price, duplicate_unit_price, cost, mhsw_fee, is_taxable, part_categories:category_id(name, unit_of_measure)), " +
+        "part:parts(id, brand, part_number, description, list_price, extra_price, category_id, cost, mhsw_fee, is_taxable, part_categories:category_id(name, unit_of_measure)), " +
         "oil_type:oil_types(id, code, name, bulk_cost_per_litre, gallon_cost_per_litre, litres_per_gallon, is_taxable)",
     )
     .in("package_id", packageIds)
@@ -1371,7 +1371,8 @@ async function fetchPackageItems(
     part_number: string;
     description: string | null;
     list_price: number;
-    duplicate_unit_price: number | null;
+    extra_price: number;
+    category_id: string;
     cost: number;
     mhsw_fee: number;
     is_taxable: boolean;
@@ -1415,10 +1416,8 @@ async function fetchPackageItems(
             part_number: row.part.part_number,
             description: row.part.description,
             list_price: Number(row.part.list_price),
-            duplicate_unit_price:
-              row.part.duplicate_unit_price == null
-                ? null
-                : Number(row.part.duplicate_unit_price),
+            extra_price: Number(row.part.extra_price ?? 0),
+            category_id: row.part.category_id,
             cost: Number(row.part.cost),
             mhsw_fee: Number(row.part.mhsw_fee),
             is_taxable: row.part.is_taxable,
@@ -1491,7 +1490,6 @@ export const createPartPackage = wrapAction({
         name: input.name.trim(),
         description: input.description ?? null,
         active: input.active,
-        labor_cost: input.labor_cost,
         labor_selling_price: input.labor_selling_price,
         labor_description: input.labor_description ?? null,
         created_by: profile.id,
@@ -1543,7 +1541,6 @@ export const updatePartPackage = wrapAction({
         name: fields.name.trim(),
         description: fields.description ?? null,
         active: fields.active,
-        labor_cost: fields.labor_cost,
         labor_selling_price: fields.labor_selling_price,
         labor_description: fields.labor_description ?? null,
         updated_by: profile.id,

@@ -109,6 +109,8 @@ export interface SalesJobItemRow extends SalesJobItem {
   part_brand: string | null;
   /** Unit of measure from the part's category, for qty display ("3 ltr"). */
   unit_of_measure: UnitOfMeasure | null;
+  /** Category id of the linked part — used for same-category dup detection on edit. */
+  part_category_id: string | null;
 }
 
 export interface SalesPaymentRow {
@@ -145,7 +147,7 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
     supabase
       .from("sales_job_items")
       .select(
-        "*, parts:part_id(part_number, brand, part_categories:category_id(unit_of_measure))",
+        "*, parts:part_id(part_number, brand, category_id, part_categories:category_id(unit_of_measure))",
       )
       .eq("sales_job_id", id)
       .order("position", { ascending: true })
@@ -173,6 +175,7 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
     parts: {
       part_number: string | null;
       brand: string | null;
+      category_id: string | null;
       part_categories: { unit_of_measure: UnitOfMeasure } | null;
     } | null;
   };
@@ -184,6 +187,7 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
         part_number: _p?.part_number ?? null,
         part_brand: _p?.brand ?? null,
         unit_of_measure: _p?.part_categories?.unit_of_measure ?? null,
+        part_category_id: _p?.category_id ?? null,
       };
     },
   );

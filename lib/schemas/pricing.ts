@@ -93,12 +93,12 @@ export const CreatePartInput = z.object({
   mhsw_fee: z.coerce.number().min(0, "Must be ≥ 0").default(0),
   margin_type: z.enum(["fixed", "percent"]).default("fixed"),
   margin_value: z.coerce.number().min(0, "Must be ≥ 0").default(0),
-  // Optional discounted price for the 2nd+ occurrence on a single job; null/empty = use list_price.
-  duplicate_unit_price: z
-    .union([z.coerce.number().min(0).max(9999999), z.null(), z.literal("")])
+  // Signed delta applied to an existing same-category line when this part is added via a package.
+  // Positive = upcharge (e.g. premium variant), negative = credit. Empty = 0.
+  extra_price: z
+    .union([z.coerce.number().min(-9999999).max(9999999), z.literal("")])
     .optional()
-    .nullable()
-    .transform((v) => (v == null || v === "" ? null : Number(v))),
+    .transform((v) => (v == null || v === "" ? 0 : Number(v))),
   service_cost_id: z
     .string()
     .uuid()
@@ -219,7 +219,6 @@ export const CreatePartPackageInput = z.object({
   name: z.string().trim().min(1, "Name is required").max(120),
   description: z.string().trim().max(500).optional().nullable(),
   active: z.coerce.boolean().default(true),
-  labor_cost: z.coerce.number().min(0, "Must be ≥ 0").default(0),
   labor_selling_price: z.coerce.number().min(0, "Must be ≥ 0").default(0),
   labor_description: z
     .string()
