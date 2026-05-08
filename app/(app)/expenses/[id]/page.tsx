@@ -135,6 +135,36 @@ export default async function ExpenseDetailPage({
         )}
       </Card>
 
+      {exp.items.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Items</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader className="sticky top-0 z-10 bg-background">
+                <TableRow>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-right w-24">Qty</TableHead>
+                  <TableHead className="text-right w-32">Unit cost</TableHead>
+                  <TableHead className="text-right w-32">Line total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {exp.items.map((it) => (
+                  <TableRow key={it.id}>
+                    <TableCell>{it.description}</TableCell>
+                    <TableCell className="text-right tabular-nums">{Number(it.quantity)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(it.unit_cost)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(it.line_total)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Payment history</CardTitle>

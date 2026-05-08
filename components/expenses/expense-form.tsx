@@ -37,6 +37,12 @@ import { todayISO } from "@/lib/utils/format";
 
 import { VendorComboBox } from "./vendor-combobox";
 import { CreateVendorDialog } from "./create-vendor-dialog";
+import {
+  ExpenseLineItems,
+  lineItemsSubTotal,
+  newExpenseLineItem,
+  type ExpenseLineItem,
+} from "./expense-line-items";
 
 const PAYMENT_MODES: { value: PaymentMode; label: string }[] = [
   { value: "cash", label: "Cash" },
@@ -78,6 +84,8 @@ export interface ExpenseFormProps {
   subcategories: ExpenseSubcategory[];
   hstRate: number;
   lockedLocationId?: string | null;
+  /** Existing line items (edit mode). */
+  initialItems?: ExpenseLineItem[];
 }
 
 export function ExpenseForm({
@@ -88,11 +96,13 @@ export function ExpenseForm({
   subcategories,
   hstRate,
   lockedLocationId,
+  initialItems,
 }: ExpenseFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [createVendorOpen, setCreateVendorOpen] = useState(false);
   const [createVendorName, setCreateVendorName] = useState("");
+  const [items, setItems] = useState<ExpenseLineItem[]>(initialItems ?? []);
 
   const defaults: FormValues = {
     location_id: lockedLocationId ?? initial?.location_id ?? locations[0]?.id ?? "",
@@ -119,8 +129,18 @@ export function ExpenseForm({
   const form = useForm<FormValues>({ defaultValues: defaults });
 
   const categoryId = useWatch({ control: form.control, name: "category_id" });
+  const vendorIdWatch = useWatch({ control: form.control, name: "vendor_id" });
   const subTotalRaw = useWatch({ control: form.control, name: "sub_total" });
   const paidRaw = useWatch({ control: form.control, name: "paid_amount" });
+
+  // When line items exist, they drive the sub-total. Without items the user
+  // can still enter sub_total directly (back-compat for expenses without
+  // itemised parts).
+  useEffect(() => {
+    if (items.length === 0) return;
+    const sum = lineItemsSubTotal(items);
+    form.setValue("sub_total", sum.toFixed(2), { shouldDirty: true });
+  }, [items, form]);
 
   useEffect(() => {
     const n = Number(subTotalRaw);
@@ -159,6 +179,18 @@ export function ExpenseForm({
   };
 
   const onSubmit = form.handleSubmit((values) => {
+    // Filter out empty rows (no description AND zero qty/cost) so a stray
+    // blank "Custom line" doesn't fail validation.
+    const cleanItems = items
+      .filter((it) => it.description.trim() || it.quantity > 0 || it.unit_cost > 0)
+      .map((it) => ({
+        part_id: it.part_id,
+        vendor_part_id: it.vendor_part_id,
+        description: it.description.trim() || "Item",
+        quantity: Number(it.quantity) || 0,
+        unit_cost: Number(it.unit_cost) || 0,
+      }));
+
     const payload = {
       ...values,
       sub_total: Number(values.sub_total || 0),
@@ -167,6 +199,7 @@ export function ExpenseForm({
       paid_amount: Number(values.paid_amount || 0),
       payment_mode: values.payment_mode === "" ? null : values.payment_mode,
       payment_date: values.payment_date || null,
+      items: cleanItems,
     };
 
     const parsed = ExpenseInput.safeParse(payload);
@@ -446,6 +479,20 @@ export function ExpenseForm({
           </section>
 
           {/* --------------------------------------------------------------
+              Items — what parts the vendor billed for. Auto-feeds sub_total.
+          -------------------------------------------------------------- */}
+          <section className="rounded-md border p-4 space-y-4">
+            <h2 className="text-sm font-semibold uppercase text-muted-foreground">
+              Items
+            </h2>
+            <ExpenseLineItems
+              vendorId={vendorIdWatch}
+              items={items}
+              onChange={setItems}
+            />
+          </section>
+
+          {/* --------------------------------------------------------------
               Money + Payment
           -------------------------------------------------------------- */}
           <section className="rounded-md border p-4 space-y-4">
@@ -459,9 +506,20 @@ export function ExpenseForm({
                 name="sub_total"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Sub Total</FormLabel>
+                    <FormLabel>
+                      Sub Total {items.length > 0 && (
+                        <span className="text-xs text-muted-foreground">(from items)</span>
+                      )}
+                    </FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" min="0" {...field} />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        readOnly={items.length > 0}
+                        className={items.length > 0 ? "bg-muted/50" : undefined}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

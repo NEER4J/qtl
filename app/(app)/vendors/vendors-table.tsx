@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Pencil, Plus, Search } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ChevronRight, Pencil, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +31,7 @@ export function VendorsTable({
   categories: ExpenseCategory[];
   locations?: Location[];
 }) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Vendor | null>(null);
   const [creating, setCreating] = useState(false);
@@ -85,7 +88,7 @@ export function VendorsTable({
               <TableHead>Phone</TableHead>
               <TableHead>Email</TableHead>
               <TableHead className="w-24">Status</TableHead>
-              <TableHead className="w-32 text-right">Actions</TableHead>
+              <TableHead className="w-48 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -106,8 +109,16 @@ export function VendorsTable({
               </TableRow>
             ) : (
               filtered.map((v) => (
-                <TableRow key={v.id} className={!v.active ? "opacity-60" : undefined}>
-                  <TableCell className="font-medium">{v.name}</TableCell>
+                <TableRow
+                  key={v.id}
+                  className={`cursor-pointer ${!v.active ? "opacity-60" : ""}`}
+                  onDoubleClick={() => router.push(`/vendors/${v.id}`)}
+                >
+                  <TableCell className="font-medium">
+                    <Link href={`/vendors/${v.id}`} className="hover:underline">
+                      {v.name}
+                    </Link>
+                  </TableCell>
                   <TableCell>
                     {v.category_id ? (categoryMap[v.category_id] ?? "—") : "—"}
                   </TableCell>
@@ -121,6 +132,11 @@ export function VendorsTable({
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/vendors/${v.id}`}>
+                          Details <ChevronRight className="size-4" />
+                        </Link>
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => setEditing(v)}>
                         <Pencil className="size-4" />
                       </Button>

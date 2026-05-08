@@ -2,6 +2,19 @@ import { z } from "zod";
 
 import { moneySchema, paymentModeSchema, paymentStatusSchema } from "@/lib/schemas/common";
 
+// Item #24 — line items per expense (what parts the vendor billed for).
+// Mirrors the sales_job_items shape. Either part_id or free-text description
+// drives the row; vendor_part_id is the optional link back to vendor_parts.
+export const ExpenseItemInput = z.object({
+  id: z.string().uuid().optional(),
+  part_id: z.string().uuid().nullable().optional(),
+  vendor_part_id: z.string().uuid().nullable().optional(),
+  description: z.string().trim().min(1, "Description required").max(500),
+  quantity: z.coerce.number().min(0.001),
+  unit_cost: moneySchema,
+});
+export type ExpenseItemInput = z.infer<typeof ExpenseItemInput>;
+
 export const ExpenseInput = z
   .object({
     id: z.string().uuid().optional(),
@@ -42,6 +55,8 @@ export const ExpenseInput = z
     transaction_id: z.string().trim().max(100).nullable().optional().or(z.literal("")),
 
     notes: z.string().trim().max(2000).nullable().optional().or(z.literal("")),
+
+    items: z.array(ExpenseItemInput).default([]),
   })
   .superRefine((val, ctx) => {
     if (Math.abs(val.total - (val.sub_total + val.hst)) > 0.02) {

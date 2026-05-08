@@ -364,6 +364,21 @@ export interface Expense {
   updated_by: string | null;
 }
 
+// Item #24 — parts billed on a given expense.
+export interface ExpenseItem {
+  id: string;
+  expense_id: string;
+  part_id: string | null;
+  vendor_part_id: string | null;
+  description: string;
+  quantity: number;
+  unit_cost: number;
+  line_total: number;
+  position: number;
+  created_at: string;
+  created_by: string | null;
+}
+
 export interface AppSettings {
   id: 1;
   company_name: string;

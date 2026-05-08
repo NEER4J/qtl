@@ -11,7 +11,7 @@ import {
   ListExpensesInput,
   UpdateExpenseInput,
 } from "@/lib/schemas/expenses";
-import type { Expense, PaymentMode, PaymentStatus } from "@/lib/db/types";
+import type { Expense, ExpenseItem, PaymentMode, PaymentStatus } from "@/lib/db/types";
 
 // ----------------------------------------------------------------------------
 // List
@@ -118,11 +118,16 @@ export interface ExpenseDetail extends Expense {
   subcategory_name: string | null;
   vendor_name: string | null;
   payments: ExpensePaymentRow[];
+  items: ExpenseItem[];
 }
 
 export async function getExpense(id: string): Promise<ExpenseDetail | null> {
   const supabase = await createClient();
-  const [{ data: exp, error: expErr }, { data: payments, error: payErr }] = await Promise.all([
+  const [
+    { data: exp, error: expErr },
+    { data: payments, error: payErr },
+    { data: items, error: itemsErr },
+  ] = await Promise.all([
     supabase
       .from("expenses")
       .select(
@@ -136,10 +141,16 @@ export async function getExpense(id: string): Promise<ExpenseDetail | null> {
       .eq("expense_id", id)
       .order("paid_on", { ascending: false })
       .order("created_at", { ascending: false }),
+    supabase
+      .from("expense_items")
+      .select("*")
+      .eq("expense_id", id)
+      .order("position"),
   ]);
 
   if (expErr) throw expErr;
   if (payErr) throw payErr;
+  if (itemsErr) throw itemsErr;
   if (!exp) return null;
 
   type JoinedRow = Expense & {
@@ -170,7 +181,43 @@ export async function getExpense(id: string): Promise<ExpenseDetail | null> {
     subcategory_name: sub?.name ?? null,
     vendor_name: ven?.name ?? null,
     payments: (payments ?? []) as ExpensePaymentRow[],
+    items: (items ?? []) as ExpenseItem[],
   };
+}
+
+// Replace-all approach matches sales_job_items: easier than diffing for the
+// volumes seen here (typically <30 lines per expense). Wrapping in a single
+// supabase call keeps the latency low.
+async function replaceExpenseItems(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  expenseId: string,
+  items: Array<{
+    part_id?: string | null;
+    vendor_part_id?: string | null;
+    description: string;
+    quantity: number;
+    unit_cost: number;
+  }>,
+  actorId: string,
+): Promise<void> {
+  const { error: delErr } = await supabase
+    .from("expense_items")
+    .delete()
+    .eq("expense_id", expenseId);
+  if (delErr) throw delErr;
+  if (items.length === 0) return;
+  const rows = items.map((it, i) => ({
+    expense_id: expenseId,
+    part_id: it.part_id ?? null,
+    vendor_part_id: it.vendor_part_id ?? null,
+    description: it.description,
+    quantity: it.quantity,
+    unit_cost: it.unit_cost,
+    position: i,
+    created_by: actorId,
+  }));
+  const { error: insErr } = await supabase.from("expense_items").insert(rows);
+  if (insErr) throw insErr;
 }
 
 // ----------------------------------------------------------------------------
@@ -232,6 +279,9 @@ export const createExpense = wrapAction({
       if (payErr) throw payErr;
     }
 
+    // Item #24 — persist the parts billed on this expense.
+    await replaceExpenseItems(supabase, data.id, input.items ?? [], profile.id);
+
     revalidatePath("/expenses");
     revalidatePath("/dashboard");
     return data as Expense;
@@ -273,6 +323,10 @@ export const updateExpense = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+
+    // Item #24 — replace-all line items.
+    await replaceExpenseItems(supabase, input.id, input.items ?? [], profile.id);
+
     revalidatePath("/expenses");
     revalidatePath(`/expenses/${input.id}`);
     revalidatePath("/dashboard");

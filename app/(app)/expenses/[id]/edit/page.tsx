@@ -85,6 +85,15 @@ export default async function EditExpensePage({
           transaction_id: exp.transaction_id ?? "",
           notes: exp.notes ?? "",
         }}
+        initialItems={exp.items.map((it) => ({
+          client_id: it.id,
+          id: it.id,
+          part_id: it.part_id,
+          vendor_part_id: it.vendor_part_id,
+          description: it.description,
+          quantity: Number(it.quantity),
+          unit_cost: Number(it.unit_cost),
+        }))}
       />
     </div>
   );
