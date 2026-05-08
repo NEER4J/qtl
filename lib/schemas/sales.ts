@@ -10,6 +10,8 @@ export const SalesJobItemInput = z.object({
   unit_price: z.coerce.number().min(0, "Price must be ≥ 0").max(9999999),
   is_taxable: z.coerce.boolean().default(true),
   package_label: z.string().trim().max(120).nullable().optional(),
+  // True when the customer brought the part themselves; line_total forced to 0.
+  is_customer_supplied: z.coerce.boolean().default(false),
 });
 export type SalesJobItemInput = z.infer<typeof SalesJobItemInput>;
 

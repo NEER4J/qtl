@@ -429,6 +429,7 @@ export function SalesJobForm({
           unit_price: Number(it.unit_price) || 0,
           is_taxable: it.is_taxable,
           package_label: it.package_label ?? null,
+          is_customer_supplied: it.is_customer_supplied ?? false,
         })),
       };
 

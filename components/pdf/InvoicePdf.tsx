@@ -422,6 +422,9 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
               const qtyLabel = it.unit_of_measure
                 ? `${Number(it.quantity)} ${it.unit_of_measure}`
                 : String(Number(it.quantity));
+              const cs = it.is_customer_supplied === true;
+              const wouldHaveCharged =
+                Math.round(Number(it.quantity) * Number(it.unit_price) * 100) / 100;
               return (
                 <View key={it.id} style={last ? styles.sectionRowLast : styles.sectionRow}>
                   <Text style={[styles.sectionCell, styles.partsQty]}>{qtyLabel}</Text>
@@ -429,6 +432,11 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
                     <Text>{it.description}</Text>
                     {it.package_label && (
                       <Text style={styles.packageBadge}>(from {it.package_label})</Text>
+                    )}
+                    {cs && (
+                      <Text style={styles.packageBadge}>
+                        (customer supplied — saved {money(wouldHaveCharged)})
+                      </Text>
                     )}
                   </View>
                   <Text style={[styles.sectionCell, styles.partsUnit]}>

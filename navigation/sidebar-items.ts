@@ -75,11 +75,6 @@ export const sidebarItems: NavGroup[] = [
         subItems: [
           { title: "All Jobs", url: "/sales" },
           { title: "New Job", url: "/sales/new", roles: ["owner", "manager", "staff"] },
-            {
-        title: "Customers",
-        url: "/customers",
-        roles: ["owner", "manager", "staff"],
-      },
         ],
       },
       {

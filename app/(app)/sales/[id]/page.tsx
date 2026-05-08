@@ -186,32 +186,42 @@ export default async function SalesJobDetailPage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {job.items.map((it) => (
-                  <TableRow key={it.id}>
-                    <TableCell>
-                      <div className="font-medium">{it.description}</div>
-                      {it.part_id && (
-                        <div className="text-xs text-muted-foreground">
-                          Catalog: {it.part_brand} {it.part_number}
-                        </div>
-                      )}
-                      {it.package_label && (
-                        <div className="text-xs text-muted-foreground italic">
-                          from {it.package_label}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {Number(it.quantity)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatMoney(it.unit_price)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">
-                      {formatMoney(it.line_total)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {job.items.map((it) => {
+                  const cs = it.is_customer_supplied === true;
+                  const wouldHaveCharged =
+                    Math.round(Number(it.quantity) * Number(it.unit_price) * 100) / 100;
+                  return (
+                    <TableRow key={it.id}>
+                      <TableCell>
+                        <div className="font-medium">{it.description}</div>
+                        {it.part_id && (
+                          <div className="text-xs text-muted-foreground">
+                            Catalog: {it.part_brand} {it.part_number}
+                          </div>
+                        )}
+                        {it.package_label && (
+                          <div className="text-xs text-muted-foreground italic">
+                            from {it.package_label}
+                          </div>
+                        )}
+                        {cs && (
+                          <div className="text-xs text-emerald-600">
+                            customer supplied — saved {formatMoney(wouldHaveCharged)}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {Number(it.quantity)}
+                      </TableCell>
+                      <TableCell className={`text-right tabular-nums ${cs ? "line-through text-muted-foreground" : ""}`}>
+                        {formatMoney(it.unit_price)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums font-medium">
+                        {formatMoney(it.line_total)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>

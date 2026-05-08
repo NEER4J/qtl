@@ -73,6 +73,7 @@ export default async function EditSalesJobPage({
           is_taxable: it.is_taxable,
           unit_of_measure: it.unit_of_measure,
           package_label: it.package_label ?? null,
+          is_customer_supplied: it.is_customer_supplied ?? false,
         }))}
         initial={{
           id: job.id,

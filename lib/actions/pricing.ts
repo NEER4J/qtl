@@ -32,7 +32,10 @@ import {
   CreateVolumeTierInput,
   DeleteEngineFilterInput,
   DeleteVolumeTierInput,
+  LockPartPackageInput,
+  MergePartPackagePricesInput,
   ToggleActiveInput,
+  UnlockPartPackageInput,
   UpdateEngineTypeInput,
   UpdateOilTypeInput,
   UpdatePartBrandInput,
@@ -43,6 +46,10 @@ import {
   UpdateVolumeTierInput,
   UpsertEngineFilterInput,
 } from "@/lib/schemas/pricing";
+import {
+  effectiveCatalogPriceForItem,
+  isPartPackageLocked,
+} from "@/lib/utils/package-pricing";
 import { normalizePartPricing } from "@/lib/utils/part-pricing";
 
 // ============================================================================
@@ -1351,8 +1358,8 @@ async function fetchPackageItems(
   const { data, error } = await supabase
     .from("part_package_items")
     .select(
-      "id, package_id, part_id, quantity, unit_price, position, created_at, oil_type_id, litres, oil_container, " +
-        "part:parts(id, brand, part_number, description, list_price, cost, mhsw_fee, is_taxable, part_categories:category_id(name, unit_of_measure)), " +
+      "id, package_id, part_id, quantity, unit_price, locked_unit_price, position, created_at, oil_type_id, litres, oil_container, " +
+        "part:parts(id, brand, part_number, description, list_price, duplicate_unit_price, cost, mhsw_fee, is_taxable, part_categories:category_id(name, unit_of_measure)), " +
         "oil_type:oil_types(id, code, name, bulk_cost_per_litre, gallon_cost_per_litre, litres_per_gallon, is_taxable)",
     )
     .in("package_id", packageIds)
@@ -1364,6 +1371,7 @@ async function fetchPackageItems(
     part_number: string;
     description: string | null;
     list_price: number;
+    duplicate_unit_price: number | null;
     cost: number;
     mhsw_fee: number;
     is_taxable: boolean;
@@ -1394,6 +1402,7 @@ async function fetchPackageItems(
       part_id: row.part_id,
       quantity: row.quantity,
       unit_price: row.unit_price,
+      locked_unit_price: row.locked_unit_price,
       position: row.position,
       created_at: row.created_at,
       oil_type_id: row.oil_type_id,
@@ -1406,6 +1415,10 @@ async function fetchPackageItems(
             part_number: row.part.part_number,
             description: row.part.description,
             list_price: Number(row.part.list_price),
+            duplicate_unit_price:
+              row.part.duplicate_unit_price == null
+                ? null
+                : Number(row.part.duplicate_unit_price),
             cost: Number(row.part.cost),
             mhsw_fee: Number(row.part.mhsw_fee),
             is_taxable: row.part.is_taxable,
@@ -1478,6 +1491,9 @@ export const createPartPackage = wrapAction({
         name: input.name.trim(),
         description: input.description ?? null,
         active: input.active,
+        labor_cost: input.labor_cost,
+        labor_selling_price: input.labor_selling_price,
+        labor_description: input.labor_description ?? null,
         created_by: profile.id,
         updated_by: profile.id,
       })
@@ -1505,12 +1521,31 @@ export const updatePartPackage = wrapAction({
   roles: ["owner"],
   handler: async ({ id, items, ...fields }, profile): Promise<PartPackage> => {
     const supabase = await createClient();
+
+    // Block edits while the package is locked — owner must unlock first or
+    // use the merge dialog. Otherwise a delete-then-insert would wipe the
+    // locked snapshots and silently break price stability.
+    const { data: existing, error: existingErr } = await supabase
+      .from("part_packages")
+      .select("lock_until")
+      .eq("id", id)
+      .single();
+    if (existingErr) throw existingErr;
+    if (isPartPackageLocked(existing as { lock_until: string | null })) {
+      throw new Error(
+        "This package is price-locked. Unlock it before editing parts or labor.",
+      );
+    }
+
     const { data: pkg, error: pkgErr } = await supabase
       .from("part_packages")
       .update({
         name: fields.name.trim(),
         description: fields.description ?? null,
         active: fields.active,
+        labor_cost: fields.labor_cost,
+        labor_selling_price: fields.labor_selling_price,
+        labor_description: fields.labor_description ?? null,
         updated_by: profile.id,
       })
       .eq("id", id)
@@ -1538,6 +1573,119 @@ export const updatePartPackage = wrapAction({
 
     revalidatePartPackages();
     return pkg as PartPackage;
+  },
+});
+
+export const lockPartPackage = wrapAction({
+  schema: LockPartPackageInput,
+  roles: ["owner"],
+  handler: async ({ id, lock_until }, profile): Promise<PartPackage> => {
+    const supabase = await createClient();
+
+    // Pull the package + items so we can snapshot effective catalog prices.
+    const itemsByPkg = await fetchPackageItems(supabase, [id]);
+    const items = itemsByPkg.get(id) ?? [];
+
+    const { data: pkgRow, error: pkgErr } = await supabase
+      .from("part_packages")
+      .select("*")
+      .eq("id", id)
+      .single();
+    if (pkgErr) throw pkgErr;
+    const pkg = pkgRow as PartPackage;
+
+    // Snapshot each item's effective catalog price → locked_unit_price.
+    for (const it of items) {
+      const snap = effectiveCatalogPriceForItem(it);
+      const { error } = await supabase
+        .from("part_package_items")
+        .update({ locked_unit_price: snap })
+        .eq("id", it.id);
+      if (error) throw error;
+    }
+
+    // Snapshot the labor selling price.
+    const { data: updated, error: updErr } = await supabase
+      .from("part_packages")
+      .update({
+        lock_until,
+        labor_locked_selling_price: pkg.labor_selling_price,
+        updated_by: profile.id,
+      })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (updErr) throw updErr;
+
+    revalidatePartPackages();
+    return updated as PartPackage;
+  },
+});
+
+export const unlockPartPackage = wrapAction({
+  schema: UnlockPartPackageInput,
+  roles: ["owner"],
+  handler: async ({ id }, profile): Promise<PartPackage> => {
+    const supabase = await createClient();
+
+    const { error: clrErr } = await supabase
+      .from("part_package_items")
+      .update({ locked_unit_price: null })
+      .eq("package_id", id);
+    if (clrErr) throw clrErr;
+
+    const { data: updated, error: updErr } = await supabase
+      .from("part_packages")
+      .update({
+        lock_until: null,
+        labor_locked_selling_price: null,
+        updated_by: profile.id,
+      })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (updErr) throw updErr;
+
+    revalidatePartPackages();
+    return updated as PartPackage;
+  },
+});
+
+export const mergePartPackagePrices = wrapAction({
+  schema: MergePartPackagePricesInput,
+  roles: ["owner"],
+  handler: async ({ id, items, labor_selling_price }, profile): Promise<PartPackage> => {
+    const supabase = await createClient();
+
+    // Apply the user's chosen prices: write both unit_price (the override the
+    // catalog respects) AND locked_unit_price (the snapshot), so future edits
+    // and future drift checks all share the same baseline.
+    for (const it of items) {
+      const { error } = await supabase
+        .from("part_package_items")
+        .update({
+          unit_price: it.new_unit_price,
+          locked_unit_price: it.new_unit_price,
+        })
+        .eq("id", it.item_id)
+        .eq("package_id", id);
+      if (error) throw error;
+    }
+
+    const { data: updated, error: updErr } = await supabase
+      .from("part_packages")
+      .update({
+        labor_selling_price,
+        labor_locked_selling_price: labor_selling_price,
+        updated_by: profile.id,
+      })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (updErr) throw updErr;
+
+    revalidatePartPackages();
+    return updated as PartPackage;
   },
 });
 

@@ -32,8 +32,18 @@ type FormValues = {
   name: string;
   description: string;
   active: boolean;
+  labor_cost: string;
+  labor_selling_price: string;
+  labor_description: string;
 };
-const blank: FormValues = { name: "", description: "", active: true };
+const blank: FormValues = {
+  name: "",
+  description: "",
+  active: true,
+  labor_cost: "0",
+  labor_selling_price: "0",
+  labor_description: "",
+};
 
 export function PartPackageFormDialog({
   open,
@@ -58,6 +68,9 @@ export function PartPackageFormDialog({
         name: pkg.name,
         description: pkg.description ?? "",
         active: pkg.active,
+        labor_cost: String(pkg.labor_cost ?? 0),
+        labor_selling_price: String(pkg.labor_selling_price ?? 0),
+        labor_description: pkg.labor_description ?? "",
       });
       setItems(
         pkg.items
@@ -95,6 +108,10 @@ export function PartPackageFormDialog({
       name: values.name.trim(),
       description: values.description.trim() ? values.description.trim() : null,
       active: values.active,
+      labor_cost: Number(values.labor_cost) || 0,
+      labor_selling_price: Number(values.labor_selling_price) || 0,
+      labor_description:
+        values.labor_description.trim() === "" ? null : values.labor_description.trim(),
       items: items.map((it) => {
         const trimmed = it.unit_price.trim();
         return {
@@ -114,7 +131,14 @@ export function PartPackageFormDialog({
         toast.error(res.error);
         if (res.fieldErrors) {
           for (const [k, v] of Object.entries(res.fieldErrors)) {
-            if (k === "name" || k === "description" || k === "active") {
+            if (
+              k === "name" ||
+              k === "description" ||
+              k === "active" ||
+              k === "labor_cost" ||
+              k === "labor_selling_price" ||
+              k === "labor_description"
+            ) {
               form.setError(k as keyof FormValues, { message: v.join(", ") });
             } else if (k.startsWith("items")) {
               setItemsError(v.join(", "));
@@ -166,6 +190,55 @@ export function PartPackageFormDialog({
                 </FormItem>
               )}
             />
+
+            <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+              <p className="text-sm font-medium">Labor</p>
+              <p className="text-xs text-muted-foreground">
+                Labor cost is for profit roll-up only. Labor selling price is
+                billed as its own line when this package is dropped onto a job.
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="labor_cost"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Labor cost</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" step="0.01" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="labor_selling_price"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Labor selling price</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" step="0.01" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={form.control}
+                name="labor_description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Labor description</FormLabel>
+                    <FormControl>
+                      <Input placeholder='e.g. "Service labor — oil change"' {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <div className="space-y-2">
               <div className="flex items-baseline justify-between">

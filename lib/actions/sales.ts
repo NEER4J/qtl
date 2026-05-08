@@ -426,6 +426,7 @@ async function replaceJobItems(
         unit_price: number;
         is_taxable?: boolean;
         package_label?: string | null;
+        is_customer_supplied?: boolean;
       }[]
     | undefined,
   userId: string,
@@ -449,6 +450,7 @@ async function replaceJobItems(
     unit_price: it.unit_price,
     is_taxable: it.is_taxable ?? true,
     package_label: it.package_label ?? null,
+    is_customer_supplied: it.is_customer_supplied ?? false,
     position: idx,
     created_by: userId,
   }));

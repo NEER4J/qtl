@@ -328,6 +328,8 @@ export interface SalesJobItem {
   position: number;
   /** Snapshot of the package name this line was expanded from. */
   package_label: string | null;
+  /** True when the customer brought the part themselves; line_total forced to 0. */
+  is_customer_supplied: boolean;
   created_at: string;
   created_by: string | null;
 }
@@ -624,6 +626,8 @@ export interface Part {
   description: string | null;
   cost: number;
   list_price: number;
+  /** Used for the 2nd+ occurrence of this part on a single sales job. NULL = use list_price. */
+  duplicate_unit_price: number | null;
   mhsw_fee: number;
   margin_type: PartMarginType;
   margin_value: number;
@@ -665,6 +669,16 @@ export interface PartPackage {
   name: string;
   description: string | null;
   active: boolean;
+  /** Owner-only labor cost used for profit roll-up; not billed. */
+  labor_cost: number;
+  /** Labor amount billed when the package is expanded onto a job. */
+  labor_selling_price: number;
+  /** Optional description for the labor line; defaults to "Labor". */
+  labor_description: string | null;
+  /** When set and >= today, package uses locked_unit_price snapshots. */
+  lock_until: string | null;
+  /** Snapshot of labor_selling_price at lock time; null when unlocked. */
+  labor_locked_selling_price: number | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -679,6 +693,8 @@ export interface PartPackageItem {
   quantity: number;
   /** Override; null means use parts.list_price (or oil_types rate × litres) at expansion. */
   unit_price: number | null;
+  /** Snapshot of effective unit_price at the moment the package was locked. */
+  locked_unit_price: number | null;
   position: number;
   created_at: string;
   // Item #18 — alternative pricing source: link straight to oil_types so
@@ -697,6 +713,7 @@ export interface PartPackageItemRow extends PartPackageItem {
         | "part_number"
         | "description"
         | "list_price"
+        | "duplicate_unit_price"
         | "cost"
         | "mhsw_fee"
         | "category"

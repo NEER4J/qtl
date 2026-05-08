@@ -93,6 +93,12 @@ export const CreatePartInput = z.object({
   mhsw_fee: z.coerce.number().min(0, "Must be ≥ 0").default(0),
   margin_type: z.enum(["fixed", "percent"]).default("fixed"),
   margin_value: z.coerce.number().min(0, "Must be ≥ 0").default(0),
+  // Optional discounted price for the 2nd+ occurrence on a single job; null/empty = use list_price.
+  duplicate_unit_price: z
+    .union([z.coerce.number().min(0).max(9999999), z.null(), z.literal("")])
+    .optional()
+    .nullable()
+    .transform((v) => (v == null || v === "" ? null : Number(v))),
   service_cost_id: z
     .string()
     .uuid()
@@ -213,6 +219,15 @@ export const CreatePartPackageInput = z.object({
   name: z.string().trim().min(1, "Name is required").max(120),
   description: z.string().trim().max(500).optional().nullable(),
   active: z.coerce.boolean().default(true),
+  labor_cost: z.coerce.number().min(0, "Must be ≥ 0").default(0),
+  labor_selling_price: z.coerce.number().min(0, "Must be ≥ 0").default(0),
+  labor_description: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .nullable()
+    .transform((v) => (v == null || v === "" ? null : v)),
   items: z
     .array(PartPackageItemInput)
     .min(1, "Add at least one part")
@@ -236,3 +251,39 @@ export const UpdatePartPackageInput = CreatePartPackageInput.extend({
   id: z.string().uuid(),
 });
 export type UpdatePartPackageInput = z.infer<typeof UpdatePartPackageInput>;
+
+// ============================================================================
+// part_packages — price lock / merge
+// ============================================================================
+export const LockPartPackageInput = z.object({
+  id: z.string().uuid(),
+  // ISO date (YYYY-MM-DD). Must be today or in the future.
+  lock_until: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date")
+    .refine(
+      (s) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const d = new Date(`${s}T00:00:00`);
+        return !Number.isNaN(d.getTime()) && d.getTime() >= today.getTime();
+      },
+      { message: "Lock date must be today or later" },
+    ),
+});
+export type LockPartPackageInput = z.infer<typeof LockPartPackageInput>;
+
+export const UnlockPartPackageInput = z.object({ id: z.string().uuid() });
+export type UnlockPartPackageInput = z.infer<typeof UnlockPartPackageInput>;
+
+export const MergePartPackagePricesInput = z.object({
+  id: z.string().uuid(),
+  labor_selling_price: z.coerce.number().min(0, "Must be ≥ 0"),
+  items: z.array(
+    z.object({
+      item_id: z.string().uuid(),
+      new_unit_price: z.coerce.number().min(0, "Must be ≥ 0"),
+    }),
+  ),
+});
+export type MergePartPackagePricesInput = z.infer<typeof MergePartPackagePricesInput>;
