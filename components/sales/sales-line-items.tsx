@@ -108,10 +108,18 @@ type CategoryMatch = {
   delta: number;
 };
 
-type PendingPackage = {
-  pkg: PartPackageWithItems;
-  matches: CategoryMatch[];
-};
+type PendingAdd =
+  | {
+      kind: "package";
+      pkg: PartPackageWithItems;
+      matches: CategoryMatch[];
+    }
+  | {
+      kind: "picker";
+      part: Part;
+      existing: LineItem;
+      delta: number;
+    };
 
 export function SalesLineItems({
   items,
@@ -120,7 +128,7 @@ export function SalesLineItems({
   items: LineItem[];
   onChange: (items: LineItem[]) => void;
 }) {
-  const [pending, setPending] = useState<PendingPackage | null>(null);
+  const [pending, setPending] = useState<PendingAdd | null>(null);
 
   const update = (key: string, patch: Partial<LineItem>) => {
     onChange(items.map((it) => (it.key === key ? { ...it, ...patch } : it)));
@@ -128,19 +136,32 @@ export function SalesLineItems({
   const remove = (key: string) => onChange(items.filter((it) => it.key !== key));
   const addCustom = () => onChange([...items, newLineItem()]);
 
+  const lineFromPart = (p: Part): LineItem =>
+    newLineItem({
+      part_id: p.id,
+      description: `${p.brand} ${p.part_number}${p.description ? ` — ${p.description}` : ""}`,
+      quantity: 1,
+      unit_price: Number(p.list_price) || 0,
+      is_taxable: p.is_taxable,
+      unit_of_measure: p.unit_of_measure,
+      part_category_id: p.category_id,
+    });
+
   const addPart = (p: Part) => {
-    onChange([
-      ...items,
-      newLineItem({
-        part_id: p.id,
-        description: `${p.brand} ${p.part_number}${p.description ? ` — ${p.description}` : ""}`,
-        quantity: 1,
-        unit_price: Number(p.list_price) || 0,
-        is_taxable: p.is_taxable,
-        unit_of_measure: p.unit_of_measure,
-        part_category_id: p.category_id,
-      }),
-    ]);
+    // If the picked part shares a category with an existing line, prompt.
+    const existing = items.find(
+      (it) => it.part_category_id != null && it.part_category_id === p.category_id,
+    );
+    if (existing) {
+      setPending({
+        kind: "picker",
+        part: p,
+        existing,
+        delta: Number(p.extra_price ?? 0),
+      });
+      return;
+    }
+    onChange([...items, lineFromPart(p)]);
   };
 
   const buildPackageRows = (
@@ -245,43 +266,62 @@ export function SalesLineItems({
   const addPackage = (pkg: PartPackageWithItems) => {
     const matches = findCategoryMatches(pkg);
     if (matches.length > 0) {
-      setPending({ pkg, matches });
+      setPending({ kind: "package", pkg, matches });
       return;
     }
     onChange([...items, ...buildPackageRows(pkg, new Set())]);
   };
 
-  /**
-   * Apply the extra-price delta to the matched existing lines AND skip those
-   * package items from being added as new rows. Labor + remaining package
-   * items still flow in.
-   */
-  const confirmPending = () => {
-    if (!pending) return;
-    const skip = new Set<string>(pending.matches.map((m) => m.pkgItem.id));
-
-    // Bump unit_price on existing lines.
-    const deltaByKey = new Map<string, number>();
-    for (const m of pending.matches) {
-      const prev = deltaByKey.get(m.existingKey) ?? 0;
-      deltaByKey.set(m.existingKey, prev + m.delta);
-    }
-    const adjusted = items.map((it) => {
-      const d = deltaByKey.get(it.key);
-      if (d == null || d === 0) return it;
-      const newPrice = Math.max(0, Math.round((Number(it.unit_price) + d) * 100) / 100);
+  const bumpExisting = (key: string, delta: number) =>
+    items.map((it) => {
+      if (it.key !== key || delta === 0) return it;
+      const newPrice = Math.max(
+        0,
+        Math.round((Number(it.unit_price) + delta) * 100) / 100,
+      );
       return { ...it, unit_price: newPrice };
     });
 
-    onChange([...adjusted, ...buildPackageRows(pending.pkg, skip)]);
+  /**
+   * Primary action.
+   * - Package: apply each match's delta to its existing line; skip those package items.
+   * - Picker: apply delta to the existing line; do NOT add a new line.
+   */
+  const confirmPending = () => {
+    if (!pending) return;
+    if (pending.kind === "package") {
+      const skip = new Set<string>(pending.matches.map((m) => m.pkgItem.id));
+      const deltaByKey = new Map<string, number>();
+      for (const m of pending.matches) {
+        const prev = deltaByKey.get(m.existingKey) ?? 0;
+        deltaByKey.set(m.existingKey, prev + m.delta);
+      }
+      const adjusted = items.map((it) => {
+        const d = deltaByKey.get(it.key);
+        if (d == null || d === 0) return it;
+        const newPrice = Math.max(0, Math.round((Number(it.unit_price) + d) * 100) / 100);
+        return { ...it, unit_price: newPrice };
+      });
+      onChange([...adjusted, ...buildPackageRows(pending.pkg, skip)]);
+    } else {
+      onChange(bumpExisting(pending.existing.key, pending.delta));
+    }
     setPending(null);
   };
 
-  /** Skip the matched package items entirely; don't touch existing lines. */
+  /**
+   * Secondary action.
+   * - Package: skip the matched package items entirely; don't touch existing lines.
+   * - Picker: add the new part as a separate line at list price.
+   */
   const declinePending = () => {
     if (!pending) return;
-    const skip = new Set<string>(pending.matches.map((m) => m.pkgItem.id));
-    onChange([...items, ...buildPackageRows(pending.pkg, skip)]);
+    if (pending.kind === "package") {
+      const skip = new Set<string>(pending.matches.map((m) => m.pkgItem.id));
+      onChange([...items, ...buildPackageRows(pending.pkg, skip)]);
+    } else {
+      onChange([...items, lineFromPart(pending.part)]);
+    }
     setPending(null);
   };
 
@@ -327,10 +367,10 @@ export function SalesLineItems({
                       />
                       {(it.part_id || it.package_label || cs) && (
                         <p className="text-[10px] text-muted-foreground mt-1">
-                          {it.part_id && <span>From catalog</span>}
-                          {it.part_id && it.package_label && <span> · </span>}
-                          {it.package_label && (
+                          {it.package_label ? (
                             <span className="italic">from {it.package_label}</span>
+                          ) : (
+                            it.part_id && <span>From catalog</span>
                           )}
                           {cs && (
                             <span className="ml-1 text-emerald-600">
@@ -449,17 +489,12 @@ function CategoryDuplicateDialog({
   onDecline,
   onCancel,
 }: {
-  pending: PendingPackage | null;
+  pending: PendingAdd | null;
   onConfirm: () => void;
   onDecline: () => void;
   onCancel: () => void;
 }) {
   if (!pending) return null;
-
-  const totalDelta =
-    Math.round(
-      pending.matches.reduce((s, m) => s + (Number.isFinite(m.delta) ? m.delta : 0), 0) * 100,
-    ) / 100;
 
   return (
     <AlertDialog
@@ -467,66 +502,150 @@ function CategoryDuplicateDialog({
       onOpenChange={(open) => !open && onCancel()}
     >
       <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>
-            Same-category parts already on this job
-          </AlertDialogTitle>
-          <AlertDialogDescription asChild>
-            <div className="space-y-2 text-sm">
-              <p>
-                <strong>{pending.pkg.name}</strong> contains parts in the same
-                category as lines already on this job. Apply the extra-price
-                delta to the existing line (recommended for variant upgrades),
-                or skip the package&rsquo;s same-category items entirely.
-              </p>
-              <ul className="list-disc pl-5 space-y-1">
-                {pending.matches.map((m) => (
-                  <li key={m.pkgItem.id}>
-                    <strong>{m.existingLabel}</strong> ←{" "}
-                    {m.pkgItem.part?.brand} {m.pkgItem.part?.part_number}{" "}
-                    <span
-                      className={
-                        m.delta > 0
-                          ? "text-rose-600"
-                          : m.delta < 0
-                          ? "text-emerald-600"
-                          : "text-muted-foreground"
-                      }
-                    >
-                      ({m.delta > 0 ? "+" : ""}
-                      {formatMoney(m.delta)})
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <p className="text-xs text-muted-foreground">
-                Net change to existing lines if applied:{" "}
-                <span
-                  className={
-                    totalDelta > 0
-                      ? "text-rose-600"
-                      : totalDelta < 0
-                      ? "text-emerald-600"
-                      : ""
-                  }
-                >
-                  {totalDelta > 0 ? "+" : ""}
-                  {formatMoney(totalDelta)}
-                </span>
-                . The remaining (non-matching) package items and labor are
-                added either way.
-              </p>
-            </div>
-          </AlertDialogDescription>
-        </AlertDialogHeader>
+        {pending.kind === "package" ? (
+          <PackageDupBody pending={pending} />
+        ) : (
+          <PickerDupBody pending={pending} />
+        )}
         <AlertDialogFooter>
           <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
-          <Button type="button" variant="outline" onClick={onDecline}>
-            Skip duplicates
-          </Button>
-          <AlertDialogAction onClick={onConfirm}>Apply deltas</AlertDialogAction>
+          {pending.kind === "package" ? (
+            <>
+              <Button type="button" variant="outline" onClick={onDecline}>
+                Skip duplicates
+              </Button>
+              <AlertDialogAction onClick={onConfirm}>
+                Apply deltas
+              </AlertDialogAction>
+            </>
+          ) : (
+            <>
+              <Button type="button" variant="outline" onClick={onDecline}>
+                Add as separate line
+              </Button>
+              {pending.delta !== 0 && (
+                <AlertDialogAction onClick={onConfirm}>
+                  Apply {pending.delta > 0 ? "+" : ""}
+                  {formatMoney(pending.delta)} to existing
+                </AlertDialogAction>
+              )}
+            </>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+function PackageDupBody({
+  pending,
+}: {
+  pending: Extract<PendingAdd, { kind: "package" }>;
+}) {
+  const totalDelta =
+    Math.round(
+      pending.matches.reduce(
+        (s, m) => s + (Number.isFinite(m.delta) ? m.delta : 0),
+        0,
+      ) * 100,
+    ) / 100;
+
+  return (
+    <AlertDialogHeader>
+      <AlertDialogTitle>
+        Same-category parts already on this job
+      </AlertDialogTitle>
+      <AlertDialogDescription asChild>
+        <div className="space-y-2 text-sm">
+          <p>
+            <strong>{pending.pkg.name}</strong> contains parts in the same
+            category as lines already on this job. Apply the extra-price delta
+            to the existing line (recommended for variant upgrades), or skip the
+            package&rsquo;s same-category items entirely.
+          </p>
+          <ul className="list-disc pl-5 space-y-1">
+            {pending.matches.map((m) => (
+              <li key={m.pkgItem.id}>
+                <strong>{m.existingLabel}</strong> ←{" "}
+                {m.pkgItem.part?.brand} {m.pkgItem.part?.part_number}{" "}
+                <span
+                  className={
+                    m.delta > 0
+                      ? "text-rose-600"
+                      : m.delta < 0
+                      ? "text-emerald-600"
+                      : "text-muted-foreground"
+                  }
+                >
+                  ({m.delta > 0 ? "+" : ""}
+                  {formatMoney(m.delta)})
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-muted-foreground">
+            Net change to existing lines if applied:{" "}
+            <span
+              className={
+                totalDelta > 0
+                  ? "text-rose-600"
+                  : totalDelta < 0
+                  ? "text-emerald-600"
+                  : ""
+              }
+            >
+              {totalDelta > 0 ? "+" : ""}
+              {formatMoney(totalDelta)}
+            </span>
+            . The remaining (non-matching) package items and labor are added
+            either way.
+          </p>
+        </div>
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+  );
+}
+
+function PickerDupBody({
+  pending,
+}: {
+  pending: Extract<PendingAdd, { kind: "picker" }>;
+}) {
+  const p = pending.part;
+  return (
+    <AlertDialogHeader>
+      <AlertDialogTitle>Same-category part already on this job</AlertDialogTitle>
+      <AlertDialogDescription asChild>
+        <div className="space-y-2 text-sm">
+          <p>
+            <strong>
+              {p.brand} {p.part_number}
+            </strong>{" "}
+            is the same category as{" "}
+            <strong>{pending.existing.description || "an existing line"}</strong>
+            .
+          </p>
+          {pending.delta !== 0 ? (
+            <p>
+              Apply{" "}
+              <span
+                className={pending.delta > 0 ? "text-rose-600" : "text-emerald-600"}
+              >
+                {pending.delta > 0 ? "+" : ""}
+                {formatMoney(pending.delta)}
+              </span>{" "}
+              to the existing line (variant upgrade/credit), or add{" "}
+              {p.brand} {p.part_number} as a separate line at{" "}
+              {formatMoney(Number(p.list_price) || 0)}.
+            </p>
+          ) : (
+            <p className="text-muted-foreground">
+              No extra-price delta is set on this part — choose whether to add
+              it as a separate line anyway.
+            </p>
+          )}
+        </div>
+      </AlertDialogDescription>
+    </AlertDialogHeader>
   );
 }
