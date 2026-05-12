@@ -183,7 +183,7 @@ export function SalesLineItems({
           ? effectiveLockedPriceForItem(it)
           : effectiveCatalogPriceForItem(it);
         const litres = Number(it.litres ?? 0);
-        description = `${it.oil_type.code} — ${it.oil_type.name}${
+        description = `${it.oil_type.name}${
           it.oil_container ? ` (${it.oil_container})` : ""
         }${litres ? ` × ${litres}L` : ""}`;
         isTaxable = it.oil_type.is_taxable;

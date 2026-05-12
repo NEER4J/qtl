@@ -960,7 +960,7 @@ export function SalesJobForm({
                           <SelectContent>
                             {oilTypes.map((o) => (
                               <SelectItem key={o.id} value={o.id}>
-                                {o.code} — {o.name}
+                                {o.name} <span className="text-muted-foreground">({o.code})</span>
                               </SelectItem>
                             ))}
                           </SelectContent>

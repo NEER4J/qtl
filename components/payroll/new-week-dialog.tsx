@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -34,8 +34,32 @@ import { PayrollWeekInput } from "@/lib/schemas/payroll";
 import { EmptyDropdownHint } from "@/components/help/empty-state";
 import { createPayrollWeek } from "@/lib/actions/payroll";
 import { listActiveLocations } from "@/lib/actions/reference";
-import { useEffect } from "react";
 import type { Location } from "@/lib/db/types";
+
+/** Snap any YYYY-MM-DD to the Monday of its week (in UTC, no DST surprises). */
+function snapToMonday(ymd: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (!m) return ymd;
+  const [, y, mo, d] = m;
+  const date = new Date(Date.UTC(+y, +mo - 1, +d));
+  const dow = date.getUTCDay(); // 0 = Sunday, 1 = Monday, …
+  const delta = dow === 0 ? -6 : 1 - dow; // shift back to Monday
+  date.setUTCDate(date.getUTCDate() + delta);
+  return date.toISOString().slice(0, 10);
+}
+
+function formatHuman(ymd: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (!m) return ymd;
+  const [, y, mo, d] = m;
+  return new Date(Date.UTC(+y, +mo - 1, +d)).toLocaleDateString(undefined, {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
 
 export function NewWeekDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -103,15 +127,41 @@ export function NewWeekDialog({ children }: { children: React.ReactNode }) {
             <FormField
               control={form.control}
               name="week_start"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Week start (Monday)</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} value={field.value ?? ""} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              render={({ field }) => {
+                const snapped = field.value ? snapToMonday(field.value) : "";
+                const didSnap = snapped && snapped !== field.value;
+                return (
+                  <FormItem>
+                    <FormLabel>Week start (Monday)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        {...field}
+                        value={field.value ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          // Snap on blur, not on change — otherwise the date
+                          // picker jumps while the user is still picking.
+                          field.onChange(v);
+                        }}
+                        onBlur={() => {
+                          if (field.value) field.onChange(snapToMonday(field.value));
+                        }}
+                      />
+                    </FormControl>
+                    {field.value && (
+                      <p className="text-xs text-muted-foreground">
+                        {didSnap ? (
+                          <>Will snap to <strong>{formatHuman(snapped)}</strong> (Monday of that week)</>
+                        ) : (
+                          <>Pay week: <strong>{formatHuman(snapped)}</strong></>
+                        )}
+                      </p>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                );
+              }}
             />
             <FormField
               control={form.control}

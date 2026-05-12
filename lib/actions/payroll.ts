@@ -111,27 +111,99 @@ export interface PayrollWeekWithLocation extends PayrollWeek {
   location_name: string;
   location_code: string;
   entry_count: number;
+  // Per-week rollups (sum across all entries in the week)
+  total_gross: number;
+  total_net: number;
+  total_deductions: number;
+  total_employer_cost: number;   // EI/CPP employer + WSIB + employer benefits + vacation
+  total_vacation_pay: number;
+  total_cash: number;
+  total_paid: number;            // sum of payroll_payments.amount
 }
 
 export async function listPayrollWeeks(locationId?: string): Promise<PayrollWeekWithLocation[]> {
   const supabase = await createClient();
   let q = supabase
     .from("payroll_weeks")
-    .select(`*, locations(name, code), payroll_entries(count)`)
+    .select(
+      `*,
+       locations(name, code),
+       payroll_entries(
+         gross_wages, overtime_wages, bonus, misc_extra, holiday_pay,
+         ei_employee, cpp_employee, cpp_employee2, income_tax,
+         benefit_employee_deduction, benefit_employer_contribution,
+         ei_employer, cpp_employer, cpp_employer2, wsib_employer,
+         vacation_pay, cash_total, net_pay
+       ),
+       payroll_payments(amount)`,
+    )
     .order("week_start", { ascending: false })
     .limit(52);
   if (locationId) q = q.eq("location_id", locationId);
   const { data, error } = await q;
   if (error) throw error;
+  type EntryShape = {
+    gross_wages: number;
+    overtime_wages: number;
+    bonus: number;
+    misc_extra: number;
+    holiday_pay: number;
+    ei_employee: number;
+    cpp_employee: number;
+    cpp_employee2: number;
+    income_tax: number;
+    benefit_employee_deduction: number;
+    benefit_employer_contribution: number;
+    ei_employer: number;
+    cpp_employer: number;
+    cpp_employer2: number;
+    wsib_employer: number;
+    vacation_pay: number;
+    cash_total: number;
+    net_pay: number;
+  };
   return ((data ?? []) as unknown[]).map((r) => {
     const row = r as Record<string, unknown>;
     const loc = row.locations as { name: string; code: string } | null;
-    const entries = row.payroll_entries as { count: string }[] | null;
+    const entries = (row.payroll_entries as EntryShape[]) ?? [];
+    const payments = (row.payroll_payments as { amount: number }[]) ?? [];
+    const sum = (key: keyof EntryShape) =>
+      entries.reduce((s, e) => s + Number(e[key] ?? 0), 0);
+    const totalGross = entries.reduce(
+      (s, e) =>
+        s
+        + Number(e.gross_wages)
+        + Number(e.overtime_wages)
+        + Number(e.bonus)
+        + Number(e.holiday_pay)
+        + Number(e.misc_extra),
+      0,
+    );
+    const totalDeductions =
+      sum("ei_employee")
+      + sum("cpp_employee")
+      + sum("cpp_employee2")
+      + sum("income_tax")
+      + sum("benefit_employee_deduction");
+    const totalEmployerCost =
+      sum("ei_employer")
+      + sum("cpp_employer")
+      + sum("cpp_employer2")
+      + sum("wsib_employer")
+      + sum("benefit_employer_contribution")
+      + sum("vacation_pay");
     return {
       ...(row as unknown as PayrollWeek),
       location_name: loc?.name ?? "",
       location_code: loc?.code ?? "",
-      entry_count: Number(entries?.[0]?.count ?? 0),
+      entry_count: entries.length,
+      total_gross: totalGross,
+      total_net: sum("net_pay"),
+      total_deductions: totalDeductions,
+      total_employer_cost: totalEmployerCost,
+      total_vacation_pay: sum("vacation_pay"),
+      total_cash: sum("cash_total"),
+      total_paid: payments.reduce((s, p) => s + Number(p.amount), 0),
     };
   });
 }
@@ -194,16 +266,31 @@ export async function getPayrollWeek(weekId: string): Promise<PayrollWeekDetail 
   };
 }
 
+/** Snap a YYYY-MM-DD to the Monday of its week (UTC). Server-side safety net
+ *  for the DB's `payroll_weeks_start_is_monday` constraint — the client form
+ *  also snaps but a stale form / API caller could still send a non-Monday. */
+function snapToMonday(ymd: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (!m) return ymd;
+  const [, y, mo, d] = m;
+  const date = new Date(Date.UTC(+y, +mo - 1, +d));
+  const dow = date.getUTCDay();
+  const delta = dow === 0 ? -6 : 1 - dow;
+  date.setUTCDate(date.getUTCDate() + delta);
+  return date.toISOString().slice(0, 10);
+}
+
 export const createPayrollWeek = wrapAction({
   schema: PayrollWeekInput,
   roles: ["owner", "manager"],
   handler: async (input, profile): Promise<PayrollWeek> => {
     const supabase = await createClient();
+    const weekStart = snapToMonday(input.week_start);
     const { data, error } = await supabase
       .from("payroll_weeks")
       .insert({
         location_id: input.location_id,
-        week_start: input.week_start,
+        week_start: weekStart,
         notes: input.notes || null,
         created_by: profile.id,
         updated_by: profile.id,
@@ -238,55 +325,115 @@ export const updatePayrollWeekStatus = wrapAction({
 // Payroll entries
 // ============================================================================
 
+/**
+ * Build the full payload (computed fields + raw inputs) for a payroll entry.
+ *
+ * One source of truth for upsert + update so we never drift on overtime,
+ * vacation, employer EI/CPP, or WSIB.
+ */
+async function buildEntryPayload(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  input: PayrollEntryInput,
+) {
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  const regularWages = round2(input.hours * input.rate);
+  const overtimeWages = round2(input.overtime_hours * input.overtime_rate);
+  const grossWages = round2(regularWages + overtimeWages);
+
+  // Look up the year + vacation/WSIB rates
+  const [{ data: weekRow }, { data: settings }] = await Promise.all([
+    supabase
+      .from("payroll_weeks")
+      .select("week_start")
+      .eq("id", input.payroll_week_id)
+      .single(),
+    supabase
+      .from("app_settings")
+      .select("vacation_pay_rate, wsib_rate")
+      .eq("id", 1)
+      .single(),
+  ]);
+  const year = weekRow ? new Date(weekRow.week_start).getFullYear() : new Date().getFullYear();
+  const vacationRate = Number(settings?.vacation_pay_rate ?? 0.04);
+  const wsibRate = Number(settings?.wsib_rate ?? 0);
+
+  // Vacation accrual = % of (gross wages + OT + bonus + holiday pay)
+  const vacationPay = round2(
+    (grossWages + input.bonus + input.holiday_pay) * vacationRate,
+  );
+
+  // Insurable earnings drive EI + CPP; holiday pay + bonus + OT are insurable;
+  // misc_extra is taxable but NOT insurable (per current convention).
+  const insurable = round2(grossWages + input.bonus + input.holiday_pay);
+
+  const rates = await getStatutoryRatesForYear(year);
+  const {
+    ei,
+    cpp,
+    cpp2,
+    ei_employer,
+    cpp_employer,
+    cpp_employer2,
+  } = _computeStatutoryDeductions(insurable, rates, year);
+
+  const wsibEmployer = round2(insurable * wsibRate);
+
+  const netPay = round2(
+    grossWages
+      + input.bonus
+      + input.holiday_pay
+      + input.misc_extra
+      - ei
+      - cpp
+      - cpp2
+      - input.income_tax
+      - input.benefit_employee_deduction,
+  );
+
+  return {
+    payroll_week_id: input.payroll_week_id,
+    employee_id: input.employee_id,
+    hours: input.hours,
+    rate: input.rate,
+    gross_wages: regularWages,
+    overtime_hours: input.overtime_hours,
+    overtime_rate: input.overtime_rate,
+    overtime_wages: overtimeWages,
+    holiday_pay: input.holiday_pay,
+    vacation_pay: vacationPay,
+    bonus: input.bonus,
+    misc_extra: input.misc_extra,
+    insurable_earnings: insurable,
+    ei_employee: ei,
+    cpp_employee: cpp,
+    cpp_employee2: cpp2,
+    income_tax: input.income_tax,
+    ei_employer,
+    cpp_employer,
+    cpp_employer2,
+    wsib_employer: wsibEmployer,
+    benefit_employee_deduction: input.benefit_employee_deduction,
+    benefit_employer_contribution: input.benefit_employer_contribution,
+    cheque_amount: input.cheque_amount,
+    net_pay: netPay,
+    notes: input.notes || null,
+  };
+}
+
 export const upsertPayrollEntry = wrapAction({
   schema: PayrollEntryInput,
   roles: ["owner", "manager"],
   handler: async (input, profile): Promise<PayrollEntry> => {
     const supabase = await createClient();
-
-    const grossWages = Math.round(input.hours * input.rate * 100) / 100;
-    const insurable = Math.round((grossWages + input.bonus) * 100) / 100;
-
-    // Look up statutory rates for the week's year
-    const { data: weekRow } = await supabase
-      .from("payroll_weeks")
-      .select("week_start")
-      .eq("id", input.payroll_week_id)
-      .single();
-    const year = weekRow ? new Date(weekRow.week_start).getFullYear() : new Date().getFullYear();
-
-    const rates = await getStatutoryRatesForYear(year);
-    const { ei, cpp } = _computeStatutoryDeductions(insurable, rates, year);
-
-    const netPay = Math.round(
-      (grossWages + input.bonus + input.misc_extra
-        - ei - cpp - input.income_tax
-        - input.benefit_employee_deduction) * 100
-    ) / 100;
-
-    const payload = {
-      payroll_week_id: input.payroll_week_id,
-      employee_id: input.employee_id,
-      hours: input.hours,
-      rate: input.rate,
-      gross_wages: grossWages,
-      bonus: input.bonus,
-      misc_extra: input.misc_extra,
-      insurable_earnings: insurable,
-      ei_employee: ei,
-      cpp_employee: cpp,
-      income_tax: input.income_tax,
-      benefit_employee_deduction: input.benefit_employee_deduction,
-      benefit_employer_contribution: input.benefit_employer_contribution,
-      cheque_amount: input.cheque_amount,
-      net_pay: netPay,
-      notes: input.notes || null,
-      updated_by: profile.id,
-    };
+    const payload = await buildEntryPayload(supabase, input);
 
     const { data, error } = await supabase
       .from("payroll_entries")
-      .upsert({ ...payload, created_by: profile.id }, { onConflict: "payroll_week_id,employee_id" })
+      .upsert(
+        { ...payload, created_by: profile.id, updated_by: profile.id },
+        { onConflict: "payroll_week_id,employee_id" },
+      )
       .select("*")
       .single();
     if (error) throw error;
@@ -301,35 +448,11 @@ export const updatePayrollEntry = wrapAction({
   handler: async (input, profile): Promise<PayrollEntry> => {
     const supabase = await createClient();
     const { id, ...rest } = input;
-
-    const grossWages = Math.round(rest.hours * rest.rate * 100) / 100;
-    const insurable = Math.round((grossWages + rest.bonus) * 100) / 100;
-
-    const { data: weekRow } = await supabase
-      .from("payroll_weeks")
-      .select("week_start")
-      .eq("id", rest.payroll_week_id)
-      .single();
-    const year = weekRow ? new Date(weekRow.week_start).getFullYear() : new Date().getFullYear();
-    const rates = await getStatutoryRatesForYear(year);
-    const { ei, cpp } = _computeStatutoryDeductions(insurable, rates, year);
-
-    const netPay = Math.round(
-      (grossWages + rest.bonus + rest.misc_extra - ei - cpp - rest.income_tax - rest.benefit_employee_deduction) * 100
-    ) / 100;
+    const payload = await buildEntryPayload(supabase, rest);
 
     const { data, error } = await supabase
       .from("payroll_entries")
-      .update({
-        hours: rest.hours, rate: rest.rate, gross_wages: grossWages,
-        bonus: rest.bonus, misc_extra: rest.misc_extra,
-        insurable_earnings: insurable, ei_employee: ei, cpp_employee: cpp,
-        income_tax: rest.income_tax,
-        benefit_employee_deduction: rest.benefit_employee_deduction,
-        benefit_employer_contribution: rest.benefit_employer_contribution,
-        cheque_amount: rest.cheque_amount,
-        net_pay: netPay, notes: rest.notes || null, updated_by: profile.id,
-      })
+      .update({ ...payload, updated_by: profile.id })
       .eq("id", id)
       .select("*")
       .single();

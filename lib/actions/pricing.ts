@@ -197,31 +197,48 @@ export async function getOilChangeGrid(): Promise<{
   // Mirrors public.oil_change_price(): one batched read per table instead of
   // engines×oil_types×containers RPCs (the prior approach overwhelmed the
   // request pipeline and surfaced as RangeError on this page).
-  const [enginesRes, oilTypesRes, filtersRes, tiersRes, settingsRes] = await Promise.all([
-    supabase
-      .from("engine_types")
-      .select("*")
-      .eq("active", true)
-      .order("manufacturer")
-      .order("model"),
-    supabase
-      .from("oil_types")
-      .select("*")
-      .eq("active", true)
-      .order("sort_order")
-      .order("name"),
-    supabase
-      .from("engine_filters")
-      .select("engine_type_id, quantity, parts:part_id(cost, mhsw_fee, service_costs:service_cost_id(cost))"),
-    supabase.from("volume_tiers").select("oil_type_id, min_litres, premium"),
-    supabase.from("app_settings").select("hst_rate").eq("id", 1).single(),
-  ]);
+  const [enginesRes, oilTypesRes, filtersRes, tiersRes, overridesRes, settingsRes] =
+    await Promise.all([
+      supabase
+        .from("engine_types")
+        .select("*")
+        .eq("active", true)
+        .order("manufacturer")
+        .order("model"),
+      supabase
+        .from("oil_types")
+        .select("*")
+        .eq("active", true)
+        .order("sort_order")
+        .order("name"),
+      supabase
+        .from("engine_filters")
+        .select("engine_type_id, quantity, parts:part_id(cost, mhsw_fee, service_costs:service_cost_id(cost))"),
+      supabase.from("volume_tiers").select("oil_type_id, min_litres, premium"),
+      supabase
+        .from("engine_sell_prices")
+        .select("engine_type_id, oil_type_id, container, sell_price"),
+      supabase.from("app_settings").select("hst_rate").eq("id", 1).single(),
+    ]);
 
   if (enginesRes.error) throw enginesRes.error;
   if (oilTypesRes.error) throw oilTypesRes.error;
   if (filtersRes.error) throw filtersRes.error;
   if (tiersRes.error) throw tiersRes.error;
+  if (overridesRes.error) throw overridesRes.error;
   const hstRate = Number(settingsRes.data?.hst_rate ?? 0.13);
+
+  // Build override lookup: "engine|oil|container" -> sell_price
+  type OverrideRow = {
+    engine_type_id: string;
+    oil_type_id: string;
+    container: "bulk" | "gallon";
+    sell_price: number;
+  };
+  const overrideMap = new Map<string, number>();
+  for (const o of (overridesRes.data ?? []) as OverrideRow[]) {
+    overrideMap.set(`${o.engine_type_id}|${o.oil_type_id}|${o.container}`, Number(o.sell_price));
+  }
 
   const engines = (enginesRes.data ?? []) as EngineType[];
   const oilTypes = (oilTypesRes.data ?? []) as OilType[];
@@ -266,7 +283,10 @@ export async function getOilChangeGrid(): Promise<{
     return best ? Number(best.premium) || 0 : 0;
   };
 
-  const round99 = (sell: number): number => Math.ceil(sell) - 0.01;
+  /** Round any positive price up to the next .99. Anything ≤ 0 → null so the
+   *  UI shows "—" instead of a nonsensical "-$0.01" for oils with no cost. */
+  const round99 = (sell: number): number | null =>
+    Number.isFinite(sell) && sell > 0 ? Math.ceil(sell) - 0.01 : null;
 
   const cells = new Map<string, PriceGridCell>();
   for (const e of engines) {
@@ -296,12 +316,21 @@ export async function getOilChangeGrid(): Promise<{
         Number.isFinite(lpg) && lpg > 0
           ? Number(o.gallon_cost_per_litre) / lpg
           : NaN;
-      const bulk = Number.isFinite(bulkRate)
-        ? round99(bulkRate * capacity + filterCost + serviceCost + tier)
-        : null;
-      const gallon = Number.isFinite(gallonRate)
-        ? round99(gallonRate * capacity + filterCost + serviceCost + tier)
-        : null;
+      // Override wins; otherwise fall back to cost-up. round99 returns null
+      // when the raw price isn't positive (oil has no cost configured), so
+      // "—" shows instead of -$0.01.
+      const overrideBulk   = overrideMap.get(`${e.id}|${o.id}|bulk`);
+      const overrideGallon = overrideMap.get(`${e.id}|${o.id}|gallon`);
+      const bulk = overrideBulk != null
+        ? overrideBulk
+        : Number.isFinite(bulkRate) && bulkRate > 0
+          ? round99(bulkRate * capacity + filterCost + serviceCost + tier)
+          : null;
+      const gallon = overrideGallon != null
+        ? overrideGallon
+        : Number.isFinite(gallonRate) && gallonRate > 0
+          ? round99(gallonRate * capacity + filterCost + serviceCost + tier)
+          : null;
       // Item #21 — apply HST when the oil type is flagged taxable.
       const gallon_with_tax =
         gallon != null && o.is_taxable
@@ -318,6 +347,426 @@ export async function getOilChangeGrid(): Promise<{
   }
 
   return { engines, oilTypes, cells, hstRate };
+}
+
+// ============================================================================
+// "All Filter Sell Price" — mirrors the eponymous Excel tab. Computes the 4
+// service-mode prices per filter and rounds each to .99.
+//
+//   With Service   = (cost + mhsw) + service_cost              (installed)
+//   Without Service= (cost + mhsw) + service_cost + counter_premium  (parts on the counter; labour for ringing up)
+//   Over Counter   = With Service                              (separate pure-sale price; reserved for future per-part override)
+//   Customer Supplies = customer_supplies_labour (flat — customer brings their own filter, QTL only does labour)
+//
+// Both the counter_premium and customer_supplies_labour are configurable on
+// app_settings so the owner can tune them without touching code.
+// ============================================================================
+
+export interface FilterSellPriceRow {
+  id: string;
+  part_number: string;
+  brand: string;
+  category: string;
+  description: string | null;
+  list_price: number;
+  cost: number;
+  mhsw_fee: number;
+  service_cost: number;
+  service_cost_name: string | null;
+  /** null when the part has no cost data — UI shows "—" instead of $-0.01. */
+  without_service: number | null;
+  with_service: number | null;
+  over_counter: number | null;
+  customer_supplies: number;
+}
+
+export async function getAllFilterSellPrices(filter?: {
+  category_id?: string;
+  brand?: string;
+  q?: string;
+}): Promise<{
+  rows: FilterSellPriceRow[];
+  counter_premium: number;
+  customer_supplies_labour: number;
+  effective_date: string | null;
+}> {
+  const supabase = await createClient();
+
+  const [partsRes, settingsRes] = await Promise.all([
+    (() => {
+      let q = supabase
+        .from("parts")
+        .select(`${PART_SELECT}, service_costs:service_cost_id(name, cost)`)
+        .eq("active", true)
+        .order("brand")
+        .order("part_number")
+        .limit(2000);
+      if (filter?.category_id) q = q.eq("category_id", filter.category_id);
+      if (filter?.brand) q = q.eq("brand", filter.brand);
+      if (filter?.q) {
+        const term = `%${filter.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+        q = q.or(`part_number.ilike.${term},description.ilike.${term}`);
+      }
+      return q;
+    })(),
+    supabase
+      .from("app_settings")
+      .select("counter_premium, customer_supplies_labour, price_list_effective_date")
+      .eq("id", 1)
+      .single(),
+  ]);
+  if (partsRes.error) throw partsRes.error;
+  const counterPremium = Number(settingsRes.data?.counter_premium ?? 10);
+  const customerSuppliesLabour = Number(settingsRes.data?.customer_supplies_labour ?? 20);
+  const effectiveDate = settingsRes.data?.price_list_effective_date ?? null;
+
+  /** Round positive prices to .99; anything ≤ 0 returns null (so "—" shows
+   *  instead of "-$0.01" for parts with no cost set). */
+  const round99 = (n: number): number | null =>
+    Number.isFinite(n) && n > 0 ? Math.ceil(n) - 0.01 : null;
+
+  type Row = PartJoinRow & { service_costs: { name: string; cost: number } | null };
+  const rows: FilterSellPriceRow[] = ((partsRes.data ?? []) as unknown as Row[]).map((r) => {
+    const merged = mergePartCategory(r);
+    const part = normalizePartPricing(merged);
+    const svcCost = Number(r.service_costs?.cost ?? 0);
+    const partBase = Number(part.cost) + Number(part.mhsw_fee);
+    const withSvc = round99(partBase + svcCost);
+    const withoutSvc = round99(partBase + svcCost + counterPremium);
+    const overCounter = withSvc;
+    // Excel "Customer Supplies Filter" is a flat $ value, NOT .99-rounded.
+    const customerSupplies = customerSuppliesLabour;
+    return {
+      id: part.id,
+      part_number: part.part_number,
+      brand: part.brand,
+      category: part.category,
+      description: part.description,
+      list_price: Number(part.list_price),
+      cost: Number(part.cost),
+      mhsw_fee: Number(part.mhsw_fee),
+      service_cost: svcCost,
+      service_cost_name: r.service_costs?.name ?? null,
+      without_service: withoutSvc,
+      with_service: withSvc,
+      over_counter: overCounter,
+      customer_supplies: customerSupplies,
+    };
+  });
+
+  return {
+    rows,
+    counter_premium: counterPremium,
+    customer_supplies_labour: customerSuppliesLabour,
+    effective_date: effectiveDate,
+  };
+}
+
+// ============================================================================
+// Per-oil pricing detail (mirrors the "15W40", "10W30", ... tabs).
+//
+// One row per engine, columns: Selling, Cost, Filter Cost, Oil Cost, Profit,
+// Cost%, Profit%. The selling-price column is the same .99-rounded number the
+// Oil-Change grid surfaces; cost columns are admin-only.
+// ============================================================================
+
+export interface OilDetailRow {
+  engine_id: string;
+  engine_name: string;
+  oil_capacity_litres: number;
+  selling: number | null;
+  /** True when `selling` came from an engine_sell_prices override (vs cost-up). */
+  is_override: boolean;
+  /** ID of the engine_sell_prices row backing the override (null if cost-up). */
+  override_id: string | null;
+  filter_cost: number;
+  oil_cost: number;
+  service_cost: number;
+  volume_tier_premium: number;
+  total_cost: number;
+  /** null when selling is null (no data to compute against). */
+  profit: number | null;
+  cost_pct: number | null;     // 0..1
+  profit_pct: number | null;   // 0..1
+}
+
+export interface OilDetailResponse {
+  oil_type: OilType;
+  container: "bulk" | "gallon";
+  rows: OilDetailRow[];
+  /** All oil types (for the page selector). */
+  oil_types: OilType[];
+}
+
+export async function getOilDetail(
+  oilCode: string,
+  container: "bulk" | "gallon",
+): Promise<OilDetailResponse | null> {
+  const supabase = await createClient();
+
+  const [enginesRes, oilTypesRes, filtersRes, tiersRes, overridesRes] =
+    await Promise.all([
+      supabase
+        .from("engine_types")
+        .select("*")
+        .eq("active", true)
+        .order("manufacturer")
+        .order("model"),
+      supabase
+        .from("oil_types")
+        .select("*")
+        .eq("active", true)
+        .order("sort_order")
+        .order("name"),
+      supabase
+        .from("engine_filters")
+        .select("engine_type_id, quantity, parts:part_id(cost, mhsw_fee, service_costs:service_cost_id(cost))"),
+      supabase.from("volume_tiers").select("oil_type_id, min_litres, premium"),
+      supabase
+        .from("engine_sell_prices")
+        .select("id, engine_type_id, oil_type_id, container, sell_price"),
+    ]);
+  if (enginesRes.error) throw enginesRes.error;
+  if (oilTypesRes.error) throw oilTypesRes.error;
+  if (filtersRes.error) throw filtersRes.error;
+  if (tiersRes.error) throw tiersRes.error;
+  if (overridesRes.error) throw overridesRes.error;
+
+  const oilTypes = (oilTypesRes.data ?? []) as OilType[];
+  const oilType = oilTypes.find((o) => o.code === oilCode);
+  if (!oilType) return null;
+
+  type OverrideRow = {
+    id: string;
+    engine_type_id: string;
+    oil_type_id: string;
+    container: "bulk" | "gallon";
+    sell_price: number;
+  };
+  const overrideMap = new Map<string, { id: string; price: number }>();
+  for (const o of (overridesRes.data ?? []) as OverrideRow[]) {
+    overrideMap.set(
+      `${o.engine_type_id}|${o.oil_type_id}|${o.container}`,
+      { id: o.id, price: Number(o.sell_price) },
+    );
+  }
+
+  type FilterRow = {
+    engine_type_id: string;
+    quantity: number;
+    parts: {
+      cost: number;
+      mhsw_fee: number;
+      service_costs: { cost: number } | null;
+    } | null;
+  };
+  const enginePartCost = new Map<string, number>();
+  const engineServiceCost = new Map<string, number>();
+  for (const f of (filtersRes.data ?? []) as unknown as FilterRow[]) {
+    if (!f.parts) continue;
+    const qty = Number(f.quantity) || 0;
+    enginePartCost.set(
+      f.engine_type_id,
+      (enginePartCost.get(f.engine_type_id) ?? 0)
+        + (Number(f.parts.cost) + Number(f.parts.mhsw_fee)) * qty,
+    );
+    engineServiceCost.set(
+      f.engine_type_id,
+      (engineServiceCost.get(f.engine_type_id) ?? 0)
+        + Number(f.parts.service_costs?.cost ?? 0) * qty,
+    );
+  }
+
+  type TierRow = { oil_type_id: string; min_litres: number; premium: number };
+  const tiers = ((tiersRes.data ?? []) as TierRow[]).filter(
+    (t) => t.oil_type_id === oilType.id,
+  );
+  const tierFor = (cap: number): number => {
+    let best: TierRow | null = null;
+    for (const t of tiers) {
+      if (Number(t.min_litres) <= cap && (!best || Number(t.min_litres) > Number(best.min_litres))) {
+        best = t;
+      }
+    }
+    return best ? Number(best.premium) : 0;
+  };
+
+  /** Round any positive price up to the next .99. Anything ≤ 0 → null. */
+  const round99 = (n: number): number | null =>
+    Number.isFinite(n) && n > 0 ? Math.ceil(n) - 0.01 : null;
+
+  const lpg = Number(oilType.litres_per_gallon);
+  const perLitre = container === "gallon"
+    ? (Number.isFinite(lpg) && lpg > 0 ? Number(oilType.gallon_cost_per_litre) / lpg : NaN)
+    : Number(oilType.bulk_cost_per_litre);
+
+  const rows: OilDetailRow[] = ((enginesRes.data ?? []) as EngineType[]).map((e) => {
+    const cap = Number(e.oil_capacity_litres);
+    const filterCost = enginePartCost.get(e.id) ?? 0;
+    const serviceCost = engineServiceCost.get(e.id) ?? 0;
+    const tier = tierFor(cap);
+    const oilCost = Number.isFinite(perLitre) ? perLitre * cap : 0;
+    const totalCost = filterCost + oilCost + serviceCost + tier;
+    // Override wins; otherwise fall back to cost-up. round99 returns null when
+    // the result isn't positive so we don't render "-$0.01" for empty oils.
+    const override = overrideMap.get(`${e.id}|${oilType.id}|${container}`);
+    const selling = override
+      ? override.price
+      : Number.isFinite(perLitre) && perLitre > 0
+        ? round99(totalCost)
+        : null;
+    // When selling is null (no price data), profit/margin are also unknown —
+    // return null so the UI shows "—" instead of "0%" or "100%".
+    const profit = selling != null ? selling - totalCost : null;
+    const costPct = selling != null && selling > 0 ? totalCost / selling : null;
+    const profitPct = costPct != null ? 1 - costPct : null;
+    return {
+      engine_id: e.id,
+      engine_name: `${e.manufacturer} ${e.model}`,
+      oil_capacity_litres: cap,
+      selling,
+      is_override: !!override,
+      override_id: override?.id ?? null,
+      filter_cost: filterCost,
+      oil_cost: oilCost,
+      service_cost: serviceCost,
+      volume_tier_premium: tier,
+      total_cost: totalCost,
+      profit,
+      cost_pct: costPct,
+      profit_pct: profitPct,
+    };
+  });
+
+  return { oil_type: oilType, container, rows, oil_types: oilTypes };
+}
+
+// ============================================================================
+// Print List — the technician's print-friendly price card. One row per engine,
+// columns are gallon-container sell prices for every active oil type.
+// ============================================================================
+
+/** A single column on the Print List. Matches the Excel layout: each oil has
+ *  a gallon column always; synthetic oils additionally have a bulk column;
+ *  three reference bulk columns close out the table (15W40, 10W30, 5W30). */
+export interface PrintListColumn {
+  key: string;
+  label: string;        // e.g. "Standard 15W-40"
+  sublabel: string;     // e.g. "15W40 · Gallon"
+  oil_type_id: string;
+  container: "bulk" | "gallon";
+  is_reference: boolean; // true for the 3 reference bulk columns at the end
+}
+
+export interface PrintListRow {
+  engine_id: string;
+  engine_name: string;
+  oil_capacity_litres: number;
+  /** Same length + order as PrintListResponse.columns. */
+  prices: Array<number | null>;
+}
+
+export interface PrintListResponse {
+  columns: PrintListColumn[];
+  rows: PrintListRow[];
+  effective_date: string | null;
+  company_name: string;
+}
+
+/** Codes for oils we treat as "synthetic" → also show bulk in the print list.
+ *  Matches the Excel's choice of which oils get a bulk column. */
+const SYNTHETIC_OIL_CODES = new Set(["T6", "DELO_5W30", "PETRO_5W30"]);
+
+/** Codes for the 3 reference bulk columns at the end of the sheet. */
+const REFERENCE_BULK_CODES = ["15W40", "10W30", "DELO_5W30"];
+
+export async function getPrintList(): Promise<PrintListResponse> {
+  const supabase = await createClient();
+  const [{ engines, oilTypes, cells }, settingsRes] = await Promise.all([
+    getOilChangeGrid(),
+    supabase
+      .from("app_settings")
+      .select("company_name, price_list_effective_date")
+      .eq("id", 1)
+      .single(),
+  ]);
+
+  // Build the column list in the same order as the Excel Print List tab.
+  const columns: PrintListColumn[] = [];
+  for (const o of oilTypes) {
+    // Always a gallon column for each oil
+    columns.push({
+      key: `${o.id}-gallon`,
+      label: o.name,
+      sublabel: `${o.code} · Gallon`,
+      oil_type_id: o.id,
+      container: "gallon",
+      is_reference: false,
+    });
+    // Bulk column too for synthetic oils
+    if (SYNTHETIC_OIL_CODES.has(o.code)) {
+      columns.push({
+        key: `${o.id}-bulk`,
+        label: o.name,
+        sublabel: `${o.code} · Bulk`,
+        oil_type_id: o.id,
+        container: "bulk",
+        is_reference: false,
+      });
+    }
+  }
+  // Reference bulk columns at the end
+  for (const code of REFERENCE_BULK_CODES) {
+    const o = oilTypes.find((x) => x.code === code);
+    if (!o) continue;
+    columns.push({
+      key: `ref-${o.id}-bulk`,
+      label: o.name,
+      sublabel: `${o.code} · Bulk ref`,
+      oil_type_id: o.id,
+      container: "bulk",
+      is_reference: true,
+    });
+  }
+
+  // First pass: build raw prices for every column so we can detect empty ones.
+  type RawRow = {
+    engine_id: string;
+    engine_name: string;
+    oil_capacity_litres: number;
+    prices: Array<number | null>;
+  };
+  const rawRows: RawRow[] = engines.map((e) => ({
+    engine_id: e.id,
+    engine_name: `${e.manufacturer} ${e.model}`,
+    oil_capacity_litres: Number(e.oil_capacity_litres),
+    prices: columns.map((col) => {
+      const cell = cells.get(`${e.id}|${col.oil_type_id}`);
+      return col.container === "bulk" ? cell?.bulk ?? null : cell?.gallon ?? null;
+    }),
+  }));
+
+  // Second pass: drop any column where no engine has a price. This keeps
+  // transmission/differential/fuel "oils" (no engine-oil cost configured) out
+  // of the Print List so it actually fits on the page and matches the Excel.
+  const keepIdx: number[] = [];
+  for (let i = 0; i < columns.length; i++) {
+    if (rawRows.some((r) => r.prices[i] != null)) keepIdx.push(i);
+  }
+  const filteredColumns = keepIdx.map((i) => columns[i]);
+  const rows: PrintListRow[] = rawRows.map((r) => ({
+    engine_id: r.engine_id,
+    engine_name: r.engine_name,
+    oil_capacity_litres: r.oil_capacity_litres,
+    prices: keepIdx.map((i) => r.prices[i]),
+  }));
+
+  return {
+    columns: filteredColumns,
+    rows,
+    effective_date: settingsRes.data?.price_list_effective_date ?? null,
+    company_name: settingsRes.data?.company_name ?? "Quick Truck Lube & Oil Ltd.",
+  };
 }
 
 // ============================================================================
@@ -651,6 +1100,9 @@ function revalidatePricing(entity?: string) {
   revalidatePath("/pricing");
   revalidatePath("/pricing/filters");
   revalidatePath("/pricing/oil-grid");
+  revalidatePath("/pricing/all-filter-price");
+  revalidatePath("/pricing/oil-detail");
+  revalidatePath("/pricing/print-list");
   revalidatePath("/settings/pricing");
   if (entity) revalidatePath(`/settings/pricing/${entity}`);
 }
@@ -1319,6 +1771,122 @@ export const lookupOilChangePrice = wrapAction({
     });
     if (error) throw error;
     return { sub_total: data == null ? null : Number(data) };
+  },
+});
+
+// ============================================================================
+// engine_sell_prices — manual override per (engine, oil, container).
+// Owner-only writes. Fall-through to cost-up if no row exists.
+// ============================================================================
+
+export interface EngineSellPriceRow {
+  id: string;
+  engine_type_id: string;
+  oil_type_id: string;
+  container: "bulk" | "gallon";
+  sell_price: number;
+  notes: string | null;
+}
+
+export async function listEngineSellPrices(): Promise<EngineSellPriceRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("engine_sell_prices")
+    .select("id, engine_type_id, oil_type_id, container, sell_price, notes")
+    .order("engine_type_id");
+  if (error) throw error;
+  return (data ?? []) as EngineSellPriceRow[];
+}
+
+const UpsertEngineSellPriceInput = z.object({
+  engine_type_id: z.string().uuid(),
+  oil_type_id: z.string().uuid(),
+  container: z.enum(["bulk", "gallon"]),
+  sell_price: z.coerce.number().positive("Must be greater than zero"),
+  notes: z.string().trim().max(200).nullable().optional().or(z.literal("")),
+});
+
+export const upsertEngineSellPrice = wrapAction({
+  schema: UpsertEngineSellPriceInput,
+  roles: ["owner"],
+  handler: async (input, profile): Promise<EngineSellPriceRow> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("engine_sell_prices")
+      .upsert(
+        {
+          engine_type_id: input.engine_type_id,
+          oil_type_id: input.oil_type_id,
+          container: input.container,
+          sell_price: input.sell_price,
+          notes: input.notes || null,
+          created_by: profile.id,
+          updated_by: profile.id,
+        },
+        { onConflict: "engine_type_id,oil_type_id,container" },
+      )
+      .select("id, engine_type_id, oil_type_id, container, sell_price, notes")
+      .single();
+    if (error) throw error;
+    revalidatePricing("sell-prices");
+    return data as EngineSellPriceRow;
+  },
+});
+
+export const deleteEngineSellPrice = wrapAction({
+  schema: z.object({ id: z.string().uuid() }),
+  roles: ["owner"],
+  handler: async (input): Promise<{ id: string }> => {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("engine_sell_prices")
+      .delete()
+      .eq("id", input.id);
+    if (error) throw error;
+    revalidatePricing("sell-prices");
+    return { id: input.id };
+  },
+});
+
+// ============================================================================
+// Pricing-related app_settings — counter premium, customer-supplies labour,
+// price-list effective date, vacation rate, WSIB rate. Owner-only.
+// ============================================================================
+
+const PricingSettingsInput = z.object({
+  counter_premium: z.coerce.number().min(0),
+  customer_supplies_labour: z.coerce.number().min(0),
+  vacation_pay_rate: z.coerce.number().min(0).max(1),
+  wsib_rate: z.coerce.number().min(0).max(1),
+  price_list_effective_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional()
+    .or(z.literal("")),
+});
+
+export const updatePricingSettings = wrapAction({
+  schema: PricingSettingsInput,
+  roles: ["owner"],
+  handler: async (input): Promise<{ ok: true }> => {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("app_settings")
+      .update({
+        counter_premium: input.counter_premium,
+        customer_supplies_labour: input.customer_supplies_labour,
+        vacation_pay_rate: input.vacation_pay_rate,
+        wsib_rate: input.wsib_rate,
+        price_list_effective_date: input.price_list_effective_date || null,
+      })
+      .eq("id", 1);
+    if (error) throw error;
+    revalidatePath("/settings/pricing");
+    revalidatePath("/pricing/all-filter-price");
+    revalidatePath("/pricing/print-list");
+    revalidatePath("/payroll");
+    return { ok: true };
   },
 });
 

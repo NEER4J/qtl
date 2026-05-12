@@ -390,6 +390,16 @@ export interface AppSettings {
   currency: string;
   invoice_format: 'manual' | 'auto';
   min_margin_alert_pct: number;
+  /** Flat $ added to "With service" filter price to produce the "Over counter" sell price. */
+  counter_premium: number;
+  /** Flat $ charged when the customer brings their own filter — labour only. */
+  customer_supplies_labour: number;
+  /** Fraction of gross wages accrued as vacation pay (e.g. 0.04 = 4%). */
+  vacation_pay_rate: number;
+  /** WSIB premium rate applied against insurable earnings (employer only). */
+  wsib_rate: number;
+  /** Effective date shown on the Print List header. */
+  price_list_effective_date: string | null;
   updated_at: string;
 }
 
@@ -457,12 +467,26 @@ export interface PayrollEntry {
   hours: number;
   rate: number;
   gross_wages: number;
+  // Overtime — separate so OT cost can be analysed on its own.
+  overtime_hours: number;
+  overtime_rate: number;
+  overtime_wages: number;
+  // Stat holiday + vacation accrual
+  holiday_pay: number;
+  vacation_pay: number;
   bonus: number;
   misc_extra: number;
   insurable_earnings: number;
+  // Employee statutory deductions
   ei_employee: number;
   cpp_employee: number;
+  cpp_employee2: number;
   income_tax: number;
+  // Employer statutory remittances
+  ei_employer: number;
+  cpp_employer: number;
+  cpp_employer2: number;
+  wsib_employer: number;
   benefit_employee_deduction: number;
   benefit_employer_contribution: number;
   cheque_amount: number;

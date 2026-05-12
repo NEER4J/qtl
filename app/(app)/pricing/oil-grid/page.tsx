@@ -80,8 +80,8 @@ export default async function OilGridPage() {
                   <th className="text-right p-2 text-xs text-muted-foreground">Capacity</th>
                   {oilTypes.map((o) => (
                     <th key={o.id} className="p-2 text-center min-w-[110px] border-l" colSpan={2}>
-                      <div className="font-medium">{o.code}</div>
-                      <div className="text-xs text-muted-foreground font-normal">{o.name}</div>
+                      <div className="font-medium">{o.name}</div>
+                      <div className="text-xs text-muted-foreground font-normal">{o.code}</div>
                     </th>
                   ))}
                 </tr>

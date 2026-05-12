@@ -71,7 +71,7 @@ export function PackagePickerButton({
                           .map((it) => {
                             const qty = Number(it.quantity);
                             if (it.part) return `${qty}× ${it.part.brand} ${it.part.part_number}`;
-                            if (it.oil_type) return `${qty}× ${it.oil_type.code}`;
+                            if (it.oil_type) return `${qty}× ${it.oil_type.name}`;
                             return `${qty}× —`;
                           })
                           .join(", ")}

@@ -46,13 +46,33 @@ export default async function PayrollWeekPage({
   const isDraft = week.status === "draft";
   const canAddEntry = canEdit && isDraft;
 
-  const totalGross = week.entries.reduce((s, e) => s + e.gross_wages + e.bonus + e.misc_extra, 0);
+  const totalGross = week.entries.reduce(
+    (s, e) =>
+      s
+      + e.gross_wages
+      + e.overtime_wages
+      + e.bonus
+      + e.holiday_pay
+      + e.misc_extra,
+    0,
+  );
   const totalDeductions = week.entries.reduce(
-    (s, e) => s + e.ei_employee + e.cpp_employee + e.income_tax + e.benefit_employee_deduction,
+    (s, e) =>
+      s
+      + e.ei_employee
+      + e.cpp_employee
+      + e.cpp_employee2
+      + e.income_tax
+      + e.benefit_employee_deduction,
     0,
   );
   const totalNet = week.entries.reduce((s, e) => s + e.net_pay, 0);
   const totalCash = week.entries.reduce((s, e) => s + e.cash_total, 0);
+  const totalEmployerRemittance = week.entries.reduce(
+    (s, e) => s + e.ei_employer + e.cpp_employer + e.cpp_employer2 + e.wsib_employer,
+    0,
+  );
+  const totalVacationAccrued = week.entries.reduce((s, e) => s + e.vacation_pay, 0);
   const totalPaid = week.payments.reduce((s, p) => s + p.amount, 0);
 
   return (
@@ -94,11 +114,13 @@ export default async function PayrollWeekPage({
       </PageHelp>
 
       {/* Summary row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <Stat label="Gross earnings" value={formatMoney(totalGross)} />
         <Stat label="Total deductions" value={formatMoney(totalDeductions)} />
         <Stat label="Net pay" value={formatMoney(totalNet)} highlight />
         <Stat label="Cash paid" value={formatMoney(totalCash)} />
+        <Stat label="Employer remit." value={formatMoney(totalEmployerRemittance)} />
+        <Stat label="Vacation accrued" value={formatMoney(totalVacationAccrued)} />
       </div>
 
       {/* Entries table */}
@@ -129,12 +151,18 @@ export default async function PayrollWeekPage({
                 <TableRow>
                   <TableHead>Employee</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Hours</TableHead>
-                  <TableHead className="text-right">Rate</TableHead>
+                  <TableHead className="text-right">Reg hrs</TableHead>
+                  <TableHead className="text-right">OT hrs</TableHead>
                   <TableHead className="text-right">Gross</TableHead>
+                  <TableHead className="text-right">Holiday</TableHead>
                   <TableHead className="text-right">EI</TableHead>
                   <TableHead className="text-right">CPP</TableHead>
+                  <TableHead className="text-right">CPP2</TableHead>
                   <TableHead className="text-right">Tax</TableHead>
+                  <TableHead className="text-right">Vac</TableHead>
+                  <TableHead className="text-right">Er EI</TableHead>
+                  <TableHead className="text-right">Er CPP</TableHead>
+                  <TableHead className="text-right">WSIB</TableHead>
                   <TableHead className="text-right">Net pay</TableHead>
                   <TableHead className="text-right">Cash</TableHead>
                   <TableHead />
@@ -151,11 +179,17 @@ export default async function PayrollWeekPage({
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{entry.hours}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatMoney(entry.rate)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatMoney(entry.gross_wages + entry.bonus + entry.misc_extra)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{entry.overtime_hours || "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatMoney(entry.gross_wages + entry.overtime_wages + entry.bonus + entry.misc_extra)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{entry.holiday_pay ? formatMoney(entry.holiday_pay) : "—"}</TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.ei_employee)}</TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.cpp_employee)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{entry.cpp_employee2 ? formatMoney(entry.cpp_employee2) : "—"}</TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.income_tax)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.vacation_pay)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.ei_employer)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.cpp_employer + entry.cpp_employer2)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{entry.wsib_employer ? formatMoney(entry.wsib_employer) : "—"}</TableCell>
                       <TableCell className="text-right tabular-nums font-semibold">{formatMoney(entry.net_pay)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatMoney(entry.cash_total)}</TableCell>
                       <TableCell>
@@ -175,7 +209,7 @@ export default async function PayrollWeekPage({
                     </TableRow>
                     {entry.cash_days.length > 0 && (
                       <TableRow key={`${entry.id}-cash`} className="bg-muted/30">
-                        <TableCell colSpan={10} className="py-1.5 pl-8">
+                        <TableCell colSpan={16} className="py-1.5 pl-8">
                           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                             {entry.cash_days.map((d) => (
                               <span key={d.id}>

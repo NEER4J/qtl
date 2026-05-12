@@ -4,6 +4,7 @@ import { Boxes, ChevronRight, Droplet, FolderTree, Gauge, History, Layers, Packa
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
 import { MinMarginThresholdCard } from "@/components/settings/min-margin-threshold-card";
+import { PricingSettingsCard } from "@/components/settings/pricing-settings-card";
 import { requireRole } from "@/lib/auth/require";
 import { getAppSettings } from "@/lib/actions/reference";
 
@@ -97,6 +98,16 @@ export default async function PricingAdminHubPage() {
           via <code>npm run migrate</code>. Use these pages for ongoing additions and edits.
         </p>
       </PageHelp>
+
+      <PricingSettingsCard
+        initial={{
+          counter_premium: Number(settings.counter_premium ?? 10),
+          customer_supplies_labour: Number(settings.customer_supplies_labour ?? 20),
+          vacation_pay_rate: Number(settings.vacation_pay_rate ?? 0.04),
+          wsib_rate: Number(settings.wsib_rate ?? 0),
+          price_list_effective_date: settings.price_list_effective_date ?? null,
+        }}
+      />
 
       <MinMarginThresholdCard initialPct={initialPct} />
 

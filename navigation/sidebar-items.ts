@@ -98,10 +98,6 @@ export const sidebarItems: NavGroup[] = [
         url: "/payroll",
         icon: Wallet,
         roles: ["owner", "manager", "accountant"],
-        subItems: [
-          { title: "Pay weeks", url: "/payroll" },
-          { title: "New week", url: "/payroll", roles: ["owner", "manager"] },
-        ],
       },
     ],
   },
@@ -129,7 +125,10 @@ export const sidebarItems: NavGroup[] = [
         subItems: [
           { title: "Catalog", url: "/pricing" },
           { title: "Filter price list", url: "/pricing/filters" },
+          { title: "All filter sell price", url: "/pricing/all-filter-price" },
           { title: "Oil-change grid", url: "/pricing/oil-grid" },
+          { title: "Oil detail (per oil)", url: "/pricing/oil-detail" },
+          { title: "Print list", url: "/pricing/print-list" },
           { title: "Manage catalogue", url: "/settings/pricing", roles: ["owner"] },
           { title: "Oil types", url: "/settings/pricing/oil-types", roles: ["owner"] },
           { title: "Engine types", url: "/settings/pricing/engine-types", roles: ["owner"] },

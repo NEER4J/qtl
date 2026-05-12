@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, Droplet, Package } from "lucide-react";
+import { ChevronRight, Droplet, Package, ListChecks, FileText, Gauge } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
@@ -9,7 +9,10 @@ export const dynamic = "force-dynamic";
 
 const CARDS = [
   { title: "Filter price list", href: "/pricing/filters", icon: Package, description: "Searchable catalog of every filter QTL stocks." },
+  { title: "All filter sell price", href: "/pricing/all-filter-price", icon: ListChecks, description: "Per-filter sell price in all four service modes (with / without / counter / customer-supplies)." },
   { title: "Oil-change price grid", href: "/pricing/oil-grid", icon: Droplet, description: "Every engine × every oil type, with bulk and gallon prices." },
+  { title: "Oil detail (per oil)", href: "/pricing/oil-detail", icon: Gauge, description: "Per-oil breakdown: selling, cost, filter cost, oil cost, profit, margin %." },
+  { title: "Print list", href: "/pricing/print-list", icon: FileText, description: "Print-ready price card for the shop floor and customer handouts." },
 ];
 
 export default async function PricingHubPage() {

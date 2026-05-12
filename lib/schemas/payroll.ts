@@ -25,9 +25,23 @@ export type UpdateEmployeeInput = z.infer<typeof UpdateEmployeeInput>;
 // Payroll weeks
 // ----------------------------------------------------------------------------
 
+/** True if the given YYYY-MM-DD string is a Monday in UTC. */
+function isMondayYmd(ymd: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (!m) return false;
+  const [, y, mo, d] = m;
+  // Use UTC so the validation matches Postgres `extract(isodow from week_start)`
+  // — both interpret the date with no timezone offset.
+  const dow = new Date(Date.UTC(+y, +mo - 1, +d)).getUTCDay();
+  return dow === 1; // Monday = 1
+}
+
 export const PayrollWeekInput = z.object({
   location_id: z.string().uuid("Select a location"),
-  week_start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date is required"),
+  week_start: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date is required")
+    .refine(isMondayYmd, "Pay week must start on a Monday"),
   notes: z.string().trim().max(500).nullable().optional().or(z.literal("")),
 });
 export type PayrollWeekInput = z.infer<typeof PayrollWeekInput>;
@@ -46,6 +60,9 @@ export const PayrollEntryInput = z.object({
   employee_id: z.string().uuid("Select an employee"),
   hours: z.coerce.number().min(0).max(168).default(0),
   rate: z.coerce.number().min(0).default(0),
+  overtime_hours: z.coerce.number().min(0).max(168).default(0),
+  overtime_rate: z.coerce.number().min(0).default(0),
+  holiday_pay: moneySchema.default(0),
   bonus: moneySchema.default(0),
   misc_extra: moneySchema.default(0),
   income_tax: moneySchema.default(0),
