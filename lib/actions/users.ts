@@ -102,6 +102,17 @@ export const inviteUser = wrapAction({
       );
     if (upsertErr) throw upsertErr;
 
+    // Mirror the plaintext into profile_credentials so the owner can recall
+    // it from the users page. RLS on profile_credentials restricts SELECT to
+    // owner-only.
+    const { error: credErr } = await admin
+      .from("profile_credentials")
+      .upsert(
+        { profile_id: userId, password_plain: input.password },
+        { onConflict: "profile_id" },
+      );
+    if (credErr) throw credErr;
+
     revalidatePath("/settings/users");
     return { id: userId, email: input.email, existed };
   },
@@ -197,17 +208,50 @@ export const deleteUser = wrapAction({
 });
 
 // ----------------------------------------------------------------------------
-// Set password directly — owner sets a user's password from the dashboard
+// Set password directly — owner sets a user's password from the dashboard.
+// Also mirrors the plaintext into profile_credentials so the owner can recall
+// it later from the users page. profile_credentials is owner-only via RLS.
 // ----------------------------------------------------------------------------
 export const setUserPassword = wrapAction({
   schema: SetUserPasswordInput,
   roles: ["owner"],
-  handler: async (input): Promise<{ updated: true }> => {
+  handler: async (input, profile): Promise<{ updated: true }> => {
     const admin = createAdminClient();
     const { error } = await admin.auth.admin.updateUserById(input.id, {
       password: input.password,
     });
     if (error) throw error;
+    const { error: credErr } = await admin
+      .from("profile_credentials")
+      .upsert(
+        { profile_id: input.id, password_plain: input.password, set_by: profile.id },
+        { onConflict: "profile_id" },
+      );
+    if (credErr) throw credErr;
+    revalidatePath("/settings/users");
     return { updated: true };
   },
 });
+
+// ----------------------------------------------------------------------------
+// List stored plaintext passwords (owner only via RLS). Returns a map of
+// profile_id → {password, set_at, set_by}. Only includes users whose password
+// the owner has set/reset via this dashboard — users who haven't been touched
+// since 0058_profile_credentials.sql shipped will be absent.
+// ----------------------------------------------------------------------------
+export interface StoredCredential {
+  profile_id: string;
+  password_plain: string;
+  set_at: string;
+  set_by: string | null;
+}
+
+export async function listUserPasswords(): Promise<StoredCredential[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profile_credentials")
+    .select("profile_id, password_plain, set_at, set_by");
+  // RLS denies for non-owners — return empty silently rather than throwing.
+  if (error) return [];
+  return (data ?? []) as StoredCredential[];
+}

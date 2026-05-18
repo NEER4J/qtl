@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, Eye, EyeOff, Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -44,18 +44,54 @@ const ROLE_LABELS: Record<UserRole, string> = {
   portal_customer: "Portal Customer",
 };
 
+type StoredPassword = { password: string; setAt: string };
+
 export function UsersTable({
   users,
   locations,
+  passwords,
 }: {
   users: UserListRow[];
   locations: Location[];
+  passwords: Record<string, StoredPassword>;
 }) {
   const [inviting, setInviting] = useState(false);
   const [editing, setEditing] = useState<UserListRow | null>(null);
   const [deleting, setDeleting] = useState<UserListRow | null>(null);
   const [settingPassword, setSettingPassword] = useState<UserListRow | null>(null);
+  const [revealed, setRevealed] = useState<Set<string>>(new Set());
+  const [copied, setCopied] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const toggleReveal = (id: string) => {
+    setRevealed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const revealAll = () => {
+    if (revealed.size === users.length) setRevealed(new Set());
+    else setRevealed(new Set(Object.keys(passwords)));
+  };
+
+  const copyPassword = (id: string, pw: string) => {
+    navigator.clipboard.writeText(pw).then(
+      () => {
+        setCopied(id);
+        toast.success("Password copied");
+        setTimeout(() => setCopied((c) => (c === id ? null : c)), 1500);
+      },
+      () => toast.error("Copy failed"),
+    );
+  };
+
+  const fmtSetAt = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  };
 
   const handleToggle = (u: UserListRow) => {
     startTransition(async () => {
@@ -82,9 +118,18 @@ export function UsersTable({
     });
   };
 
+  const anyStored = Object.keys(passwords).length > 0;
+  const allRevealed = anyStored && revealed.size >= Object.keys(passwords).length;
+
   return (
     <>
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {anyStored && (
+          <Button variant="outline" onClick={revealAll}>
+            {allRevealed ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            {allRevealed ? "Hide all passwords" : "Show all passwords"}
+          </Button>
+        )}
         <Button onClick={() => setInviting(true)}>
           <Plus className="size-4" /> Add user
         </Button>
@@ -100,13 +145,14 @@ export function UsersTable({
               <TableHead>Location</TableHead>
               <TableHead className="w-20">Expenses</TableHead>
               <TableHead className="w-24">Status</TableHead>
+              <TableHead className="w-56">Password</TableHead>
               <TableHead className="w-48 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {users.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8 px-6">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8 px-6">
                   <div className="space-y-1">
                     <p className="font-medium text-foreground">Just you for now.</p>
                     <p className="text-sm">
@@ -133,6 +179,51 @@ export function UsersTable({
                     <Badge variant={u.active ? "default" : "secondary"}>
                       {u.active ? "Active" : "Inactive"}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {passwords[u.id] ? (
+                      <div className="flex items-center gap-1">
+                        <code className="text-xs font-mono min-w-[120px]">
+                          {revealed.has(u.id) ? passwords[u.id].password : "••••••••"}
+                        </code>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7"
+                          title={revealed.has(u.id) ? "Hide" : "Show"}
+                          onClick={() => toggleReveal(u.id)}
+                        >
+                          {revealed.has(u.id) ? (
+                            <EyeOff className="size-3.5" />
+                          ) : (
+                            <Eye className="size-3.5" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7"
+                          title="Copy password"
+                          onClick={() => copyPassword(u.id, passwords[u.id].password)}
+                        >
+                          {copied === u.id ? (
+                            <Check className="size-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="size-3.5" />
+                          )}
+                        </Button>
+                        <span
+                          className="text-[10px] text-muted-foreground"
+                          title={`Set on ${new Date(passwords[u.id].setAt).toLocaleString()}`}
+                        >
+                          {fmtSetAt(passwords[u.id].setAt)}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">
+                        not set via dashboard
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
