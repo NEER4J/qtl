@@ -116,6 +116,7 @@ export const sidebarItems: NavGroup[] = [
           { title: "Oil-change grid", url: "/pricing/oil-grid" },
           { title: "Oil detail", url: "/pricing/oil-detail" },
           { title: "Print list", url: "/pricing/print-list" },
+          { title: "Trans & Diff", url: "/pricing/trans-diff" },
         ],
       },
     ],

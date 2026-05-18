@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, Droplet, Package, ListChecks, FileText, Gauge } from "lucide-react";
+import { ChevronRight, Droplet, Package, ListChecks, FileText, Gauge, Wrench } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
@@ -13,6 +13,7 @@ const CARDS = [
   { title: "Oil-change price grid", href: "/pricing/oil-grid", icon: Droplet, description: "Every engine × every oil type, with bulk and gallon prices." },
   { title: "Oil detail (per oil)", href: "/pricing/oil-detail", icon: Gauge, description: "Per-oil breakdown: selling, cost, filter cost, oil cost, profit, margin %." },
   { title: "Print list", href: "/pricing/print-list", icon: FileText, description: "Print-ready price card for the shop floor and customer handouts." },
+  { title: "Trans & Diff", href: "/pricing/trans-diff", icon: Wrench, description: "Transmission, differential, and coolant flush service prices (Regular + Synthetic)." },
 ];
 
 export default async function PricingHubPage() {

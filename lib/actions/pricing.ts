@@ -2281,3 +2281,89 @@ export const togglePartPackageActive = wrapAction({
     return data as PartPackage;
   },
 });
+
+// ============================================================================
+// Trans & Diff — flat-priced service catalogue (Excel "Trans & Diff" tab).
+// ============================================================================
+
+export type TransmissionServiceKind =
+  | "allison_trans"
+  | "diff"
+  | "trans"
+  | "combined"
+  | "specialty_trans"
+  | "coolant_flush";
+
+export interface TransmissionService {
+  id: string;
+  name: string;
+  service_kind: TransmissionServiceKind;
+  is_synthetic: boolean;
+  oil_type_id: string | null;
+  oil_type_name: string | null;
+  litres: number | null;
+  sell_price: number;
+  labour: number | null;
+  notes: string | null;
+  sort_order: number;
+  active: boolean;
+}
+
+const TRANSMISSION_KIND_LABEL: Record<TransmissionServiceKind, string> = {
+  allison_trans:   "Allison Transmission",
+  diff:            "Differential oil change",
+  trans:           "Transmission oil change",
+  combined:        "Combined Trans + Diff",
+  specialty_trans: "Specialty Transmission",
+  coolant_flush:   "Coolant Flush",
+};
+
+export async function listTransmissionServices(): Promise<{
+  groups: { kind: TransmissionServiceKind; label: string; rows: TransmissionService[] }[];
+}> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("transmission_services")
+    .select("*, oil_types:oil_type_id(name)")
+    .eq("active", true)
+    .order("sort_order")
+    .order("name");
+  if (error) throw error;
+
+  type Row = Omit<TransmissionService, "oil_type_name"> & {
+    oil_types: { name: string } | null;
+  };
+  const rows: TransmissionService[] = (data ?? []).map((r: Row) => ({
+    id: r.id,
+    name: r.name,
+    service_kind: r.service_kind,
+    is_synthetic: r.is_synthetic,
+    oil_type_id: r.oil_type_id,
+    oil_type_name: r.oil_types?.name ?? null,
+    litres: r.litres,
+    sell_price: Number(r.sell_price),
+    labour: r.labour == null ? null : Number(r.labour),
+    notes: r.notes,
+    sort_order: r.sort_order,
+    active: r.active,
+  }));
+
+  // Preserve the kind order from the enum literal above for stable section order.
+  const order: TransmissionServiceKind[] = [
+    "allison_trans", "trans", "diff", "combined", "specialty_trans", "coolant_flush",
+  ];
+  const byKind = new Map<TransmissionServiceKind, TransmissionService[]>();
+  for (const r of rows) {
+    const arr = byKind.get(r.service_kind) ?? [];
+    arr.push(r);
+    byKind.set(r.service_kind, arr);
+  }
+  const groups = order
+    .filter((k) => byKind.has(k))
+    .map((kind) => ({
+      kind,
+      label: TRANSMISSION_KIND_LABEL[kind],
+      rows: byKind.get(kind) ?? [],
+    }));
+  return { groups };
+}

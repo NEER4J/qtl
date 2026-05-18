@@ -43,8 +43,14 @@ REPO = Path(__file__).resolve().parents[1]
 WORKBOOK = REPO / "doc" / "May 2026 Standard.xlsx"
 SEED = REPO / "supabase" / "seed"
 
-SUPABASE_URL = "https://facbmuiigusuekddtscz.supabase.co"
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or "REDACTED"
+SUPABASE_URL = os.environ.get("NEXT_PUBLIC_SUPABASE_URL") or "https://facbmuiigusuekddtscz.supabase.co"
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+if not SUPABASE_KEY:
+    sys.exit(
+        "SUPABASE_SERVICE_ROLE_KEY env var is required.\n"
+        "Get it from .env.local (key: SUPABASE_SERVICE_ROLE_KEY) and prefix the command:\n"
+        "  SUPABASE_SERVICE_ROLE_KEY=... python3 scripts/sync-may-2026.py"
+    )
 
 
 # ============================================================================

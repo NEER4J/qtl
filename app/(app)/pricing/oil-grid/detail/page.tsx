@@ -9,8 +9,11 @@ import { formatMoney } from "@/lib/utils/format";
 export const dynamic = "force-dynamic";
 
 export default async function OilChangeDetailPage() {
-  await requireProfile();
+  const profile = await requireProfile();
   const { rows } = await getOilChangeDetails();
+  // Filter cost + labour are admin-only — staff and manager see brand
+  // availability but not the cost numbers. Same rule as /pricing/oil-detail.
+  const showCost = profile.role === "owner" || profile.role === "accountant";
 
   // All distinct brands across all engines, ordered alphabetically — used as
   // table columns so each engine row shows its brand options side by side.
@@ -31,16 +34,32 @@ export default async function OilChangeDetailPage() {
       </div>
 
       <PageHelp id="pricing-oil-grid-detail">
-        <p>
-          Each row is an engine. The brand columns show every filter brand wired up to that engine
-          (Donaldson, Fleetguard, etc.). Each brand cell stacks <strong>filter cost</strong>{" "}
-          (parts × quantity) on top of <strong>labour</strong> (the service cost charged for
-          installing that filter set).
-        </p>
-        <ul>
-          <li>The <em>Grease</em> column pulls from the active service-cost row whose code matches "grease". Wire one up under <Link href="/settings/pricing/service-costs" className="underline">service costs</Link> if blank.</li>
-          <li>Add or change brand options for an engine on its detail page.</li>
-        </ul>
+        {showCost ? (
+          <>
+            <p>
+              Each row is an engine. The brand columns show every filter brand wired up to that engine
+              (Donaldson, Fleetguard, etc.). Each brand cell stacks <strong>filter cost</strong>{" "}
+              (parts × quantity) on top of <strong>labour</strong> (the service cost charged for
+              installing that filter set).
+            </p>
+            <ul>
+              <li>The <em>Grease</em> column pulls from the active service-cost row whose code matches "grease". Wire one up under <Link href="/settings/pricing/service-costs" className="underline">service costs</Link> if blank.</li>
+              <li>Add or change brand options for an engine on its detail page.</li>
+            </ul>
+          </>
+        ) : (
+          <>
+            <p>
+              Quick lookup of which filter brands we stock for each engine. A green ✓ means we have that
+              brand wired up; a dash means we don&apos;t.
+            </p>
+            <p>
+              For customer-facing sell prices, use the{" "}
+              <Link href="/pricing/oil-grid" className="underline">Oil-change price grid</Link> or{" "}
+              <Link href="/pricing/print-list" className="underline">Print list</Link>.
+            </p>
+          </>
+        )}
       </PageHelp>
 
       {rows.length === 0 ? (
@@ -62,21 +81,23 @@ export default async function OilChangeDetailPage() {
                       {b}
                     </th>
                   ))}
-                  <th className="p-2 text-right min-w-[100px] border-l">Grease</th>
+                  {showCost && <th className="p-2 text-right min-w-[100px] border-l">Grease</th>}
                 </tr>
-                <tr className="border-t text-xs text-muted-foreground">
-                  <th />
-                  <th />
-                  {allBrands.map((b) => (
-                    <th key={`${b}-sub`} className="border-l">
-                      <div className="grid grid-cols-2 gap-1 px-1">
-                        <span className="text-right">Filter</span>
-                        <span className="text-right">Labour</span>
-                      </div>
-                    </th>
-                  ))}
-                  <th className="border-l" />
-                </tr>
+                {showCost && (
+                  <tr className="border-t text-xs text-muted-foreground">
+                    <th />
+                    <th />
+                    {allBrands.map((b) => (
+                      <th key={`${b}-sub`} className="border-l">
+                        <div className="grid grid-cols-2 gap-1 px-1">
+                          <span className="text-right">Filter</span>
+                          <span className="text-right">Labour</span>
+                        </div>
+                      </th>
+                    ))}
+                    <th className="border-l" />
+                  </tr>
+                )}
               </thead>
               <tbody>
                 {rows.map((r) => {
@@ -94,21 +115,27 @@ export default async function OilChangeDetailPage() {
                         return (
                           <td key={b} className="p-1 border-l text-sm tabular-nums">
                             {slot ? (
-                              <div className="grid grid-cols-2 gap-1">
-                                <span className="text-right">{formatMoney(slot.filter_cost)}</span>
-                                <span className="text-right text-muted-foreground">
-                                  {formatMoney(slot.labour)}
-                                </span>
-                              </div>
+                              showCost ? (
+                                <div className="grid grid-cols-2 gap-1">
+                                  <span className="text-right">{formatMoney(slot.filter_cost)}</span>
+                                  <span className="text-right text-muted-foreground">
+                                    {formatMoney(slot.labour)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-center block text-emerald-600">✓</span>
+                              )
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
                           </td>
                         );
                       })}
-                      <td className="p-1 border-l text-right tabular-nums text-sm">
-                        {r.grease > 0 ? formatMoney(r.grease) : "—"}
-                      </td>
+                      {showCost && (
+                        <td className="p-1 border-l text-right tabular-nums text-sm">
+                          {r.grease > 0 ? formatMoney(r.grease) : "—"}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
