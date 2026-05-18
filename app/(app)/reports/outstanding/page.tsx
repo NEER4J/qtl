@@ -85,7 +85,7 @@ export default async function OutstandingReportPage({
 
       <Card>
         <CardHeader><CardTitle>All outstanding invoices</CardTitle></CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
+        <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto">
           {rows.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground text-center">
               No outstanding invoices. Nicely done.

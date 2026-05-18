@@ -55,7 +55,7 @@ export default async function FilterListPage({
       </form>
 
       <Card>
-        <CardContent className="p-0 overflow-x-auto">
+        <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto">
           {parts.length === 0 ? (
             <div className="p-8 text-sm text-muted-foreground text-center space-y-3">
               <p className="font-medium text-foreground">

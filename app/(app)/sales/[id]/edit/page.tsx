@@ -103,7 +103,8 @@ export default async function EditSalesJobPage({
           odometer: job.odometer?.toString() ?? "",
           service_type_id: job.service_type_id,
           advisor_name: job.advisor_name ?? "",
-          job_time: job.job_time ?? (job.start_time ? toTimeOfDay(job.start_time) : ""),
+          start_time: job.start_time?.slice(0, 5) ?? "",
+          end_time: job.end_time?.slice(0, 5) ?? "",
           free_grease_applied: job.free_grease_applied ?? false,
           free_grease_override_reason: job.free_grease_override_reason ?? "",
           comments: job.comments ?? "",
@@ -120,14 +121,5 @@ export default async function EditSalesJobPage({
       />
     </div>
   );
-}
-
-// Pull HH:mm from a stored timestamptz so legacy rows surface a time on edit.
-function toTimeOfDay(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
 }
 

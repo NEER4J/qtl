@@ -11,7 +11,14 @@ import {
   ListExpensesInput,
   UpdateExpenseInput,
 } from "@/lib/schemas/expenses";
-import type { Expense, ExpenseItem, PaymentMode, PaymentStatus } from "@/lib/db/types";
+import type {
+  Expense,
+  ExpenseItem,
+  Part,
+  PaymentMode,
+  PaymentStatus,
+  UnitOfMeasure,
+} from "@/lib/db/types";
 
 // ----------------------------------------------------------------------------
 // List
@@ -197,6 +204,7 @@ async function replaceExpenseItems(
     description: string;
     quantity: number;
     unit_cost: number;
+    last_buying_price_snapshot?: number | null;
   }>,
   actorId: string,
 ): Promise<void> {
@@ -213,6 +221,7 @@ async function replaceExpenseItems(
     description: it.description,
     quantity: it.quantity,
     unit_cost: it.unit_cost,
+    last_buying_price_snapshot: it.last_buying_price_snapshot ?? null,
     position: i,
     created_by: actorId,
   }));
@@ -389,4 +398,103 @@ function deriveStatus(total: number, paid: number): PaymentStatus {
   if (paid <= 0) return "outstanding";
   if (paid < total) return "partial";
   return "paid";
+}
+
+// ----------------------------------------------------------------------------
+// Parts catalog for the expense line-item picker.
+//
+// The expense Items section uses this instead of the per-vendor parts list so
+// the user can pick any catalog part regardless of which vendor is selected.
+// The "last buying price" is the unit_cost from the most recent active expense
+// line that referenced the part — surfaced as a column to flag price drift.
+// ----------------------------------------------------------------------------
+export interface ExpensePartPickerRow {
+  id: string;
+  part_number: string;
+  brand: string;
+  description: string | null;
+  category: string;
+  unit_of_measure: UnitOfMeasure;
+  cost: number;
+  last_buying_price: number | null;
+  last_buying_date: string | null;
+}
+
+export async function listPartsForExpensePicker(
+  q?: string,
+): Promise<ExpensePartPickerRow[]> {
+  const supabase = await createClient();
+
+  let partsQuery = supabase
+    .from("parts")
+    .select("*, part_categories:category_id(name, unit_of_measure)")
+    .eq("active", true)
+    .order("brand")
+    .order("part_number")
+    .limit(200);
+
+  const term = q?.trim();
+  if (term) {
+    const safe = `%${term.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+    partsQuery = partsQuery.or(
+      `part_number.ilike.${safe},description.ilike.${safe},brand.ilike.${safe}`,
+    );
+  }
+
+  const { data: parts, error: partsErr } = await partsQuery;
+  if (partsErr) throw partsErr;
+
+  type PartRow = Part & {
+    part_categories: { name: string; unit_of_measure: UnitOfMeasure } | null;
+  };
+  const partRows = (parts ?? []) as unknown as PartRow[];
+  const ids = partRows.map((p) => p.id);
+  if (ids.length === 0) return [];
+
+  // Pull every prior expense line that references one of these parts, ordered
+  // newest-first by the parent expense_date. Dedupe to one row per part_id in JS.
+  const { data: items, error: itemsErr } = await supabase
+    .from("expense_items")
+    .select(
+      "part_id, unit_cost, created_at, expenses:expense_id!inner(expense_date, deactivated_at)",
+    )
+    .in("part_id", ids)
+    .is("expenses.deactivated_at", null)
+    .order("expense_date", { foreignTable: "expenses", ascending: false })
+    .order("created_at", { ascending: false });
+  if (itemsErr) throw itemsErr;
+
+  type ItemRow = {
+    part_id: string;
+    unit_cost: number;
+    created_at: string;
+    expenses:
+      | { expense_date: string | null }
+      | { expense_date: string | null }[]
+      | null;
+  };
+  const lastByPart = new Map<string, { unit_cost: number; date: string | null }>();
+  for (const row of (items ?? []) as ItemRow[]) {
+    if (lastByPart.has(row.part_id)) continue;
+    const exp = Array.isArray(row.expenses) ? row.expenses[0] : row.expenses;
+    lastByPart.set(row.part_id, {
+      unit_cost: Number(row.unit_cost) || 0,
+      date: exp?.expense_date ?? null,
+    });
+  }
+
+  return partRows.map((p) => {
+    const last = lastByPart.get(p.id);
+    return {
+      id: p.id,
+      part_number: p.part_number,
+      brand: p.brand,
+      description: p.description ?? null,
+      category: p.part_categories?.name ?? "",
+      unit_of_measure: p.part_categories?.unit_of_measure ?? "pcs",
+      cost: Number(p.cost) || 0,
+      last_buying_price: last?.unit_cost ?? null,
+      last_buying_date: last?.date ?? null,
+    };
+  });
 }

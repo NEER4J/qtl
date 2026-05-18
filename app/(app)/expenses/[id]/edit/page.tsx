@@ -93,6 +93,10 @@ export default async function EditExpensePage({
           description: it.description,
           quantity: Number(it.quantity),
           unit_cost: Number(it.unit_cost),
+          last_buying_price:
+            it.last_buying_price_snapshot != null
+              ? Number(it.last_buying_price_snapshot)
+              : null,
         }))}
       />
     </div>

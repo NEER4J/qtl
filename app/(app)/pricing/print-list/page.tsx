@@ -70,7 +70,7 @@ export default async function PrintListPage() {
         </Card>
       ) : (
         <Card className="print:shadow-none print:border-0">
-          <CardContent className="p-0 overflow-x-auto print:overflow-visible">
+          <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto print:max-h-none print:overflow-visible">
             <table className="w-full text-sm border-collapse print:text-[10px]">
               <thead className="bg-muted/50 print:bg-transparent">
                 <tr>

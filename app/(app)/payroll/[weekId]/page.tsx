@@ -135,7 +135,7 @@ export default async function PayrollWeekPage({
             </PayrollEntryDialog>
           )}
         </CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
+        <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto">
           {week.entries.length === 0 ? (
             <div className="p-8 text-sm text-muted-foreground text-center space-y-2">
               <p className="font-medium text-foreground">No entries yet for this week.</p>

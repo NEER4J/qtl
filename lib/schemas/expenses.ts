@@ -12,6 +12,9 @@ export const ExpenseItemInput = z.object({
   description: z.string().trim().min(1, "Description required").max(500),
   quantity: z.coerce.number().min(0.001),
   unit_cost: moneySchema,
+  // Snapshot of the part's last buying price at pick time. Persisted so the
+  // drift indicator survives reopening the expense for edit.
+  last_buying_price_snapshot: z.number().nullable().optional(),
 });
 export type ExpenseItemInput = z.infer<typeof ExpenseItemInput>;
 

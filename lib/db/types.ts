@@ -283,12 +283,12 @@ export interface SalesJob {
   odometer: number | null;
   service_type_id: string;
   carrier_name: string | null;
+  // Time-of-day (HH:mm:ss) — 0054 reverted these from timestamptz back to
+  // an explicit two-field model. duration_minutes is generated from the pair.
   start_time: string | null;
   end_time: string | null;
   duration_minutes: number | null;
-  // New fields (0037): single time, advisor, vehicle link, free-grease.
   vehicle_id: string | null;
-  job_time: string | null;
   advisor_name: string | null;
   free_grease_applied: boolean;
   free_grease_override_reason: string | null;
@@ -377,6 +377,10 @@ export interface ExpenseItem {
   unit_cost: number;
   line_total: number;
   position: number;
+  /** Snapshot of the part's last buying price at the moment this row was
+   *  picked from the catalog. Null when the part had no prior history or the
+   *  row predates the snapshot column (0056). */
+  last_buying_price_snapshot: number | null;
   created_at: string;
   created_by: string | null;
 }
@@ -657,6 +661,10 @@ export interface Part {
   margin_value: number;
   service_cost_id: string | null;
   is_taxable: boolean;
+  /** Per-part sell-price overrides for the "All Filter Sell Price" view. NULL = fall back to cost-up. */
+  without_service_price: number | null;
+  with_service_price: number | null;
+  over_counter_price: number | null;
   active: boolean;
   created_at: string;
   updated_at: string;

@@ -31,7 +31,8 @@ export const SalesJobInput = z
     id: z.string().uuid().optional(),
     location_id: z.string().uuid("Select a location"),
     job_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date is required"),
-    job_time: timeNullable,                                            // item #6 — single time
+    start_time: timeNullable,
+    end_time: timeNullable,
 
     bay_no: z.coerce.number().int().min(1).max(20).nullable().optional(),
     upper_tech: z.string().trim().max(60).nullable().optional().or(z.literal("")),
@@ -104,6 +105,14 @@ export const SalesJobInput = z
         code: z.ZodIssueCode.custom,
         path: ["paid_amount"],
         message: "Paid amount cannot exceed Total",
+      });
+    }
+    // HH:mm:ss strings sort lexicographically, so a plain string compare works.
+    if (val.start_time && val.end_time && val.end_time < val.start_time) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["end_time"],
+        message: "End time must be at or after start time",
       });
     }
   });

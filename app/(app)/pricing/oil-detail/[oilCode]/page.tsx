@@ -114,7 +114,7 @@ export default async function OilDetailPage({
         </Card>
       ) : (
       <Card>
-        <CardContent className="p-0 overflow-x-auto">
+        <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>

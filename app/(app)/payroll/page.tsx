@@ -112,7 +112,7 @@ export default async function PayrollPage() {
               }
             />
           ) : (
-            <div className="overflow-x-auto">
+            <div className="max-h-[calc(100vh-220px)] overflow-auto">
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>

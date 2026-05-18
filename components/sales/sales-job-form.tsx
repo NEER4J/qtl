@@ -72,7 +72,8 @@ const PAYMENT_MODES: { value: PaymentMode; label: string }[] = [
 interface FormValues {
   location_id: string;
   job_date: string;
-  job_time: string;
+  start_time: string;
+  end_time: string;
   bay_no: string;
   upper_tech: string;
   lower_tech: string;
@@ -149,7 +150,8 @@ export function SalesJobForm({
   const defaults: FormValues = {
     location_id: lockedLocationId ?? initial?.location_id ?? locations[0]?.id ?? "",
     job_date: initial?.job_date ?? todayISO(),
-    job_time: initial?.job_time ?? "",
+    start_time: initial?.start_time ?? "",
+    end_time: initial?.end_time ?? "",
     bay_no: initial?.bay_no ?? "",
     upper_tech: initial?.upper_tech ?? "",
     lower_tech: initial?.lower_tech ?? "",
@@ -417,7 +419,8 @@ export function SalesJobForm({
         total: Number(values.total || 0),
         paid_amount: Number(values.paid_amount || 0),
         payment_mode: values.payment_mode === "" ? null : values.payment_mode,
-        job_time: values.job_time || null,
+        start_time: values.start_time || null,
+        end_time: values.end_time || null,
         engine_type_id: values.engine_type_id || null,
         oil_type_id: values.oil_type_id || null,
         oil_container: values.oil_container || null,
@@ -439,7 +442,7 @@ export function SalesJobForm({
         // customer is picked; items.* live outside react-hook-form). Surface
         // those via toast so the click doesn't feel silently dropped.
         const REGISTERED: ReadonlySet<string> = new Set([
-          "location_id", "job_date", "job_time", "bay_no", "upper_tech", "lower_tech",
+          "location_id", "job_date", "start_time", "end_time", "bay_no", "upper_tech", "lower_tech",
           "invoice_no", "billing_name", "license_plate", "contact_no", "email",
           "odometer", "service_type_id", "advisor_name",
           "comments", "sub_total", "hst", "total", "paid_amount", "payment_mode",
@@ -1021,10 +1024,23 @@ export function SalesJobForm({
               />
               <FormField
                 control={form.control}
-                name="job_time"
+                name="start_time"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Time</FormLabel>
+                    <FormLabel>Start time</FormLabel>
+                    <FormControl>
+                      <Input type="time" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="end_time"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>End time</FormLabel>
                     <FormControl>
                       <Input type="time" {...field} />
                     </FormControl>
@@ -1033,6 +1049,7 @@ export function SalesJobForm({
                 )}
               />
             </div>
+            <JobDurationHint control={form.control} />
 
             <FormField
               control={form.control}
@@ -1258,4 +1275,43 @@ function FreeGreaseBanner({
       </div>
     </div>
   );
+}
+
+// Live "Duration: 1h 23m" hint under the start/end inputs.
+function JobDurationHint({ control }: { control: ReturnType<typeof useForm<FormValues>>["control"] }) {
+  const start = useWatch({ control, name: "start_time" });
+  const end = useWatch({ control, name: "end_time" });
+  const minutes = diffMinutes(start, end);
+  if (minutes == null) return null;
+  if (minutes < 0) {
+    return <p className="text-xs text-destructive">End time is before start time.</p>;
+  }
+  return (
+    <p className="text-xs text-muted-foreground">
+      Duration: {formatDuration(minutes)}
+    </p>
+  );
+}
+
+function diffMinutes(start: string | undefined, end: string | undefined): number | null {
+  if (!start || !end) return null;
+  const s = parseHHmm(start);
+  const e = parseHHmm(end);
+  if (s == null || e == null) return null;
+  return e - s;
+}
+
+function parseHHmm(v: string): number | null {
+  const m = /^(\d{2}):(\d{2})/.exec(v);
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+function formatDuration(minutes: number): string {
+  if (minutes === 0) return "0 min";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }

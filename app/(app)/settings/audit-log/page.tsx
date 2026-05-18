@@ -75,7 +75,7 @@ export default async function AuditLogPage({
       </PageHelp>
 
       <Card>
-        <CardContent className="p-0 overflow-x-auto">
+        <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto">
           {rows.length === 0 ? (
             <div className="p-8 text-sm text-muted-foreground text-center">
               <p className="font-medium text-foreground">Nothing to show yet.</p>

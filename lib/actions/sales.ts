@@ -225,7 +225,8 @@ export const createSalesJob = wrapAction({
       .insert({
         location_id: locationId,
         job_date: input.job_date,
-        job_time: input.job_time,
+        start_time: input.start_time,
+        end_time: input.end_time,
         bay_no: input.bay_no ?? null,
         upper_tech: input.upper_tech || null,
         lower_tech: input.lower_tech || null,
@@ -313,7 +314,8 @@ export const updateSalesJob = wrapAction({
       .update({
         location_id: input.location_id,
         job_date: input.job_date,
-        job_time: input.job_time,
+        start_time: input.start_time,
+        end_time: input.end_time,
         bay_no: input.bay_no ?? null,
         upper_tech: input.upper_tech || null,
         lower_tech: input.lower_tech || null,

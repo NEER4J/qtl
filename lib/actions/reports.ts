@@ -440,12 +440,14 @@ export async function getVendorStatement(
 // Daily Job Report (item #11)
 // One-day snapshot for a single date and (optionally) a single location.
 // Returns: per-job rows, aggregated parts list, service-type breakdown,
-// per-hour totals (using job_time), and customer-status mix.
+// per-hour totals (using start_time), and customer-status mix.
 // ============================================================================
 export interface DailyJobReportRow {
   id: string;
   invoice_no: string;
-  job_time: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  duration_minutes: number | null;
   service_code: string | null;
   service_name: string | null;
   location_code: string | null;
@@ -495,7 +497,7 @@ export async function getDailyJobReport(
   let query = supabase
     .from("sales_jobs")
     .select(
-      `id, invoice_no, job_time, start_time, total, paid_amount, outstanding,
+      `id, invoice_no, start_time, end_time, duration_minutes, total, paid_amount, outstanding,
        payment_status, sub_total, hst, advisor_name, customer_id,
        license_plate, billing_name,
        locations:location_id(code),
@@ -513,8 +515,9 @@ export async function getDailyJobReport(
   type Joined = {
     id: string;
     invoice_no: string;
-    job_time: string | null;
     start_time: string | null;
+    end_time: string | null;
+    duration_minutes: number | null;
     total: number;
     paid_amount: number;
     outstanding: number;
@@ -634,13 +637,10 @@ export async function getDailyJobReport(
     return j.license_plate;
   }
 
-  function hourFromJobTime(t: string | null, st: string | null): number | null {
-    if (t) return Number(t.slice(0, 2));
-    if (st) {
-      const d = new Date(st);
-      if (!Number.isNaN(d.getTime())) return d.getHours();
-    }
-    return null;
+  function hourFromTime(t: string | null): number | null {
+    if (!t) return null;
+    const m = /^(\d{2}):/.exec(t);
+    return m ? Number(m[1]) : null;
   }
 
   const jobs: DailyJobReportRow[] = rows.map((r) => {
@@ -649,7 +649,9 @@ export async function getDailyJobReport(
     return {
       id: r.id,
       invoice_no: r.invoice_no,
-      job_time: r.job_time,
+      start_time: r.start_time,
+      end_time: r.end_time,
+      duration_minutes: r.duration_minutes,
       service_code: svc?.code ?? null,
       service_name: svc?.name ?? null,
       location_code: loc?.code ?? null,
@@ -682,7 +684,7 @@ export async function getDailyJobReport(
   // by_hour (0-23). Skip jobs with no usable time.
   const hourBuckets = new Map<number, { count: number; revenue: number }>();
   for (const r of rows) {
-    const h = hourFromJobTime(r.job_time, r.start_time);
+    const h = hourFromTime(r.start_time);
     if (h == null) continue;
     const existing = hourBuckets.get(h);
     const total = Number(r.total ?? 0);

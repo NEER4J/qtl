@@ -106,7 +106,7 @@ export default async function DailyReportPage({
                 {filteredJobs.map((j) => (
                   <TableRow key={j.id}>
                     <TableCell className="tabular-nums">
-                      {j.job_time?.slice(0, 5) ?? "—"}
+                      {j.start_time?.slice(0, 5) ?? "—"}
                     </TableCell>
                     <TableCell>
                       <Link href={`/sales/${j.id}`} className="font-mono text-sm hover:underline">

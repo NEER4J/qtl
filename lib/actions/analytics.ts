@@ -231,18 +231,25 @@ export async function getJobsAnalytics(filter: AnalyticsFilter = {}): Promise<Jo
     ? by_bay.reduce((acc, b) => (acc.avg_minutes < b.avg_minutes ? acc : b))
     : null;
 
-  // By hour + dow + volume trend
+  // By hour + dow + volume trend.
+  // start_time is a time-of-day (HH:mm:ss); dow comes from job_date so we
+  // bucket even jobs that were never timestamped.
   const hourMap: Record<number, number> = {};
   const dowMap: Record<number, number> = {};
   const volumeMap: Record<string, number> = {};
   for (const r of rows) {
     volumeMap[r.job_date] = (volumeMap[r.job_date] ?? 0) + 1;
     if (r.start_time) {
-      const d = new Date(r.start_time);
-      if (!Number.isNaN(d.getTime())) {
-        hourMap[d.getHours()] = (hourMap[d.getHours()] ?? 0) + 1;
-        dowMap[d.getDay()] = (dowMap[d.getDay()] ?? 0) + 1;
+      const hm = /^(\d{2}):/.exec(r.start_time);
+      if (hm) {
+        const h = Number(hm[1]);
+        hourMap[h] = (hourMap[h] ?? 0) + 1;
       }
+    }
+    // Parse job_date as local midnight to avoid TZ off-by-one.
+    const d = new Date(`${r.job_date}T00:00:00`);
+    if (!Number.isNaN(d.getTime())) {
+      dowMap[d.getDay()] = (dowMap[d.getDay()] ?? 0) + 1;
     }
   }
   const by_hour = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: hourMap[h] ?? 0 }));

@@ -40,7 +40,6 @@ import { CreateVendorDialog } from "./create-vendor-dialog";
 import {
   ExpenseLineItems,
   lineItemsSubTotal,
-  newExpenseLineItem,
   type ExpenseLineItem,
 } from "./expense-line-items";
 
@@ -129,7 +128,6 @@ export function ExpenseForm({
   const form = useForm<FormValues>({ defaultValues: defaults });
 
   const categoryId = useWatch({ control: form.control, name: "category_id" });
-  const vendorIdWatch = useWatch({ control: form.control, name: "vendor_id" });
   const subTotalRaw = useWatch({ control: form.control, name: "sub_total" });
   const paidRaw = useWatch({ control: form.control, name: "paid_amount" });
 
@@ -179,8 +177,6 @@ export function ExpenseForm({
   };
 
   const onSubmit = form.handleSubmit((values) => {
-    // Filter out empty rows (no description AND zero qty/cost) so a stray
-    // blank "Custom line" doesn't fail validation.
     const cleanItems = items
       .filter((it) => it.description.trim() || it.quantity > 0 || it.unit_cost > 0)
       .map((it) => ({
@@ -189,6 +185,7 @@ export function ExpenseForm({
         description: it.description.trim() || "Item",
         quantity: Number(it.quantity) || 0,
         unit_cost: Number(it.unit_cost) || 0,
+        last_buying_price_snapshot: it.last_buying_price ?? null,
       }));
 
     const payload = {
@@ -485,11 +482,7 @@ export function ExpenseForm({
             <h2 className="text-sm font-semibold uppercase text-muted-foreground">
               Items
             </h2>
-            <ExpenseLineItems
-              vendorId={vendorIdWatch}
-              items={items}
-              onChange={setItems}
-            />
+            <ExpenseLineItems items={items} onChange={setItems} />
           </section>
 
           {/* --------------------------------------------------------------

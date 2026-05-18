@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
+import { ChevronsUpDown, Package, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Table,
   TableBody,
@@ -20,9 +22,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { listVendorPartsForVendor } from "@/lib/actions/vendor-parts";
-import type { VendorPartRow } from "@/lib/db/types";
-import { formatMoney } from "@/lib/utils/format";
+import {
+  listPartsForExpensePicker,
+  type ExpensePartPickerRow,
+} from "@/lib/actions/expenses";
+import { formatDate, formatMoney } from "@/lib/utils/format";
 
 export interface ExpenseLineItem {
   /** Local-only client id used for React keys; not persisted. */
@@ -34,6 +38,9 @@ export interface ExpenseLineItem {
   description: string;
   quantity: number;
   unit_cost: number;
+  /** Snapshot of the part's last buying price at the moment it was picked,
+   *  shown in the row so the user can see how today's unit_cost compares. */
+  last_buying_price?: number | null;
 }
 
 export function lineItemsSubTotal(items: ExpenseLineItem[]): number {
@@ -58,60 +65,124 @@ export function newExpenseLineItem(partial: Partial<ExpenseLineItem> = {}): Expe
     description: "",
     quantity: 1,
     unit_cost: 0,
+    last_buying_price: null,
     ...partial,
   };
 }
 
+function PartsCatalogPicker({
+  onPick,
+}: {
+  onPick: (part: ExpensePartPickerRow) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<ExpensePartPickerRow[]>([]);
+  const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!open) return;
+    startTransition(async () => {
+      try {
+        const data = await listPartsForExpensePicker(q);
+        setResults(data);
+      } catch {
+        setResults([]);
+      }
+    });
+  }, [q, open]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          role="combobox"
+          aria-expanded={open}
+        >
+          <Package className="size-4" /> Add part from catalog
+          <ChevronsUpDown className="size-3.5 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[640px]" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Search by part #, brand, description…"
+            value={q}
+            onValueChange={setQ}
+          />
+          <CommandList className="max-h-[360px]">
+            <CommandEmpty>{isPending ? "Searching…" : "No matching parts."}</CommandEmpty>
+            <CommandGroup>
+              <div className="px-2 pt-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground grid grid-cols-[1fr_auto] gap-2">
+                <span>Part</span>
+                <span className="text-right pr-1">Last buying price</span>
+              </div>
+              {results.map((p) => (
+                <CommandItem
+                  key={p.id}
+                  value={`${p.part_number} ${p.brand} ${p.description ?? ""}`}
+                  onSelect={() => {
+                    onPick(p);
+                    setOpen(false);
+                    setQ("");
+                  }}
+                  className="grid grid-cols-[1fr_auto] gap-2 items-start"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">
+                      {p.part_number} <span className="text-muted-foreground">— {p.brand}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {p.description || p.category}
+                    </div>
+                  </div>
+                  <div className="text-right tabular-nums">
+                    {p.last_buying_price != null ? (
+                      <>
+                        <div className="text-sm font-medium">
+                          {formatMoney(p.last_buying_price)}
+                        </div>
+                        {p.last_buying_date && (
+                          <div className="text-[10px] text-muted-foreground">
+                            {formatDate(p.last_buying_date)}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function ExpenseLineItems({
-  vendorId,
   items,
   onChange,
 }: {
-  vendorId: string | null;
   items: ExpenseLineItem[];
   onChange: (next: ExpenseLineItem[]) => void;
 }) {
-  const [vendorParts, setVendorParts] = useState<VendorPartRow[]>([]);
-  const [loadingParts, setLoadingParts] = useState(false);
-
-  // Pull the vendor's catalog whenever the chosen vendor changes. If no vendor
-  // is set, fall back to an empty list — the user can still type free-text rows.
-  useEffect(() => {
-    if (!vendorId) {
-      setVendorParts([]);
-      return;
-    }
-    let cancelled = false;
-    setLoadingParts(true);
-    listVendorPartsForVendor(vendorId)
-      .then((rows) => {
-        if (!cancelled) setVendorParts(rows);
-      })
-      .catch(() => {
-        if (!cancelled) setVendorParts([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingParts(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [vendorId]);
-
-  const addBlankRow = () => onChange([...items, newExpenseLineItem()]);
-
-  const addVendorPart = (vp: VendorPartRow) => {
-    if (!vp.part) return;
+  const addPart = (p: ExpensePartPickerRow) => {
+    const unit_cost = p.last_buying_price ?? p.cost ?? 0;
     onChange([
       ...items,
       newExpenseLineItem({
-        part_id: vp.part.id,
-        vendor_part_id: vp.id,
-        description: `${vp.part.brand} ${vp.part.part_number}${
-          vp.part.description ? ` — ${vp.part.description}` : ""
-        }`,
+        part_id: p.id,
+        vendor_part_id: null,
+        description: `${p.brand} ${p.part_number}${p.description ? ` — ${p.description}` : ""}`,
         quantity: 1,
-        unit_cost: Number(vp.cost) || 0,
+        unit_cost,
+        last_buying_price: p.last_buying_price,
       }),
     ]);
   };
@@ -129,58 +200,16 @@ export function ExpenseLineItems({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-2">
-        {vendorId ? (
-          vendorParts.length === 0 ? (
-            <div className="text-xs text-muted-foreground">
-              {loadingParts
-                ? "Loading vendor parts…"
-                : "This vendor has no parts assigned. Add one on the vendor's page, or use Custom line below."}
-            </div>
-          ) : (
-            <div className="flex items-end gap-2">
-              <div>
-                <label className="text-xs text-muted-foreground">Add part from this vendor</label>
-                <Select
-                  onValueChange={(id) => {
-                    const vp = vendorParts.find((v) => v.id === id);
-                    if (vp) addVendorPart(vp);
-                  }}
-                  value=""
-                >
-                  <SelectTrigger className="w-[360px]">
-                    <SelectValue placeholder="Pick a part…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vendorParts.map((vp) =>
-                      vp.part ? (
-                        <SelectItem key={vp.id} value={vp.id}>
-                          {vp.part.part_number} — {vp.part.brand}
-                          {vp.part.description ? ` (${vp.part.description})` : ""}
-                          {" · "}
-                          {formatMoney(vp.cost)}
-                        </SelectItem>
-                      ) : null,
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )
-        ) : (
-          <div className="text-xs text-muted-foreground">
-            Pick a vendor above to see their parts. You can also add custom lines.
-          </div>
-        )}
-        <div className="ml-auto">
-          <Button type="button" variant="outline" size="sm" onClick={addBlankRow}>
-            <Plus className="size-4" /> Custom line
-          </Button>
+        <PartsCatalogPicker onPick={addPart} />
+        <div className="text-xs text-muted-foreground">
+          Pick a part to add a row. Non-itemised expenses (rent, utilities) can
+          leave items empty and enter Sub Total directly below.
         </div>
       </div>
 
       {items.length === 0 ? (
         <div className="rounded-md border p-4 text-sm text-center text-muted-foreground">
-          No line items yet. Add a part from the vendor or a custom line.
+          No line items yet. Add a part from the catalog above.
         </div>
       ) : (
         <div className="rounded-md border">
@@ -190,14 +219,19 @@ export function ExpenseLineItems({
                 <TableHead>Description</TableHead>
                 <TableHead className="w-24 text-right">Qty</TableHead>
                 <TableHead className="w-32 text-right">Unit cost</TableHead>
+                <TableHead className="w-32 text-right">Last buying price</TableHead>
                 <TableHead className="w-32 text-right">Line total</TableHead>
                 <TableHead className="w-12" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.map((row) => {
-                const lineTotal =
-                  (Number(row.quantity) || 0) * (Number(row.unit_cost) || 0);
+                const qty = Number(row.quantity) || 0;
+                const cost = Number(row.unit_cost) || 0;
+                const lineTotal = qty * cost;
+                const last = row.last_buying_price;
+                const drift =
+                  last != null && last > 0 ? (cost - last) / last : null;
                 return (
                   <TableRow key={row.client_id}>
                     <TableCell>
@@ -230,6 +264,27 @@ export function ExpenseLineItems({
                           patchRow(row.client_id, { unit_cost: Number(e.target.value) })
                         }
                       />
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {last != null ? (
+                        <div className="flex flex-col items-end">
+                          <span>{formatMoney(last)}</span>
+                          {drift != null && Math.abs(drift) >= 0.005 && (
+                            <span
+                              className={
+                                drift > 0
+                                  ? "text-[10px] text-amber-600"
+                                  : "text-[10px] text-emerald-600"
+                              }
+                            >
+                              {drift > 0 ? "+" : ""}
+                              {(drift * 100).toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatMoney(lineTotal)}

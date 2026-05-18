@@ -51,7 +51,7 @@ export default async function OilChangeDetailPage() {
         </Card>
       ) : (
         <Card>
-          <CardContent className="p-0 overflow-x-auto">
+          <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 sticky top-0 z-10">
                 <tr>

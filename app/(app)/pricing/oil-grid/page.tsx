@@ -72,9 +72,9 @@ export default async function OilGridPage() {
         </Card>
       ) : (
         <Card>
-          <CardContent className="p-0 overflow-x-auto">
+          <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50">
+              <thead className="bg-muted/50 sticky top-0 z-20">
                 <tr>
                   <th className="text-left p-2 sticky left-0 bg-muted/50 z-10">Engine</th>
                   <th className="text-right p-2 text-xs text-muted-foreground">Capacity</th>

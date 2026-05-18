@@ -425,15 +425,26 @@ export async function getAllFilterSellPrices(filter?: {
   const round99 = (n: number): number | null =>
     Number.isFinite(n) && n > 0 ? Math.ceil(n) - 0.01 : null;
 
-  type Row = PartJoinRow & { service_costs: { name: string; cost: number } | null };
+  type Row = PartJoinRow & {
+    service_costs: { name: string; cost: number } | null;
+    without_service_price: number | null;
+    with_service_price: number | null;
+    over_counter_price: number | null;
+  };
   const rows: FilterSellPriceRow[] = ((partsRes.data ?? []) as unknown as Row[]).map((r) => {
     const merged = mergePartCategory(r);
     const part = normalizePartPricing(merged);
     const svcCost = Number(r.service_costs?.cost ?? 0);
     const partBase = Number(part.cost) + Number(part.mhsw_fee);
-    const withSvc = round99(partBase + svcCost);
-    const withoutSvc = round99(partBase + svcCost + counterPremium);
-    const overCounter = withSvc;
+    // Manual override (per-part) wins over cost-up computation. Null override =
+    // fall back to the formula. The override columns are populated from the
+    // Excel "All Filter Sell Price" tab (see supabase/seed/may2026_*.sql).
+    const computedWithSvc = round99(partBase + svcCost);
+    const withSvc = r.with_service_price != null ? Number(r.with_service_price) : computedWithSvc;
+    const withoutSvc = r.without_service_price != null
+      ? Number(r.without_service_price)
+      : round99(partBase + svcCost + counterPremium);
+    const overCounter = r.over_counter_price != null ? Number(r.over_counter_price) : withSvc;
     // Excel "Customer Supplies Filter" is a flat $ value, NOT .99-rounded.
     const customerSupplies = customerSuppliesLabour;
     return {

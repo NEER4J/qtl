@@ -19,7 +19,7 @@ import { StatusBadge } from "@/components/sales/status-badge";
 import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { getSalesJob } from "@/lib/actions/sales";
-import { formatDate, formatMoney, formatTime } from "@/lib/utils/format";
+import { formatDate, formatMoney } from "@/lib/utils/format";
 
 export const dynamic = "force-dynamic";
 
@@ -140,15 +140,11 @@ export default async function SalesJobDetailPage({
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <Field label="Bay" value={job.bay_no != null ? String(job.bay_no) : null} />
+          <Field label="Start time" value={job.start_time ? job.start_time.slice(0, 5) : null} />
+          <Field label="End time" value={job.end_time ? job.end_time.slice(0, 5) : null} />
           <Field
-            label="Time"
-            value={
-              job.job_time
-                ? job.job_time.slice(0, 5)
-                : job.start_time
-                ? formatTime(job.start_time)
-                : null
-            }
+            label="Duration"
+            value={job.duration_minutes != null ? formatDurationMinutes(job.duration_minutes) : null}
           />
           <Field label="Advisor" value={job.advisor_name} />
           <Field label="Upper tech" value={job.upper_tech} />
@@ -158,9 +154,6 @@ export default async function SalesJobDetailPage({
             label="Payment mode"
             value={job.payment_mode ? PAYMENT_MODE_LABELS[job.payment_mode] : null}
           />
-          {job.duration_minutes != null && (
-            <Field label="Duration (legacy)" value={`${job.duration_minutes} min`} />
-          )}
         </CardContent>
         {job.comments && (
           <CardContent className="border-t pt-4">
@@ -298,4 +291,13 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
       <span className={`tabular-nums ${bold ? "font-semibold" : ""}`}>{value}</span>
     </div>
   );
+}
+
+function formatDurationMinutes(minutes: number): string {
+  if (minutes <= 0) return "0 min";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }

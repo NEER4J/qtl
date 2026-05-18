@@ -1,8 +1,9 @@
 "use client";
 
 import { useTransition } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
-import { EllipsisVertical, LogOut, Moon, Sun } from "lucide-react";
+import { EllipsisVertical, HelpCircle, LogOut, Moon, Sun, UserCircle } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -97,6 +98,18 @@ export function NavUser({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/profile">
+                <UserCircle />
+                Profile
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/help">
+                <HelpCircle />
+                Help
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={handleThemeToggle}>
               {theme === "dark" ? <Sun /> : <Moon />}
               {theme === "dark" ? "Light Mode" : "Dark Mode"}

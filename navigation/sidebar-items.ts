@@ -8,10 +8,8 @@ import {
   LineChart,
   Wallet,
   Settings,
-  UserCircle,
   BookText,
   Package,
-  HelpCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -53,7 +51,6 @@ export interface NavGroup {
 export const sidebarItems: NavGroup[] = [
   {
     id: 1,
-    label: "Overview",
     items: [
       {
         title: "Dashboard",
@@ -65,17 +62,12 @@ export const sidebarItems: NavGroup[] = [
   },
   {
     id: 2,
-    label: "Operations",
     items: [
       {
         title: "Sales",
         url: "/sales",
         icon: ClipboardList,
         roles: ["owner", "manager", "accountant", "staff"],
-        subItems: [
-          { title: "All Jobs", url: "/sales" },
-          { title: "New Job", url: "/sales/new", roles: ["owner", "manager", "staff"] },
-        ],
       },
       {
         title: "Invoices",
@@ -88,10 +80,6 @@ export const sidebarItems: NavGroup[] = [
         url: "/expenses",
         icon: Receipt,
         roles: ["owner", "manager", "accountant", "staff"],
-        subItems: [
-          { title: "All Expenses", url: "/expenses" },
-          { title: "New Expense", url: "/expenses/new", roles: ["owner", "manager", "accountant", "staff"] },
-        ],
       },
       {
         title: "Payroll",
@@ -103,7 +91,6 @@ export const sidebarItems: NavGroup[] = [
   },
   {
     id: 3,
-    label: "Directory",
     items: [
       {
         title: "Customers",
@@ -127,25 +114,14 @@ export const sidebarItems: NavGroup[] = [
           { title: "Filter price list", url: "/pricing/filters" },
           { title: "All filter sell price", url: "/pricing/all-filter-price" },
           { title: "Oil-change grid", url: "/pricing/oil-grid" },
-          { title: "Oil detail (per oil)", url: "/pricing/oil-detail" },
+          { title: "Oil detail", url: "/pricing/oil-detail" },
           { title: "Print list", url: "/pricing/print-list" },
-          { title: "Manage catalogue", url: "/settings/pricing", roles: ["owner"] },
-          { title: "Oil types", url: "/settings/pricing/oil-types", roles: ["owner"] },
-          { title: "Engine types", url: "/settings/pricing/engine-types", roles: ["owner"] },
-          { title: "Parts", url: "/settings/pricing/parts", roles: ["owner"] },
-          { title: "Packages", url: "/settings/pricing/packages", roles: ["owner"] },
-          { title: "Part categories", url: "/settings/pricing/categories", roles: ["owner"] },
-          { title: "Part brands", url: "/settings/pricing/brands", roles: ["owner"] },
-          { title: "Service costs", url: "/settings/pricing/service-costs", roles: ["owner"] },
-          { title: "Volume tiers", url: "/settings/pricing/volume-tiers", roles: ["owner"] },
-          { title: "Price history", url: "/settings/pricing/price-history", roles: ["owner"] },
         ],
       },
     ],
   },
   {
     id: 4,
-    label: "Analytics",
     items: [
       {
         title: "Analytics",
@@ -178,33 +154,22 @@ export const sidebarItems: NavGroup[] = [
   },
   {
     id: 5,
-    label: "Administration",
     items: [
       {
         title: "Settings",
         url: "/settings",
         icon: Settings,
-        roles: ["owner"],
+        roles: ["owner", "accountant"],
         subItems: [
-          { title: "Users", url: "/settings/users" },
-          { title: "Locations", url: "/settings/locations" },
-          { title: "Expense Categories", url: "/settings/categories" },
-          { title: "Service Types", url: "/settings/services" },
-          { title: "Pricing Catalogue", url: "/settings/pricing" },
-          { title: "Recurring Expenses", url: "/settings/recurring-expenses" },
-          { title: "Statutory Rates", url: "/settings/statutory-rates" },
+          { title: "Users", url: "/settings/users", roles: ["owner"] },
+          { title: "Locations", url: "/settings/locations", roles: ["owner"] },
+          { title: "Expense Categories", url: "/settings/categories", roles: ["owner"] },
+          { title: "Service Types", url: "/settings/services", roles: ["owner"] },
+          { title: "Pricing Catalogue", url: "/settings/pricing", roles: ["owner"] },
+          { title: "Recurring Expenses", url: "/settings/recurring-expenses", roles: ["owner"] },
+          { title: "Statutory Rates", url: "/settings/statutory-rates", roles: ["owner"] },
           { title: "Audit Log", url: "/settings/audit-log", roles: ["owner", "accountant"] },
         ],
-      },
-      {
-        title: "Help",
-        url: "/help",
-        icon: HelpCircle,
-      },
-      {
-        title: "Profile",
-        url: "/profile",
-        icon: UserCircle,
       },
     ],
   },
