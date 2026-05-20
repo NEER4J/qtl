@@ -230,7 +230,13 @@ def collect_engine_oil_prices(wb) -> tuple[list[tuple[str, str, str, float]], di
                 skipped[label] += 1
                 continue
             _, _, canonical = ENGINE_LABEL_MAPPING[label]
-            rows.append((canonical, oil_code, container, float(price)))
+            # The bulk per-oil tabs have col B already rounded to .99 endings,
+            # but the gallon tabs have col B as the raw "bulk + tier premium"
+            # value (e.g. 317.74). Excel's Print List rounds it via
+            # ceil(raw) - 0.01 on display. Apply the same rounding here so the
+            # stored sell_price matches what staff see on the Print List.
+            # Idempotent for already-rounded values.
+            rows.append((canonical, oil_code, container, round_99(float(price))))
             # Litre capacity lives in column F (index 6) on every per-oil tab.
             cap = sh.cell(r, 6).value
             if isinstance(cap, (int, float)) and cap > 0 and canonical not in capacities:

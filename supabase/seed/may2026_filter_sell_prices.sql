@@ -89,6 +89,9 @@ update public.parts set without_service_price = 40.99, with_service_price    = n
 update public.parts set without_service_price = 40.99, with_service_price    = null, over_counter_price    = 23.99
   where part_number = '23530707';
 
+update public.parts set without_service_price = 129.99, with_service_price    = 119.99, over_counter_price    = 104.99
+  where part_number = 'A0000903651';
+
 update public.parts set without_service_price = 135.99, with_service_price    = null, over_counter_price    = 120.99
   where part_number = 'A4700903151';
 
@@ -316,4 +319,4 @@ update public.parts set without_service_price = 97.99, with_service_price    = n
 
 commit;
 
--- Matched 102 parts. 661 Excel rows had no matching part_number in DB (see report).
+-- Matched 103 parts. 660 Excel rows had no matching part_number in DB (see report).

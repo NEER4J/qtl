@@ -16,6 +16,7 @@ import { EditableSellingCell } from "@/components/pricing/editable-selling-cell"
 import { requireProfile } from "@/lib/auth/require";
 import { getOilDetail } from "@/lib/actions/pricing";
 import { formatMoney } from "@/lib/utils/format";
+import { excelOilLabel } from "@/lib/utils/oil-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -43,11 +44,11 @@ export default async function OilDetailPage({
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
-          {data.oil_type.name}{" "}
+          {excelOilLabel(data.oil_type.code, data.oil_type.name)}{" "}
           <Badge variant="outline" className="ml-2 align-middle">{container}</Badge>
         </h1>
         <p className="text-sm text-muted-foreground">
-          Per-engine breakdown: oil + filter + labour + tier premium → selling price
+          {data.oil_type.name} · Per-engine breakdown: oil + filter + labour + tier premium → selling price
         </p>
       </div>
 
@@ -59,9 +60,9 @@ export default async function OilDetailPage({
             key={o.id}
             href={`/pricing/oil-detail/${encodeURIComponent(o.code)}?container=${container}`}
             className={`px-2 py-1 rounded-md text-xs border ${o.code === data.oil_type.code ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"}`}
-            title={o.code}
+            title={o.name}
           >
-            {o.name}
+            {excelOilLabel(o.code, o.name)}
           </Link>
         ))}
         <span className="mx-2 text-muted-foreground">·</span>

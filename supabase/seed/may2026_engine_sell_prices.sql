@@ -391,385 +391,385 @@ select e.id, o.id, 'bulk', 492.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 317.74
+select e.id, o.id, 'gallon', 317.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C7/C10/3126 With Cat Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 295.74
+select e.id, o.id, 'gallon', 295.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C7/C10/3126 With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 405.85
+select e.id, o.id, 'gallon', 405.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Cat Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 364.85
+select e.id, o.id, 'gallon', 364.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 438.20
+select e.id, o.id, 'gallon', 438.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Cat Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 397.20
+select e.id, o.id, 'gallon', 397.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 380.79
+select e.id, o.id, 'gallon', 380.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins N14'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 201.57
+select e.id, o.id, 'gallon', 201.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins 5.9L/6.7L'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 309.74
+select e.id, o.id, 'gallon', 309.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISC/ISL'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 307.74
+select e.id, o.id, 'gallon', 307.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISB'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 360.91
+select e.id, o.id, 'gallon', 360.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISM'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 463.67
+select e.id, o.id, 'gallon', 463.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISX/X15'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 340.97
+select e.id, o.id, 'gallon', 340.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins M11'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 420.85
+select e.id, o.id, 'gallon', 420.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Detroit Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 472.03
+select e.id, o.id, 'gallon', 472.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD8 With Detroit Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 497.73
+select e.id, o.id, 'gallon', 497.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Detroit Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 475.73
+select e.id, o.id, 'gallon', 475.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 373.85
+select e.id, o.id, 'gallon', 373.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 201.57
+select e.id, o.id, 'gallon', 201.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Duramax / Vortec 8100L'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 201.57
+select e.id, o.id, 'gallon', 201.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Ford F250/F350/F550/F650'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 300.57
+select e.id, o.id, 'gallon', 300.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Hino Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 230.57
+select e.id, o.id, 'gallon', 230.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 319.21
+select e.id, o.id, 'gallon', 319.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 587.61
+select e.id, o.id, 'gallon', 587.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International S13'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 295.57
+select e.id, o.id, 'gallon', 295.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Vista'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 246.57
+select e.id, o.id, 'gallon', 246.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 306.57
+select e.id, o.id, 'gallon', 306.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Isuzu Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 434.85
+select e.id, o.id, 'gallon', 434.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 505.85
+select e.id, o.id, 'gallon', 505.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Mack Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 542.84
+select e.id, o.id, 'gallon', 542.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 615.84
+select e.id, o.id, 'gallon', 615.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Mack Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 388.85
+select e.id, o.id, 'gallon', 388.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 479.43
+select e.id, o.id, 'gallon', 479.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 497.85
+select e.id, o.id, 'gallon', 497.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Mack Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 591.43
+select e.id, o.id, 'gallon', 591.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Mack Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 489.21
+select e.id, o.id, 'gallon', 489.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With MaxForce Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 410.21
+select e.id, o.id, 'gallon', 410.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 505.85
+select e.id, o.id, 'gallon', 505.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With MaxForce Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 427.85
+select e.id, o.id, 'gallon', 427.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 454.08
+select e.id, o.id, 'gallon', 454.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Mercedes Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 432.08
+select e.id, o.id, 'gallon', 432.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 333.21
+select e.id, o.id, 'gallon', 333.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Mercedes Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 295.21
+select e.id, o.id, 'gallon', 295.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 270.27
+select e.id, o.id, 'gallon', 270.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz Sprinter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 259.10
+select e.id, o.id, 'gallon', 259.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mitsubishi Engine'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 300.21
+select e.id, o.id, 'gallon', 300.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Navistar'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 546.61
+select e.id, o.id, 'gallon', 546.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Paccar Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 467.61
+select e.id, o.id, 'gallon', 467.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 280.27
+select e.id, o.id, 'gallon', 280.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar Small'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 410.97
+select e.id, o.id, 'gallon', 410.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 461.73
+select e.id, o.id, 'gallon', 461.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 526.43
+select e.id, o.id, 'gallon', 526.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Fleetguard Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 479.97
+select e.id, o.id, 'gallon', 479.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Volvo Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 531.73
+select e.id, o.id, 'gallon', 531.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Volvo Filter'
    and o.code = '257004'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 594.43
+select e.id, o.id, 'gallon', 594.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Volvo Filter'
    and o.code = '257004'
@@ -1154,14 +1154,14 @@ select e.id, o.id, 'bulk', 527.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 355.33
+select e.id, o.id, 'gallon', 355.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C7/C10/3126 With Cat Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 333.33
+select e.id, o.id, 'gallon', 333.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C7/C10/3126 With Fleetguard Filter'
    and o.code = '10'
@@ -1182,63 +1182,63 @@ select e.id, o.id, 'gallon', 408.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 489.85
+select e.id, o.id, 'gallon', 489.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Cat Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 448.85
+select e.id, o.id, 'gallon', 448.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Fleetguard Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 430.93
+select e.id, o.id, 'gallon', 430.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins N14'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 223.62
+select e.id, o.id, 'gallon', 223.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins 5.9L/6.7L'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 347.33
+select e.id, o.id, 'gallon', 347.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISC/ISL'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 345.33
+select e.id, o.id, 'gallon', 345.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISB'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 404.04
+select e.id, o.id, 'gallon', 404.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISM'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 515.83
+select e.id, o.id, 'gallon', 515.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISX/X15'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 383.09
+select e.id, o.id, 'gallon', 383.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins M11'
    and o.code = '10'
@@ -1252,21 +1252,21 @@ select e.id, o.id, 'gallon', 464.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 513.15
+select e.id, o.id, 'gallon', 513.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD8 With Detroit Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 548.88
+select e.id, o.id, 'gallon', 548.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Detroit Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 526.88
+select e.id, o.id, 'gallon', 526.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Fleetguard Filter'
    and o.code = '10'
@@ -1280,63 +1280,63 @@ select e.id, o.id, 'gallon', 417.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 223.62
+select e.id, o.id, 'gallon', 223.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Duramax / Vortec 8100L'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 223.62
+select e.id, o.id, 'gallon', 223.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Ford F250/F350/F550/F650'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 322.62
+select e.id, o.id, 'gallon', 322.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Hino Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 252.62
+select e.id, o.id, 'gallon', 252.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Fleetguard Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 357.30
+select e.id, o.id, 'gallon', 357.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International With Fleetguard Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 640.78
+select e.id, o.id, 'gallon', 640.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International S13'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 302.62
+select e.id, o.id, 'gallon', 302.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Vista'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 268.62
+select e.id, o.id, 'gallon', 268.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Fleetguard Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 328.62
+select e.id, o.id, 'gallon', 328.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Isuzu Filter'
    and o.code = '10'
@@ -1357,14 +1357,14 @@ select e.id, o.id, 'gallon', 549.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 600.54
+select e.id, o.id, 'gallon', 600.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Fleetguard Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 673.54
+select e.id, o.id, 'gallon', 673.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Mack Filter'
    and o.code = '10'
@@ -1378,7 +1378,7 @@ select e.id, o.id, 'gallon', 437.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 540.62
+select e.id, o.id, 'gallon', 540.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Fleetguard Filter'
    and o.code = '10'
@@ -1392,21 +1392,21 @@ select e.id, o.id, 'gallon', 541.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 652.62
+select e.id, o.id, 'gallon', 652.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Mack Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 527.30
+select e.id, o.id, 'gallon', 527.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With MaxForce Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 448.30
+select e.id, o.id, 'gallon', 448.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With Fleetguard Filter'
    and o.code = '10'
@@ -1427,112 +1427,112 @@ select e.id, o.id, 'gallon', 471.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 507.75
+select e.id, o.id, 'gallon', 507.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Mercedes Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 485.75
+select e.id, o.id, 'gallon', 485.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Fleetguard Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 371.30
+select e.id, o.id, 'gallon', 371.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Mercedes Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 333.30
+select e.id, o.id, 'gallon', 333.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Fleetguard Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 302.36
+select e.id, o.id, 'gallon', 302.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz Sprinter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 280.65
+select e.id, o.id, 'gallon', 280.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mitsubishi Engine'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 338.30
+select e.id, o.id, 'gallon', 338.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Navistar'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 599.78
+select e.id, o.id, 'gallon', 599.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Paccar Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 520.78
+select e.id, o.id, 'gallon', 520.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Fleetguard Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 317.36
+select e.id, o.id, 'gallon', 317.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar Small'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 453.09
+select e.id, o.id, 'gallon', 453.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Fleetguard Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 512.88
+select e.id, o.id, 'gallon', 512.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Fleetguard Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 587.62
+select e.id, o.id, 'gallon', 587.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Fleetguard Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 522.09
+select e.id, o.id, 'gallon', 522.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Volvo Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 582.88
+select e.id, o.id, 'gallon', 582.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Volvo Filter'
    and o.code = '10'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 655.62
+select e.id, o.id, 'gallon', 655.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Volvo Filter'
    and o.code = '10'
@@ -1924,385 +1924,385 @@ select e.id, o.id, 'bulk', 527.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 372.01
+select e.id, o.id, 'gallon', 372.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C7/C10/3126 With Cat Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 350.01
+select e.id, o.id, 'gallon', 350.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C7/C10/3126 With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 475.34
+select e.id, o.id, 'gallon', 475.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Cat Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 434.34
+select e.id, o.id, 'gallon', 434.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 518.54
+select e.id, o.id, 'gallon', 518.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Cat Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 477.54
+select e.id, o.id, 'gallon', 477.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 457.62
+select e.id, o.id, 'gallon', 457.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins N14'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 232.96
+select e.id, o.id, 'gallon', 232.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins 5.9L/6.7L'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 364.01
+select e.id, o.id, 'gallon', 364.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISC/ISL'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 362.01
+select e.id, o.id, 'gallon', 362.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISB'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 428.05
+select e.id, o.id, 'gallon', 428.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISM'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 545.18
+select e.id, o.id, 'gallon', 545.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISX/X15'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 405.77
+select e.id, o.id, 'gallon', 405.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins M11'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 490.34
+select e.id, o.id, 'gallon', 490.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Detroit Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 534.49
+select e.id, o.id, 'gallon', 534.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD8 With Detroit Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 576.90
+select e.id, o.id, 'gallon', 576.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Detroit Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 554.90
+select e.id, o.id, 'gallon', 554.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 443.34
+select e.id, o.id, 'gallon', 443.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 232.96
+select e.id, o.id, 'gallon', 232.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Duramax / Vortec 8100L'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 232.96
+select e.id, o.id, 'gallon', 232.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Ford F250/F350/F550/F650'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 331.96
+select e.id, o.id, 'gallon', 331.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Hino Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 261.96
+select e.id, o.id, 'gallon', 261.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 374.65
+select e.id, o.id, 'gallon', 374.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 671.46
+select e.id, o.id, 'gallon', 671.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International S13'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 311.96
+select e.id, o.id, 'gallon', 311.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Vista'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 277.96
+select e.id, o.id, 'gallon', 277.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 337.96
+select e.id, o.id, 'gallon', 337.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Isuzu Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 504.34
+select e.id, o.id, 'gallon', 504.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 575.34
+select e.id, o.id, 'gallon', 575.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Mack Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 637.23
+select e.id, o.id, 'gallon', 637.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 710.23
+select e.id, o.id, 'gallon', 710.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Mack Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 458.34
+select e.id, o.id, 'gallon', 458.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 575.30
+select e.id, o.id, 'gallon', 575.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 567.34
+select e.id, o.id, 'gallon', 567.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Mack Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 687.30
+select e.id, o.id, 'gallon', 687.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Mack Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 544.65
+select e.id, o.id, 'gallon', 544.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With MaxForce Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 465.65
+select e.id, o.id, 'gallon', 465.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 575.34
+select e.id, o.id, 'gallon', 575.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With MaxForce Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 497.34
+select e.id, o.id, 'gallon', 497.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 539.10
+select e.id, o.id, 'gallon', 539.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Mercedes Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 517.10
+select e.id, o.id, 'gallon', 517.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 388.65
+select e.id, o.id, 'gallon', 388.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Mercedes Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 350.65
+select e.id, o.id, 'gallon', 350.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 318.37
+select e.id, o.id, 'gallon', 318.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz Sprinter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 289.32
+select e.id, o.id, 'gallon', 289.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mitsubishi Engine'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 355.65
+select e.id, o.id, 'gallon', 355.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Navistar'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 630.46
+select e.id, o.id, 'gallon', 630.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Paccar Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 551.46
+select e.id, o.id, 'gallon', 551.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 333.37
+select e.id, o.id, 'gallon', 333.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar Small'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 475.77
+select e.id, o.id, 'gallon', 475.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 540.90
+select e.id, o.id, 'gallon', 540.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 622.30
+select e.id, o.id, 'gallon', 622.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Fleetguard Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 544.77
+select e.id, o.id, 'gallon', 544.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Volvo Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 610.90
+select e.id, o.id, 'gallon', 610.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Volvo Filter'
    and o.code = '500010047'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 690.30
+select e.id, o.id, 'gallon', 690.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Volvo Filter'
    and o.code = '500010047'
@@ -2694,42 +2694,42 @@ select e.id, o.id, 'bulk', 527.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 319.74
+select e.id, o.id, 'gallon', 319.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C7/C10/3126 With Cat Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 297.74
+select e.id, o.id, 'gallon', 297.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C7/C10/3126 With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 395.89
+select e.id, o.id, 'gallon', 395.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Cat Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 354.89
+select e.id, o.id, 'gallon', 354.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 428.64
+select e.id, o.id, 'gallon', 428.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Cat Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 387.64
+select e.id, o.id, 'gallon', 387.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Fleetguard Filter'
    and o.code = '21'
@@ -2743,336 +2743,336 @@ select e.id, o.id, 'gallon', 373.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 203.69
+select e.id, o.id, 'gallon', 203.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins 5.9L/6.7L'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 311.74
+select e.id, o.id, 'gallon', 311.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISC/ISL'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 309.74
+select e.id, o.id, 'gallon', 309.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISB'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 352.79
+select e.id, o.id, 'gallon', 352.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISM'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 453.19
+select e.id, o.id, 'gallon', 453.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISX/X15'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 334.69
+select e.id, o.id, 'gallon', 334.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins M11'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 410.89
+select e.id, o.id, 'gallon', 410.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Detroit Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 467.59
+select e.id, o.id, 'gallon', 467.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD8 With Detroit Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 489.09
+select e.id, o.id, 'gallon', 489.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Detroit Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 467.09
+select e.id, o.id, 'gallon', 467.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 363.89
+select e.id, o.id, 'gallon', 363.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 203.69
+select e.id, o.id, 'gallon', 203.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Duramax / Vortec 8100L'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 203.69
+select e.id, o.id, 'gallon', 203.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Ford F250/F350/F550/F650'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 302.69
+select e.id, o.id, 'gallon', 302.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Hino Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 232.69
+select e.id, o.id, 'gallon', 232.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 320.29
+select e.id, o.id, 'gallon', 320.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 575.29
+select e.id, o.id, 'gallon', 575.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International S13'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 282.69
+select e.id, o.id, 'gallon', 282.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Vista'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 248.69
+select e.id, o.id, 'gallon', 248.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 308.69
+select e.id, o.id, 'gallon', 308.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Isuzu Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 424.89
+select e.id, o.id, 'gallon', 424.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 495.89
+select e.id, o.id, 'gallon', 495.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Mack Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 527.24
+select e.id, o.id, 'gallon', 527.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 600.24
+select e.id, o.id, 'gallon', 600.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Mack Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 378.89
+select e.id, o.id, 'gallon', 378.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 466.59
+select e.id, o.id, 'gallon', 466.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 487.89
+select e.id, o.id, 'gallon', 487.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Mack Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 578.59
+select e.id, o.id, 'gallon', 578.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Mack Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 490.29
+select e.id, o.id, 'gallon', 490.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With MaxForce Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 411.29
+select e.id, o.id, 'gallon', 411.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 495.89
+select e.id, o.id, 'gallon', 495.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With MaxForce Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 417.89
+select e.id, o.id, 'gallon', 417.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 440.84
+select e.id, o.id, 'gallon', 440.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Mercedes Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 418.84
+select e.id, o.id, 'gallon', 418.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 334.29
+select e.id, o.id, 'gallon', 334.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Mercedes Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 296.29
+select e.id, o.id, 'gallon', 296.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 273.19
+select e.id, o.id, 'gallon', 273.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz Sprinter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 262.14
+select e.id, o.id, 'gallon', 262.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mitsubishi Engine'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 301.29
+select e.id, o.id, 'gallon', 301.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Navistar'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 534.29
+select e.id, o.id, 'gallon', 534.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Paccar Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 455.29
+select e.id, o.id, 'gallon', 455.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 283.19
+select e.id, o.id, 'gallon', 283.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar Small'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 404.69
+select e.id, o.id, 'gallon', 404.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 453.09
+select e.id, o.id, 'gallon', 453.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 513.59
+select e.id, o.id, 'gallon', 513.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Fleetguard Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 473.69
+select e.id, o.id, 'gallon', 473.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Volvo Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 523.09
+select e.id, o.id, 'gallon', 523.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Volvo Filter'
    and o.code = '21'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 556.59
+select e.id, o.id, 'gallon', 556.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Volvo Filter'
    and o.code = '21'
@@ -3093,42 +3093,42 @@ select e.id, o.id, 'bulk', 339.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 454.91
+select e.id, o.id, 'bulk', 454.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Cat Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 413.91
+select e.id, o.id, 'bulk', 413.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 494.11
+select e.id, o.id, 'bulk', 494.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Cat Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 453.11
+select e.id, o.id, 'bulk', 453.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 435.59
+select e.id, o.id, 'bulk', 435.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins N14'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 226.75
+select e.id, o.id, 'bulk', 226.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins 5.9L/6.7L'
    and o.code = '14'
@@ -3149,98 +3149,98 @@ select e.id, o.id, 'bulk', 351.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 409.23
+select e.id, o.id, 'bulk', 409.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISM'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 519.95
+select e.id, o.id, 'bulk', 519.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISX/X15'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 388.55
+select e.id, o.id, 'bulk', 388.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins M11'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 469.91
+select e.id, o.id, 'bulk', 469.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Detroit Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 518.87
+select e.id, o.id, 'bulk', 518.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD8 With Detroit Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 553.27
+select e.id, o.id, 'bulk', 553.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Detroit Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 531.27
+select e.id, o.id, 'bulk', 531.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 422.91
+select e.id, o.id, 'bulk', 422.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 226.75
+select e.id, o.id, 'bulk', 226.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Duramax / Vortec 8100L'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 226.75
+select e.id, o.id, 'bulk', 226.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Ford F250/F350/F550/F650'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 325.75
+select e.id, o.id, 'bulk', 325.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Hino Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 255.75
+select e.id, o.id, 'bulk', 255.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 363.83
+select e.id, o.id, 'bulk', 363.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 644.63
+select e.id, o.id, 'bulk', 644.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International S13'
    and o.code = '14'
@@ -3254,595 +3254,595 @@ select e.id, o.id, 'bulk', 398.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 291.75
+select e.id, o.id, 'bulk', 291.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 361.75
+select e.id, o.id, 'bulk', 361.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Isuzu Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 483.91
+select e.id, o.id, 'bulk', 483.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 554.91
+select e.id, o.id, 'bulk', 554.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Mack Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 608.19
+select e.id, o.id, 'bulk', 608.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 681.19
+select e.id, o.id, 'bulk', 681.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Mack Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 437.91
+select e.id, o.id, 'bulk', 437.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 543.67
+select e.id, o.id, 'bulk', 543.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 546.91
+select e.id, o.id, 'bulk', 546.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Mack Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 655.67
+select e.id, o.id, 'bulk', 655.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Mack Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 533.83
+select e.id, o.id, 'bulk', 533.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With MaxForce Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 454.83
+select e.id, o.id, 'bulk', 454.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 554.91
+select e.id, o.id, 'bulk', 554.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With MaxForce Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 476.91
+select e.id, o.id, 'bulk', 476.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 511.47
+select e.id, o.id, 'bulk', 511.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Mercedes Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 489.47
+select e.id, o.id, 'bulk', 489.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 377.83
+select e.id, o.id, 'bulk', 377.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Mercedes Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 339.83
+select e.id, o.id, 'bulk', 339.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 314.15
+select e.id, o.id, 'bulk', 314.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz Sprinter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 283.91
+select e.id, o.id, 'bulk', 283.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mitsubishi Engine'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 344.83
+select e.id, o.id, 'bulk', 344.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Navistar'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 603.63
+select e.id, o.id, 'bulk', 603.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Paccar Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 524.63
+select e.id, o.id, 'bulk', 524.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 324.15
+select e.id, o.id, 'bulk', 324.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar Small'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 458.55
+select e.id, o.id, 'bulk', 458.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 517.27
+select e.id, o.id, 'bulk', 517.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 590.67
+select e.id, o.id, 'bulk', 590.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 527.55
+select e.id, o.id, 'bulk', 527.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Volvo Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 587.27
+select e.id, o.id, 'bulk', 587.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Volvo Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 658.67
+select e.id, o.id, 'bulk', 658.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Volvo Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 433.79
+select e.id, o.id, 'gallon', 433.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C7/C10/3126 With Cat Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 411.79
+select e.id, o.id, 'gallon', 411.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C7/C10/3126 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 556.25
+select e.id, o.id, 'gallon', 556.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Cat Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 515.25
+select e.id, o.id, 'gallon', 515.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 611.81
+select e.id, o.id, 'gallon', 611.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Cat Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 570.81
+select e.id, o.id, 'gallon', 570.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 546.47
+select e.id, o.id, 'gallon', 546.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins N14'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 268.56
+select e.id, o.id, 'gallon', 268.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins 5.9L/6.7L'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 425.79
+select e.id, o.id, 'gallon', 425.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISC/ISL'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 423.79
+select e.id, o.id, 'gallon', 423.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISB'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 511.02
+select e.id, o.id, 'gallon', 511.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISM'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 639.92
+select e.id, o.id, 'gallon', 639.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISX/X15'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 480.80
+select e.id, o.id, 'gallon', 480.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins M11'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 571.25
+select e.id, o.id, 'gallon', 571.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Detroit Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 606.57
+select e.id, o.id, 'gallon', 606.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD8 With Detroit Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 668.69
+select e.id, o.id, 'gallon', 668.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Detroit Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 646.69
+select e.id, o.id, 'gallon', 646.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 524.25
+select e.id, o.id, 'gallon', 524.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 268.56
+select e.id, o.id, 'gallon', 268.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Duramax / Vortec 8100L'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 268.56
+select e.id, o.id, 'gallon', 268.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Ford F250/F350/F550/F650'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 367.56
+select e.id, o.id, 'gallon', 367.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Hino Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 297.56
+select e.id, o.id, 'gallon', 297.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 437.90
+select e.id, o.id, 'gallon', 437.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 769.14
+select e.id, o.id, 'gallon', 769.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International S13'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 440.80
+select e.id, o.id, 'gallon', 440.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Vista'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 333.56
+select e.id, o.id, 'gallon', 333.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 403.56
+select e.id, o.id, 'gallon', 403.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Isuzu Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 585.25
+select e.id, o.id, 'gallon', 585.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 656.25
+select e.id, o.id, 'gallon', 656.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Mack Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 758.15
+select e.id, o.id, 'gallon', 758.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 831.15
+select e.id, o.id, 'gallon', 831.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Mack Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 539.25
+select e.id, o.id, 'gallon', 539.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 686.81
+select e.id, o.id, 'gallon', 686.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 648.25
+select e.id, o.id, 'gallon', 648.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Mack Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 798.81
+select e.id, o.id, 'gallon', 798.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Mack Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 607.90
+select e.id, o.id, 'gallon', 607.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With MaxForce Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 528.90
+select e.id, o.id, 'gallon', 528.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 656.25
+select e.id, o.id, 'gallon', 656.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With MaxForce Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 578.25
+select e.id, o.id, 'gallon', 578.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 643.25
+select e.id, o.id, 'gallon', 643.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Mercedes Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 621.25
+select e.id, o.id, 'gallon', 621.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 451.90
+select e.id, o.id, 'gallon', 451.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Mercedes Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 413.90
+select e.id, o.id, 'gallon', 413.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 360.50
+select e.id, o.id, 'gallon', 360.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz Sprinter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 323.45
+select e.id, o.id, 'gallon', 323.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mitsubishi Engine'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 418.90
+select e.id, o.id, 'gallon', 418.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Navistar'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 728.14
+select e.id, o.id, 'gallon', 728.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Paccar Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 649.14
+select e.id, o.id, 'gallon', 649.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 393.68
+select e.id, o.id, 'gallon', 393.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar Small'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 550.80
+select e.id, o.id, 'gallon', 550.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 632.69
+select e.id, o.id, 'gallon', 632.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 733.81
+select e.id, o.id, 'gallon', 733.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Fleetguard Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 619.80
+select e.id, o.id, 'gallon', 619.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Volvo Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 702.69
+select e.id, o.id, 'gallon', 702.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Volvo Filter'
    and o.code = '14'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 801.81
+select e.id, o.id, 'gallon', 801.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Volvo Filter'
    and o.code = '14'
@@ -3863,42 +3863,42 @@ select e.id, o.id, 'bulk', 359.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 485.31
+select e.id, o.id, 'bulk', 485.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Cat Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 444.31
+select e.id, o.id, 'bulk', 444.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 528.51
+select e.id, o.id, 'bulk', 528.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Cat Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 487.51
+select e.id, o.id, 'bulk', 487.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 467.59
+select e.id, o.id, 'bulk', 467.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins N14'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 237.95
+select e.id, o.id, 'bulk', 237.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins 5.9L/6.7L'
    and o.code = '11'
@@ -3919,98 +3919,98 @@ select e.id, o.id, 'bulk', 371.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 438.03
+select e.id, o.id, 'bulk', 438.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISM'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 555.15
+select e.id, o.id, 'bulk', 555.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISX/X15'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 415.75
+select e.id, o.id, 'bulk', 415.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins M11'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 500.31
+select e.id, o.id, 'bulk', 500.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Detroit Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 544.47
+select e.id, o.id, 'bulk', 544.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD8 With Detroit Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 586.87
+select e.id, o.id, 'bulk', 586.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Detroit Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 564.87
+select e.id, o.id, 'bulk', 564.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 453.31
+select e.id, o.id, 'bulk', 453.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 237.95
+select e.id, o.id, 'bulk', 237.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Duramax / Vortec 8100L'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 237.95
+select e.id, o.id, 'bulk', 237.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Ford F250/F350/F550/F650'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 336.95
+select e.id, o.id, 'bulk', 336.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Hino Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 266.95
+select e.id, o.id, 'bulk', 266.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 384.63
+select e.id, o.id, 'bulk', 384.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 681.43
+select e.id, o.id, 'bulk', 681.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International S13'
    and o.code = '11'
@@ -4024,287 +4024,287 @@ select e.id, o.id, 'bulk', 279.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 302.95
+select e.id, o.id, 'bulk', 302.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 372.95
+select e.id, o.id, 'bulk', 372.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Isuzu Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 514.31
+select e.id, o.id, 'bulk', 514.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 585.31
+select e.id, o.id, 'bulk', 585.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Mack Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 652.19
+select e.id, o.id, 'bulk', 652.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 725.19
+select e.id, o.id, 'bulk', 725.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Mack Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 468.31
+select e.id, o.id, 'bulk', 468.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 585.27
+select e.id, o.id, 'bulk', 585.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 577.31
+select e.id, o.id, 'bulk', 577.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Mack Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 697.27
+select e.id, o.id, 'bulk', 697.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Mack Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 554.63
+select e.id, o.id, 'bulk', 554.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With MaxForce Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 475.63
+select e.id, o.id, 'bulk', 475.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 585.31
+select e.id, o.id, 'bulk', 585.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With MaxForce Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 507.31
+select e.id, o.id, 'bulk', 507.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 549.07
+select e.id, o.id, 'bulk', 549.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Mercedes Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 527.07
+select e.id, o.id, 'bulk', 527.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 398.63
+select e.id, o.id, 'bulk', 398.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Mercedes Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 360.63
+select e.id, o.id, 'bulk', 360.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 333.35
+select e.id, o.id, 'bulk', 333.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz Sprinter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 294.31
+select e.id, o.id, 'bulk', 294.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mitsubishi Engine'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 365.63
+select e.id, o.id, 'bulk', 365.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Navistar'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 640.43
+select e.id, o.id, 'bulk', 640.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Paccar Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 561.43
+select e.id, o.id, 'bulk', 561.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 343.35
+select e.id, o.id, 'bulk', 343.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar Small'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 485.75
+select e.id, o.id, 'bulk', 485.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 550.87
+select e.id, o.id, 'bulk', 550.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 632.27
+select e.id, o.id, 'bulk', 632.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 554.75
+select e.id, o.id, 'bulk', 554.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Volvo Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 620.87
+select e.id, o.id, 'bulk', 620.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Volvo Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 700.27
+select e.id, o.id, 'bulk', 700.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Volvo Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 438.95
+select e.id, o.id, 'gallon', 438.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C7/C10/3126 With Cat Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 416.95
+select e.id, o.id, 'gallon', 416.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C7/C10/3126 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 564.08
+select e.id, o.id, 'gallon', 564.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Cat Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 523.08
+select e.id, o.id, 'gallon', 523.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 620.67
+select e.id, o.id, 'gallon', 620.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Cat Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 579.67
+select e.id, o.id, 'gallon', 579.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 554.72
+select e.id, o.id, 'gallon', 554.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins N14'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 271.45
+select e.id, o.id, 'gallon', 271.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins 5.9L/6.7L'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 430.95
+select e.id, o.id, 'gallon', 430.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISC/ISL'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 428.95
+select e.id, o.id, 'gallon', 428.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISB'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 513.45
+select e.id, o.id, 'gallon', 513.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISM'
    and o.code = '11'
@@ -4318,343 +4318,343 @@ select e.id, o.id, 'gallon', 648.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 487.81
+select e.id, o.id, 'gallon', 487.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins M11'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 579.08
+select e.id, o.id, 'gallon', 579.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Detroit Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 613.17
+select e.id, o.id, 'gallon', 613.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD8 With Detroit Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 677.36
+select e.id, o.id, 'gallon', 677.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Detroit Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 655.36
+select e.id, o.id, 'gallon', 655.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 532.08
+select e.id, o.id, 'gallon', 532.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 271.45
+select e.id, o.id, 'gallon', 271.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Duramax / Vortec 8100L'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 271.45
+select e.id, o.id, 'gallon', 271.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Ford F250/F350/F550/F650'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 370.45
+select e.id, o.id, 'gallon', 370.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Hino Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 300.45
+select e.id, o.id, 'gallon', 300.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 443.26
+select e.id, o.id, 'gallon', 443.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 778.63
+select e.id, o.id, 'gallon', 778.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International S13'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 313.49
+select e.id, o.id, 'gallon', 313.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Vista'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 341.45
+select e.id, o.id, 'gallon', 341.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 416.45
+select e.id, o.id, 'gallon', 416.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Isuzu Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 593.08
+select e.id, o.id, 'gallon', 593.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 664.08
+select e.id, o.id, 'gallon', 664.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Mack Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 764.49
+select e.id, o.id, 'gallon', 764.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 837.49
+select e.id, o.id, 'gallon', 837.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Mack Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 547.08
+select e.id, o.id, 'gallon', 547.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 697.54
+select e.id, o.id, 'gallon', 697.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 656.08
+select e.id, o.id, 'gallon', 656.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Mack Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 809.54
+select e.id, o.id, 'gallon', 809.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Mack Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 613.26
+select e.id, o.id, 'gallon', 613.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With MaxForce Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 534.26
+select e.id, o.id, 'gallon', 534.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 664.08
+select e.id, o.id, 'gallon', 664.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With MaxForce Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 586.08
+select e.id, o.id, 'gallon', 586.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 647.95
+select e.id, o.id, 'gallon', 647.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Mercedes Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 625.95
+select e.id, o.id, 'gallon', 625.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 457.26
+select e.id, o.id, 'gallon', 457.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Mercedes Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 419.26
+select e.id, o.id, 'gallon', 419.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 383.63
+select e.id, o.id, 'gallon', 383.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz Sprinter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 326.13
+select e.id, o.id, 'gallon', 326.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mitsubishi Engine'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 424.26
+select e.id, o.id, 'gallon', 424.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Navistar'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 737.63
+select e.id, o.id, 'gallon', 737.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Paccar Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 658.63
+select e.id, o.id, 'gallon', 658.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 398.63
+select e.id, o.id, 'gallon', 398.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar Small'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 557.81
+select e.id, o.id, 'gallon', 557.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 641.36
+select e.id, o.id, 'gallon', 641.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 744.54
+select e.id, o.id, 'gallon', 744.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Fleetguard Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 626.81
+select e.id, o.id, 'gallon', 626.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Volvo Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 711.36
+select e.id, o.id, 'gallon', 711.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Volvo Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 812.54
+select e.id, o.id, 'gallon', 812.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Volvo Filter'
    and o.code = '11'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 342.24
+select e.id, o.id, 'bulk', 342.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C7/C10/3126 With Cat Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 320.24
+select e.id, o.id, 'bulk', 320.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C7/C10/3126 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 424.89
+select e.id, o.id, 'bulk', 424.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Cat Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 383.89
+select e.id, o.id, 'bulk', 383.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 460.14
+select e.id, o.id, 'bulk', 460.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Cat Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 419.14
+select e.id, o.id, 'bulk', 419.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Fleetguard Filter'
    and o.code = '22'
@@ -4668,721 +4668,721 @@ select e.id, o.id, 'bulk', 403.99
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 215.69
+select e.id, o.id, 'bulk', 215.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins 5.9L/6.7L'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 334.24
+select e.id, o.id, 'bulk', 334.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISC/ISL'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 332.24
+select e.id, o.id, 'bulk', 332.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISB'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 380.79
+select e.id, o.id, 'bulk', 380.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISM'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 485.19
+select e.id, o.id, 'bulk', 485.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISX/X15'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 361.69
+select e.id, o.id, 'bulk', 361.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins M11'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 439.89
+select e.id, o.id, 'bulk', 439.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Detroit Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 493.59
+select e.id, o.id, 'bulk', 493.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD8 With Detroit Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 520.09
+select e.id, o.id, 'bulk', 520.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Detroit Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 498.09
+select e.id, o.id, 'bulk', 498.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 392.89
+select e.id, o.id, 'bulk', 392.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 215.69
+select e.id, o.id, 'bulk', 215.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Duramax / Vortec 8100L'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 215.69
+select e.id, o.id, 'bulk', 215.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Ford F250/F350/F550/F650'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 314.69
+select e.id, o.id, 'bulk', 314.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Hino Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 244.69
+select e.id, o.id, 'bulk', 244.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 343.29
+select e.id, o.id, 'bulk', 343.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 608.29
+select e.id, o.id, 'bulk', 608.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International S13'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 294.69
+select e.id, o.id, 'bulk', 294.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Vista'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 280.69
+select e.id, o.id, 'bulk', 280.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 350.69
+select e.id, o.id, 'bulk', 350.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Isuzu Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 453.89
+select e.id, o.id, 'bulk', 453.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 524.89
+select e.id, o.id, 'bulk', 524.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Mack Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 564.74
+select e.id, o.id, 'bulk', 564.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 637.74
+select e.id, o.id, 'bulk', 637.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Mack Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 407.89
+select e.id, o.id, 'bulk', 407.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 502.59
+select e.id, o.id, 'bulk', 502.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 516.89
+select e.id, o.id, 'bulk', 516.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Mack Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 614.59
+select e.id, o.id, 'bulk', 614.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Mack Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 513.29
+select e.id, o.id, 'bulk', 513.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With MaxForce Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 434.29
+select e.id, o.id, 'bulk', 434.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 524.89
+select e.id, o.id, 'bulk', 524.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With MaxForce Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 446.89
+select e.id, o.id, 'bulk', 446.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 474.34
+select e.id, o.id, 'bulk', 474.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Mercedes Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 452.34
+select e.id, o.id, 'bulk', 452.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 357.29
+select e.id, o.id, 'bulk', 357.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Mercedes Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 319.29
+select e.id, o.id, 'bulk', 319.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 295.19
+select e.id, o.id, 'bulk', 295.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz Sprinter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 273.64
+select e.id, o.id, 'bulk', 273.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mitsubishi Engine'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 324.29
+select e.id, o.id, 'bulk', 324.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Navistar'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 567.29
+select e.id, o.id, 'bulk', 567.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Paccar Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 488.29
+select e.id, o.id, 'bulk', 488.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 305.19
+select e.id, o.id, 'bulk', 305.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar Small'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 431.69
+select e.id, o.id, 'bulk', 431.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 484.09
+select e.id, o.id, 'bulk', 484.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 549.59
+select e.id, o.id, 'bulk', 549.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 500.69
+select e.id, o.id, 'bulk', 500.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Volvo Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 554.09
+select e.id, o.id, 'bulk', 554.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Volvo Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'bulk', 617.59
+select e.id, o.id, 'bulk', 617.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Volvo Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 382.74
+select e.id, o.id, 'gallon', 382.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C7/C10/3126 With Cat Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 360.74
+select e.id, o.id, 'gallon', 360.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C7/C10/3126 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 478.65
+select e.id, o.id, 'gallon', 478.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Cat Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 437.65
+select e.id, o.id, 'gallon', 437.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C12/3406 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 524.00
+select e.id, o.id, 'gallon', 523.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Cat Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 483.00
+select e.id, o.id, 'gallon', 482.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cat C13/C15 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 464.79
+select e.id, o.id, 'gallon', 464.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins N14'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 239.97
+select e.id, o.id, 'gallon', 239.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins 5.9L/6.7L'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 374.74
+select e.id, o.id, 'gallon', 374.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISC/ISL'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 372.74
+select e.id, o.id, 'gallon', 372.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISB'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 432.51
+select e.id, o.id, 'gallon', 432.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISM'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 550.07
+select e.id, o.id, 'gallon', 550.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins ISX/X15'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 411.37
+select e.id, o.id, 'gallon', 411.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Cummins M11'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 493.65
+select e.id, o.id, 'gallon', 493.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Detroit Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 541.23
+select e.id, o.id, 'gallon', 541.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD8 With Detroit Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 582.93
+select e.id, o.id, 'gallon', 582.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Detroit Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 560.93
+select e.id, o.id, 'gallon', 560.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit DD13/DD15/DD16 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 446.65
+select e.id, o.id, 'gallon', 446.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Detroit 60 Series With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 239.97
+select e.id, o.id, 'gallon', 239.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Duramax / Vortec 8100L'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 239.97
+select e.id, o.id, 'gallon', 239.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Ford F250/F350/F550/F650'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 338.97
+select e.id, o.id, 'gallon', 338.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Hino Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 268.97
+select e.id, o.id, 'gallon', 268.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Hino With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 384.81
+select e.id, o.id, 'gallon', 384.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 675.21
+select e.id, o.id, 'gallon', 675.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International S13'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 318.97
+select e.id, o.id, 'gallon', 318.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Vista'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 309.97
+select e.id, o.id, 'gallon', 309.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 384.97
+select e.id, o.id, 'gallon', 384.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Isuzu With Isuzu Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 507.65
+select e.id, o.id, 'gallon', 507.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 578.65
+select e.id, o.id, 'gallon', 578.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8 With Mack Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 640.84
+select e.id, o.id, 'gallon', 640.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 713.84
+select e.id, o.id, 'gallon', 713.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack MP 7/8/10 52L With Mack Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 461.65
+select e.id, o.id, 'gallon', 461.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 580.63
+select e.id, o.id, 'gallon', 580.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 570.65
+select e.id, o.id, 'gallon', 570.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack With Mack Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 692.63
+select e.id, o.id, 'gallon', 692.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mack 52L With Mack Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 554.81
+select e.id, o.id, 'gallon', 554.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With MaxForce Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 475.81
+select e.id, o.id, 'gallon', 475.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 7/9/10 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 578.65
+select e.id, o.id, 'gallon', 578.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With MaxForce Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 500.65
+select e.id, o.id, 'gallon', 500.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'MaxForce 13 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 542.28
+select e.id, o.id, 'gallon', 542.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Mercedes Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 520.28
+select e.id, o.id, 'gallon', 520.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 4000 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 398.81
+select e.id, o.id, 'gallon', 398.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Mercedes Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 360.81
+select e.id, o.id, 'gallon', 360.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz 900 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 329.67
+select e.id, o.id, 'gallon', 329.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mercedes Benz Sprinter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 296.90
+select e.id, o.id, 'gallon', 296.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Mitsubishi Engine'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 365.81
+select e.id, o.id, 'gallon', 365.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'International Navistar'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 634.21
+select e.id, o.id, 'gallon', 634.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Paccar Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 555.21
+select e.id, o.id, 'gallon', 555.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 344.67
+select e.id, o.id, 'gallon', 344.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Paccar Small'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 481.37
+select e.id, o.id, 'gallon', 481.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 546.93
+select e.id, o.id, 'gallon', 546.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 627.63
+select e.id, o.id, 'gallon', 627.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Fleetguard Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 550.37
+select e.id, o.id, 'gallon', 550.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D12 With Volvo Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 616.93
+select e.id, o.id, 'gallon', 616.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 42L With Volvo Filter'
    and o.code = '22'
   on conflict (engine_type_id, oil_type_id, container) do update set sell_price = excluded.sell_price;
 
 insert into public.engine_sell_prices (engine_type_id, oil_type_id, container, sell_price)
-select e.id, o.id, 'gallon', 695.63
+select e.id, o.id, 'gallon', 695.99
   from public.engine_types e, public.oil_types o
  where e.display_name = 'Volvo D16 52L With Volvo Filter'
    and o.code = '22'

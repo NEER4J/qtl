@@ -51,6 +51,7 @@ import {
   isPartPackageLocked,
 } from "@/lib/utils/package-pricing";
 import { normalizePartPricing } from "@/lib/utils/part-pricing";
+import { excelOilLabel } from "@/lib/utils/oil-labels";
 
 // ============================================================================
 // Read-only catalog queries — RLS already allows SELECT to all authenticated.
@@ -217,7 +218,8 @@ export async function getOilChangeGrid(): Promise<{
       supabase.from("volume_tiers").select("oil_type_id, min_litres, premium"),
       supabase
         .from("engine_sell_prices")
-        .select("engine_type_id, oil_type_id, container, sell_price"),
+        .select("engine_type_id, oil_type_id, container, sell_price")
+        .limit(10000),  // Supabase REST defaults to 1000; we have ~1400+ rows.
       supabase.from("app_settings").select("hst_rate").eq("id", 1).single(),
     ]);
 
@@ -535,7 +537,8 @@ export async function getOilDetail(
       supabase.from("volume_tiers").select("oil_type_id, min_litres, premium"),
       supabase
         .from("engine_sell_prices")
-        .select("id, engine_type_id, oil_type_id, container, sell_price"),
+        .select("id, engine_type_id, oil_type_id, container, sell_price")
+        .limit(10000),  // Supabase REST defaults to 1000; we have ~1400+ rows.
     ]);
   if (enginesRes.error) throw enginesRes.error;
   if (oilTypesRes.error) throw oilTypesRes.error;
@@ -684,12 +687,32 @@ export interface PrintListResponse {
   company_name: string;
 }
 
-/** Codes for oils we treat as "synthetic" → also show bulk in the print list.
- *  Matches the Excel's choice of which oils get a bulk column. */
-const SYNTHETIC_OIL_CODES = new Set(["T6", "DELO_5W30", "PETRO_5W30"]);
-
-/** Codes for the 3 reference bulk columns at the end of the sheet. */
-const REFERENCE_BULK_CODES = ["15W40", "10W30", "DELO_5W30"];
+/** Explicit ordered column list matching the Excel Print List tab exactly.
+ *  Each entry is (DB oil_types.code, container, short_label, sublabel,
+ *  is_reference). Labels mirror the Excel headers so spot-checking against
+ *  the spreadsheet is one-to-one. */
+const PRINT_LIST_COLUMNS: Array<{
+  code: string;
+  container: "bulk" | "gallon";
+  label: string;
+  sublabel: string;
+  is_reference: boolean;
+}> = [
+  { code: "257004",    container: "gallon", label: "15W40",          sublabel: "Gallon",   is_reference: false },
+  { code: "10",        container: "gallon", label: "10W30",          sublabel: "Gallon",   is_reference: false },
+  { code: "500010047", container: "gallon", label: "T5",             sublabel: "Gallon",   is_reference: false },
+  { code: "21",        container: "gallon", label: "Petro 10W30",    sublabel: "Gallon",   is_reference: false },
+  { code: "14",        container: "bulk",   label: "T6",             sublabel: "5W30/5W40 Bulk", is_reference: false },
+  { code: "14",        container: "gallon", label: "T6",             sublabel: "Gallon",   is_reference: false },
+  { code: "11",        container: "bulk",   label: "Delo SYN 5W30",  sublabel: "Bulk",     is_reference: false },
+  { code: "11",        container: "gallon", label: "Delo SYN 5W30",  sublabel: "Gallon",   is_reference: false },
+  { code: "22",        container: "bulk",   label: "Petro SYN 5W30", sublabel: "Bulk",     is_reference: false },
+  { code: "22",        container: "gallon", label: "Petro SYN 5W30", sublabel: "Gallon",   is_reference: false },
+  // 3 reference bulk columns at the end (Excel cols V / X / Y)
+  { code: "257004",    container: "bulk",   label: "15W40",          sublabel: "Bulk ref", is_reference: true  },
+  { code: "10",        container: "bulk",   label: "10W30",          sublabel: "Bulk ref", is_reference: true  },
+  { code: "11",        container: "bulk",   label: "5W30",           sublabel: "Bulk ref", is_reference: true  },
+];
 
 export async function getPrintList(): Promise<PrintListResponse> {
   const supabase = await createClient();
@@ -702,41 +725,20 @@ export async function getPrintList(): Promise<PrintListResponse> {
       .single(),
   ]);
 
-  // Build the column list in the same order as the Excel Print List tab.
+  // Resolve each Excel column to its oil_type_id by code. Skip any column
+  // whose oil isn't in the DB (defensive — shouldn't happen with the seed).
+  const codeToOil = new Map(oilTypes.map((o) => [o.code, o]));
   const columns: PrintListColumn[] = [];
-  for (const o of oilTypes) {
-    // Always a gallon column for each oil
-    columns.push({
-      key: `${o.id}-gallon`,
-      label: o.name,
-      sublabel: `${o.code} · Gallon`,
-      oil_type_id: o.id,
-      container: "gallon",
-      is_reference: false,
-    });
-    // Bulk column too for synthetic oils
-    if (SYNTHETIC_OIL_CODES.has(o.code)) {
-      columns.push({
-        key: `${o.id}-bulk`,
-        label: o.name,
-        sublabel: `${o.code} · Bulk`,
-        oil_type_id: o.id,
-        container: "bulk",
-        is_reference: false,
-      });
-    }
-  }
-  // Reference bulk columns at the end
-  for (const code of REFERENCE_BULK_CODES) {
-    const o = oilTypes.find((x) => x.code === code);
+  for (const spec of PRINT_LIST_COLUMNS) {
+    const o = codeToOil.get(spec.code);
     if (!o) continue;
     columns.push({
-      key: `ref-${o.id}-bulk`,
-      label: o.name,
-      sublabel: `${o.code} · Bulk ref`,
+      key: `${spec.is_reference ? "ref-" : ""}${o.id}-${spec.container}`,
+      label: spec.label,
+      sublabel: spec.sublabel,
       oil_type_id: o.id,
-      container: "bulk",
-      is_reference: true,
+      container: spec.container,
+      is_reference: spec.is_reference,
     });
   }
 
@@ -1804,7 +1806,8 @@ export async function listEngineSellPrices(): Promise<EngineSellPriceRow[]> {
   const { data, error } = await supabase
     .from("engine_sell_prices")
     .select("id, engine_type_id, oil_type_id, container, sell_price, notes")
-    .order("engine_type_id");
+    .order("engine_type_id")
+    .limit(10000);  // Supabase REST defaults to 1000; we have ~1400+ rows.
   if (error) throw error;
   return (data ?? []) as EngineSellPriceRow[];
 }
@@ -2324,14 +2327,14 @@ export async function listTransmissionServices(): Promise<{
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("transmission_services")
-    .select("*, oil_types:oil_type_id(name)")
+    .select("*, oil_types:oil_type_id(code, name)")
     .eq("active", true)
     .order("sort_order")
     .order("name");
   if (error) throw error;
 
   type Row = Omit<TransmissionService, "oil_type_name"> & {
-    oil_types: { name: string } | null;
+    oil_types: { code: string; name: string } | null;
   };
   const rows: TransmissionService[] = (data ?? []).map((r: Row) => ({
     id: r.id,
@@ -2339,7 +2342,7 @@ export async function listTransmissionServices(): Promise<{
     service_kind: r.service_kind,
     is_synthetic: r.is_synthetic,
     oil_type_id: r.oil_type_id,
-    oil_type_name: r.oil_types?.name ?? null,
+    oil_type_name: r.oil_types ? excelOilLabel(r.oil_types.code, r.oil_types.name) : null,
     litres: r.litres,
     sell_price: Number(r.sell_price),
     labour: r.labour == null ? null : Number(r.labour),

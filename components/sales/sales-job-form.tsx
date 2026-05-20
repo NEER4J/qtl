@@ -29,6 +29,7 @@ import { EmptyDropdownHint } from "@/components/help/empty-state";
 import { InfoTip } from "@/components/help/info-tip";
 import { createSalesJob, updateSalesJob } from "@/lib/actions/sales";
 import { createCustomer, getCustomer } from "@/lib/actions/customers";
+import { excelOilLabel } from "@/lib/utils/oil-labels";
 import { getCustomerVehicles } from "@/lib/actions/vehicles";
 import { isFreeGreaseEligible } from "@/lib/utils/free-grease";
 import { isFreeOilChangeEligible } from "@/lib/utils/free-oil-change";
@@ -963,7 +964,8 @@ export function SalesJobForm({
                           <SelectContent>
                             {oilTypes.map((o) => (
                               <SelectItem key={o.id} value={o.id}>
-                                {o.name} <span className="text-muted-foreground">({o.code})</span>
+                                {excelOilLabel(o.code, o.name)}{" "}
+                                <span className="text-muted-foreground">— {o.name}</span>
                               </SelectItem>
                             ))}
                           </SelectContent>
