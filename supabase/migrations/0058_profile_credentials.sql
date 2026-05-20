@@ -23,6 +23,8 @@ create table if not exists public.profile_credentials (
   set_by uuid references auth.users(id)
 );
 
+
+
 drop trigger if exists trg_profile_credentials_set_at on public.profile_credentials;
 create or replace function public.set_profile_credentials_set_at()
 returns trigger language plpgsql as $$
