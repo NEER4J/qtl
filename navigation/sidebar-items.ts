@@ -10,6 +10,7 @@ import {
   Settings,
   BookText,
   Package,
+  Boxes,
   type LucideIcon,
 } from "lucide-react";
 
@@ -117,6 +118,24 @@ export const sidebarItems: NavGroup[] = [
           { title: "Oil detail", url: "/pricing/oil-detail" },
           { title: "Print list", url: "/pricing/print-list" },
           { title: "Trans & Diff", url: "/pricing/trans-diff" },
+        ],
+      },
+      {
+        title: "Inventory",
+        url: "/settings/pricing",
+        icon: Boxes,
+        roles: ["owner"],
+        subItems: [
+          { title: "Parts", url: "/settings/pricing/parts" },
+          { title: "Packages", url: "/settings/pricing/packages" },
+          { title: "Part categories", url: "/settings/pricing/categories" },
+          { title: "Part brands", url: "/settings/pricing/brands" },
+          { title: "Oil types", url: "/settings/pricing/oil-types" },
+          { title: "Engine types", url: "/settings/pricing/engine-types" },
+          { title: "Service costs", url: "/settings/pricing/service-costs" },
+          { title: "Volume tiers", url: "/settings/pricing/volume-tiers" },
+          { title: "Price history", url: "/settings/pricing/price-history" },
+          { title: "Manage catalogue", url: "/settings/pricing" },
         ],
       },
     ],
