@@ -11,7 +11,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { APP_CONFIG } from "@/config/app-config";
-import { filterSidebarByRole } from "@/navigation/sidebar-items";
+import { filterSidebar } from "@/navigation/sidebar-items";
 import type { UserRole } from "@/lib/db/types";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +21,7 @@ import { NavUser } from "./nav-user";
 export function AppSidebar({
   user,
   role,
+  allowedPages,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   readonly user: {
@@ -29,10 +30,11 @@ export function AppSidebar({
     readonly avatar: string;
   };
   readonly role?: UserRole;
+  readonly allowedPages?: string[] | null;
 }) {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
-  const items = filterSidebarByRole(role);
+  const items = filterSidebar(role, allowedPages);
 
   return (
     <Sidebar {...props}>

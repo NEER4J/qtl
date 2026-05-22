@@ -52,6 +52,7 @@ import {
 } from "@/lib/utils/package-pricing";
 import { normalizePartPricing } from "@/lib/utils/part-pricing";
 import { excelOilLabel } from "@/lib/utils/oil-labels";
+import { applyPartsSearch } from "@/lib/utils/parts-search";
 
 // ============================================================================
 // Read-only catalog queries — RLS already allows SELECT to all authenticated.
@@ -405,10 +406,11 @@ export async function getAllFilterSellPrices(filter?: {
         .limit(2000);
       if (filter?.category_id) q = q.eq("category_id", filter.category_id);
       if (filter?.brand) q = q.eq("brand", filter.brand);
-      if (filter?.q) {
-        const term = `%${filter.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
-        q = q.or(`part_number.ilike.${term},description.ilike.${term}`);
-      }
+      q = applyPartsSearch(q, filter?.q, [
+        "part_number",
+        "description",
+        "brand",
+      ]);
       return q;
     })(),
     supabase
@@ -432,6 +434,7 @@ export async function getAllFilterSellPrices(filter?: {
     without_service_price: number | null;
     with_service_price: number | null;
     over_counter_price: number | null;
+    in_package: boolean;
   };
   const rows: FilterSellPriceRow[] = ((partsRes.data ?? []) as unknown as Row[]).map((r) => {
     const merged = mergePartCategory(r);
@@ -443,9 +446,14 @@ export async function getAllFilterSellPrices(filter?: {
     // Excel "All Filter Sell Price" tab (see supabase/seed/may2026_*.sql).
     const computedWithSvc = round99(partBase + svcCost);
     const withSvc = r.with_service_price != null ? Number(r.with_service_price) : computedWithSvc;
-    const withoutSvc = r.without_service_price != null
-      ? Number(r.without_service_price)
-      : round99(partBase + svcCost + counterPremium);
+    // Bundled parts have no standalone "Without Service" price — the customer
+    // pays for the package, not the part. Force to 0 regardless of any
+    // historical override that may still be sitting on the row.
+    const withoutSvc = r.in_package
+      ? 0
+      : r.without_service_price != null
+        ? Number(r.without_service_price)
+        : round99(partBase + svcCost + counterPremium);
     const overCounter = r.over_counter_price != null ? Number(r.over_counter_price) : withSvc;
     // Excel "Customer Supplies Filter" is a flat $ value, NOT .99-rounded.
     const customerSupplies = customerSuppliesLabour;
@@ -1061,10 +1069,11 @@ export async function listPartsForPicker(q?: string): Promise<Part[]> {
     .order("brand")
     .order("part_number")
     .limit(50);
-  if (q && q.trim()) {
-    const term = `%${q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
-    query = query.or(`part_number.ilike.${term},description.ilike.${term},brand.ilike.${term}`);
-  }
+  query = applyPartsSearch(query, q, [
+    "part_number",
+    "description",
+    "brand",
+  ]);
   const { data, error } = await query;
   if (error) throw error;
   return ((data ?? []) as unknown as PartJoinRow[]).map(mergePartCategory);
@@ -1247,6 +1256,32 @@ async function syncBrandRef(
     .from("part_brands")
     .upsert({ name: br }, { onConflict: "name", ignoreDuplicates: true });
   if (error) console.error("[syncBrandRef]", error);
+}
+
+// Lightweight, debounce-friendly check for the Part form's "this part number
+// is already in the catalog" warning. Match is case-insensitive on
+// part_number alone — the (part_number, brand) unique constraint is the
+// hard guard at the DB level; this surfaces same-number-different-brand
+// collisions too because that's almost always a typo / duplicate entry.
+export async function checkPartNumberExists(input: {
+  part_number: string;
+  excludeId?: string | null;
+}): Promise<{ exists: boolean; matches: { id: string; part_number: string; brand: string; active: boolean }[] }> {
+  const partNumber = input.part_number.trim();
+  if (partNumber.length < 2) return { exists: false, matches: [] };
+
+  const supabase = await createClient();
+  let query = supabase
+    .from("parts")
+    .select("id, part_number, brand, active")
+    .ilike("part_number", partNumber)
+    .limit(5);
+  if (input.excludeId) query = query.neq("id", input.excludeId);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  const matches = (data ?? []) as { id: string; part_number: string; brand: string; active: boolean }[];
+  return { exists: matches.length > 0, matches };
 }
 
 export const createPart = wrapAction({

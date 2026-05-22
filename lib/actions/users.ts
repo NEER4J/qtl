@@ -6,10 +6,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { wrapAction } from "@/lib/actions/_utils";
 import {
+  BulkUserAction,
   InviteUserInput,
   SetUserPasswordInput,
   ToggleUserActive,
   UpdateUserInput,
+  UpdateUserPermissionsInput,
+  isUsernameRole,
+  syntheticEmailForUsername,
 } from "@/lib/schemas/users";
 import type { Profile } from "@/lib/db/types";
 
@@ -25,7 +29,7 @@ export async function listUsers(): Promise<UserListRow[]> {
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "id, email, full_name, role, location_id, can_enter_expenses, active, last_login_at, created_at, updated_at, locations:location_id(name)",
+      "id, email, username, full_name, role, location_id, can_enter_expenses, active, last_login_at, created_at, updated_at, allowed_pages, hidden_columns, cross_location, locations:location_id(name)",
     )
     .order("role")
     .order("full_name");
@@ -51,15 +55,24 @@ export const inviteUser = wrapAction({
   roles: ["owner"],
   handler: async (
     input,
-  ): Promise<{ id: string; email: string; existed: boolean }> => {
+  ): Promise<{ id: string; identity: string; existed: boolean }> => {
     const admin = createAdminClient();
 
-    // Idempotent: if the email already exists (e.g. retry after a prior
+    // Resolve the auth-email Supabase will use. Username-only roles get a
+    // synthetic email so signInWithPassword keeps working.
+    const usingUsername = isUsernameRole(input.role) && !!input.username;
+    const authEmail = usingUsername
+      ? syntheticEmailForUsername(input.username!)
+      : (input.email as string);
+
+    const identity = usingUsername ? input.username! : authEmail;
+
+    // Idempotent: if the auth user already exists (e.g. retry after a prior
     // failure), patch the existing user's password + profile instead of
     // erroring.
     const { data: listData } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
     const existing = listData?.users.find(
-      (u) => u.email?.toLowerCase() === input.email.toLowerCase(),
+      (u) => u.email?.toLowerCase() === authEmail.toLowerCase(),
     );
 
     let userId: string;
@@ -70,19 +83,44 @@ export const inviteUser = wrapAction({
       existed = true;
       const { error: pwErr } = await admin.auth.admin.updateUserById(userId, {
         password: input.password,
+        user_metadata: {
+          full_name: input.full_name,
+          ...(usingUsername ? { username: input.username } : {}),
+        },
       });
       if (pwErr) throw pwErr;
     } else {
       const { data, error } = await admin.auth.admin.createUser({
-        email: input.email,
+        email: authEmail,
         password: input.password,
         email_confirm: true,
-        user_metadata: { full_name: input.full_name },
+        user_metadata: {
+          full_name: input.full_name,
+          ...(usingUsername ? { username: input.username } : {}),
+        },
       });
-      if (error) throw error;
+      if (error) {
+        console.error("[inviteUser] auth.admin.createUser failed", {
+          authEmail,
+          role: input.role,
+          status: error.status,
+          code: (error as { code?: string }).code,
+          message: error.message,
+        });
+        throw new Error(
+          `Could not create the auth user. If you just deployed, confirm migration 0060_username_and_permissions.sql has been applied. Underlying error: ${error.message}`,
+        );
+      }
       if (!data.user) throw new Error("Create did not return a user");
       userId = data.user.id;
     }
+
+    // Real email for an owner/accountant goes into profiles.email straight.
+    // For username users we still need a unique non-null email in profiles
+    // because the column is NOT NULL — store the synthetic one. The display
+    // layer must use `username` for username users so the synthetic value
+    // is never shown.
+    const profileEmail = usingUsername ? authEmail : input.email!;
 
     // Ensure a profile row exists (upsert — covers the rare case where the
     // trigger didn't fire, e.g. on a user imported via SQL).
@@ -91,11 +129,15 @@ export const inviteUser = wrapAction({
       .upsert(
         {
           id: userId,
-          email: input.email,
+          email: profileEmail,
+          username: input.username ?? null,
           full_name: input.full_name,
           role: input.role,
           location_id: input.location_id,
           can_enter_expenses: input.can_enter_expenses,
+          cross_location: input.cross_location,
+          allowed_pages: input.allowed_pages ?? null,
+          hidden_columns: input.hidden_columns ?? {},
           active: true,
         },
         { onConflict: "id" },
@@ -114,26 +156,77 @@ export const inviteUser = wrapAction({
     if (credErr) throw credErr;
 
     revalidatePath("/settings/users");
-    return { id: userId, email: input.email, existed };
+    return { id: userId, identity, existed };
   },
 });
 
 // ----------------------------------------------------------------------------
-// Update — edit role / location / name
+// Update — edit role / location / name + identity + permissions
 // ----------------------------------------------------------------------------
 export const updateUser = wrapAction({
   schema: UpdateUserInput,
+  roles: ["owner"],
+  handler: async (input): Promise<Profile> => {
+    const admin = createAdminClient();
+    const supabase = await createClient();
+
+    const usingUsername = isUsernameRole(input.role) && !!input.username;
+    const authEmail = usingUsername
+      ? syntheticEmailForUsername(input.username!)
+      : (input.email as string);
+
+    // Sync the auth.users email if it diverges from what we'd compute now.
+    // This handles role flips (e.g. staff → accountant or vice versa) where
+    // the underlying email must change to keep signInWithPassword consistent.
+    const { data: existingUser } = await admin.auth.admin.getUserById(input.id);
+    if (existingUser?.user) {
+      if (existingUser.user.email?.toLowerCase() !== authEmail.toLowerCase()) {
+        const { error: emailErr } = await admin.auth.admin.updateUserById(input.id, {
+          email: authEmail,
+          email_confirm: true,
+        });
+        if (emailErr) throw emailErr;
+      }
+    }
+
+    const profileEmail = usingUsername ? authEmail : input.email!;
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({
+        email: profileEmail,
+        username: input.username ?? null,
+        full_name: input.full_name,
+        role: input.role,
+        location_id: input.location_id,
+        can_enter_expenses: input.can_enter_expenses,
+        cross_location: input.cross_location,
+        active: input.active,
+        allowed_pages: input.allowed_pages ?? null,
+        hidden_columns: input.hidden_columns ?? {},
+      })
+      .eq("id", input.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePath("/settings/users");
+    return data as Profile;
+  },
+});
+
+// ----------------------------------------------------------------------------
+// Permissions-only update — used by the matrix UI's Save button.
+// ----------------------------------------------------------------------------
+export const updateUserPermissions = wrapAction({
+  schema: UpdateUserPermissionsInput,
   roles: ["owner"],
   handler: async (input): Promise<Profile> => {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("profiles")
       .update({
-        full_name: input.full_name,
-        role: input.role,
-        location_id: input.location_id,
-        can_enter_expenses: input.can_enter_expenses,
-        active: input.active,
+        allowed_pages: input.allowed_pages ?? null,
+        hidden_columns: input.hidden_columns ?? {},
       })
       .eq("id", input.id)
       .select("*")
@@ -204,6 +297,54 @@ export const deleteUser = wrapAction({
 
     revalidatePath("/settings/users");
     return { deleted: true };
+  },
+});
+
+// ----------------------------------------------------------------------------
+// Bulk action — deactivate / reactivate / delete in one shot.
+// Same safeguards as the single-row variants.
+// ----------------------------------------------------------------------------
+export const bulkUserAction = wrapAction({
+  schema: BulkUserAction,
+  roles: ["owner"],
+  handler: async (input, profile): Promise<{ affected: number }> => {
+    if (input.ids.includes(profile.id)) {
+      throw new Error("You can't include your own account in a bulk action");
+    }
+
+    const supabase = await createClient();
+
+    if (input.action === "deactivate" || input.action === "reactivate") {
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({ active: input.action === "reactivate" })
+        .in("id", input.ids)
+        .select("id");
+      if (error) throw error;
+      revalidatePath("/settings/users");
+      return { affected: data?.length ?? 0 };
+    }
+
+    // Delete branch — protect the last active owner.
+    const { data: owners } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("role", "owner")
+      .eq("active", true);
+    const ownerIds = new Set((owners ?? []).map((o) => o.id));
+    const includesAllOwners = [...ownerIds].every((id) => input.ids.includes(id));
+    if (ownerIds.size > 0 && includesAllOwners) {
+      throw new Error("Bulk delete would remove every active owner");
+    }
+
+    const admin = createAdminClient();
+    let affected = 0;
+    for (const id of input.ids) {
+      const { error } = await admin.auth.admin.deleteUser(id);
+      if (!error) affected += 1;
+    }
+    revalidatePath("/settings/users");
+    return { affected };
   },
 });
 

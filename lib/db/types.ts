@@ -40,6 +40,7 @@ export interface Location {
 export interface Profile {
   id: string;
   email: string;
+  username: string | null;
   full_name: string;
   role: UserRole;
   location_id: string | null;
@@ -48,6 +49,12 @@ export interface Profile {
   last_login_at: string | null;
   created_at: string;
   updated_at: string;
+  /** NULL = use the role's default page allowlist (see lib/permissions/registry.ts). */
+  allowed_pages: string[] | null;
+  /** Map of pageKey -> list of columnKeys the user should NOT see. Missing pageKey = show all columns for that page. */
+  hidden_columns: Record<string, string[]>;
+  /** When true, this manager/staff/employee can act on rows at any location (like owner/accountant). */
+  cross_location: boolean;
 }
 
 export interface ServiceType {
@@ -665,6 +672,9 @@ export interface Part {
   without_service_price: number | null;
   with_service_price: number | null;
   over_counter_price: number | null;
+  /** When true the part is bundled in a package — Without Service price is forced to 0
+   *  and a second occurrence on the same sales job defaults to over_counter_price. */
+  in_package: boolean;
   active: boolean;
   created_at: string;
   updated_at: string;

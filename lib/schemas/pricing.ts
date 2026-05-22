@@ -107,6 +107,9 @@ export const CreatePartInput = z.object({
     .or(z.literal(""))
     .transform((v) => (v == null || v === "" ? null : v)),
   is_taxable: z.coerce.boolean().default(true),
+  // Marks the part as bundled in a package — Without Service price is forced
+  // to 0 and a second occurrence on the same sales job defaults to over_counter_price.
+  in_package: z.coerce.boolean().default(false),
   active: z.coerce.boolean().default(true),
 });
 export type CreatePartInput = z.infer<typeof CreatePartInput>;

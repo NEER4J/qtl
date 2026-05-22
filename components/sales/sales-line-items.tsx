@@ -137,18 +137,31 @@ export function SalesLineItems({
   const remove = (key: string) => onChange(items.filter((it) => it.key !== key));
   const addCustom = () => onChange([...items, newLineItem()]);
 
-  const lineFromPart = (p: Part): LineItem =>
+  const lineFromPart = (p: Part, unitPriceOverride?: number): LineItem =>
     newLineItem({
       part_id: p.id,
       description: `${p.brand} ${p.part_number}${p.description ? ` — ${p.description}` : ""}`,
       quantity: 1,
-      unit_price: Number(p.list_price) || 0,
+      unit_price: unitPriceOverride ?? (Number(p.list_price) || 0),
       is_taxable: p.is_taxable,
       unit_of_measure: p.unit_of_measure,
       part_category_id: p.category_id,
     });
 
   const addPart = (p: Part) => {
+    // Bundled-package rule: when the same part is already on the job (typically
+    // expanded from a package at unit_price=0) and the part is flagged
+    // in_package, the second occurrence is "the customer wants an extra one
+    // off the shelf" — bill it at over_counter_price, not list_price.
+    const alreadyOnJob = items.some((it) => it.part_id === p.id);
+    if (alreadyOnJob && p.in_package) {
+      const overCounter = Number(p.over_counter_price ?? 0);
+      const fallback = Number(p.list_price) || 0;
+      const price = overCounter > 0 ? overCounter : fallback;
+      onChange([...items, lineFromPart(p, price)]);
+      return;
+    }
+
     // If the picked part shares a category with an existing line, prompt.
     const existing = items.find(
       (it) => it.part_category_id != null && it.part_category_id === p.category_id,

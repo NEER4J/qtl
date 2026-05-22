@@ -48,6 +48,11 @@ export async function requireLocation(locationId: string): Promise<Profile> {
     return profile;
   }
 
+  // Cross-location managers/staff/employees act as if they had this location.
+  if (profile.cross_location && profile.role !== "portal_customer") {
+    return profile;
+  }
+
   if (profile.role === "employee") {
     throw new AuthorizationError("Employees cannot access location data");
   }

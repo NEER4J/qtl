@@ -76,8 +76,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [loadProfile])
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (identifier: string, password: string) => {
     const supabase = createClient()
+
+    // Accept either an email or a username. If the input contains no `@`,
+    // we treat it as a username and resolve it to the underlying auth email
+    // via the SECURITY DEFINER RPC (see 0059_username_and_permissions.sql).
+    let email = identifier.trim()
+    if (!email.includes('@')) {
+      const { data, error } = await supabase.rpc('auth_email_for_username', {
+        p_username: email.toLowerCase(),
+      })
+      if (error || !data) {
+        return { error: 'Invalid username or password' }
+      }
+      email = data as string
+    }
+
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     return { error: error?.message || null }
   }

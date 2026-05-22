@@ -15,7 +15,10 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth/use-auth";
 
 const FormSchema = z.object({
-  email: z.string().email({ message: "Please enter a valid email address." }),
+  identifier: z
+    .string()
+    .trim()
+    .min(1, { message: "Please enter your email or username." }),
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
   remember: z.boolean().optional(),
 });
@@ -28,7 +31,7 @@ export function LoginForm() {
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      email: "",
+      identifier: "",
       password: "",
       remember: false,
     },
@@ -36,8 +39,8 @@ export function LoginForm() {
 
   const onSubmit = async (data: z.infer<typeof FormSchema>) => {
     setIsLoading(true);
-    
-    const { error } = await signIn(data.email, data.password);
+
+    const { error } = await signIn(data.identifier, data.password);
     
     if (error) {
       toast.error("Login failed", {
@@ -58,12 +61,18 @@ export function LoginForm() {
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <FormField
           control={form.control}
-          name="email"
+          name="identifier"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email Address</FormLabel>
+              <FormLabel>Email or username</FormLabel>
               <FormControl>
-                <Input id="email" type="email" placeholder="you@example.com" autoComplete="email" {...field} />
+                <Input
+                  id="identifier"
+                  type="text"
+                  placeholder="you@example.com or jdoe"
+                  autoComplete="username"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

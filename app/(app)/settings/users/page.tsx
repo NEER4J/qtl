@@ -1,4 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
+import { getCurrentProfileOrRedirect } from "@/lib/auth/get-profile";
 import { listLocations } from "@/lib/actions/locations";
 import { listUserPasswords, listUsers } from "@/lib/actions/users";
 
@@ -7,7 +8,8 @@ import { UsersTable } from "./users-table";
 export const dynamic = "force-dynamic";
 
 export default async function UsersPage() {
-  const [users, locations, passwords] = await Promise.all([
+  const [viewer, users, locations, passwords] = await Promise.all([
+    getCurrentProfileOrRedirect(),
     listUsers(),
     listLocations(),
     listUserPasswords(),
@@ -49,7 +51,17 @@ export default async function UsersPage() {
         </ul>
       </PageHelp>
 
-      <UsersTable users={users} locations={locations} passwords={passwordMap} />
+      <UsersTable
+        users={users}
+        locations={locations}
+        passwords={passwordMap}
+        viewer={{
+          id: viewer.id,
+          role: viewer.role,
+          allowed_pages: viewer.allowed_pages,
+          hidden_columns: viewer.hidden_columns,
+        }}
+      />
     </div>
   );
 }

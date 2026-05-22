@@ -15,7 +15,8 @@ export interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   error: string | null;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  /** `identifier` accepts either an email or a username (team-member accounts). */
+  signIn: (identifier: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string) => Promise<{ error: string | null }>;
   signInWithGoogle: () => Promise<{ error: string | null }>;
   signOut: () => Promise<{ error: string | null }>;

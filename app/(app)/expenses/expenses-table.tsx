@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { Pencil } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -46,12 +48,13 @@ export function ExpensesTable({
               <TableHead className="text-right hidden md:table-cell">Paid</TableHead>
               <TableHead className="text-right">Balance</TableHead>
               <TableHead className="w-28">Status</TableHead>
+              <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-8 px-6 text-center text-muted-foreground">
+                <TableCell colSpan={10} className="py-8 px-6 text-center text-muted-foreground">
                   <div className="space-y-1">
                     <p className="font-medium text-foreground">No expenses to show.</p>
                     <p className="text-sm">
@@ -87,6 +90,13 @@ export function ExpensesTable({
                   <TableCell>
                     <StatusBadge status={r.payment_status} />
                   </TableCell>
+                  <TableCell className="text-right">
+                    <Button asChild variant="ghost" size="icon" aria-label="Edit expense">
+                      <Link href={`/expenses/${r.id}/edit`}>
+                        <Pencil className="size-4" />
+                      </Link>
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -104,6 +114,7 @@ export function ExpensesTable({
                 <TableCell className="text-right tabular-nums">
                   {formatMoney(visibleBalance)}
                 </TableCell>
+                <TableCell />
                 <TableCell />
               </TableRow>
             </TableFooter>

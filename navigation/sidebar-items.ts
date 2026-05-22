@@ -215,3 +215,43 @@ export function filterSidebarByRole(role: UserRole | undefined): NavGroup[] {
     }))
     .filter((group) => group.items.length > 0);
 }
+
+import { pageKeyForPath } from "@/lib/permissions/registry";
+
+/**
+ * Filter the nav using BOTH the role's default allowlist and the user's
+ * per-user `allowed_pages` override (if present). Owner bypasses everything.
+ *
+ * `allowedPages = null` means "use the role's defaults" (the old behaviour).
+ * `allowedPages = string[]` is the explicit allowlist of page keys (from
+ *  lib/permissions/registry.ts) — items whose path is registered AND not in
+ *  the list get hidden. Unregistered paths (utility/internal) pass through.
+ */
+export function filterSidebar(
+  role: UserRole | undefined,
+  allowedPages: string[] | null | undefined,
+): NavGroup[] {
+  if (!role) return [];
+  if (role === "owner") return filterSidebarByRole(role);
+
+  const overrideSet = allowedPages ? new Set(allowedPages) : null;
+
+  const passesOverride = (url: string): boolean => {
+    if (!overrideSet) return true; // no override -> role default already filtered.
+    const key = pageKeyForPath(url);
+    if (!key) return true; // unregistered path -> let role filter handle it.
+    return overrideSet.has(key);
+  };
+
+  return filterSidebarByRole(role)
+    .map((group) => ({
+      ...group,
+      items: group.items
+        .filter((item) => passesOverride(item.url))
+        .map((item) => ({
+          ...item,
+          subItems: item.subItems?.filter((s) => passesOverride(s.url)),
+        })),
+    }))
+    .filter((group) => group.items.length > 0);
+}

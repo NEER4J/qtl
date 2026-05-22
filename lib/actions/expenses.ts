@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { wrapAction } from "@/lib/actions/_utils";
+import { applyPartsSearch } from "@/lib/utils/parts-search";
 import {
   AddExpensePaymentInput,
   DeactivateExpenseInput,
@@ -433,13 +434,11 @@ export async function listPartsForExpensePicker(
     .order("part_number")
     .limit(200);
 
-  const term = q?.trim();
-  if (term) {
-    const safe = `%${term.replace(/[%_]/g, (m) => `\\${m}`)}%`;
-    partsQuery = partsQuery.or(
-      `part_number.ilike.${safe},description.ilike.${safe},brand.ilike.${safe}`,
-    );
-  }
+  partsQuery = applyPartsSearch(partsQuery, q, [
+    "part_number",
+    "description",
+    "brand",
+  ]);
 
   const { data: parts, error: partsErr } = await partsQuery;
   if (partsErr) throw partsErr;

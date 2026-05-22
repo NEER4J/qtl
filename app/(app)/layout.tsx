@@ -45,6 +45,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
         variant="sidebar"
         collapsible="icon"
         role={profile.role}
+        allowedPages={profile.allowed_pages}
         user={{
           name: userData.name,
           email: userData.email,

@@ -5,12 +5,49 @@ import { userRoleSchema } from "@/lib/schemas/common";
 // ----------------------------------------------------------------------------
 // Shared refinements
 // ----------------------------------------------------------------------------
-const emailField = z
+const optionalEmailField = z
   .string()
   .trim()
   .toLowerCase()
-  .min(1, "Email is required")
-  .email("Invalid email");
+  .email("Invalid email")
+  .or(z.literal(""))
+  .nullable()
+  .optional()
+  .transform((v) => (v ? v : null));
+
+const usernameField = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(3, "Username must be at least 3 characters")
+  .max(40, "Username is too long")
+  .regex(
+    /^[a-z0-9_.\-]+$/,
+    "Use letters, numbers, dots, underscores, or hyphens only",
+  )
+  .nullable()
+  .optional();
+
+/** Roles that authenticate by username instead of real email. */
+export const USERNAME_LOGIN_ROLES = ["manager", "staff", "employee"] as const;
+type UsernameRole = (typeof USERNAME_LOGIN_ROLES)[number];
+
+export function isUsernameRole(role: string): role is UsernameRole {
+  return (USERNAME_LOGIN_ROLES as readonly string[]).includes(role);
+}
+
+/** Internal synthetic email used for username-only accounts.
+ *  Uses `.app` (a real TLD with no DNS / MX validation surprises) so Supabase
+ *  Auth's email validator always accepts it. The address is not deliverable
+ *  by design — the user only ever types `<username>` on the login screen. */
+export function syntheticEmailForUsername(username: string): string {
+  return `${username.trim().toLowerCase()}@team.qtl.app`;
+}
+
+/** True if a given profiles.email row is a synthetic team-login address. */
+export function isSyntheticEmail(email: string | null | undefined): boolean {
+  return !!email && (email.endsWith("@team.qtl.app") || email.endsWith("@team.qtl.local"));
+}
 
 const roleLocationRefine = (
   data: { role: z.infer<typeof userRoleSchema>; location_id: string | null },
@@ -25,6 +62,44 @@ const roleLocationRefine = (
   }
 };
 
+const identityRefine = (
+  data: {
+    role: z.infer<typeof userRoleSchema>;
+    email?: string | null;
+    username?: string | null;
+  },
+  ctx: z.RefinementCtx,
+) => {
+  if (isUsernameRole(data.role)) {
+    if (!data.username) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["username"],
+        message: "Username is required for this role",
+      });
+    }
+  } else {
+    if (!data.email) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["email"],
+        message: "Email is required for this role",
+      });
+    }
+  }
+};
+
+// ----------------------------------------------------------------------------
+// Permission overrides
+// ----------------------------------------------------------------------------
+/** NULL = use role default; array = explicit allowlist. */
+export const AllowedPagesField = z.array(z.string().min(1)).nullable().optional();
+
+/** Hidden columns by pageKey. Missing key = all visible. */
+export const HiddenColumnsField = z
+  .record(z.array(z.string().min(1)))
+  .default({});
+
 // ----------------------------------------------------------------------------
 // Invite (admin creates user directly with a password)
 // ----------------------------------------------------------------------------
@@ -35,14 +110,19 @@ const passwordField = z
 
 export const InviteUserInput = z
   .object({
-    email: emailField,
+    email: optionalEmailField,
+    username: usernameField,
     full_name: z.string().trim().min(1, "Name is required").max(120),
     role: userRoleSchema,
     location_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
     can_enter_expenses: z.coerce.boolean().default(false),
+    cross_location: z.coerce.boolean().default(false),
     password: passwordField,
+    allowed_pages: AllowedPagesField,
+    hidden_columns: HiddenColumnsField,
   })
-  .superRefine(roleLocationRefine);
+  .superRefine(roleLocationRefine)
+  .superRefine(identityRefine);
 export type InviteUserInput = z.infer<typeof InviteUserInput>;
 
 // ----------------------------------------------------------------------------
@@ -51,13 +131,19 @@ export type InviteUserInput = z.infer<typeof InviteUserInput>;
 export const UpdateUserInput = z
   .object({
     id: z.string().uuid(),
+    email: optionalEmailField,
+    username: usernameField,
     full_name: z.string().trim().min(1).max(120),
     role: userRoleSchema,
     location_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
     can_enter_expenses: z.coerce.boolean().default(false),
+    cross_location: z.coerce.boolean().default(false),
     active: z.coerce.boolean(),
+    allowed_pages: AllowedPagesField,
+    hidden_columns: HiddenColumnsField,
   })
-  .superRefine(roleLocationRefine);
+  .superRefine(roleLocationRefine)
+  .superRefine(identityRefine);
 export type UpdateUserInput = z.infer<typeof UpdateUserInput>;
 
 // ----------------------------------------------------------------------------
@@ -76,3 +162,22 @@ export const SetUserPasswordInput = z.object({
   password: passwordField,
 });
 export type SetUserPasswordInput = z.infer<typeof SetUserPasswordInput>;
+
+// ----------------------------------------------------------------------------
+// Permissions-only update — for the matrix UI
+// ----------------------------------------------------------------------------
+export const UpdateUserPermissionsInput = z.object({
+  id: z.string().uuid(),
+  allowed_pages: AllowedPagesField,
+  hidden_columns: HiddenColumnsField,
+});
+export type UpdateUserPermissionsInput = z.infer<typeof UpdateUserPermissionsInput>;
+
+// ----------------------------------------------------------------------------
+// Bulk actions (Users list page)
+// ----------------------------------------------------------------------------
+export const BulkUserAction = z.object({
+  ids: z.array(z.string().uuid()).min(1, "Pick at least one user"),
+  action: z.enum(["deactivate", "reactivate", "delete"]),
+});
+export type BulkUserAction = z.infer<typeof BulkUserAction>;

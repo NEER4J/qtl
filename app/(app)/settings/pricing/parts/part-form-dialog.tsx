@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 import { CreatableCombobox } from "@/components/pricing/creatable-combobox";
@@ -33,7 +34,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { createPart, updatePart } from "@/lib/actions/pricing";
+import {
+  checkPartNumberExists,
+  createPart,
+  updatePart,
+} from "@/lib/actions/pricing";
 import type { AdminPartRow, PartCategoryOption } from "@/lib/actions/pricing";
 import type { PartMarginType, ServiceCost } from "@/lib/db/types";
 import { calculatePartListPrice } from "@/lib/utils/part-pricing";
@@ -49,6 +54,7 @@ type FormValues = {
   margin_value: string;
   service_cost_id: string | null;
   is_taxable: boolean;
+  in_package: boolean;
   active: boolean;
   extra_price: string;
 };
@@ -64,6 +70,7 @@ const blank: FormValues = {
   margin_value: "0",
   service_cost_id: null,
   is_taxable: true,
+  in_package: false,
   active: true,
   extra_price: "0",
 };
@@ -87,11 +94,21 @@ export function PartFormDialog({
 }) {
   const [isPending, startTransition] = useTransition();
   const form = useForm<FormValues>({ defaultValues: blank });
-  const [cost = "0", mhswFee = "0", marginType = "fixed", marginValue = "0", categoryId] =
-    useWatch({
-      control: form.control,
-      name: ["cost", "mhsw_fee", "margin_type", "margin_value", "category_id"],
-    });
+  const [
+    cost = "0",
+    mhswFee = "0",
+    marginType = "fixed",
+    marginValue = "0",
+    categoryId,
+    partNumber = "",
+  ] = useWatch({
+    control: form.control,
+    name: ["cost", "mhsw_fee", "margin_type", "margin_value", "category_id", "part_number"],
+  });
+
+  const [duplicateMatches, setDuplicateMatches] = useState<
+    { id: string; part_number: string; brand: string; active: boolean }[]
+  >([]);
 
   const calculatedListPrice = calculatePartListPrice({
     cost: Number(cost),
@@ -117,12 +134,42 @@ export function PartFormDialog({
             margin_value: String(part.margin_value),
             service_cost_id: part.service_cost_id,
             is_taxable: part.is_taxable,
+            in_package: part.in_package ?? false,
             active: part.active,
             extra_price: String(part.extra_price ?? 0),
           }
         : blank,
     );
+    setDuplicateMatches([]);
   }, [open, mode, part, form]);
+
+  // Debounced "this part number already exists" check. Runs as the user types
+  // — surfaces a warning before they fill in the rest of the form. Excludes
+  // the current part in edit mode so editing its own row doesn't self-flag.
+  useEffect(() => {
+    if (!open) return;
+    const trimmed = partNumber.trim();
+    if (trimmed.length < 2) {
+      setDuplicateMatches([]);
+      return;
+    }
+    let cancelled = false;
+    const handle = setTimeout(async () => {
+      try {
+        const res = await checkPartNumberExists({
+          part_number: trimmed,
+          excludeId: mode === "edit" && part ? part.id : null,
+        });
+        if (!cancelled) setDuplicateMatches(res.matches);
+      } catch {
+        if (!cancelled) setDuplicateMatches([]);
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [partNumber, open, mode, part]);
 
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
@@ -138,6 +185,7 @@ export function PartFormDialog({
         margin_value: Number(values.margin_value),
         service_cost_id: values.service_cost_id || null,
         is_taxable: values.is_taxable,
+        in_package: values.in_package,
         active: values.active,
         extra_price: extraTrimmed === "" ? 0 : Number(extraTrimmed),
       };
@@ -177,6 +225,27 @@ export function PartFormDialog({
                     <FormControl>
                       <Input placeholder="LF9080" {...field} />
                     </FormControl>
+                    {duplicateMatches.length > 0 && (
+                      <div className="mt-1 flex items-start gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                        <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                        <div>
+                          <div className="font-medium">
+                            Already in catalog
+                            {duplicateMatches.length > 1 ? ` (${duplicateMatches.length} matches)` : ""}
+                          </div>
+                          <ul className="mt-0.5 space-y-0.5">
+                            {duplicateMatches.slice(0, 3).map((m) => (
+                              <li key={m.id}>
+                                <span className="font-mono">{m.part_number}</span> — {m.brand}
+                                {!m.active && (
+                                  <span className="ml-1 text-muted-foreground">(inactive)</span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -375,6 +444,27 @@ export function PartFormDialog({
                     <FormLabel className="cursor-pointer">HST taxable</FormLabel>
                     <FormDescription className="text-xs">
                       Uncheck for HST-exempt parts. Applies to the list price on every job that uses this part.
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="in_package"
+              render={({ field }) => (
+                <FormItem className="flex items-start gap-2 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={(v) => field.onChange(v === true)}
+                    />
+                  </FormControl>
+                  <div className="leading-none">
+                    <FormLabel className="cursor-pointer">Bundled in a package</FormLabel>
+                    <FormDescription className="text-xs">
+                      When on, the All Filter Sell Price shows <strong>Without Service = $0</strong> for this part (the customer pays for the package). If the same part is added to a sales job a second time, the extra one auto-uses the <strong>Over Counter</strong> price.
                     </FormDescription>
                   </div>
                 </FormItem>
