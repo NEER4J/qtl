@@ -70,7 +70,7 @@ export function CustomerComboBox({
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Search by name or plate…"
+            placeholder="Search by plate, name, or phone…"
             value={q}
             onValueChange={setQ}
           />

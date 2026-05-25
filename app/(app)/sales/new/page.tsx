@@ -15,11 +15,17 @@ import { listEngineTypes, listOilTypes } from "@/lib/actions/pricing";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewSalesJobPage() {
+export default async function NewSalesJobPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ customer_id?: string }>;
+}) {
   const profile = await requireProfile();
   if (profile.role === "accountant" || profile.role === "employee") {
     redirect("/sales");
   }
+
+  const { customer_id: preselectCustomerId } = await searchParams;
 
   const [locations, serviceTypes, settings, engineTypes, oilTypes] = await Promise.all([
     listActiveLocations(),
@@ -69,6 +75,7 @@ export default async function NewSalesJobPage() {
         oilTypes={oilTypes}
         hstRate={Number(settings.hst_rate)}
         lockedLocationId={lockedLocationId}
+        initial={preselectCustomerId ? { customer_id: preselectCustomerId } : undefined}
       />
     </div>
   );

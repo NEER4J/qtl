@@ -75,6 +75,21 @@ export const SalesJobInput = z
     total: moneySchema,
     paid_amount: moneySchema.default(0),
     payment_mode: paymentModeSchema.nullable().optional(),
+    /**
+     * Multiple-payment shape used at job creation. When provided and non-empty,
+     * the action layer ignores `paid_amount` + `payment_mode` and inserts one
+     * `sales_payments` row per entry. `paid_amount` on the job ends up as the
+     * sum; `payment_mode` is the first row's mode (kept for legacy reporting).
+     * On update, this is ignored — payment edits go through addSalesPayment.
+     */
+    initial_payments: z
+      .array(
+        z.object({
+          mode: paymentModeSchema,
+          amount: moneySchema.refine((v) => v > 0, "Amount must be > 0"),
+        }),
+      )
+      .optional(),
 
     // Free grease (item #15)
     free_grease_applied: z.coerce.boolean().default(false),
@@ -100,7 +115,19 @@ export const SalesJobInput = z
         message: "Total must equal Sub Total + HST",
       });
     }
-    if (val.paid_amount > val.total + 0.01) {
+    // initial_payments takes precedence when present — validate its sum
+    // against total. Otherwise fall back to single-shot paid_amount check.
+    const payments = val.initial_payments ?? [];
+    if (payments.length > 0) {
+      const sum = payments.reduce((a, p) => a + p.amount, 0);
+      if (sum > val.total + 0.01) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["initial_payments"],
+          message: "Sum of payments cannot exceed Total",
+        });
+      }
+    } else if (val.paid_amount > val.total + 0.01) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["paid_amount"],

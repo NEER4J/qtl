@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -52,15 +53,23 @@ const NO_PAY_METHOD = "__none__";
 
 type FormValues = {
   code: string;
-  salutation: string;
   last_or_company: string;
   card_number: string;
+  card_expiry: string;
+  card_cvv: string;
   address_1: string;
   address_2: string;
   city: string;
   province: string;
   country: "CA" | "US";
   postal_code: string;
+  mailing_same_as_billing: boolean;
+  mailing_address_1: string;
+  mailing_address_2: string;
+  mailing_city: string;
+  mailing_province: string;
+  mailing_country: "CA" | "US";
+  mailing_postal_code: string;
   phone_home: string;
   phone_cell: string;
   phone_business: string;
@@ -73,7 +82,7 @@ type FormValues = {
   comments: string;
   phone_notes: Record<string, string>;
   contact_method: "mail" | "email" | "phone" | "sms" | "";
-  customer_type: string;
+  customer_type: "fleet" | "single" | "";
   default_pay_method: string;
   cod_required: boolean;
   labour_discount_pct: number;
@@ -88,15 +97,23 @@ type FormValues = {
 
 const empty: FormValues = {
   code: "",
-  salutation: "",
   last_or_company: "",
   card_number: "",
+  card_expiry: "",
+  card_cvv: "",
   address_1: "",
   address_2: "",
   city: "",
-  province: "",
+  province: "ON",
   country: "CA",
   postal_code: "",
+  mailing_same_as_billing: true,
+  mailing_address_1: "",
+  mailing_address_2: "",
+  mailing_city: "",
+  mailing_province: "ON",
+  mailing_country: "CA",
+  mailing_postal_code: "",
   phone_home: "",
   phone_cell: "",
   phone_business: "",
@@ -123,17 +140,36 @@ const empty: FormValues = {
 };
 
 function valuesFromCustomer(c: Customer): FormValues {
+  // Treat mailing as "same as billing" when every mailing-* field exactly
+  // matches the corresponding billing field. That's the most useful heuristic:
+  // if they diverge for any reason, the user sees the divergence and decides.
+  const sameAsBilling =
+    (c.mailing_address_1 ?? "") === (c.address_1 ?? "") &&
+    (c.mailing_address_2 ?? "") === (c.address_2 ?? "") &&
+    (c.mailing_city ?? "") === (c.city ?? "") &&
+    (c.mailing_province ?? "") === (c.province ?? "") &&
+    (c.mailing_country ?? "") === (c.country ?? "") &&
+    (c.mailing_postal_code ?? "") === (c.postal_code ?? "");
+
   return {
     code: c.code ?? "",
-    salutation: c.salutation ?? "",
     last_or_company: c.last_or_company ?? c.billing_name ?? "",
     card_number: c.card_number ?? "",
+    card_expiry: c.card_expiry ?? "",
+    card_cvv: c.card_cvv ?? "",
     address_1: c.address_1 ?? "",
     address_2: c.address_2 ?? "",
     city: c.city ?? "",
-    province: c.province ?? "",
+    province: c.province ?? "ON",
     country: (c.country as "CA" | "US") || "CA",
     postal_code: c.postal_code ?? "",
+    mailing_same_as_billing: sameAsBilling,
+    mailing_address_1: c.mailing_address_1 ?? "",
+    mailing_address_2: c.mailing_address_2 ?? "",
+    mailing_city: c.mailing_city ?? "",
+    mailing_province: c.mailing_province ?? "ON",
+    mailing_country: (c.mailing_country as "CA" | "US") || "CA",
+    mailing_postal_code: c.mailing_postal_code ?? "",
     phone_home: c.phone_home ?? "",
     phone_cell: c.phone_cell ?? "",
     phone_business: c.phone_business ?? "",
@@ -186,11 +222,17 @@ export function CustomerForm({
   onSaved,
   onCancel,
 }: CustomerFormProps) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  // Which submit button was clicked — drives post-save navigation.
+  // Reset to "save" before every submit so a previous click doesn't leak.
+  const [submitIntent, setSubmitIntent] = useState<"save" | "save-and-add-job">("save");
   const form = useForm<FormValues>({
     defaultValues: customer ? valuesFromCustomer(customer) : empty,
   });
   const country = form.watch("country");
+  const mailingCountry = form.watch("mailing_country");
+  const mailingSameAsBilling = form.watch("mailing_same_as_billing");
   const mode: "create" | "edit" = customer ? "edit" : "create";
 
   // Edit mode — vehicles are real DB rows.
@@ -221,11 +263,33 @@ export function CustomerForm({
   };
 
   const onSubmit = form.handleSubmit((values) => {
+    // "Same as billing" mirrors the billing fields into mailing_*. Persisting
+    // the copy means downstream PDFs / mail-merge don't need fallback logic.
+    const mailingSrc = values.mailing_same_as_billing
+      ? {
+          mailing_address_1: values.address_1,
+          mailing_address_2: values.address_2,
+          mailing_city: values.city,
+          mailing_province: values.province,
+          mailing_country: values.country,
+          mailing_postal_code: values.postal_code,
+        }
+      : {
+          mailing_address_1: values.mailing_address_1,
+          mailing_address_2: values.mailing_address_2,
+          mailing_city: values.mailing_city,
+          mailing_province: values.mailing_province,
+          mailing_country: values.mailing_country,
+          mailing_postal_code: values.mailing_postal_code,
+        };
+
     const payload = {
       code: values.code || null,
-      salutation: values.salutation || null,
+      salutation: null,
       last_or_company: values.last_or_company || null,
       card_number: values.card_number || null,
+      card_expiry: values.card_expiry || null,
+      card_cvv: values.card_cvv || null,
       billing_name: null,
       address_1: values.address_1 || null,
       address_2: values.address_2 || null,
@@ -233,6 +297,12 @@ export function CustomerForm({
       province: values.province || null,
       country: values.country,
       postal_code: values.postal_code || null,
+      mailing_address_1: mailingSrc.mailing_address_1 || null,
+      mailing_address_2: mailingSrc.mailing_address_2 || null,
+      mailing_city: mailingSrc.mailing_city || null,
+      mailing_province: mailingSrc.mailing_province || null,
+      mailing_country: mailingSrc.mailing_country,
+      mailing_postal_code: mailingSrc.mailing_postal_code || null,
       phone_home: values.phone_home || null,
       phone_cell: values.phone_cell || null,
       phone_business: values.phone_business || null,
@@ -245,7 +315,11 @@ export function CustomerForm({
       comments: values.comments || null,
       phone_notes: values.phone_notes ?? {},
       contact_method: values.contact_method || null,
-      customer_type: values.customer_type || null,
+      // "_" is the Select's placeholder sentinel — treat as null.
+      customer_type:
+        values.customer_type === "fleet" || values.customer_type === "single"
+          ? values.customer_type
+          : null,
       default_pay_method:
         values.default_pay_method && values.default_pay_method !== NO_PAY_METHOD
           ? values.default_pay_method
@@ -326,6 +400,14 @@ export function CustomerForm({
         toast.success(mode === "create" ? "Customer created" : "Customer updated");
       }
 
+      // "Save and add new job" — jump straight into the new-sales-job form
+      // with the customer pre-selected. The form runs in create mode only;
+      // editing existing customers always uses plain "save".
+      if (mode === "create" && submitIntent === "save-and-add-job") {
+        router.push(`/sales/new?customer_id=${res.data.id}`);
+        return;
+      }
+
       onSaved?.(res.data);
     });
   });
@@ -351,43 +433,19 @@ export function CustomerForm({
           {/* ------------------------------------------------------ Identity */}
           <section className="space-y-4">
             <SectionHeader title="Identity" />
-            <div className="grid gap-4 md:grid-cols-12">
-              <FormField
-                control={form.control}
-                name="salutation"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Salutation</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || "_"}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="None" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="_">None</SelectItem>
-                        {["Mr.", "Mrs.", "Ms.", "Dr."].map((s) => (
-                          <SelectItem key={s} value={s}>{s}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="last_or_company"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-10">
-                    <FormLabel>Last / Company name *</FormLabel>
-                    <FormControl>
-                      <UppercaseInput placeholder="ACME TRUCKING LTD." {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            <FormField
+              control={form.control}
+              name="last_or_company"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Last name / Company name *</FormLabel>
+                  <FormControl>
+                    <UppercaseInput placeholder="Last name or company name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
@@ -396,20 +454,32 @@ export function CustomerForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Type</FormLabel>
-                    <FormControl>
-                      <Input placeholder="(free text)" {...field} />
-                    </FormControl>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || "_"}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="_">—</SelectItem>
+                        <SelectItem value="fleet">Fleet</SelectItem>
+                        <SelectItem value="single">Single</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </FormItem>
                 )}
               />
               <FormField
                 control={form.control}
-                name="card_number"
+                name="code"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Card number</FormLabel>
+                    <FormLabel>Customer code</FormLabel>
                     <FormControl>
-                      <UppercaseInput placeholder="(carrier or fleet card #)" {...field} />
+                      <Input placeholder="Optional short code" {...field} />
                     </FormControl>
                   </FormItem>
                 )}
@@ -417,16 +487,16 @@ export function CustomerForm({
             </div>
           </section>
 
-          {/* ------------------------------------------------------ Address */}
+          {/* ------------------------------------------------------ Billing address */}
           <section className="space-y-4">
-            <SectionHeader title="Address" />
+            <SectionHeader title="Billing address" />
             <FormField
               control={form.control}
               name="address_1"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Address 1</FormLabel>
-                  <FormControl><UppercaseInput {...field} /></FormControl>
+                  <FormControl><UppercaseInput placeholder="Street address" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -437,7 +507,7 @@ export function CustomerForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Address 2</FormLabel>
-                  <FormControl><UppercaseInput {...field} /></FormControl>
+                  <FormControl><UppercaseInput placeholder="Suite, unit, etc. (optional)" {...field} /></FormControl>
                 </FormItem>
               )}
             />
@@ -448,7 +518,7 @@ export function CustomerForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>City / Town</FormLabel>
-                    <FormControl><UppercaseInput {...field} /></FormControl>
+                    <FormControl><UppercaseInput placeholder="City" {...field} /></FormControl>
                   </FormItem>
                 )}
               />
@@ -491,6 +561,101 @@ export function CustomerForm({
             </div>
           </section>
 
+          {/* ------------------------------------------------------ Mailing address */}
+          <section className="space-y-4">
+            <SectionHeader title="Mailing address" />
+            <FormField
+              control={form.control}
+              name="mailing_same_as_billing"
+              render={({ field }) => (
+                <FormItem className="flex items-center gap-2 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      id="mailing_same_as_billing"
+                      checked={field.value}
+                      onCheckedChange={(v) => field.onChange(v === true)}
+                    />
+                  </FormControl>
+                  <label htmlFor="mailing_same_as_billing" className="text-sm cursor-pointer">
+                    Same as billing address
+                  </label>
+                </FormItem>
+              )}
+            />
+            {!mailingSameAsBilling && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="mailing_address_1"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Address 1</FormLabel>
+                      <FormControl><UppercaseInput placeholder="Street address" {...field} /></FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="mailing_address_2"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Address 2</FormLabel>
+                      <FormControl><UppercaseInput placeholder="Suite, unit, etc. (optional)" {...field} /></FormControl>
+                    </FormItem>
+                  )}
+                />
+                <div className="grid gap-4 md:grid-cols-4">
+                  <FormField
+                    control={form.control}
+                    name="mailing_city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>City / Town</FormLabel>
+                        <FormControl><UppercaseInput placeholder="City" {...field} /></FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="mailing_postal_code"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Postal / ZIP</FormLabel>
+                        <FormControl>
+                          <UppercaseInput placeholder={postalPlaceholder(mailingCountry)} {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="mailing_country"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Country</FormLabel>
+                        <CountrySelect value={field.value} onChange={field.onChange} />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="mailing_province"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{mailingCountry === "US" ? "State" : "Province"}</FormLabel>
+                        <ProvinceSelect
+                          country={mailingCountry}
+                          value={field.value}
+                          onChange={field.onChange}
+                        />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </>
+            )}
+          </section>
+
           {/* ------------------------------------------------------ Phones */}
           <section className="space-y-4">
             <SectionHeader
@@ -498,7 +663,6 @@ export function CustomerForm({
               hint="Each phone has a notes button (icon next to the field) for call-time preferences, who to ask for, etc."
             />
             <div className="grid gap-4 md:grid-cols-2">
-              <PhoneSlot form={form} name="phone_home" label="Home" notesKey="home" />
               <PhoneSlot form={form} name="phone_cell" label="Cell" notesKey="cell" />
               <div className="grid grid-cols-[1fr_5rem] gap-2">
                 <PhoneSlot
@@ -518,6 +682,7 @@ export function CustomerForm({
                   )}
                 />
               </div>
+              <PhoneSlot form={form} name="phone_home" label="Home" notesKey="home" />
               <PhoneSlot form={form} name="phone_fax" label="Fax" notesKey="fax" />
               <PhoneSlot form={form} name="phone_alt_1" label="Alternate 1" notesKey="alt_1" />
               <PhoneSlot form={form} name="phone_alt_2" label="Alternate 2" notesKey="alt_2" />
@@ -559,6 +724,46 @@ export function CustomerForm({
           {/* ------------------------------------------------------ Billing */}
           <section className="space-y-4">
             <SectionHeader title="Billing" />
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="card_number"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Card number</FormLabel>
+                    <FormControl>
+                      <UppercaseInput placeholder="Card number" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="card_expiry"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Expiry</FormLabel>
+                    <FormControl>
+                      <Input placeholder="MM/YY" maxLength={7} {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="card_cvv"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>CVV</FormLabel>
+                    <FormControl>
+                      <Input placeholder="CVV" maxLength={4} {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
+
             <div className="grid gap-4 md:grid-cols-3">
               <FormField
                 control={form.control}
@@ -839,7 +1044,7 @@ export function CustomerForm({
                   </TableBody>
                 </Table>
                 <p className="px-3 py-2 text-xs text-muted-foreground">
-                  These vehicles will be saved when you click <strong>Create customer</strong>.
+                  These vehicles will be saved when you click <strong>Save</strong>.
                 </p>
               </div>
             )}
@@ -860,8 +1065,24 @@ export function CustomerForm({
               Cancel
             </Button>
           )}
-          <Button type="submit" disabled={isPending}>
-            {isPending ? "Saving…" : mode === "create" ? "Create customer" : "Save changes"}
+          {mode === "create" && (
+            <Button
+              type="submit"
+              variant="outline"
+              disabled={isPending}
+              onClick={() => setSubmitIntent("save-and-add-job")}
+            >
+              {isPending && submitIntent === "save-and-add-job"
+                ? "Saving…"
+                : "Save & add new job"}
+            </Button>
+          )}
+          <Button
+            type="submit"
+            disabled={isPending}
+            onClick={() => setSubmitIntent("save")}
+          >
+            {isPending && submitIntent === "save" ? "Saving…" : "Save"}
           </Button>
         </div>
       </form>

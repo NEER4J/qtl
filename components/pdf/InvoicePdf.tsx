@@ -455,13 +455,26 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
         <View style={styles.commentsBox}>
           <Text style={styles.commentsLabel}>Comments</Text>
           {job.comments ? <Text>{job.comments}</Text> : null}
-          {job.paid_amount > 0 && (
+          {/* Payments — iterate every sales_payments row so multi-mode
+              ("$100 cash + $50 Visa") shows up correctly. Fall back to the
+              legacy single line when the ledger is empty but paid_amount > 0,
+              which happens on imported / pre-multipay jobs. */}
+          {job.payments && job.payments.length > 0 ? (
+            <View style={{ marginTop: job.comments ? 3 : 0 }}>
+              {job.payments.map((p, idx) => (
+                <Text key={p.id ?? idx}>
+                  Payment of ${money(p.amount)} by {labelForMode(p.mode)}
+                  {job.invoice_no ? `, inv#${job.invoice_no}` : ""} — Received with thanks
+                </Text>
+              ))}
+            </View>
+          ) : job.paid_amount > 0 ? (
             <Text style={{ marginTop: job.comments ? 3 : 0 }}>
               Payment of ${money(job.paid_amount)}
               {job.payment_mode ? ` by ${labelForMode(job.payment_mode)}` : ""}
               {job.invoice_no ? `, inv#${job.invoice_no}` : ""} — Received with thanks
             </Text>
-          )}
+          ) : null}
         </View>
 
         {/* ---------------- Footer (disclaimer + totals) ---------------- */}

@@ -74,13 +74,23 @@ export const CreateCustomerInput = z.object({
     .or(z.literal(""))
     .transform((v) => (v === "" || v == null ? null : v)),
 
-  // Address (item #2) — uppercase-locked at the form & schema level
+  // Billing address (item #2) — uppercase-locked at the form & schema level
   address_1: upperOptional(200),
   address_2: upperOptional(200),
   city: upperOptional(80),
   province: upperOptional(60),
   country: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).default("CA"),
   postal_code: upperOptional(20),
+
+  // Mailing address — UI offers a "same as billing" checkbox that copies the
+  // billing fields into these. We still persist them separately so PDFs and
+  // mail-merge templates don't need fallback logic.
+  mailing_address_1: upperOptional(200),
+  mailing_address_2: upperOptional(200),
+  mailing_city: upperOptional(80),
+  mailing_province: upperOptional(60),
+  mailing_country: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).default("CA"),
+  mailing_postal_code: upperOptional(20),
 
   // Phones (item #13 — display formatted client-side)
   contact_no: phoneOptional,
@@ -102,10 +112,18 @@ export const CreateCustomerInput = z.object({
     .nullable()
     .optional()
     .transform((v) => v ?? null),
-  customer_type: textOptional(60),
+  customer_type: z
+    .enum(["fleet", "single"])
+    .nullable()
+    .optional()
+    .or(z.literal(""))
+    .transform((v) => (v === "" || v == null ? null : v)),
 
-  // Item #23 — carrier/customer-level card number
+  // Item #23 — carrier/customer-level card details. WARNING: CVV violates
+  // PCI-DSS; kept by explicit client request (2026-05-22).
   card_number: upperOptional(60),
+  card_expiry: textOptional(10),
+  card_cvv: textOptional(8),
 
   // Billing options (item #3)
   default_pay_method: paymentModeSchema.nullable().optional(),

@@ -641,7 +641,7 @@ export function ExpenseForm({
               Cancel
             </Button>
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Saving…" : mode === "create" ? "Record expense" : "Save changes"}
+              {isPending ? "Saving…" : "Save"}
             </Button>
           </div>
         </form>

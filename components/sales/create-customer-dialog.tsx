@@ -124,7 +124,7 @@ export function CreateCustomerDialog({
                 <FormItem>
                   <FormLabel>Billing name</FormLabel>
                   <FormControl>
-                    <Input placeholder="ABC Trucking Ltd." {...field} />
+                    <Input placeholder="Customer or company name" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -137,7 +137,7 @@ export function CreateCustomerDialog({
                 <FormItem>
                   <FormLabel>License plates</FormLabel>
                   <FormControl>
-                    <Input placeholder="ABC 123, XYZ 789" {...field} />
+                    <Input placeholder="Comma-separated license plates" {...field} />
                   </FormControl>
                   <FormDescription>Comma-separated. Stored uppercase.</FormDescription>
                   <FormMessage />
@@ -152,7 +152,7 @@ export function CreateCustomerDialog({
                   <FormItem>
                     <FormLabel>Contact</FormLabel>
                     <FormControl>
-                      <Input placeholder="(226) 555-0100" {...field} />
+                      <Input placeholder="Phone number" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -165,7 +165,7 @@ export function CreateCustomerDialog({
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="billing@abc.ca" {...field} />
+                      <Input type="email" placeholder="Email address" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -177,7 +177,7 @@ export function CreateCustomerDialog({
                 Cancel
               </Button>
               <Button type="submit" disabled={isPending}>
-                {isPending ? "Saving…" : "Create"}
+                {isPending ? "Saving…" : "Save"}
               </Button>
             </DialogFooter>
           </form>

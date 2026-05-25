@@ -218,7 +218,21 @@ export const createSalesJob = wrapAction({
         : input.location_id;
 
     const supabase = await createClient();
-    const status = deriveStatus(input.total, input.paid_amount);
+
+    // Reconcile single-shot vs multi-payment input. When the form sends an
+    // initial_payments array, that's the source of truth; we derive
+    // paid_amount + (legacy) payment_mode from it. The legacy fields stay on
+    // the job row for analytics/reports and for backwards compat with code
+    // that only reads sales_jobs.payment_mode.
+    const initialPayments = input.initial_payments ?? [];
+    const usingMulti = initialPayments.length > 0;
+    const effectivePaidAmount = usingMulti
+      ? Math.round(initialPayments.reduce((a, p) => a + p.amount, 0) * 100) / 100
+      : input.paid_amount;
+    const effectivePaymentMode = usingMulti
+      ? initialPayments[0]!.mode
+      : input.payment_mode ?? null;
+    const status = deriveStatus(input.total, effectivePaidAmount);
 
     const { data, error } = await supabase
       .from("sales_jobs")
@@ -254,8 +268,8 @@ export const createSalesJob = wrapAction({
         sub_total: input.sub_total,
         hst: input.hst,
         total: input.total,
-        paid_amount: input.paid_amount,
-        payment_mode: input.payment_mode ?? null,
+        paid_amount: effectivePaidAmount,
+        payment_mode: effectivePaymentMode,
         payment_status: status,
         free_grease_applied: input.free_grease_applied,
         free_grease_override_reason: input.free_grease_override_reason || null,
@@ -270,11 +284,20 @@ export const createSalesJob = wrapAction({
       .single();
     if (error) throw error;
 
-    // Mirror the single-shot paid amount as a payment row so the ledger is
-    // consistent with what the spec calls "Partial Payments" UX (Add Payment
-    // button accumulates more rows). A zero-amount shortcut stays a zero-row
-    // job.
-    if (input.paid_amount > 0 && input.payment_mode) {
+    // Persist payments to the ledger. Multi-row path inserts each entry;
+    // single-shot path mirrors the legacy paid_amount/payment_mode as one row
+    // so the ledger stays consistent across both UI shapes.
+    if (usingMulti) {
+      const rows = initialPayments.map((p) => ({
+        sales_job_id: data.id,
+        paid_on: input.job_date,
+        amount: p.amount,
+        mode: p.mode,
+        created_by: profile.id,
+      }));
+      const { error: payErr } = await supabase.from("sales_payments").insert(rows);
+      if (payErr) throw payErr;
+    } else if (input.paid_amount > 0 && input.payment_mode) {
       const { error: payErr } = await supabase.from("sales_payments").insert({
         sales_job_id: data.id,
         paid_on: input.job_date,
@@ -286,6 +309,22 @@ export const createSalesJob = wrapAction({
     }
 
     await replaceJobItems(supabase, data.id, input.items, profile.id);
+
+    // Free-grease "one-shot" rule: once a customer redeems the offer on a job,
+    // clear free_grease_until so the next sales-form lookup treats them as
+    // ineligible. The 30-day window is enforced separately via
+    // isFreeGreaseEligible(); this just retires the offer after one use.
+    if (input.free_grease_applied && input.customer_id) {
+      const { error: clearErr } = await supabase
+        .from("customers")
+        .update({ free_grease_until: null, updated_by: profile.id })
+        .eq("id", input.customer_id);
+      if (clearErr) {
+        // Don't fail the whole save — the job is on the books either way.
+        // Log so the issue surfaces on the next dashboard render.
+        console.error("[free-grease-clear]", clearErr);
+      }
+    }
 
     revalidatePath("/sales");
     revalidatePath("/dashboard");
@@ -358,6 +397,18 @@ export const updateSalesJob = wrapAction({
     if (error) throw error;
 
     await replaceJobItems(supabase, input.id, input.items, profile.id);
+
+    // Free-grease "one-shot" rule on edit too: if the job is toggled into
+    // free-grease-applied during an edit, retire the offer on the customer.
+    if (input.free_grease_applied && input.customer_id) {
+      const { error: clearErr } = await supabase
+        .from("customers")
+        .update({ free_grease_until: null, updated_by: profile.id })
+        .eq("id", input.customer_id);
+      if (clearErr) {
+        console.error("[free-grease-clear]", clearErr);
+      }
+    }
 
     revalidatePath("/sales");
     revalidatePath(`/sales/${input.id}`);

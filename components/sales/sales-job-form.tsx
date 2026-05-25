@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -147,6 +148,13 @@ export function SalesJobForm({
     initial?.auto_priced_at && initial?.sub_total ? initial.sub_total : null,
   );
   const [lineItems, setLineItems] = useState<LineItem[]>(initialItems ?? []);
+  // Create-mode multi-payment ledger. Each row becomes a sales_payments
+  // insert at save time. Edit mode uses the existing AddPaymentDialog on the
+  // detail page instead — we don't try to round-trip the ledger through this
+  // form (too easy to clobber existing payments).
+  const [createPayments, setCreatePayments] = useState<
+    { id: string; mode: PaymentMode; amount: string }[]
+  >([]);
 
   const defaults: FormValues = {
     location_id: lockedLocationId ?? initial?.location_id ?? locations[0]?.id ?? "",
@@ -264,15 +272,26 @@ export function SalesJobForm({
   // --------------------------------------------------------------------------
   const customerId = useWatch({ control: form.control, name: "customer_id" });
 
-  // Edit mode — hydrate selectedCustomer + vehicles from existing job.
+  // Hydrate selectedCustomer + vehicles when the form mounts with a
+  // customer_id already in `initial` — covers both edit mode AND the
+  // "Save & add new job" flow that pre-fills customer_id via querystring.
   useEffect(() => {
-    if (mode === "edit" && initial?.customer_id && !selectedCustomer) {
+    if (initial?.customer_id && !selectedCustomer) {
       (async () => {
         const [c, vs] = await Promise.all([
           getCustomer(initial.customer_id!),
           getCustomerVehicles(initial.customer_id!),
         ]);
-        if (c) setSelectedCustomer(c);
+        if (c) {
+          setSelectedCustomer(c);
+          // In create mode the form's billing/contact fields default to "" —
+          // populate them from the customer so the user doesn't have to retype.
+          if (mode === "create") {
+            form.setValue("billing_name", c.billing_name ?? c.last_or_company ?? "");
+            form.setValue("contact_no", c.phone_cell ?? c.contact_no ?? "");
+            form.setValue("email", c.email ?? "");
+          }
+        }
         setCustomerVehicles(vs);
         if (initial.vehicle_id) {
           const v = vs.find((x) => x.id === initial.vehicle_id) ?? null;
@@ -408,6 +427,16 @@ export function SalesJobForm({
       const stillAutoPriced =
         lastAutoPrice != null && Number(values.sub_total) === Number(lastAutoPrice);
 
+      // Multi-payment path (create mode only): roll up the ledger into the
+      // initial_payments array the schema/action understand. Empty rows are
+      // dropped silently; a single row collapses cleanly to one ledger entry.
+      const cleanedPayments =
+        mode === "create"
+          ? createPayments
+              .map((p) => ({ mode: p.mode, amount: Number(p.amount) || 0 }))
+              .filter((p) => p.amount > 0)
+          : [];
+
       const payload = {
         ...values,
         customer_id: customerIdToUse,
@@ -426,6 +455,7 @@ export function SalesJobForm({
         oil_type_id: values.oil_type_id || null,
         oil_container: values.oil_container || null,
         auto_priced_at: stillAutoPriced ? new Date().toISOString() : null,
+        initial_payments: cleanedPayments.length > 0 ? cleanedPayments : undefined,
         items: lineItems.map((it) => ({
           part_id: it.part_id,
           description: it.description,
@@ -651,7 +681,7 @@ export function SalesJobForm({
                     <FormItem>
                       <FormLabel>Billing name *</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Acme Trucking Ltd." />
+                        <Input {...field} placeholder="Customer or company name" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -666,7 +696,7 @@ export function SalesJobForm({
                       <FormItem>
                         <FormLabel>Contact</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="(226) 555-0100" />
+                          <Input {...field} placeholder="Phone number" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -679,7 +709,7 @@ export function SalesJobForm({
                       <FormItem>
                         <FormLabel>Email</FormLabel>
                         <FormControl>
-                          <Input type="email" {...field} placeholder="billing@acme.ca" />
+                          <Input type="email" {...field} placeholder="Email address" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -697,7 +727,7 @@ export function SalesJobForm({
                         <Input
                           {...field}
                           className="font-mono uppercase max-w-xs"
-                          placeholder="ABC 1234"
+                          placeholder="License plate"
                           onChange={(e) => field.onChange(e.target.value.toUpperCase())}
                         />
                       </FormControl>
@@ -1145,50 +1175,179 @@ export function SalesJobForm({
                   </FormItem>
                 )}
               />
+              {mode === "edit" && (
+                <FormField
+                  control={form.control}
+                  name="paid_amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Paid</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" min="0" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
+
+            {mode === "edit" && (
               <FormField
                 control={form.control}
-                name="paid_amount"
+                name="payment_mode"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Paid</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.01" min="0" {...field} />
-                    </FormControl>
+                  <FormItem className="max-w-xs">
+                    <FormLabel>Payment mode</FormLabel>
+                    <Select
+                      onValueChange={(v) => field.onChange(v as PaymentMode | "")}
+                      value={field.value || ""}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="(Outstanding if blank)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {PAYMENT_MODES.map((m) => (
+                          <SelectItem key={m.value} value={m.value}>
+                            {m.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            </div>
+            )}
 
-            <FormField
-              control={form.control}
-              name="payment_mode"
-              render={({ field }) => (
-                <FormItem className="max-w-xs">
-                  <FormLabel>Payment mode</FormLabel>
-                  <Select
-                    onValueChange={(v) => field.onChange(v as PaymentMode | "")}
-                    value={field.value || ""}
+            {/* Multi-payment ledger (create mode). Add one row per tender the
+                customer used (e.g. $100 cash + $50 Visa). Each row becomes a
+                sales_payments insert at save time. Leave the list empty to
+                mark the job Outstanding; further payments are recorded later
+                via the Add Payment dialog on the job detail page. */}
+            {mode === "create" && (
+              <div className="space-y-2">
+                <div className="flex items-baseline justify-between">
+                  <FormLabel>Payments received</FormLabel>
+                  <span className="text-xs text-muted-foreground">
+                    Add a row for each tender (cash + card splits are fine).
+                  </span>
+                </div>
+
+                {createPayments.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                    No payment yet — this job will be marked Outstanding.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {createPayments.map((row, idx) => (
+                      <div
+                        key={row.id}
+                        className="grid grid-cols-[minmax(0,160px)_1fr_auto] gap-2 items-end"
+                      >
+                        <div>
+                          {idx === 0 && (
+                            <div className="text-xs text-muted-foreground mb-1">Mode</div>
+                          )}
+                          <Select
+                            value={row.mode}
+                            onValueChange={(v) =>
+                              setCreatePayments((prev) =>
+                                prev.map((p) =>
+                                  p.id === row.id ? { ...p, mode: v as PaymentMode } : p,
+                                ),
+                              )
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PAYMENT_MODES.map((m) => (
+                                <SelectItem key={m.value} value={m.value}>
+                                  {m.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          {idx === 0 && (
+                            <div className="text-xs text-muted-foreground mb-1">Amount</div>
+                          )}
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            placeholder="0.00"
+                            value={row.amount}
+                            onChange={(e) =>
+                              setCreatePayments((prev) =>
+                                prev.map((p) =>
+                                  p.id === row.id ? { ...p, amount: e.target.value } : p,
+                                ),
+                              )
+                            }
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            setCreatePayments((prev) => prev.filter((p) => p.id !== row.id))
+                          }
+                          aria-label="Remove payment"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const remaining =
+                        Number(form.getValues("total") || 0) -
+                        createPayments.reduce((a, p) => a + (Number(p.amount) || 0), 0);
+                      setCreatePayments((prev) => [
+                        ...prev,
+                        {
+                          id:
+                            typeof crypto !== "undefined" && "randomUUID" in crypto
+                              ? crypto.randomUUID()
+                              : `pay-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                          mode: "cash",
+                          amount: remaining > 0 ? remaining.toFixed(2) : "",
+                        },
+                      ]);
+                    }}
                   >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="(Outstanding if blank)" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {PAYMENT_MODES.map((m) => (
-                        <SelectItem key={m.value} value={m.value}>
-                          {m.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    <Plus className="size-4" /> Add payment
+                  </Button>
+                  {createPayments.length > 0 && (
+                    <div className="text-xs text-muted-foreground tabular-nums">
+                      Total paid:{" "}
+                      <span className="font-medium text-foreground">
+                        $
+                        {createPayments
+                          .reduce((a, p) => a + (Number(p.amount) || 0), 0)
+                          .toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
-            {Number(paidRaw) === 0 && (
+            {mode === "edit" && Number(paidRaw) === 0 && (
               <p className="text-xs text-amber-600">
                 No payment recorded — this job will be marked Outstanding.
               </p>
@@ -1200,7 +1359,7 @@ export function SalesJobForm({
               Cancel
             </Button>
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Saving…" : mode === "create" ? "Create job" : "Save changes"}
+              {isPending ? "Saving…" : "Save"}
             </Button>
           </div>
         </form>

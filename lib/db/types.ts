@@ -92,13 +92,20 @@ export interface Customer {
   salutation: string | null;
   first_name: string | null;
   last_or_company: string | null;
-  // address
+  // billing address
   address_1: string | null;
   address_2: string | null;
   city: string | null;
   province: string | null;
   country: string;
   postal_code: string | null;
+  // mailing address (separate column; UI offers "same as billing" copy)
+  mailing_address_1: string | null;
+  mailing_address_2: string | null;
+  mailing_city: string | null;
+  mailing_province: string | null;
+  mailing_country: string;
+  mailing_postal_code: string | null;
   // phones
   contact_no: string | null;
   phone_home: string | null;
@@ -115,10 +122,14 @@ export interface Customer {
   other_contact: string | null;
   comments: string | null;
   contact_method: ContactMethod | null;
-  customer_type: string | null;
+  /** 'fleet' | 'single' | null. Free-text in earlier versions; constrained by CHECK in migration 0061. */
+  customer_type: "fleet" | "single" | null;
   status: CustomerStatus;
-  // item #23 — carrier/customer-level card number
+  // item #23 — carrier/customer-level card details
   card_number: string | null;
+  card_expiry: string | null;
+  /** WARNING: PCI-DSS prohibits CVV storage; kept by explicit client request (2026-05-22). */
+  card_cvv: string | null;
   // billing options
   default_pay_method: PaymentMode | null;
   cod_required: boolean;

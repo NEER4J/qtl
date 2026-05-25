@@ -451,13 +451,7 @@ export function VehicleForm({
             Cancel
           </Button>
           <Button type="submit" disabled={isPending}>
-            {isPending
-              ? "Saving…"
-              : vehicle
-                ? "Save vehicle"
-                : initialStaged
-                  ? "Update vehicle"
-                  : "Add vehicle"}
+            {isPending ? "Saving…" : "Save"}
           </Button>
         </div>
       </form>

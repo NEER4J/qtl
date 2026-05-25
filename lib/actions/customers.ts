@@ -121,33 +121,76 @@ export const searchCustomers = wrapAction({
   schema: SearchCustomersInput,
   handler: async (input): Promise<Customer[]> => {
     const supabase = await createClient();
-    let query = supabase
-      .from("customers")
-      .select("*")
-      .eq("active", true)
-      .order("billing_name")
-      .limit(input.limit);
 
-    if (input.q) {
-      const term = `%${input.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
-      const plateUpper = input.q.toUpperCase();
-      const phoneDigits = digitsOnly(input.q);
-
-      const ors = [
-        `billing_name.ilike.${term}`,
-        `last_or_company.ilike.${term}`,
-        `license_plates.cs.{${plateUpper}}`,
-      ];
-      if (phoneDigits.length >= 3) {
-        ors.push(`phone_search.like.%${phoneDigits}%`);
-      }
-
-      query = query.or(ors.join(","));
+    // No query → just the first N customers by name (the open-the-combobox case).
+    if (!input.q) {
+      const { data, error } = await supabase
+        .from("customers")
+        .select("*")
+        .eq("active", true)
+        .order("billing_name")
+        .limit(input.limit);
+      if (error) throw error;
+      return (data ?? []) as Customer[];
     }
 
-    const { data, error } = await query;
-    if (error) throw error;
-    return (data ?? []) as Customer[];
+    const term = `%${input.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+    const phoneDigits = digitsOnly(input.q);
+
+    // 1) Customer-side search: name + phone_search (denormalised digits-only
+    //    column populated by trigger across every phone field).
+    const customerOrs = [
+      `billing_name.ilike.${term}`,
+      `last_or_company.ilike.${term}`,
+    ];
+    if (phoneDigits.length >= 3) {
+      customerOrs.push(`phone_search.like.%${phoneDigits}%`);
+    }
+
+    // 2) Vehicle-side plate lookup. Plates live on the vehicles table now; the
+    //    legacy customers.license_plates array isn't the source of truth, so a
+    //    partial plate match has to go through vehicles.
+    const [customerRes, vehicleRes] = await Promise.all([
+      supabase
+        .from("customers")
+        .select("*")
+        .eq("active", true)
+        .or(customerOrs.join(","))
+        .order("billing_name")
+        .limit(input.limit),
+      supabase
+        .from("vehicles")
+        .select("customer_id")
+        .ilike("license_plate", term)
+        .is("deactivated_at", null)
+        .limit(input.limit),
+    ]);
+    if (customerRes.error) throw customerRes.error;
+    if (vehicleRes.error) throw vehicleRes.error;
+
+    const out = new Map<string, Customer>();
+    for (const c of (customerRes.data ?? []) as Customer[]) out.set(c.id, c);
+
+    const plateCustomerIds = Array.from(
+      new Set(
+        ((vehicleRes.data ?? []) as { customer_id: string }[])
+          .map((r) => r.customer_id)
+          .filter((id) => id && !out.has(id)),
+      ),
+    );
+    if (plateCustomerIds.length > 0) {
+      const { data: extra, error: extraErr } = await supabase
+        .from("customers")
+        .select("*")
+        .eq("active", true)
+        .in("id", plateCustomerIds);
+      if (extraErr) throw extraErr;
+      for (const c of (extra ?? []) as Customer[]) out.set(c.id, c);
+    }
+
+    return Array.from(out.values())
+      .sort((a, b) => (a.billing_name ?? "").localeCompare(b.billing_name ?? ""))
+      .slice(0, input.limit);
   },
 });
 
