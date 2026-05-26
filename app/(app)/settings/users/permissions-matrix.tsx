@@ -46,8 +46,27 @@ export function PermissionsMatrix({
   otherUsers,
   onChange,
 }: Props) {
+  // Grantable = the role's `defaultRoles` whitelist on the page. Roles outside
+  // it can't actually reach the page even if ticked here — page-level guards
+  // and server-action role checks reject them — so we mark those rows as
+  // disabled with a badge instead of pretending the tick will take effect.
+  const isGrantable = (key: string): boolean => {
+    const def = PAGE_REGISTRY.find((p) => p.key === key);
+    return !!def && def.defaultRoles.includes(role);
+  };
+  const labelForUngrantable = (key: string): string => {
+    const def = PAGE_REGISTRY.find((p) => p.key === key);
+    if (!def) return "Not available";
+    if (def.defaultRoles.length === 1) {
+      return `${def.defaultRoles[0][0].toUpperCase()}${def.defaultRoles[0].slice(1)} only`;
+    }
+    return `Not available for ${role}`;
+  };
+
   const initialAllowed = useMemo<string[]>(
-    () => allowedPages ?? defaultAllowedPagesForRole(role),
+    // Drop any keys for pages this role can't be granted, in case a legacy
+    // override saved them.
+    () => (allowedPages ?? defaultAllowedPagesForRole(role)).filter(isGrantable),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -88,6 +107,7 @@ export function PermissionsMatrix({
   };
 
   const togglePage = (key: string) => {
+    if (!isGrantable(key)) return; // hard-blocked roles can't be granted via UI
     const next = new Set(allowed);
     if (next.has(key)) next.delete(key);
     else next.add(key);
@@ -95,18 +115,24 @@ export function PermissionsMatrix({
   };
 
   const allPageKeys = PAGE_REGISTRY.map((p) => p.key);
-  const allSelected = allPageKeys.every((k) => allowed.has(k));
+  const grantableKeys = allPageKeys.filter(isGrantable);
+  const allSelected = grantableKeys.length > 0 && grantableKeys.every((k) => allowed.has(k));
   const noneSelected = allowed.size === 0;
   const roleDefaultSet = new Set(defaultAllowedPagesForRole(role));
 
-  const selectAllPages = () => commit(new Set(allPageKeys), hidden, false);
+  const selectAllPages = () => commit(new Set(grantableKeys), hidden, false);
   const clearAllPages = () => commit(new Set(), hidden, false);
-  const resetToRoleDefault = () => commit(new Set(defaultAllowedPagesForRole(role)), {}, true);
+  const resetToRoleDefault = () =>
+    commit(new Set(defaultAllowedPagesForRole(role).filter(isGrantable)), {}, true);
 
   const copyFromUser = (sourceUserId: string) => {
     const src = otherUsers?.find((u) => u.id === sourceUserId);
     if (!src) return;
-    const nextAllowed = new Set(src.allowed_pages ?? defaultAllowedPagesForRole(src.role));
+    // Filter the source's allowlist down to what THIS role can be granted —
+    // copying a manager's settings onto a staff user shouldn't grant pages
+    // the staff role can't actually reach.
+    const srcAllowed = src.allowed_pages ?? defaultAllowedPagesForRole(src.role);
+    const nextAllowed = new Set(srcAllowed.filter(isGrantable));
     const nextHidden: Record<string, Set<string>> = {};
     for (const [k, v] of Object.entries(src.hidden_columns ?? {})) {
       nextHidden[k] = new Set(v);
@@ -134,7 +160,10 @@ export function PermissionsMatrix({
 
   // ----- counts for the toolbar
   const allowedCount = allowed.size;
-  const totalPages = allPageKeys.length;
+  // Denominator is the number of pages this role can actually be granted,
+  // not the total registry size — otherwise a staff user reads "5/24" even
+  // when they've got every page their role permits.
+  const totalPages = grantableKeys.length;
   const hiddenColumnTotal = Object.values(hidden).reduce((acc, s) => acc + s.size, 0);
 
   return (
@@ -203,45 +232,72 @@ export function PermissionsMatrix({
                   </div>
                   <ul>
                     {groupPages.map((p) => {
+                      const grantable = isGrantable(p.key);
                       const isOn = allowed.has(p.key);
                       const isFocused = focusedPage === p.key;
                       const isRoleDefault = roleDefaultSet.has(p.key);
                       const hasColumns = PAGES_WITH_COLUMNS.has(p.key);
                       const hiddenCount = hidden[p.key]?.size ?? 0;
-                      const diverged = isRoleDefault !== isOn;
+                      const diverged = grantable && isRoleDefault !== isOn;
                       return (
                         <li key={p.key}>
-                          <button
-                            type="button"
-                            onClick={() => hasColumns && setFocusedPage(p.key)}
+                          {/*
+                            The row used to be a <button> wrapping a Radix
+                            <Checkbox>. Radix renders Checkbox as a <button>,
+                            so the markup was <button><button>, which React
+                            errors on (and breaks hydration). Switched to a
+                            <div role="button"> so the row stays clickable
+                            while the Checkbox keeps its own button semantics.
+                          */}
+                          <div
+                            role={grantable && hasColumns ? "button" : undefined}
+                            tabIndex={grantable && hasColumns ? 0 : -1}
+                            aria-disabled={!grantable}
+                            title={grantable ? undefined : labelForUngrantable(p.key)}
+                            onClick={() => grantable && hasColumns && setFocusedPage(p.key)}
+                            onKeyDown={(e) => {
+                              if (!grantable || !hasColumns) return;
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                setFocusedPage(p.key);
+                              }
+                            }}
                             className={cn(
                               "group flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm",
-                              hasColumns ? "cursor-pointer" : "cursor-default",
-                              isFocused && "bg-accent",
-                              !isFocused && hasColumns && "hover:bg-muted/60",
+                              !grantable && "opacity-50 cursor-not-allowed",
+                              grantable && hasColumns ? "cursor-pointer" : "cursor-default",
+                              grantable && isFocused && "bg-accent",
+                              grantable && !isFocused && hasColumns && "hover:bg-muted/60",
                             )}
                           >
+                            <Checkbox
+                              checked={isOn}
+                              disabled={!grantable}
+                              onCheckedChange={() => {
+                                if (grantable) togglePage(p.key);
+                              }}
+                              // Stop the row click from also firing — otherwise
+                              // ticking the box would additionally focus the
+                              // page in the detail panel, which is surprising.
+                              onClick={(e) => e.stopPropagation()}
+                              className="size-4"
+                            />
                             <span
-                              role="checkbox"
-                              aria-checked={isOn}
-                              tabIndex={0}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                togglePage(p.key);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === " " || e.key === "Enter") {
-                                  e.preventDefault();
-                                  togglePage(p.key);
-                                }
-                              }}
-                              className="flex items-center justify-center"
+                              className={cn(
+                                "flex-1 truncate",
+                                !isOn && grantable && "text-muted-foreground",
+                              )}
                             >
-                              <Checkbox checked={isOn} className="size-4" tabIndex={-1} />
-                            </span>
-                            <span className={cn("flex-1 truncate", !isOn && "text-muted-foreground")}>
                               {p.label}
                             </span>
+                            {!grantable && (
+                              <Badge
+                                variant="outline"
+                                className="h-4 px-1 text-[9px] font-medium uppercase tracking-wide border-muted-foreground/30 text-muted-foreground"
+                              >
+                                {labelForUngrantable(p.key)}
+                              </Badge>
+                            )}
                             {diverged && (
                               <Badge
                                 variant="outline"
@@ -253,7 +309,7 @@ export function PermissionsMatrix({
                                 {isOn ? "+" : "−"}
                               </Badge>
                             )}
-                            {hiddenCount > 0 && (
+                            {grantable && hiddenCount > 0 && (
                               <span
                                 className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground"
                                 title={`${hiddenCount} column${hiddenCount === 1 ? "" : "s"} hidden`}
@@ -262,7 +318,7 @@ export function PermissionsMatrix({
                                 {hiddenCount}
                               </span>
                             )}
-                            {hasColumns && (
+                            {grantable && hasColumns && (
                               <ChevronRight
                                 className={cn(
                                   "size-3.5 shrink-0 text-muted-foreground/60 transition-transform",
@@ -270,7 +326,7 @@ export function PermissionsMatrix({
                                 )}
                               />
                             )}
-                          </button>
+                          </div>
                         </li>
                       );
                     })}

@@ -235,7 +235,7 @@ async function replaceExpenseItems(
 // ----------------------------------------------------------------------------
 export const createExpense = wrapAction({
   schema: ExpenseInput,
-  roles: ["owner", "accountant", "manager", "staff"],
+  roles: ["owner", "co_owner", "accountant", "manager", "staff"],
   handler: async (input, profile): Promise<Expense> => {
     const locationId =
       profile.role === "staff"
@@ -303,7 +303,7 @@ export const createExpense = wrapAction({
 // ----------------------------------------------------------------------------
 export const updateExpense = wrapAction({
   schema: UpdateExpenseInput,
-  roles: ["owner", "accountant", "manager"],
+  roles: ["owner", "co_owner", "accountant", "manager"],
   handler: async (input, profile): Promise<Expense> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -349,7 +349,7 @@ export const updateExpense = wrapAction({
 // ----------------------------------------------------------------------------
 export const addExpensePayment = wrapAction({
   schema: AddExpensePaymentInput,
-  roles: ["owner", "accountant", "manager"],
+  roles: ["owner", "co_owner", "accountant", "manager"],
   handler: async (input, profile): Promise<ExpensePaymentRow> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -378,7 +378,7 @@ export const addExpensePayment = wrapAction({
 // ----------------------------------------------------------------------------
 export const deactivateExpense = wrapAction({
   schema: DeactivateExpenseInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<{ id: string }> => {
     const supabase = await createClient();
     const { error } = await supabase

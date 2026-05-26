@@ -52,7 +52,7 @@ export async function listUsers(): Promise<UserListRow[]> {
 // ----------------------------------------------------------------------------
 export const inviteUser = wrapAction({
   schema: InviteUserInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (
     input,
   ): Promise<{ id: string; identity: string; existed: boolean }> => {
@@ -165,7 +165,7 @@ export const inviteUser = wrapAction({
 // ----------------------------------------------------------------------------
 export const updateUser = wrapAction({
   schema: UpdateUserInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<Profile> => {
     const admin = createAdminClient();
     const supabase = await createClient();
@@ -219,7 +219,7 @@ export const updateUser = wrapAction({
 // ----------------------------------------------------------------------------
 export const updateUserPermissions = wrapAction({
   schema: UpdateUserPermissionsInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<Profile> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -242,7 +242,7 @@ export const updateUserPermissions = wrapAction({
 // ----------------------------------------------------------------------------
 export const toggleUserActive = wrapAction({
   schema: ToggleUserActive,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<Profile> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -266,7 +266,7 @@ import { z } from "zod";
 
 export const deleteUser = wrapAction({
   schema: z.object({ id: z.string().uuid() }),
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<{ deleted: true }> => {
     if (input.id === profile.id) {
       throw new Error("You can't delete your own account");
@@ -280,14 +280,17 @@ export const deleteUser = wrapAction({
       .single();
     if (targetErr) throw targetErr;
 
-    if (target?.role === "owner") {
+    // Safeguard: at least one active owner OR co_owner must remain. Both
+    // roles are functional admins; we don't strand the shop with only
+    // restricted accounts. Co_owner counts toward the "last admin" floor.
+    if (target?.role === "owner" || target?.role === "co_owner") {
       const { count } = await supabase
         .from("profiles")
         .select("*", { count: "exact", head: true })
-        .eq("role", "owner")
+        .in("role", ["owner", "co_owner"])
         .eq("active", true);
       if ((count ?? 0) <= 1) {
-        throw new Error("Cannot delete the last active owner");
+        throw new Error("Cannot delete the last active owner or co-owner");
       }
     }
 
@@ -306,7 +309,7 @@ export const deleteUser = wrapAction({
 // ----------------------------------------------------------------------------
 export const bulkUserAction = wrapAction({
   schema: BulkUserAction,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<{ affected: number }> => {
     if (input.ids.includes(profile.id)) {
       throw new Error("You can't include your own account in a bulk action");
@@ -325,16 +328,17 @@ export const bulkUserAction = wrapAction({
       return { affected: data?.length ?? 0 };
     }
 
-    // Delete branch — protect the last active owner.
-    const { data: owners } = await supabase
+    // Delete branch — protect the last active owner/co_owner. We pull both
+    // roles together because they share the admin floor (see deleteUser).
+    const { data: admins } = await supabase
       .from("profiles")
       .select("id")
-      .eq("role", "owner")
+      .in("role", ["owner", "co_owner"])
       .eq("active", true);
-    const ownerIds = new Set((owners ?? []).map((o) => o.id));
-    const includesAllOwners = [...ownerIds].every((id) => input.ids.includes(id));
-    if (ownerIds.size > 0 && includesAllOwners) {
-      throw new Error("Bulk delete would remove every active owner");
+    const adminIds = new Set((admins ?? []).map((o) => o.id));
+    const includesAllAdmins = [...adminIds].every((id) => input.ids.includes(id));
+    if (adminIds.size > 0 && includesAllAdmins) {
+      throw new Error("Bulk delete would remove every active owner / co-owner");
     }
 
     const admin = createAdminClient();
@@ -355,7 +359,7 @@ export const bulkUserAction = wrapAction({
 // ----------------------------------------------------------------------------
 export const setUserPassword = wrapAction({
   schema: SetUserPasswordInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<{ updated: true }> => {
     const admin = createAdminClient();
     const { error } = await admin.auth.admin.updateUserById(input.id, {

@@ -31,7 +31,7 @@ export default async function FilterListPage({
     q: sp.q,
   });
 
-  const showCost = profile.role === "owner";
+  const showCost = (profile.role === "owner" || profile.role === "co_owner");
 
   return (
     <div className="flex flex-col gap-6">
@@ -63,7 +63,7 @@ export default async function FilterListPage({
               </p>
               {(sp.q || sp.category_id || sp.brand) ? (
                 <p>Try clearing the filters above to see the full list.</p>
-              ) : profile.role === "owner" ? (
+              ) : (profile.role === "owner" || profile.role === "co_owner") ? (
                 <>
                   <p>No parts have been added yet. Add one from the pricing catalogue admin.</p>
                   <div className="flex justify-center gap-2 pt-1">

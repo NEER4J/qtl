@@ -60,7 +60,7 @@ export const grantPortalAccess = wrapAction({
     email: z.string().email(),
     full_name: z.string().trim().min(1).max(120),
   }),
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<{ profile_id: string; link_id: string }> => {
     const admin = createAdminClient();
     const supabase = await createClient();
@@ -123,7 +123,7 @@ export const grantPortalAccess = wrapAction({
 
 export const revokePortalAccess = wrapAction({
   schema: z.object({ link_id: z.string().uuid() }),
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input): Promise<{ ok: true }> => {
     const supabase = await createClient();
     const { error } = await supabase

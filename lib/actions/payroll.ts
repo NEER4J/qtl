@@ -46,7 +46,7 @@ export async function getEmployee(id: string): Promise<Employee | null> {
 
 export const createEmployee = wrapAction({
   schema: EmployeeInput,
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<Employee> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -72,7 +72,7 @@ export const createEmployee = wrapAction({
 
 export const updateEmployee = wrapAction({
   schema: UpdateEmployeeInput,
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<Employee> => {
     const supabase = await createClient();
     const { id, code, ...rest } = input;
@@ -282,7 +282,7 @@ function snapToMonday(ymd: string): string {
 
 export const createPayrollWeek = wrapAction({
   schema: PayrollWeekInput,
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<PayrollWeek> => {
     const supabase = await createClient();
     const weekStart = snapToMonday(input.week_start);
@@ -305,7 +305,7 @@ export const createPayrollWeek = wrapAction({
 
 export const updatePayrollWeekStatus = wrapAction({
   schema: UpdatePayrollWeekStatusInput,
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<PayrollWeek> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -423,7 +423,7 @@ async function buildEntryPayload(
 
 export const upsertPayrollEntry = wrapAction({
   schema: PayrollEntryInput,
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<PayrollEntry> => {
     const supabase = await createClient();
     const payload = await buildEntryPayload(supabase, input);
@@ -444,7 +444,7 @@ export const upsertPayrollEntry = wrapAction({
 
 export const updatePayrollEntry = wrapAction({
   schema: UpdatePayrollEntryInput,
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<PayrollEntry> => {
     const supabase = await createClient();
     const { id, ...rest } = input;
@@ -468,7 +468,7 @@ export const updatePayrollEntry = wrapAction({
 
 export const upsertCashDaily = wrapAction({
   schema: PayrollCashDailyInput,
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<PayrollCashDaily> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -490,7 +490,7 @@ export const upsertCashDaily = wrapAction({
 
 export const addPayrollPayment = wrapAction({
   schema: PayrollPaymentInput,
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<PayrollPayment> => {
     const supabase = await createClient();
     const { data, error } = await supabase

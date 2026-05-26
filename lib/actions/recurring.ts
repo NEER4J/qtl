@@ -24,7 +24,7 @@ export async function listRecurringExpenses(): Promise<RecurringExpense[]> {
 
 export const createRecurringExpense = wrapAction({
   schema: RecurringExpenseInput,
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<RecurringExpense> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -56,7 +56,7 @@ export const createRecurringExpense = wrapAction({
 
 export const updateRecurringExpense = wrapAction({
   schema: UpdateRecurringExpenseInput,
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<RecurringExpense> => {
     const supabase = await createClient();
     const { id, ...rest } = input;
@@ -89,7 +89,7 @@ export const updateRecurringExpense = wrapAction({
 
 export const toggleRecurringExpenseActive = wrapAction({
   schema: z.object({ id: z.string().uuid(), active: z.boolean() }),
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<RecurringExpense> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -107,7 +107,7 @@ export const toggleRecurringExpenseActive = wrapAction({
 // Manually trigger the process function (normally would be on a cron).
 export const processRecurringExpenses = wrapAction({
   schema: z.object({ as_of: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }),
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input): Promise<{ generated: number }> => {
     const supabase = await createClient();
     const { data, error } = await supabase

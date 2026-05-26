@@ -25,6 +25,7 @@ export function CreatableCombobox({
   value,
   onChange,
   suggestions,
+  descriptionFor,
   placeholder = "Select…",
   searchPlaceholder = "Search or type a new value…",
   emptyLabel = "Nothing yet.",
@@ -36,6 +37,9 @@ export function CreatableCombobox({
   value: string;
   onChange: (value: string) => void;
   suggestions: string[];
+  /** Optional secondary text rendered next to each suggestion (e.g. a role
+   *  label beside a technician name). Match on the suggestion string. */
+  descriptionFor?: (value: string) => string | null | undefined;
   placeholder?: string;
   searchPlaceholder?: string;
   emptyLabel?: string;
@@ -51,8 +55,12 @@ export function CreatableCombobox({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return suggestions;
-    return suggestions.filter((s) => s.toLowerCase().includes(q));
-  }, [query, suggestions]);
+    return suggestions.filter((s) => {
+      if (s.toLowerCase().includes(q)) return true;
+      const desc = descriptionFor?.(s);
+      return !!desc && desc.toLowerCase().includes(q);
+    });
+  }, [query, suggestions, descriptionFor]);
 
   const trimmed = query.trim();
   const hasExactMatch = suggestions.some(
@@ -138,17 +146,25 @@ export function CreatableCombobox({
             </CommandEmpty>
             {filtered.length > 0 && (
               <CommandGroup>
-                {filtered.map((s) => (
-                  <CommandItem key={s} value={s} onSelect={() => commit(s)}>
-                    <Check
-                      className={cn(
-                        "mr-2 size-4",
-                        value === s ? "opacity-100" : "opacity-0",
+                {filtered.map((s) => {
+                  const desc = descriptionFor?.(s);
+                  return (
+                    <CommandItem key={s} value={s} onSelect={() => commit(s)}>
+                      <Check
+                        className={cn(
+                          "mr-2 size-4",
+                          value === s ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                      <span className="flex-1 truncate">{s}</span>
+                      {desc && (
+                        <span className="ml-2 text-xs text-muted-foreground truncate">
+                          {desc}
+                        </span>
                       )}
-                    />
-                    {s}
-                  </CommandItem>
-                ))}
+                    </CommandItem>
+                  );
+                })}
               </CommandGroup>
             )}
           </CommandList>

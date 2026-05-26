@@ -7,10 +7,10 @@ import { PartPackagesTable } from "./part-packages-table";
 export const dynamic = "force-dynamic";
 
 export default async function PartPackagesPage() {
-  await requireRole("owner");
+  await requireRole("owner", "co_owner");
   const profile = await requireProfile();
   const packages = await listAllPartPackages();
-  const isOwner = profile.role === "owner";
+  const isOwner = (profile.role === "owner" || profile.role === "co_owner");
 
   return (
     <div className="flex flex-col gap-4">

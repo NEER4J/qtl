@@ -3,6 +3,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { hasEnvVars } from "../utils";
 
 export async function updateSession(request: NextRequest) {
+  // Surface the current pathname to Server Components / layouts via a request
+  // header. Next.js doesn't expose pathname to layouts otherwise, and the
+  // (app) layout needs it to enforce per-user `allowed_pages` overrides.
+  request.headers.set("x-pathname", request.nextUrl.pathname);
+
   let supabaseResponse = NextResponse.next({
     request,
   });

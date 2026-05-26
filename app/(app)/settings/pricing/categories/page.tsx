@@ -7,7 +7,7 @@ import { PartCategoriesTable } from "./part-categories-table";
 export const dynamic = "force-dynamic";
 
 export default async function PartCategoriesPage() {
-  await requireRole("owner");
+  await requireRole("owner", "co_owner");
   const categories = await listAllPartCategories();
 
   return (

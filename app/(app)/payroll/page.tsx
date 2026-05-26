@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { requireProfile } from "@/lib/auth/require";
+import { requireRole } from "@/lib/auth/require";
 import { listPayrollWeeks } from "@/lib/actions/payroll";
 import { formatDate, formatMoney } from "@/lib/utils/format";
 import { NewWeekDialog } from "@/components/payroll/new-week-dialog";
@@ -28,13 +28,14 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default async function PayrollPage() {
-  const profile = await requireProfile();
+  // Match registry: payroll.defaultRoles = owner/co_owner/manager/accountant.
+  const profile = await requireRole("owner", "co_owner", "manager", "accountant");
   const locationId =
     profile.role === "manager" ? (profile.location_id ?? undefined) : undefined;
 
   const weeks = await listPayrollWeeks(locationId);
 
-  const canCreate = profile.role === "owner" || profile.role === "manager";
+  const canCreate = (profile.role === "owner" || profile.role === "co_owner") || profile.role === "manager";
 
   // ------- 12-month rolling totals -------
   const cutoff = new Date();

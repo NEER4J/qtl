@@ -22,7 +22,7 @@ export interface AuditLogResult {
 
 export async function listAuditLog(filter: AuditLogFilter = {}): Promise<AuditLogResult> {
   const profile = await requireProfile();
-  if (profile.role !== "owner" && profile.role !== "accountant") {
+  if ((profile.role !== "owner" && profile.role !== "co_owner") && profile.role !== "accountant") {
     throw new Error("Unauthorized");
   }
 

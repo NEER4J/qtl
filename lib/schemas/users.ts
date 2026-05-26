@@ -28,7 +28,8 @@ const usernameField = z
   .nullable()
   .optional();
 
-/** Roles that authenticate by username instead of real email. */
+/** Roles that authenticate by username instead of real email.
+ *  owner / co_owner / accountant log in with a real email. */
 export const USERNAME_LOGIN_ROLES = ["manager", "staff", "employee"] as const;
 type UsernameRole = (typeof USERNAME_LOGIN_ROLES)[number];
 

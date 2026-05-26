@@ -41,6 +41,7 @@ import { SetPasswordDialog } from "./set-password-dialog";
 
 const ROLE_LABELS: Record<UserRole, string> = {
   owner: "Owner",
+  co_owner: "Co-owner",
   manager: "Manager",
   accountant: "Accountant",
   staff: "Staff",
@@ -51,7 +52,11 @@ const ROLE_LABELS: Record<UserRole, string> = {
 type StoredPassword = { password: string; setAt: string };
 
 const ALL_COLUMNS = [
-  "email",
+  // Note: "email" used to be a separate column. It's been folded into the
+  // single "Login" column (real email shown as a secondary line beneath the
+  // @username for username users; shown as the primary for owner/accountant).
+  // The registry entry was dropped at the same time, so any previously-saved
+  // "email" hide override is now a no-op rather than orphaning silently.
   "role",
   "location",
   "expenses",
@@ -261,7 +266,6 @@ export function UsersTable({
               </TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Login</TableHead>
-              {visible("email") && <TableHead>Email</TableHead>}
               {visible("role") && <TableHead>Role</TableHead>}
               {visible("location") && <TableHead>Location</TableHead>}
               {visible("expenses") && <TableHead className="w-20">Expenses</TableHead>}
@@ -298,21 +302,28 @@ export function UsersTable({
                     </TableCell>
                     <TableCell className="font-medium">{u.full_name}</TableCell>
                     <TableCell className="font-mono text-xs">
-                      {u.username ? `@${u.username}` : u.email}
+                      {u.username ? (
+                        <div className="flex flex-col leading-tight">
+                          <span>@{u.username}</span>
+                          {/* Real email shown as a secondary line only when
+                              the user has one set and it's not the synthetic
+                              `@team.qtl.app` address generated for logins. */}
+                          {!isSyntheticEmail(u.email) && (
+                            <span className="text-[10px] text-muted-foreground">
+                              {u.email}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        u.email
+                      )}
                     </TableCell>
-                    {visible("email") && (
-                      <TableCell className="font-mono text-xs">
-                        {u.username
-                          ? (isSyntheticEmail(u.email) ? "—" : u.email)
-                          : u.email}
-                      </TableCell>
-                    )}
                     {visible("role") && (
                       <TableCell>
-                        <Badge variant={u.role === "owner" ? "default" : "secondary"}>
+                        <Badge variant={(u.role === "owner" || u.role === "co_owner") ? "default" : "secondary"}>
                           {ROLE_LABELS[u.role]}
                         </Badge>
-                        {u.allowed_pages !== null && u.role !== "owner" && (
+                        {u.allowed_pages !== null && (u.role !== "owner" && u.role !== "co_owner") && (
                           <Badge variant="outline" className="ml-1 text-[10px] py-0">custom</Badge>
                         )}
                       </TableCell>

@@ -17,6 +17,7 @@ import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { getPayrollWeek, updatePayrollWeekStatus } from "@/lib/actions/payroll";
 import { formatDate, formatMoney } from "@/lib/utils/format";
+import { hiddenColumnsForPage } from "@/lib/permissions/check";
 import { PayrollEntryDialog } from "@/components/payroll/payroll-entry-dialog";
 import { CashDailyDialog } from "@/components/payroll/cash-daily-dialog";
 import { PayrollPaymentDialog } from "@/components/payroll/payroll-payment-dialog";
@@ -40,8 +41,26 @@ export default async function PayrollWeekPage({
   const week = await getPayrollWeek(weekId);
   if (!week) notFound();
 
+  // Per-viewer column hides from profiles.hidden_columns["payroll"].
+  const hidden = hiddenColumnsForPage(profile, "payroll");
+  const show = (key: string) => !hidden.has(key);
+
+  // Visible-column count for the entries table. Used to compute colSpan for
+  // the cash-days sub-row so it spans the right width regardless of hides.
+  // Always-on columns: Employee, Type, Cash, Actions (4).
+  const entryVisibleCount =
+    4 +
+    (show("hours") ? 1 : 0) +
+    (show("overtime") ? 1 : 0) +
+    (show("gross") ? 1 : 0) +
+    (show("holiday_vacation") ? 2 : 0) + // Holiday + Vac
+    (show("ei_cpp") ? 3 : 0) + // EI, CPP, CPP2
+    (show("income_tax") ? 1 : 0) +
+    (show("benefits") ? 3 : 0) + // Er EI, Er CPP, WSIB
+    (show("net_pay") ? 1 : 0);
+
   const canEdit =
-    profile.role === "owner" ||
+    (profile.role === "owner" || profile.role === "co_owner") ||
     (profile.role === "manager" && profile.location_id === week.location_id);
   const isDraft = week.status === "draft";
   const canAddEntry = canEdit && isDraft;
@@ -151,19 +170,19 @@ export default async function PayrollWeekPage({
                 <TableRow>
                   <TableHead>Employee</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Reg hrs</TableHead>
-                  <TableHead className="text-right">OT hrs</TableHead>
-                  <TableHead className="text-right">Gross</TableHead>
-                  <TableHead className="text-right">Holiday</TableHead>
-                  <TableHead className="text-right">EI</TableHead>
-                  <TableHead className="text-right">CPP</TableHead>
-                  <TableHead className="text-right">CPP2</TableHead>
-                  <TableHead className="text-right">Tax</TableHead>
-                  <TableHead className="text-right">Vac</TableHead>
-                  <TableHead className="text-right">Er EI</TableHead>
-                  <TableHead className="text-right">Er CPP</TableHead>
-                  <TableHead className="text-right">WSIB</TableHead>
-                  <TableHead className="text-right">Net pay</TableHead>
+                  {show("hours") && <TableHead className="text-right">Reg hrs</TableHead>}
+                  {show("overtime") && <TableHead className="text-right">OT hrs</TableHead>}
+                  {show("gross") && <TableHead className="text-right">Gross</TableHead>}
+                  {show("holiday_vacation") && <TableHead className="text-right">Holiday</TableHead>}
+                  {show("ei_cpp") && <TableHead className="text-right">EI</TableHead>}
+                  {show("ei_cpp") && <TableHead className="text-right">CPP</TableHead>}
+                  {show("ei_cpp") && <TableHead className="text-right">CPP2</TableHead>}
+                  {show("income_tax") && <TableHead className="text-right">Tax</TableHead>}
+                  {show("holiday_vacation") && <TableHead className="text-right">Vac</TableHead>}
+                  {show("benefits") && <TableHead className="text-right">Er EI</TableHead>}
+                  {show("benefits") && <TableHead className="text-right">Er CPP</TableHead>}
+                  {show("benefits") && <TableHead className="text-right">WSIB</TableHead>}
+                  {show("net_pay") && <TableHead className="text-right">Net pay</TableHead>}
                   <TableHead className="text-right">Cash</TableHead>
                   <TableHead />
                 </TableRow>
@@ -178,19 +197,19 @@ export default async function PayrollWeekPage({
                           {entry.employee_payroll_type}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{entry.hours}</TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{entry.overtime_hours || "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatMoney(entry.gross_wages + entry.overtime_wages + entry.bonus + entry.misc_extra)}</TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{entry.holiday_pay ? formatMoney(entry.holiday_pay) : "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.ei_employee)}</TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.cpp_employee)}</TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{entry.cpp_employee2 ? formatMoney(entry.cpp_employee2) : "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.income_tax)}</TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.vacation_pay)}</TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.ei_employer)}</TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.cpp_employer + entry.cpp_employer2)}</TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{entry.wsib_employer ? formatMoney(entry.wsib_employer) : "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums font-semibold">{formatMoney(entry.net_pay)}</TableCell>
+                      {show("hours") && <TableCell className="text-right tabular-nums">{entry.hours}</TableCell>}
+                      {show("overtime") && <TableCell className="text-right tabular-nums text-muted-foreground">{entry.overtime_hours || "—"}</TableCell>}
+                      {show("gross") && <TableCell className="text-right tabular-nums">{formatMoney(entry.gross_wages + entry.overtime_wages + entry.bonus + entry.misc_extra)}</TableCell>}
+                      {show("holiday_vacation") && <TableCell className="text-right tabular-nums text-muted-foreground">{entry.holiday_pay ? formatMoney(entry.holiday_pay) : "—"}</TableCell>}
+                      {show("ei_cpp") && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.ei_employee)}</TableCell>}
+                      {show("ei_cpp") && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.cpp_employee)}</TableCell>}
+                      {show("ei_cpp") && <TableCell className="text-right tabular-nums text-muted-foreground">{entry.cpp_employee2 ? formatMoney(entry.cpp_employee2) : "—"}</TableCell>}
+                      {show("income_tax") && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.income_tax)}</TableCell>}
+                      {show("holiday_vacation") && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.vacation_pay)}</TableCell>}
+                      {show("benefits") && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.ei_employer)}</TableCell>}
+                      {show("benefits") && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.cpp_employer + entry.cpp_employer2)}</TableCell>}
+                      {show("benefits") && <TableCell className="text-right tabular-nums text-muted-foreground">{entry.wsib_employer ? formatMoney(entry.wsib_employer) : "—"}</TableCell>}
+                      {show("net_pay") && <TableCell className="text-right tabular-nums font-semibold">{formatMoney(entry.net_pay)}</TableCell>}
                       <TableCell className="text-right tabular-nums">{formatMoney(entry.cash_total)}</TableCell>
                       <TableCell>
                         <div className="flex gap-1 justify-end">
@@ -209,7 +228,7 @@ export default async function PayrollWeekPage({
                     </TableRow>
                     {entry.cash_days.length > 0 && (
                       <TableRow key={`${entry.id}-cash`} className="bg-muted/30">
-                        <TableCell colSpan={16} className="py-1.5 pl-8">
+                        <TableCell colSpan={entryVisibleCount - 1} className="py-1.5 pl-8">
                           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                             {entry.cash_days.map((d) => (
                               <span key={d.id}>

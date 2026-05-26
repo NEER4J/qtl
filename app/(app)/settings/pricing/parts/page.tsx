@@ -16,7 +16,7 @@ export default async function PartsAdminPage({
 }: {
   searchParams: Promise<Record<string, string>>;
 }) {
-  await requireRole("owner");
+  await requireRole("owner", "co_owner");
   const sp = await searchParams;
 
   const [parts, serviceCosts, categories, brands] = await Promise.all([

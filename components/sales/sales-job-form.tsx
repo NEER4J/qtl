@@ -43,10 +43,12 @@ import type {
   OilType,
   PaymentMode,
   ServiceType,
+  Technician,
   Vehicle,
 } from "@/lib/db/types";
 import { todayISO, formatDate } from "@/lib/utils/format";
 import { formatPhone } from "@/lib/utils/phone";
+import { CreatableCombobox } from "@/components/pricing/creatable-combobox";
 
 import { CustomerComboBox } from "./customer-combobox";
 import { PreviousPendingAlert } from "./previous-pending-alert";
@@ -119,6 +121,8 @@ export interface SalesJobFormProps {
   serviceTypes: ServiceType[];
   engineTypes: EngineType[];
   oilTypes: OilType[];
+  /** Active roster used to populate Upper tech / Lower tech / Advisor pickers. */
+  technicians: Technician[];
   hstRate: number;
   /** Force location to this value (staff role). */
   lockedLocationId?: string | null;
@@ -133,6 +137,7 @@ export function SalesJobForm({
   serviceTypes,
   engineTypes,
   oilTypes,
+  technicians,
   hstRate,
   lockedLocationId,
   initialItems,
@@ -155,6 +160,19 @@ export function SalesJobForm({
   const [createPayments, setCreatePayments] = useState<
     { id: string; mode: PaymentMode; amount: string }[]
   >([]);
+
+  // Roster suggestions for the tech/advisor pickers. We expose every active
+  // name in every dropdown so the user has flexibility (a Front Counter
+  // person can still be tagged on a job if they helped). The combobox is
+  // creatable — typing a brand-new name commits it on this job; managing the
+  // canonical roster happens at /settings/technicians.
+  const technicianSuggestions = technicians.map((t) => t.name);
+  const technicianRoleByName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of technicians) if (t.role) m.set(t.name, t.role);
+    return m;
+  }, [technicians]);
+  const technicianRoleFor = (name: string) => technicianRoleByName.get(name) ?? null;
 
   const defaults: FormValues = {
     location_id: lockedLocationId ?? initial?.location_id ?? locations[0]?.id ?? "",
@@ -858,7 +876,7 @@ export function SalesJobForm({
                     <FormLabel className="flex items-center gap-1">
                       Invoice #
                       <InfoTip>
-                        Whatever you write on the paper invoice. It has to be unique within this shop — you can&apos;t reuse an invoice number you&apos;ve used before at the same location. Leave blank to auto-generate (INV-000001).
+                        Whatever you write on the paper invoice. It has to be unique within this shop — you can&apos;t reuse an invoice number you&apos;ve used before at the same location. Leave blank to auto-generate (e.g. AYR202605250001 — location code + date + monthly counter).
                       </InfoTip>
                     </FormLabel>
                     <FormControl>
@@ -923,7 +941,17 @@ export function SalesJobForm({
                   <FormItem>
                     <FormLabel>Advisor</FormLabel>
                     <FormControl>
-                      <Input placeholder="Service advisor" {...field} />
+                      <CreatableCombobox
+                        value={field.value ?? ""}
+                        onChange={field.onChange}
+                        suggestions={technicianSuggestions}
+                        descriptionFor={technicianRoleFor}
+                        placeholder="Pick advisor"
+                        searchPlaceholder="Search by name or role…"
+                        emptyLabel="Roster empty."
+                        addLabel="Add"
+                        allowClear
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1035,7 +1063,17 @@ export function SalesJobForm({
                   <FormItem>
                     <FormLabel>Upper tech</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <CreatableCombobox
+                        value={field.value ?? ""}
+                        onChange={field.onChange}
+                        suggestions={technicianSuggestions}
+                        descriptionFor={technicianRoleFor}
+                        placeholder="Pick technician"
+                        searchPlaceholder="Search by name or role…"
+                        emptyLabel="Roster empty."
+                        addLabel="Add"
+                        allowClear
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1048,7 +1086,17 @@ export function SalesJobForm({
                   <FormItem>
                     <FormLabel>Lower tech</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <CreatableCombobox
+                        value={field.value ?? ""}
+                        onChange={field.onChange}
+                        suggestions={technicianSuggestions}
+                        descriptionFor={technicianRoleFor}
+                        placeholder="Pick technician"
+                        searchPlaceholder="Search by name or role…"
+                        emptyLabel="Roster empty."
+                        addLabel="Add"
+                        allowClear
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

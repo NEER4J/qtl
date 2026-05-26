@@ -29,7 +29,7 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 export default async function PriceHistoryPage() {
-  await requireRole("owner");
+  await requireRole("owner", "co_owner");
   const rows = await listPriceHistory(500);
 
   return (

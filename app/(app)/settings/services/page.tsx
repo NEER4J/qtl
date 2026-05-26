@@ -7,7 +7,7 @@ import { ServicesTable } from "./services-table";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsServicesPage() {
-  await requireRole("owner");
+  await requireRole("owner", "co_owner");
   const services = await listAllServiceTypes();
 
   return (

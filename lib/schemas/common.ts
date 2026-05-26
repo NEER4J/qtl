@@ -27,6 +27,7 @@ export const paymentStatusSchema = z.enum(["paid", "partial", "outstanding"]);
 
 export const userRoleSchema = z.enum([
   "owner",
+  "co_owner",
   "manager",
   "accountant",
   "staff",

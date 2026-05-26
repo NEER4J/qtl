@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function OilGridPage() {
   const profile = await requireProfile();
   const { engines, oilTypes, cells, hstRate } = await getOilChangeGrid();
-  const isOwner = profile.role === "owner";
+  const isOwner = (profile.role === "owner" || profile.role === "co_owner");
   const hstPct = Math.round(hstRate * 1000) / 10;
 
   return (

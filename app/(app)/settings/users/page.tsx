@@ -1,5 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
-import { getCurrentProfileOrRedirect } from "@/lib/auth/get-profile";
+import { requireRole } from "@/lib/auth/require";
 import { listLocations } from "@/lib/actions/locations";
 import { listUserPasswords, listUsers } from "@/lib/actions/users";
 
@@ -8,8 +8,11 @@ import { UsersTable } from "./users-table";
 export const dynamic = "force-dynamic";
 
 export default async function UsersPage() {
-  const [viewer, users, locations, passwords] = await Promise.all([
-    getCurrentProfileOrRedirect(),
+  // Owner-only — the settings layout admits owner/accountant/manager into
+  // /settings/* (each leaf locks down further), so the page itself must
+  // enforce the registry's `settings_users.defaultRoles = ["owner", "co_owner"]`.
+  const viewer = await requireRole("owner", "co_owner");
+  const [users, locations, passwords] = await Promise.all([
     listUsers(),
     listLocations(),
     listUserPasswords(),

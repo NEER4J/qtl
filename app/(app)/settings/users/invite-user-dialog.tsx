@@ -47,6 +47,7 @@ import { PermissionsMatrix } from "./permissions-matrix";
 
 const ROLE_OPTIONS: { value: UserRole; label: string; helper: string }[] = [
   { value: "owner", label: "Owner", helper: "Full access to every location. Logs in with email." },
+  { value: "co_owner", label: "Co-owner", helper: "Functional equal of the owner — every page, every setting. Logs in with email." },
   { value: "manager", label: "Manager", helper: "Manages one location. Logs in with username." },
   { value: "accountant", label: "Accountant", helper: "Cross-location access to expenses and payroll. Logs in with email." },
   { value: "staff", label: "Staff", helper: "Front-line user at one location. Logs in with username." },
@@ -384,9 +385,10 @@ export function InviteUserDialog({
               </TabsContent>
 
               <TabsContent value="permissions" className="pt-2">
-                {role === "owner" ? (
+                {role === "owner" || role === "co_owner" ? (
                   <div className="rounded-md border bg-muted/40 p-4 text-sm text-muted-foreground">
-                    Owners always have full access. Page and column overrides don&apos;t apply.
+                    {role === "owner" ? "Owners" : "Co-owners"} always have full access.
+                    Page and column overrides don&apos;t apply.
                   </div>
                 ) : (
                   <PermissionsMatrix

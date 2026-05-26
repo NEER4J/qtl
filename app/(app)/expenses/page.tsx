@@ -10,6 +10,7 @@ import {
   listActiveExpenseSubcategories,
   listActiveLocations,
 } from "@/lib/actions/reference";
+import { hiddenColumnsForPage } from "@/lib/permissions/check";
 
 import { ExpensesFilters } from "./expenses-filters";
 import { ExpensesTable } from "./expenses-table";
@@ -38,10 +39,10 @@ export default async function ExpensesListPage({
     listActiveExpenseSubcategories(),
   ]);
 
-  const showLocationFilter = profile.role === "owner" || profile.role === "accountant";
+  const showLocationFilter = (profile.role === "owner" || profile.role === "co_owner") || profile.role === "accountant";
 
   const canCreate =
-    profile.role === "owner" ||
+    (profile.role === "owner" || profile.role === "co_owner") ||
     profile.role === "accountant" ||
     profile.role === "manager" ||
     (profile.role === "staff" && profile.can_enter_expenses);
@@ -93,6 +94,7 @@ export default async function ExpensesListPage({
         total={result.total}
         page={result.page}
         pageSize={result.pageSize}
+        hiddenColumns={[...hiddenColumnsForPage(profile, "expenses")]}
       />
     </div>
   );

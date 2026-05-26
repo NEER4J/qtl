@@ -14,7 +14,7 @@ export default async function InvoicesListPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const profile = await requireProfile();
-  if (profile.role !== "owner" && profile.role !== "manager" && profile.role !== "accountant") {
+  if ((profile.role !== "owner" && profile.role !== "co_owner") && profile.role !== "manager" && profile.role !== "accountant") {
     return <div className="text-sm text-muted-foreground">You do not have access to invoices.</div>;
   }
 
@@ -28,7 +28,7 @@ export default async function InvoicesListPage({
     listActiveLocations(),
   ]);
 
-  const showLocationFilter = profile.role === "owner" || profile.role === "accountant";
+  const showLocationFilter = (profile.role === "owner" || profile.role === "co_owner") || profile.role === "accountant";
 
   return (
     <div className="flex flex-col gap-6">

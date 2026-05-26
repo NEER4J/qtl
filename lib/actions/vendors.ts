@@ -62,7 +62,7 @@ export async function listVendors(): Promise<Vendor[]> {
 // ----------------------------------------------------------------------------
 export const createVendor = wrapAction({
   schema: CreateVendorInput,
-  roles: ["owner", "accountant", "manager"],
+  roles: ["owner", "co_owner", "accountant", "manager"],
   handler: async (input, profile): Promise<Vendor> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -92,7 +92,7 @@ export const createVendor = wrapAction({
 // ----------------------------------------------------------------------------
 export const toggleVendorActive = wrapAction({
   schema: z.object({ id: z.string().uuid(), active: z.boolean() }),
-  roles: ["owner", "accountant", "manager"],
+  roles: ["owner", "co_owner", "accountant", "manager"],
   handler: async (input, profile): Promise<Vendor> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -112,7 +112,7 @@ export const toggleVendorActive = wrapAction({
 // ----------------------------------------------------------------------------
 export const updateVendor = wrapAction({
   schema: UpdateVendorInput,
-  roles: ["owner", "accountant", "manager"],
+  roles: ["owner", "co_owner", "accountant", "manager"],
   handler: async (input, profile): Promise<Vendor> => {
     const supabase = await createClient();
     const codeUpdate = input.code?.trim() ? { code: input.code.trim() } : {};
@@ -201,7 +201,7 @@ export async function getVendorLocationDetails(
 
 export const upsertVendorLocation = wrapAction({
   schema: UpsertVendorLocationInput,
-  roles: ["owner", "accountant", "manager"],
+  roles: ["owner", "co_owner", "accountant", "manager"],
   handler: async (input, profile): Promise<VendorLocation> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -232,7 +232,7 @@ export const upsertVendorLocation = wrapAction({
 
 export const deleteVendorLocation = wrapAction({
   schema: DeleteVendorLocationInput,
-  roles: ["owner", "accountant"],
+  roles: ["owner", "co_owner", "accountant"],
   handler: async (input): Promise<{ vendor_id: string; location_id: string }> => {
     const supabase = await createClient();
     const { error } = await supabase

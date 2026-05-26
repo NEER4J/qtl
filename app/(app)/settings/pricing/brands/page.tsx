@@ -7,7 +7,7 @@ import { PartBrandsTable } from "./part-brands-table";
 export const dynamic = "force-dynamic";
 
 export default async function PartBrandsPage() {
-  await requireRole("owner");
+  await requireRole("owner", "co_owner");
   const brands = await listAllPartBrands();
 
   return (

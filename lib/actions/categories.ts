@@ -39,7 +39,7 @@ const UpdateCategoryInput = CategoryInput.extend({ id: z.string().uuid() });
 
 export const createExpenseCategory = wrapAction({
   schema: CategoryInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<ExpenseCategory> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -55,7 +55,7 @@ export const createExpenseCategory = wrapAction({
 
 export const updateExpenseCategory = wrapAction({
   schema: UpdateCategoryInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<ExpenseCategory> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -72,7 +72,7 @@ export const updateExpenseCategory = wrapAction({
 
 export const toggleCategoryActive = wrapAction({
   schema: z.object({ id: z.string().uuid(), active: z.boolean() }),
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<ExpenseCategory> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -98,7 +98,7 @@ const UpdateSubcategoryInput = SubcategoryInput.extend({ id: z.string().uuid() }
 
 export const createExpenseSubcategory = wrapAction({
   schema: SubcategoryInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<ExpenseSubcategory> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -114,7 +114,7 @@ export const createExpenseSubcategory = wrapAction({
 
 export const updateExpenseSubcategory = wrapAction({
   schema: UpdateSubcategoryInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<ExpenseSubcategory> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -131,7 +131,7 @@ export const updateExpenseSubcategory = wrapAction({
 
 export const toggleSubcategoryActive = wrapAction({
   schema: z.object({ id: z.string().uuid(), active: z.boolean() }),
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<ExpenseSubcategory> => {
     const supabase = await createClient();
     const { data, error } = await supabase

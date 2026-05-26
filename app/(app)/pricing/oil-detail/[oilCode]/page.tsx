@@ -35,8 +35,8 @@ export default async function OilDetailPage({
   const data = await getOilDetail(decodeURIComponent(oilCode), container);
   if (!data) notFound();
 
-  const showCost = profile.role === "owner" || profile.role === "accountant";
-  const canEdit = profile.role === "owner";
+  const showCost = (profile.role === "owner" || profile.role === "co_owner") || profile.role === "accountant";
+  const canEdit = (profile.role === "owner" || profile.role === "co_owner");
 
   const pct = (n: number | null) => n == null ? "—" : `${(n * 100).toFixed(1)}%`;
 

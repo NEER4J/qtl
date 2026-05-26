@@ -26,16 +26,24 @@ export function VendorsTable({
   vendors,
   categories,
   locations = [],
+  hiddenColumns,
 }: {
   vendors: Vendor[];
   categories: ExpenseCategory[];
   locations?: Location[];
+  /** Per-viewer hidden column keys from profiles.hidden_columns["vendors"]. */
+  hiddenColumns?: string[];
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Vendor | null>(null);
   const [creating, setCreating] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const hidden = new Set(hiddenColumns ?? []);
+  const show = (key: string) => !hidden.has(key);
+  // ALWAYS: Name, Status, Actions. HIDEABLE: category, account_no, contact, email.
+  const visibleCount =
+    3 + [show("category"), show("account_no"), show("contact"), show("email")].filter(Boolean).length;
 
   const categoryMap = Object.fromEntries(categories.map((c) => [c.id, c.name]));
 
@@ -83,10 +91,10 @@ export function VendorsTable({
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Account #</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Email</TableHead>
+              {show("category") && <TableHead>Category</TableHead>}
+              {show("account_no") && <TableHead>Account #</TableHead>}
+              {show("contact") && <TableHead>Phone</TableHead>}
+              {show("email") && <TableHead>Email</TableHead>}
               <TableHead className="w-24">Status</TableHead>
               <TableHead className="w-48 text-right">Actions</TableHead>
             </TableRow>
@@ -94,7 +102,7 @@ export function VendorsTable({
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8 px-6">
+                <TableCell colSpan={visibleCount} className="text-center text-muted-foreground py-8 px-6">
                   {search ? (
                     <p>No vendors match <strong>&quot;{search}&quot;</strong>. Try a shorter search, or clear the box.</p>
                   ) : (
@@ -119,12 +127,16 @@ export function VendorsTable({
                       {v.name}
                     </Link>
                   </TableCell>
-                  <TableCell>
-                    {v.category_id ? (categoryMap[v.category_id] ?? "—") : "—"}
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">{v.account_no ?? "—"}</TableCell>
-                  <TableCell>{v.contact_no ?? "—"}</TableCell>
-                  <TableCell>{v.email ?? "—"}</TableCell>
+                  {show("category") && (
+                    <TableCell>
+                      {v.category_id ? (categoryMap[v.category_id] ?? "—") : "—"}
+                    </TableCell>
+                  )}
+                  {show("account_no") && (
+                    <TableCell className="font-mono text-sm">{v.account_no ?? "—"}</TableCell>
+                  )}
+                  {show("contact") && <TableCell>{v.contact_no ?? "—"}</TableCell>}
+                  {show("email") && <TableCell>{v.email ?? "—"}</TableCell>}
                   <TableCell>
                     <Badge variant={v.active ? "default" : "secondary"}>
                       {v.active ? "Active" : "Inactive"}

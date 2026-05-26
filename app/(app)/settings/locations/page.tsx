@@ -1,10 +1,14 @@
 import { PageHelp } from "@/components/help/page-help";
+import { requireRole } from "@/lib/auth/require";
 import { listLocations } from "@/lib/actions/locations";
 import { LocationsTable } from "./locations-table";
 
 export const dynamic = "force-dynamic";
 
 export default async function LocationsPage() {
+  // Owner-only per registry. Settings layout admits other roles for the
+  // section as a whole, so this leaf must enforce its own gate.
+  await requireRole("owner", "co_owner");
   const locations = await listLocations();
 
   return (

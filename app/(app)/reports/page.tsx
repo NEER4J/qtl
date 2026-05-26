@@ -11,7 +11,7 @@ import {
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
-import { requireProfile } from "@/lib/auth/require";
+import { requireRole } from "@/lib/auth/require";
 
 export const dynamic = "force-dynamic";
 
@@ -21,47 +21,48 @@ const REPORTS = [
     href: "/reports/daily",
     icon: CalendarDays,
     description: "Single-day jobs, parts used, revenue by hour, customer mix.",
-    roles: ["owner", "manager", "accountant", "staff"],
+    roles: ["owner", "co_owner", "manager", "accountant", "staff"],
   },
   {
     title: "HST Summary",
     href: "/reports/hst",
     icon: Percent,
     description: "HST collected vs paid for tax filing.",
-    roles: ["owner", "accountant"],
+    roles: ["owner", "co_owner", "accountant"],
   },
   {
     title: "P&L Report",
     href: "/reports/pnl",
     icon: TrendingUp,
     description: "Sales − Expenses − Payroll = Net, per location & month.",
-    roles: ["owner", "manager", "accountant"],
+    roles: ["owner", "co_owner", "manager", "accountant"],
   },
   {
     title: "Outstanding Invoices",
     href: "/reports/outstanding",
     icon: ReceiptText,
     description: "Aged receivables (1-30, 31-60, 61-90, 90+ days).",
-    roles: ["owner", "manager", "accountant"],
+    roles: ["owner", "co_owner", "manager", "accountant"],
   },
   {
     title: "Customer Statement",
     href: "/customers",
     icon: ScrollText,
     description: "Select a customer from the directory to view or export.",
-    roles: ["owner", "manager", "accountant"],
+    roles: ["owner", "co_owner", "manager", "accountant"],
   },
   {
     title: "Vendor Statement",
     href: "/vendors",
     icon: FileText,
     description: "Select a vendor from the directory to view or export.",
-    roles: ["owner", "manager", "accountant"],
+    roles: ["owner", "co_owner", "manager", "accountant"],
   },
 ] as const;
 
 export default async function ReportsHubPage() {
-  const profile = await requireProfile();
+  // Match registry: reports.defaultRoles = owner/co_owner/manager/accountant.
+  const profile = await requireRole("owner", "co_owner", "manager", "accountant");
   const reports = REPORTS.filter((r) => (r.roles as readonly string[]).includes(profile.role));
 
   return (

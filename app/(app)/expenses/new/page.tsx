@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export default async function NewExpensePage() {
   const profile = await requireProfile();
   const canCreate =
-    profile.role === "owner" ||
+    (profile.role === "owner" || profile.role === "co_owner") ||
     profile.role === "accountant" ||
     profile.role === "manager" ||
     (profile.role === "staff" && profile.can_enter_expenses);

@@ -19,7 +19,7 @@ export default async function EngineTypeDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole("owner");
+  await requireRole("owner", "co_owner");
   const { id } = await params;
   const detail = await getEngineTypeDetail(id);
   if (!detail) notFound();

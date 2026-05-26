@@ -10,7 +10,7 @@ import {
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
-import { requireProfile } from "@/lib/auth/require";
+import { requireRole } from "@/lib/auth/require";
 import { getDashboardOverview, getOverdueJobs } from "@/lib/actions/dashboard";
 import { formatMoney } from "@/lib/utils/format";
 
@@ -20,7 +20,8 @@ import { ExpenseBreakdownChart } from "./expense-breakdown-chart";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  await requireProfile();
+  // Match registry: dashboard.defaultRoles = ["owner", "co_owner", "manager", "accountant"].
+  await requireRole("owner", "co_owner", "manager", "accountant");
   const [data, overdueJobs] = await Promise.all([
     getDashboardOverview(),
     getOverdueJobs(30),

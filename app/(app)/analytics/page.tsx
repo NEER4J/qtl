@@ -10,7 +10,7 @@ import {
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
-import { requireProfile } from "@/lib/auth/require";
+import { requireRole } from "@/lib/auth/require";
 
 export const dynamic = "force-dynamic";
 
@@ -20,40 +20,41 @@ const CARDS = [
     href: "/analytics/sales",
     icon: SalesIcon,
     description: "Revenue trends, location comparisons, payment modes, top customers.",
-    roles: ["owner", "manager", "accountant"],
+    roles: ["owner", "co_owner", "manager", "accountant"],
   },
   {
     title: "Job Duration",
     href: "/analytics/jobs",
     icon: Clock,
     description: "How long jobs take, by service type, bay, hour of day, and day of week.",
-    roles: ["owner", "manager", "accountant"],
+    roles: ["owner", "co_owner", "manager", "accountant"],
   },
   {
     title: "Products & Services",
     href: "/analytics/products",
     icon: PackageOpen,
     description: "Service type performance: most performed, highest revenue, trends.",
-    roles: ["owner", "manager", "accountant"],
+    roles: ["owner", "co_owner", "manager", "accountant"],
   },
   {
     title: "Expenses",
     href: "/analytics/expenses",
     icon: ShoppingCart,
     description: "Spend by category and vendor, monthly trends, paid vs outstanding.",
-    roles: ["owner", "manager", "accountant"],
+    roles: ["owner", "co_owner", "manager", "accountant"],
   },
   {
     title: "Payroll",
     href: "/analytics/payroll",
     icon: Wallet,
     description: "Weekly payroll cost, deductions, payroll-to-revenue ratio.",
-    roles: ["owner", "accountant"],
+    roles: ["owner", "co_owner", "accountant"],
   },
 ] as const;
 
 export default async function AnalyticsHubPage() {
-  const profile = await requireProfile();
+  // Match registry: analytics.defaultRoles = owner/co_owner/manager/accountant.
+  const profile = await requireRole("owner", "co_owner", "manager", "accountant");
 
   const cards = CARDS.filter((c) => (c.roles as readonly string[]).includes(profile.role));
 

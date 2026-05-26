@@ -36,7 +36,7 @@ export default async function ProductsAnalyticsPage({
       location_id: sp.location_id,
     }),
     listActiveLocations(),
-    profile.role === "owner" ? listLowMarginParts() : Promise.resolve(null),
+    (profile.role === "owner" || profile.role === "co_owner") ? listLowMarginParts() : Promise.resolve(null),
   ]);
 
   const serviceCodes = Array.from(new Set(data.by_count.map((b) => b.code)));

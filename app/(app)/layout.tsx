@@ -1,6 +1,6 @@
 import { ReactNode, Suspense } from "react";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
@@ -11,6 +11,12 @@ import { cn } from "@/lib/utils";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { createClient } from "@/lib/supabase/server";
 import { SearchDialog } from "@/components/sidebar/search-dialog";
+import { isOwnerProfile, isPageAllowed } from "@/lib/permissions/check";
+import {
+  PAGE_REGISTRY,
+  defaultAllowedPagesForRole,
+  pageKeyForRequestPath,
+} from "@/lib/permissions/registry";
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   const supabase = await createClient();
@@ -25,6 +31,26 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   }
   if (!profile.active) redirect("/auth/login?error=account_disabled");
   if (profile.role === "portal_customer") redirect("/portal/invoices");
+
+  // Per-user `allowed_pages` enforcement. Owner bypasses. For non-owners the
+  // `x-pathname` header is set by middleware (lib/supabase/proxy.ts) so we can
+  // identify which registered page the current URL belongs to.
+  if (!isOwnerProfile(profile)) {
+    const pathname = (await headers()).get("x-pathname") ?? "";
+    const pageKey = pageKeyForRequestPath(pathname);
+    if (pageKey && !isPageAllowed(profile, pageKey)) {
+      // Send the user somewhere they ARE allowed. /dashboard is the usual
+      // landing pad, but if it's been revoked we fall back to the first page
+      // they still have. If nothing is allowed at all, sign them out — there
+      // is nothing for them in the app.
+      const allowed = profile.allowed_pages ?? defaultAllowedPagesForRole(profile.role);
+      const fallback =
+        (allowed.includes("dashboard") ? "/dashboard" : null) ??
+        PAGE_REGISTRY.find((p) => allowed.includes(p.key))?.path ??
+        null;
+      redirect(fallback ?? "/auth/login?error=no_access");
+    }
+  }
 
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value === "true";

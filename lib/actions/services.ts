@@ -27,7 +27,7 @@ const UpdateServiceTypeInput = ServiceTypeInput.extend({ id: z.string().uuid() }
 
 export const createServiceType = wrapAction({
   schema: ServiceTypeInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<ServiceType> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -43,7 +43,7 @@ export const createServiceType = wrapAction({
 
 export const updateServiceType = wrapAction({
   schema: UpdateServiceTypeInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<ServiceType> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -60,7 +60,7 @@ export const updateServiceType = wrapAction({
 
 export const toggleServiceTypeActive = wrapAction({
   schema: z.object({ id: z.string().uuid(), active: z.boolean() }),
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<ServiceType> => {
     const supabase = await createClient();
     const { data, error } = await supabase

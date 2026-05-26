@@ -208,7 +208,7 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
 // ----------------------------------------------------------------------------
 export const createSalesJob = wrapAction({
   schema: SalesJobInput,
-  roles: ["owner", "manager", "staff"],
+  roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input, profile): Promise<SalesJob> => {
     // Staff MUST write to their own location. Enforce server-side even though
     // RLS also blocks cross-location writes.
@@ -337,7 +337,7 @@ export const createSalesJob = wrapAction({
 // ----------------------------------------------------------------------------
 export const updateSalesJob = wrapAction({
   schema: UpdateSalesJobInput,
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<SalesJob> => {
     const supabase = await createClient();
 
@@ -422,7 +422,7 @@ export const updateSalesJob = wrapAction({
 // ----------------------------------------------------------------------------
 export const addSalesPayment = wrapAction({
   schema: AddSalesPaymentInput,
-  roles: ["owner", "manager", "staff", "accountant"],
+  roles: ["owner", "co_owner", "manager", "staff", "accountant"],
   handler: async (input, profile): Promise<SalesPaymentRow> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -451,7 +451,7 @@ export const addSalesPayment = wrapAction({
 // ----------------------------------------------------------------------------
 export const deactivateSalesJob = wrapAction({
   schema: DeactivateSalesJobInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<{ id: string }> => {
     const supabase = await createClient();
     const { error } = await supabase

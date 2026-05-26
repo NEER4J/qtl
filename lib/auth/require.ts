@@ -38,13 +38,13 @@ export async function requireRole(...roles: UserRole[]): Promise<Profile> {
 
 /**
  * Require that the caller is entitled to act on the given location.
- * Owner + accountant pass for any location. Manager/staff must match their
- * assigned location. Employees fail.
+ * Owner + co_owner + accountant pass for any location. Manager/staff must
+ * match their assigned location. Employees fail.
  */
 export async function requireLocation(locationId: string): Promise<Profile> {
   const profile = await requireProfile();
 
-  if (profile.role === "owner" || profile.role === "accountant") {
+  if (profile.role === "owner" || profile.role === "co_owner" || profile.role === "accountant") {
     return profile;
   }
 
@@ -64,8 +64,13 @@ export async function requireLocation(locationId: string): Promise<Profile> {
   return profile;
 }
 
+/**
+ * True for both owner and co_owner. The two roles are treated as functional
+ * equivalents everywhere — co_owner exists so multiple humans can administer
+ * the shop without sharing the bootstrap owner account.
+ */
 export function isOwner(profile: Profile | null): boolean {
-  return profile?.role === "owner";
+  return profile?.role === "owner" || profile?.role === "co_owner";
 }
 
 export function isAccountant(profile: Profile | null): boolean {
@@ -85,8 +90,8 @@ export function isEmployee(profile: Profile | null): boolean {
 }
 
 /**
- * Owner or accountant — the two cross-location admin roles.
+ * Owner / co_owner / accountant — the cross-location admin roles.
  */
 export function isCrossLocation(profile: Profile | null): boolean {
-  return profile?.role === "owner" || profile?.role === "accountant";
+  return profile?.role === "owner" || profile?.role === "co_owner" || profile?.role === "accountant";
 }

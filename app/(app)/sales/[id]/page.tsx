@@ -45,12 +45,12 @@ export default async function SalesJobDetailPage({
   if (!job) notFound();
 
   const canEdit =
-    profile.role === "owner" ||
+    (profile.role === "owner" || profile.role === "co_owner") ||
     (profile.role === "manager" && profile.location_id === job.location_id);
 
   const canAddPayment =
     profile.role !== "employee" &&
-    (profile.role === "owner" ||
+    ((profile.role === "owner" || profile.role === "co_owner") ||
       profile.role === "accountant" ||
       profile.location_id === job.location_id);
 

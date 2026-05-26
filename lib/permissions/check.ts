@@ -1,5 +1,5 @@
 import type { Profile, UserRole } from "@/lib/db/types";
-import { defaultAllowedPagesForRole, pageKeyForPath } from "./registry";
+import { PAGE_REGISTRY, defaultAllowedPagesForRole, pageKeyForPath } from "./registry";
 
 // ----------------------------------------------------------------------------
 // Per-user permission checks
@@ -11,17 +11,20 @@ type ProfileSubset = Pick<Profile, "role" | "allowed_pages" | "hidden_columns"> 
 
 export function effectiveAllowedPageKeys(profile: ProfileSubset): Set<string> {
   if (!profile) return new Set();
-  if (profile.role === "owner") {
-    // Owner gets everything — a special sentinel set; consumers should check
-    // isOwnerProfile first, but returning a populated set is also fine.
-    return new Set();
+  if (isOwnerProfile(profile)) {
+    // Owner / co_owner gets EVERY registered page. Returning the full keyset
+    // (rather than an empty "sentinel" set) means callers who forget to
+    // special-case owner still get the correct answer instead of silently
+    // locking them out.
+    return new Set(PAGE_REGISTRY.map((p) => p.key));
   }
   const allowed = profile.allowed_pages ?? defaultAllowedPagesForRole(profile.role);
   return new Set(allowed);
 }
 
+/** True for owner and co_owner. They share the same effective permission set. */
 export function isOwnerProfile(profile: ProfileSubset): boolean {
-  return profile?.role === "owner";
+  return profile?.role === "owner" || profile?.role === "co_owner";
 }
 
 export function isPageAllowed(profile: ProfileSubset, pageKey: string): boolean {

@@ -24,7 +24,7 @@ export default async function HstSummaryPage({
   searchParams: Promise<Record<string, string>>;
 }) {
   const profile = await requireProfile();
-  if (profile.role !== "owner" && profile.role !== "accountant") notFound();
+  if ((profile.role !== "owner" && profile.role !== "co_owner") && profile.role !== "accountant") notFound();
   const sp = await searchParams;
 
   const [data, locations] = await Promise.all([

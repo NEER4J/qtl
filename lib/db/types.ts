@@ -2,7 +2,7 @@
 //   supabase gen types typescript --local > lib/db/types.ts
 // once `supabase start` has applied the migrations.
 
-export type UserRole = 'owner' | 'manager' | 'accountant' | 'staff' | 'employee' | 'portal_customer';
+export type UserRole = 'owner' | 'co_owner' | 'manager' | 'accountant' | 'staff' | 'employee' | 'portal_customer';
 
 export type PaymentMode =
   | 'visa'
@@ -273,6 +273,23 @@ export interface VendorInvoiceItem {
   line_total: number;
   position: number;
   created_at: string;
+}
+
+/** Curated roster of names that appear in the Upper tech / Lower tech /
+ *  Advisor dropdowns on a sales job. These are NOT login users — see
+ *  migration 0065. */
+export interface Technician {
+  id: string;
+  name: string;
+  role: string | null;
+  sort_order: number;
+  active: boolean;
+  deactivated_at: string | null;
+  deactivated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
 }
 
 export interface SalesJob {

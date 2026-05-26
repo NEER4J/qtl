@@ -27,7 +27,7 @@ const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default async function RecurringExpensesPage() {
   const profile = await requireProfile();
-  if (profile.role !== "owner" && profile.role !== "manager") notFound();
+  if ((profile.role !== "owner" && profile.role !== "co_owner") && profile.role !== "manager") notFound();
 
   const [rows, locations, categories, vendors] = await Promise.all([
     listRecurringExpenses(),

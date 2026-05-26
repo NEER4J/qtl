@@ -136,7 +136,7 @@ export async function listParts(filter?: {
   const { data, error } = await q;
   if (error) throw error;
 
-  const hideCost = profile.role !== "owner";
+  const hideCost = (profile.role !== "owner" && profile.role !== "co_owner");
   type Row = PartJoinRow & { service_costs: { name: string } | null };
   return ((data ?? []) as unknown as Row[]).map((r) => {
     const merged = mergePartCategory(r);
@@ -904,7 +904,7 @@ const StatutoryRateInput = z.object({
 
 export const upsertStatutoryRate = wrapAction({
   schema: StatutoryRateInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<StatutoryRate> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1135,7 +1135,7 @@ function revalidatePricing(entity?: string) {
 
 export const createOilType = wrapAction({
   schema: CreateOilTypeInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<OilType> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1151,7 +1151,7 @@ export const createOilType = wrapAction({
 
 export const updateOilType = wrapAction({
   schema: UpdateOilTypeInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<OilType> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1168,7 +1168,7 @@ export const updateOilType = wrapAction({
 
 export const toggleOilTypeActive = wrapAction({
   schema: ToggleActiveInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<OilType> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1189,7 +1189,7 @@ export const toggleOilTypeActive = wrapAction({
 
 export const createEngineType = wrapAction({
   schema: CreateEngineTypeInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<EngineType> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1205,7 +1205,7 @@ export const createEngineType = wrapAction({
 
 export const updateEngineType = wrapAction({
   schema: UpdateEngineTypeInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<EngineType> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1222,7 +1222,7 @@ export const updateEngineType = wrapAction({
 
 export const toggleEngineTypeActive = wrapAction({
   schema: ToggleActiveInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<EngineType> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1286,7 +1286,7 @@ export async function checkPartNumberExists(input: {
 
 export const createPart = wrapAction({
   schema: CreatePartInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<Part> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1305,7 +1305,7 @@ export const createPart = wrapAction({
 
 export const updatePart = wrapAction({
   schema: UpdatePartInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<Part> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1325,7 +1325,7 @@ export const updatePart = wrapAction({
 
 export const togglePartActive = wrapAction({
   schema: ToggleActiveInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<Part> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1346,7 +1346,7 @@ export const togglePartActive = wrapAction({
 
 export const createServiceCost = wrapAction({
   schema: CreateServiceCostInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<ServiceCost> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1362,7 +1362,7 @@ export const createServiceCost = wrapAction({
 
 export const updateServiceCost = wrapAction({
   schema: UpdateServiceCostInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<ServiceCost> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1379,7 +1379,7 @@ export const updateServiceCost = wrapAction({
 
 export const toggleServiceCostActive = wrapAction({
   schema: ToggleActiveInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<ServiceCost> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1401,7 +1401,7 @@ export const toggleServiceCostActive = wrapAction({
 
 export const createVolumeTier = wrapAction({
   schema: CreateVolumeTierInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<VolumeTier> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1417,7 +1417,7 @@ export const createVolumeTier = wrapAction({
 
 export const updateVolumeTier = wrapAction({
   schema: UpdateVolumeTierInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<VolumeTier> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1434,7 +1434,7 @@ export const updateVolumeTier = wrapAction({
 
 export const deleteVolumeTier = wrapAction({
   schema: DeleteVolumeTierInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ id: string }> => {
     const supabase = await createClient();
     const { error } = await supabase
@@ -1453,7 +1453,7 @@ export const deleteVolumeTier = wrapAction({
 
 export const upsertEngineFilter = wrapAction({
   schema: UpsertEngineFilterInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<EngineFilter> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1469,7 +1469,7 @@ export const upsertEngineFilter = wrapAction({
 
 export const deleteEngineFilter = wrapAction({
   schema: DeleteEngineFilterInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ id: string }> => {
     const supabase = await createClient();
     const { error } = await supabase
@@ -1485,7 +1485,7 @@ export const deleteEngineFilter = wrapAction({
 // Search action used by the engine-detail part picker.
 export const searchPartsForEngine = wrapAction({
   schema: z.object({ q: z.string().trim().max(100).optional() }),
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<Part[]> => {
     return listPartsForPicker(input.q);
   },
@@ -1497,7 +1497,7 @@ export const searchPartsForEngine = wrapAction({
 
 export const createPartCategory = wrapAction({
   schema: CreatePartCategoryInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<PartCategory> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1514,7 +1514,7 @@ export const createPartCategory = wrapAction({
 
 export const updatePartCategory = wrapAction({
   schema: UpdatePartCategoryInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<PartCategory> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1534,7 +1534,7 @@ export const updatePartCategory = wrapAction({
 
 export const togglePartCategoryActive = wrapAction({
   schema: ToggleActiveInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<PartCategory> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1556,7 +1556,7 @@ export const togglePartCategoryActive = wrapAction({
 
 export const createPartBrand = wrapAction({
   schema: CreatePartBrandInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<PartBrand> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1573,7 +1573,7 @@ export const createPartBrand = wrapAction({
 
 export const updatePartBrand = wrapAction({
   schema: UpdatePartBrandInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<PartBrand> => {
     const supabase = await createClient();
     const { data: prev, error: prevErr } = await supabase
@@ -1608,7 +1608,7 @@ export const updatePartBrand = wrapAction({
 
 export const togglePartBrandActive = wrapAction({
   schema: ToggleActiveInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<PartBrand> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1631,7 +1631,7 @@ export const togglePartBrandActive = wrapAction({
  */
 export const ensurePartCategory = wrapAction({
   schema: z.object({ name: z.string().trim().min(1).max(80) }),
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ name: string }> => {
     const supabase = await createClient();
     const name = input.name.trim();
@@ -1646,7 +1646,7 @@ export const ensurePartCategory = wrapAction({
 
 export const ensurePartBrand = wrapAction({
   schema: z.object({ name: z.string().trim().min(1).max(80) }),
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ name: string }> => {
     const supabase = await createClient();
     const name = input.name.trim();
@@ -1809,7 +1809,7 @@ export const lookupOilChangePrice = wrapAction({
     oil_type_id: z.string().uuid(),
     oil_container: z.enum(["bulk", "gallon"]),
   }),
-  roles: ["owner", "manager", "staff"],
+  roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input): Promise<{ sub_total: number | null }> => {
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("oil_change_price", {
@@ -1857,7 +1857,7 @@ const UpsertEngineSellPriceInput = z.object({
 
 export const upsertEngineSellPrice = wrapAction({
   schema: UpsertEngineSellPriceInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<EngineSellPriceRow> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1884,7 +1884,7 @@ export const upsertEngineSellPrice = wrapAction({
 
 export const deleteEngineSellPrice = wrapAction({
   schema: z.object({ id: z.string().uuid() }),
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ id: string }> => {
     const supabase = await createClient();
     const { error } = await supabase
@@ -1917,7 +1917,7 @@ const PricingSettingsInput = z.object({
 
 export const updatePricingSettings = wrapAction({
   schema: PricingSettingsInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ ok: true }> => {
     const supabase = await createClient();
     const { error } = await supabase
@@ -1941,7 +1941,7 @@ export const updatePricingSettings = wrapAction({
 
 export const updateMinMarginAlertPct = wrapAction({
   schema: z.object({ pct: z.coerce.number().min(0).max(100) }),
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ pct: number }> => {
     const supabase = await createClient();
     const frac = Math.round((input.pct / 100) * 10000) / 10000;
@@ -2098,7 +2098,7 @@ export async function listPackagesForPicker(q?: string): Promise<PartPackageWith
 
 export const createPartPackage = wrapAction({
   schema: CreatePartPackageInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<PartPackage> => {
     const supabase = await createClient();
     const { data: pkg, error: pkgErr } = await supabase
@@ -2133,7 +2133,7 @@ export const createPartPackage = wrapAction({
 
 export const updatePartPackage = wrapAction({
   schema: UpdatePartPackageInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async ({ id, items, ...fields }, profile): Promise<PartPackage> => {
     const supabase = await createClient();
 
@@ -2192,7 +2192,7 @@ export const updatePartPackage = wrapAction({
 
 export const lockPartPackage = wrapAction({
   schema: LockPartPackageInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async ({ id, lock_until }, profile): Promise<PartPackage> => {
     const supabase = await createClient();
 
@@ -2238,7 +2238,7 @@ export const lockPartPackage = wrapAction({
 
 export const unlockPartPackage = wrapAction({
   schema: UnlockPartPackageInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async ({ id }, profile): Promise<PartPackage> => {
     const supabase = await createClient();
 
@@ -2267,7 +2267,7 @@ export const unlockPartPackage = wrapAction({
 
 export const mergePartPackagePrices = wrapAction({
   schema: MergePartPackagePricesInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async ({ id, items, labor_selling_price }, profile): Promise<PartPackage> => {
     const supabase = await createClient();
 
@@ -2305,7 +2305,7 @@ export const mergePartPackagePrices = wrapAction({
 
 export const togglePartPackageActive = wrapAction({
   schema: ToggleActiveInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<PartPackage> => {
     const supabase = await createClient();
     const { data, error } = await supabase

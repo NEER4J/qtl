@@ -50,7 +50,7 @@ export async function getVendorInvoice(id: string): Promise<{
 
 export const createVendorInvoice = wrapAction({
   schema: CreateVendorInvoiceInput,
-  roles: ["owner", "manager", "accountant"],
+  roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<VendorInvoice> => {
     const supabase = await createClient();
     const total = Number(input.sub_total) + Number(input.hst);
@@ -97,7 +97,7 @@ export const createVendorInvoice = wrapAction({
 
 export const recordVendorInvoicePayment = wrapAction({
   schema: RecordVendorInvoicePaymentInput,
-  roles: ["owner", "manager", "accountant"],
+  roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<VendorInvoice> => {
     const supabase = await createClient();
     // Read current paid_amount + total to compute new status.

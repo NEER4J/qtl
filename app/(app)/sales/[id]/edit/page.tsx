@@ -12,6 +12,7 @@ import {
   listActiveServiceTypes,
 } from "@/lib/actions/reference";
 import { listEngineTypes, listOilTypes } from "@/lib/actions/pricing";
+import { listActiveTechnicians } from "@/lib/actions/technicians";
 import { formatDate } from "@/lib/utils/format";
 
 export const dynamic = "force-dynamic";
@@ -28,18 +29,20 @@ export default async function EditSalesJobPage({
 
   // Only owner + manager (own location) can edit — staff and accountant cannot.
   const canEdit =
-    profile.role === "owner" ||
+    (profile.role === "owner" || profile.role === "co_owner") ||
     (profile.role === "manager" && profile.location_id === job.location_id);
   if (!canEdit) redirect(`/sales/${id}`);
   if (job.deactivated_at) redirect(`/sales/${id}`);
 
-  const [locations, serviceTypes, settings, engineTypes, oilTypes] = await Promise.all([
-    listActiveLocations(),
-    listActiveServiceTypes(),
-    getAppSettings(),
-    listEngineTypes(),
-    listOilTypes(),
-  ]);
+  const [locations, serviceTypes, settings, engineTypes, oilTypes, technicians] =
+    await Promise.all([
+      listActiveLocations(),
+      listActiveServiceTypes(),
+      getAppSettings(),
+      listEngineTypes(),
+      listOilTypes(),
+      listActiveTechnicians(),
+    ]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -63,6 +66,7 @@ export default async function EditSalesJobPage({
         serviceTypes={serviceTypes}
         engineTypes={engineTypes}
         oilTypes={oilTypes}
+        technicians={technicians}
         hstRate={Number(settings.hst_rate)}
         initialItems={job.items.map((it) => ({
           key: it.id,

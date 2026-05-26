@@ -22,7 +22,7 @@ export default async function TransDiffPage() {
   const { groups } = await listTransmissionServices();
   // Cost-side data (labour breakdown for coolant flush) is admin only —
   // staff and manager at the counter see sell prices only.
-  const showCost = profile.role === "owner" || profile.role === "accountant";
+  const showCost = (profile.role === "owner" || profile.role === "co_owner") || profile.role === "accountant";
 
   const totalRows = groups.reduce((n, g) => n + g.rows.length, 0);
 

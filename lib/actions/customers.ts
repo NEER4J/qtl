@@ -60,7 +60,7 @@ function customerWritablePayload(input: z.infer<typeof CreateCustomerInput>) {
 // Item #29 — owner/manager grants a 30-day free oil-change offer.
 export const grantFreeOilChange = wrapAction({
   schema: z.object({ customer_id: z.string().uuid() }),
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<Customer> => {
     const supabase = await createClient();
     const until = new Date();
@@ -98,7 +98,7 @@ export async function listCustomers(): Promise<Customer[]> {
 // ----------------------------------------------------------------------------
 export const toggleCustomerActive = wrapAction({
   schema: z.object({ id: z.string().uuid(), active: z.boolean() }),
-  roles: ["owner", "manager"],
+  roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<Customer> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -199,7 +199,7 @@ export const searchCustomers = wrapAction({
 // ----------------------------------------------------------------------------
 export const createCustomer = wrapAction({
   schema: CreateCustomerInput,
-  roles: ["owner", "manager", "staff"],
+  roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input, profile): Promise<Customer> => {
     const supabase = await createClient();
 
@@ -275,7 +275,7 @@ export const createCustomer = wrapAction({
 // ----------------------------------------------------------------------------
 export const updateCustomer = wrapAction({
   schema: UpdateCustomerInput,
-  roles: ["owner", "manager", "staff"],
+  roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input, profile): Promise<Customer> => {
     const supabase = await createClient();
     const plates = Array.from(

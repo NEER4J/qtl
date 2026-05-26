@@ -1,13 +1,14 @@
 import { PageHelp } from "@/components/help/page-help";
 import { requireRole } from "@/lib/auth/require";
 import { listCustomers } from "@/lib/actions/customers";
+import { hiddenColumnsForPage } from "@/lib/permissions/check";
 
 import { CustomersTable } from "./customers-table";
 
 export const dynamic = "force-dynamic";
 
 export default async function CustomersPage() {
-  await requireRole("owner", "manager", "staff");
+  const profile = await requireRole("owner", "co_owner", "manager", "staff");
   const customers = await listCustomers();
 
   return (
@@ -29,7 +30,10 @@ export default async function CustomersPage() {
         </ul>
       </PageHelp>
 
-      <CustomersTable customers={customers} />
+      <CustomersTable
+        customers={customers}
+        hiddenColumns={[...hiddenColumnsForPage(profile, "customers")]}
+      />
     </div>
   );
 }

@@ -13,7 +13,7 @@ export default async function OilChangeDetailPage() {
   const { rows } = await getOilChangeDetails();
   // Filter cost + labour are admin-only — staff and manager see brand
   // availability but not the cost numbers. Same rule as /pricing/oil-detail.
-  const showCost = profile.role === "owner" || profile.role === "accountant";
+  const showCost = (profile.role === "owner" || profile.role === "co_owner") || profile.role === "accountant";
 
   // All distinct brands across all engines, ordered alphabetically — used as
   // table columns so each engine row shows its brand options side by side.

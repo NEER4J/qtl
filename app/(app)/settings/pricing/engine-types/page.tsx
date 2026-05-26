@@ -7,7 +7,7 @@ import { EngineTypesTable } from "./engine-types-table";
 export const dynamic = "force-dynamic";
 
 export default async function EngineTypesPage() {
-  await requireRole("owner");
+  await requireRole("owner", "co_owner");
   const engineTypes = await listAllEngineTypes();
 
   return (

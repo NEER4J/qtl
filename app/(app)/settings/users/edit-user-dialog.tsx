@@ -46,6 +46,7 @@ import { PermissionsMatrix } from "./permissions-matrix";
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "owner", label: "Owner" },
+  { value: "co_owner", label: "Co-owner" },
   { value: "manager", label: "Manager" },
   { value: "accountant", label: "Accountant" },
   { value: "staff", label: "Staff" },
@@ -357,9 +358,10 @@ export function EditUserDialog({
               </TabsContent>
 
               <TabsContent value="permissions" className="pt-2">
-                {role === "owner" ? (
+                {role === "owner" || role === "co_owner" ? (
                   <div className="rounded-md border bg-muted/40 p-4 text-sm text-muted-foreground">
-                    Owners always have full access. Page and column overrides don&apos;t apply.
+                    {role === "owner" ? "Owners" : "Co-owners"} always have full access.
+                    Page and column overrides don&apos;t apply.
                   </div>
                 ) : (
                   <PermissionsMatrix

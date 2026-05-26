@@ -24,7 +24,7 @@ export default async function AllFilterPricePage({
 }) {
   const profile = await requireProfile();
   const sp = await searchParams;
-  const showCost = profile.role === "owner";
+  const showCost = (profile.role === "owner" || profile.role === "co_owner");
 
   const [{ rows, counter_premium, customer_supplies_labour, effective_date }, categories] =
     await Promise.all([

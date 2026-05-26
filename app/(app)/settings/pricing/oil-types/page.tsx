@@ -7,7 +7,7 @@ import { OilTypesTable } from "./oil-types-table";
 export const dynamic = "force-dynamic";
 
 export default async function OilTypesPage() {
-  await requireRole("owner");
+  await requireRole("owner", "co_owner");
   const oilTypes = await listAllOilTypes();
 
   return (

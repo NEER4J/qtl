@@ -68,7 +68,7 @@ const CARDS = [
 ];
 
 export default async function PricingAdminHubPage() {
-  await requireRole("owner");
+  await requireRole("owner", "co_owner");
   const settings = await getAppSettings();
   const initialPct = Math.round(Number(settings.min_margin_alert_pct) * 1000) / 10;
   return (

@@ -26,12 +26,23 @@ function customerDisplayName(c: Customer): string {
   return c.billing_name ?? c.last_or_company ?? "(no name)";
 }
 
-export function CustomersTable({ customers }: { customers: Customer[] }) {
+export function CustomersTable({
+  customers,
+  hiddenColumns,
+}: {
+  customers: Customer[];
+  /** Per-viewer hidden column keys from profiles.hidden_columns["customers"]. */
+  hiddenColumns?: string[];
+}) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Customer | null>(null);
   const [creating, setCreating] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const hidden = new Set(hiddenColumns ?? []);
+  const show = (key: string) => !hidden.has(key);
+  // ALWAYS: Name, Plates, Actions. HIDEABLE: phone, email.
+  const visibleCount = 3 + [show("phone"), show("email")].filter(Boolean).length;
 
   const filtered = customers.filter((c) => {
     if (!search) return true;
@@ -80,15 +91,15 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Plates</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Email</TableHead>
+              {show("phone") && <TableHead>Phone</TableHead>}
+              {show("email") && <TableHead>Email</TableHead>}
               <TableHead className="w-32 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8 px-6">
+                <TableCell colSpan={visibleCount} className="text-center text-muted-foreground py-8 px-6">
                   {search ? (
                     <p>No customers match <strong>&quot;{search}&quot;</strong>. Try a shorter search, or clear the box.</p>
                   ) : (
@@ -122,8 +133,10 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell>{formatPhone(c.phone_cell ?? c.contact_no) || "—"}</TableCell>
-                  <TableCell>{c.email ?? "—"}</TableCell>
+                  {show("phone") && (
+                    <TableCell>{formatPhone(c.phone_cell ?? c.contact_no) || "—"}</TableCell>
+                  )}
+                  {show("email") && <TableCell>{c.email ?? "—"}</TableCell>}
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button variant="ghost" size="icon" onClick={() => setEditing(c)}>

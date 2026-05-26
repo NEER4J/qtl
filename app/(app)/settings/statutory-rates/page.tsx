@@ -27,7 +27,7 @@ const RATE_LABELS: Record<string, string> = {
 
 export default async function StatutoryRatesPage() {
   const profile = await requireProfile();
-  if (profile.role !== "owner") notFound();
+  if ((profile.role !== "owner" && profile.role !== "co_owner")) notFound();
 
   const rows = await listStatutoryRates();
 

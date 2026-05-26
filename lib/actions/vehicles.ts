@@ -79,7 +79,7 @@ export const searchVehicles = wrapAction({
 // ----------------------------------------------------------------------------
 export const createVehicle = wrapAction({
   schema: CreateVehicleInput,
-  roles: ["owner", "manager", "staff"],
+  roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input, profile): Promise<Vehicle> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -114,7 +114,7 @@ export const createVehicle = wrapAction({
 // ----------------------------------------------------------------------------
 export const updateVehicle = wrapAction({
   schema: UpdateVehicleInput,
-  roles: ["owner", "manager", "staff"],
+  roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input, profile): Promise<Vehicle> => {
     const supabase = await createClient();
     const { id, ...rest } = input;
@@ -148,7 +148,7 @@ export const updateVehicle = wrapAction({
 // ----------------------------------------------------------------------------
 export const markVehicleContacted = wrapAction({
   schema: DeactivateVehicleInput, // shares { id }
-  roles: ["owner", "manager", "staff"],
+  roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input, profile): Promise<Vehicle> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -243,7 +243,7 @@ export async function getVehicleStats(vehicleId: string): Promise<VehicleStats> 
 // ----------------------------------------------------------------------------
 export const deactivateVehicle = wrapAction({
   schema: DeactivateVehicleInput,
-  roles: ["owner"],
+  roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<{ id: string }> => {
     const supabase = await createClient();
     const { error } = await supabase

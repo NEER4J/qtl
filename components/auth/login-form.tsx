@@ -48,9 +48,13 @@ export function LoginForm() {
       });
     } else {
       toast.success("Login successful", {
-        description: "Redirecting to dashboard...",
+        description: "Redirecting...",
       });
-      router.push("/dashboard");
+      // Bounce through root; the server picks the right landing page based
+      // on role + allowed_pages (see app/page.tsx → defaultLandingPath).
+      // Refresh so the new auth cookies propagate to the server components.
+      router.replace("/");
+      router.refresh();
     }
     
     setIsLoading(false);

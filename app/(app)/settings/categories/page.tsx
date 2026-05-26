@@ -10,7 +10,7 @@ import { CategoriesManager } from "./categories-manager";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsCategoriesPage() {
-  await requireRole("owner");
+  await requireRole("owner", "co_owner");
   const [categories, subcategories] = await Promise.all([
     listAllExpenseCategories(),
     listAllExpenseSubcategories(),

@@ -33,7 +33,7 @@ export default async function AuditLogPage({
   searchParams: Promise<Record<string, string>>;
 }) {
   const profile = await requireProfile();
-  if (profile.role !== "owner" && profile.role !== "accountant") {
+  if ((profile.role !== "owner" && profile.role !== "co_owner") && profile.role !== "accountant") {
     notFound();
   }
 

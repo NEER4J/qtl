@@ -33,36 +33,40 @@ export type PageGroup = (typeof PAGE_GROUPS)[number];
 
 export const PAGE_REGISTRY: PageDef[] = [
   // Overview
-  { key: "dashboard", label: "Dashboard", group: "Overview", path: "/dashboard", defaultRoles: ["owner", "manager", "accountant"] },
+  { key: "dashboard", label: "Dashboard", group: "Overview", path: "/dashboard", defaultRoles: ["owner", "co_owner", "manager", "accountant"] },
 
   // Operations
-  { key: "sales", label: "Sales", group: "Operations", path: "/sales", defaultRoles: ["owner", "manager", "accountant", "staff"] },
-  { key: "invoices", label: "Invoices", group: "Operations", path: "/invoices", defaultRoles: ["owner", "manager", "accountant"] },
-  { key: "expenses", label: "Expenses", group: "Operations", path: "/expenses", defaultRoles: ["owner", "manager", "accountant", "staff"] },
-  { key: "payroll", label: "Payroll", group: "Operations", path: "/payroll", defaultRoles: ["owner", "manager", "accountant"] },
+  { key: "sales", label: "Sales", group: "Operations", path: "/sales", defaultRoles: ["owner", "co_owner", "manager", "accountant", "staff"] },
+  { key: "invoices", label: "Invoices", group: "Operations", path: "/invoices", defaultRoles: ["owner", "co_owner", "manager", "accountant"] },
+  { key: "expenses", label: "Expenses", group: "Operations", path: "/expenses", defaultRoles: ["owner", "co_owner", "manager", "accountant", "staff"] },
+  { key: "payroll", label: "Payroll", group: "Operations", path: "/payroll", defaultRoles: ["owner", "co_owner", "manager", "accountant"] },
 
   // Catalog & directory
-  { key: "customers", label: "Customers", group: "Catalog", path: "/customers", defaultRoles: ["owner", "manager", "staff"] },
-  { key: "vendors", label: "Vendors", group: "Catalog", path: "/vendors", defaultRoles: ["owner", "accountant", "manager"] },
-  { key: "pricing", label: "Pricing", group: "Catalog", path: "/pricing", defaultRoles: ["owner", "manager", "accountant", "staff"] },
-  { key: "inventory", label: "Inventory", group: "Catalog", path: "/settings/pricing", defaultRoles: ["owner"] },
+  { key: "customers", label: "Customers", group: "Catalog", path: "/customers", defaultRoles: ["owner", "co_owner", "manager", "staff"] },
+  { key: "vendors", label: "Vendors", group: "Catalog", path: "/vendors", defaultRoles: ["owner", "co_owner", "accountant", "manager"] },
+  { key: "pricing", label: "Pricing", group: "Catalog", path: "/pricing", defaultRoles: ["owner", "co_owner", "manager", "accountant", "staff"] },
+  // Note: the sidebar's "Inventory" tile points at /settings/pricing and is
+  // permission-covered by the `settings_pricing` key in the Settings group.
+  // A duplicate registry entry for the same path would make pageKeyForPath
+  // and pageKeyForRequestPath disagree about which key represents the URL.
 
   // Insights
-  { key: "analytics", label: "Analytics", group: "Insights", path: "/analytics", defaultRoles: ["owner", "manager", "accountant"] },
-  { key: "analytics_payroll", label: "Analytics — Payroll", group: "Insights", path: "/analytics/payroll", defaultRoles: ["owner", "accountant"] },
-  { key: "reports", label: "Reports", group: "Insights", path: "/reports", defaultRoles: ["owner", "manager", "accountant"] },
-  { key: "reports_hst", label: "Reports — HST", group: "Insights", path: "/reports/hst", defaultRoles: ["owner", "accountant"] },
+  { key: "analytics", label: "Analytics", group: "Insights", path: "/analytics", defaultRoles: ["owner", "co_owner", "manager", "accountant"] },
+  { key: "analytics_payroll", label: "Analytics — Payroll", group: "Insights", path: "/analytics/payroll", defaultRoles: ["owner", "co_owner", "accountant"] },
+  { key: "reports", label: "Reports", group: "Insights", path: "/reports", defaultRoles: ["owner", "co_owner", "manager", "accountant"] },
+  { key: "reports_hst", label: "Reports — HST", group: "Insights", path: "/reports/hst", defaultRoles: ["owner", "co_owner", "accountant"] },
 
   // Settings
-  { key: "settings", label: "Settings (root)", group: "Settings", path: "/settings", defaultRoles: ["owner", "accountant"] },
-  { key: "settings_users", label: "Users", group: "Settings", path: "/settings/users", defaultRoles: ["owner"] },
-  { key: "settings_locations", label: "Locations", group: "Settings", path: "/settings/locations", defaultRoles: ["owner"] },
-  { key: "settings_categories", label: "Expense Categories", group: "Settings", path: "/settings/categories", defaultRoles: ["owner"] },
-  { key: "settings_services", label: "Service Types", group: "Settings", path: "/settings/services", defaultRoles: ["owner"] },
-  { key: "settings_pricing", label: "Pricing Catalogue", group: "Settings", path: "/settings/pricing", defaultRoles: ["owner"] },
-  { key: "settings_recurring", label: "Recurring Expenses", group: "Settings", path: "/settings/recurring-expenses", defaultRoles: ["owner"] },
-  { key: "settings_statutory", label: "Statutory Rates", group: "Settings", path: "/settings/statutory-rates", defaultRoles: ["owner"] },
-  { key: "settings_audit_log", label: "Audit Log", group: "Settings", path: "/settings/audit-log", defaultRoles: ["owner", "accountant"] },
+  { key: "settings", label: "Settings (root)", group: "Settings", path: "/settings", defaultRoles: ["owner", "co_owner", "accountant"] },
+  { key: "settings_users", label: "Users", group: "Settings", path: "/settings/users", defaultRoles: ["owner", "co_owner"] },
+  { key: "settings_locations", label: "Locations", group: "Settings", path: "/settings/locations", defaultRoles: ["owner", "co_owner"] },
+  { key: "settings_categories", label: "Expense Categories", group: "Settings", path: "/settings/categories", defaultRoles: ["owner", "co_owner"] },
+  { key: "settings_services", label: "Service Types", group: "Settings", path: "/settings/services", defaultRoles: ["owner", "co_owner"] },
+  { key: "settings_technicians", label: "Technicians", group: "Settings", path: "/settings/technicians", defaultRoles: ["owner", "co_owner"] },
+  { key: "settings_pricing", label: "Pricing Catalogue", group: "Settings", path: "/settings/pricing", defaultRoles: ["owner", "co_owner"] },
+  { key: "settings_recurring", label: "Recurring Expenses", group: "Settings", path: "/settings/recurring-expenses", defaultRoles: ["owner", "co_owner"] },
+  { key: "settings_statutory", label: "Statutory Rates", group: "Settings", path: "/settings/statutory-rates", defaultRoles: ["owner", "co_owner"] },
+  { key: "settings_audit_log", label: "Audit Log", group: "Settings", path: "/settings/audit-log", defaultRoles: ["owner", "co_owner", "accountant"] },
 ];
 
 const PAGE_KEY_BY_PATH = new Map(PAGE_REGISTRY.map((p) => [p.path, p.key]));
@@ -73,6 +77,23 @@ export function pageKeyForPath(path: string): string | null {
 }
 export function pageByKey(key: string): PageDef | null {
   return PAGE_BY_KEY.get(key) ?? null;
+}
+
+/**
+ * Match a request URL (which may include dynamic segments and sub-paths) to
+ * the most-specific registered page. `/sales/123/edit` → `sales`,
+ * `/settings/pricing/parts` → `settings_pricing` (the longest prefix wins).
+ * Returns null for paths that aren't registered (utility routes etc.) — those
+ * are intentionally not permission-gated.
+ */
+export function pageKeyForRequestPath(pathname: string): string | null {
+  let best: PageDef | null = null;
+  for (const p of PAGE_REGISTRY) {
+    if (pathname === p.path || pathname.startsWith(p.path + "/")) {
+      if (!best || p.path.length > best.path.length) best = p;
+    }
+  }
+  return best?.key ?? null;
 }
 
 // ----------------------------------------------------------------------------
@@ -98,7 +119,9 @@ export const COLUMN_REGISTRY: PageColumns[] = [
   {
     pageKey: "settings_users",
     columns: [
-      { key: "email", label: "Email" },
+      // "email" used to live here as its own column. After the Login/Email
+      // merge it doesn't exist as a standalone column — any saved override
+      // referencing it is now a silent no-op.
       { key: "role", label: "Role" },
       { key: "location", label: "Location" },
       { key: "expenses", label: "Expenses flag" },
@@ -192,4 +215,26 @@ export function columnsForPage(pageKey: string): ColumnDef[] {
 /** Pages a freshly-created user of this role can access by default. */
 export function defaultAllowedPagesForRole(role: UserRole): string[] {
   return PAGE_REGISTRY.filter((p) => p.defaultRoles.includes(role)).map((p) => p.key);
+}
+
+/**
+ * Compute where a freshly-signed-in user should land. Prefers /dashboard when
+ * they can reach it, otherwise the first page in registry order that their
+ * effective allowlist permits. Returns null only for accounts with literally
+ * no accessible app page (e.g. `employee`, which has no registry entries).
+ *
+ * Portal customers always land in the customer portal, independent of the
+ * (app)-side registry.
+ */
+export function defaultLandingPath(opts: {
+  role: UserRole;
+  allowedPages: string[] | null | undefined;
+}): string | null {
+  if (opts.role === "portal_customer") return "/portal/invoices";
+  const allowed = opts.allowedPages ?? defaultAllowedPagesForRole(opts.role);
+  if (allowed.includes("dashboard")) return "/dashboard";
+  for (const p of PAGE_REGISTRY) {
+    if (allowed.includes(p.key)) return p.path;
+  }
+  return null;
 }

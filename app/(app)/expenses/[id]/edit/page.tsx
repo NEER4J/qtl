@@ -27,7 +27,7 @@ export default async function EditExpensePage({
   if (!exp) notFound();
 
   const canEdit =
-    profile.role === "owner" ||
+    (profile.role === "owner" || profile.role === "co_owner") ||
     profile.role === "accountant" ||
     (profile.role === "manager" && profile.location_id === exp.location_id);
   if (!canEdit) redirect(`/expenses/${id}`);

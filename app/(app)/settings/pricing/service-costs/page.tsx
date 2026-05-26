@@ -7,7 +7,7 @@ import { ServiceCostsTable } from "./service-costs-table";
 export const dynamic = "force-dynamic";
 
 export default async function ServiceCostsPage() {
-  await requireRole("owner");
+  await requireRole("owner", "co_owner");
   const serviceCosts = await listAllServiceCosts();
 
   return (

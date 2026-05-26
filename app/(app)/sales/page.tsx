@@ -6,6 +6,7 @@ import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { listSalesJobs } from "@/lib/actions/sales";
 import { listActiveLocations, listActiveServiceTypes } from "@/lib/actions/reference";
+import { hiddenColumnsForPage } from "@/lib/permissions/check";
 
 import { SalesFilters } from "./sales-filters";
 import { SalesTable } from "./sales-table";
@@ -34,7 +35,7 @@ export default async function SalesListPage({
     listActiveServiceTypes(),
   ]);
 
-  const showLocationFilter = profile.role === "owner" || profile.role === "accountant";
+  const showLocationFilter = (profile.role === "owner" || profile.role === "co_owner") || profile.role === "accountant";
   const canCreate = profile.role !== "accountant";
 
   return (
@@ -79,7 +80,13 @@ export default async function SalesListPage({
         serviceTypes={serviceTypes}
       />
 
-      <SalesTable rows={result.rows} total={result.total} page={result.page} pageSize={result.pageSize} />
+      <SalesTable
+        rows={result.rows}
+        total={result.total}
+        page={result.page}
+        pageSize={result.pageSize}
+        hiddenColumns={[...hiddenColumnsForPage(profile, "sales")]}
+      />
     </div>
   );
 }

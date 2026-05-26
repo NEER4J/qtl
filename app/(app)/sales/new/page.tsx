@@ -12,6 +12,7 @@ import {
   listActiveServiceTypes,
 } from "@/lib/actions/reference";
 import { listEngineTypes, listOilTypes } from "@/lib/actions/pricing";
+import { listActiveTechnicians } from "@/lib/actions/technicians";
 
 export const dynamic = "force-dynamic";
 
@@ -27,13 +28,15 @@ export default async function NewSalesJobPage({
 
   const { customer_id: preselectCustomerId } = await searchParams;
 
-  const [locations, serviceTypes, settings, engineTypes, oilTypes] = await Promise.all([
-    listActiveLocations(),
-    listActiveServiceTypes(),
-    getAppSettings(),
-    listEngineTypes(),
-    listOilTypes(),
-  ]);
+  const [locations, serviceTypes, settings, engineTypes, oilTypes, technicians] =
+    await Promise.all([
+      listActiveLocations(),
+      listActiveServiceTypes(),
+      getAppSettings(),
+      listEngineTypes(),
+      listOilTypes(),
+      listActiveTechnicians(),
+    ]);
 
   const lockedLocationId = profile.role === "staff" ? profile.location_id : null;
 
@@ -73,6 +76,7 @@ export default async function NewSalesJobPage({
         serviceTypes={serviceTypes}
         engineTypes={engineTypes}
         oilTypes={oilTypes}
+        technicians={technicians}
         hstRate={Number(settings.hst_rate)}
         lockedLocationId={lockedLocationId}
         initial={preselectCustomerId ? { customer_id: preselectCustomerId } : undefined}
