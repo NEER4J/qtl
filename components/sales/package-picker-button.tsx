@@ -73,6 +73,7 @@ export function PackagePickerButton({
                             const qty = Number(it.quantity);
                             if (it.part) return `${qty}× ${it.part.brand} ${it.part.part_number}`;
                             if (it.oil_type) return `${qty}× ${excelOilLabel(it.oil_type.code, it.oil_type.name)}`;
+                            if (it.transmission_service) return `${qty}× ${it.transmission_service.name}`;
                             return `${qty}× —`;
                           })
                           .join(", ")}

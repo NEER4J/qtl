@@ -77,6 +77,10 @@ export default async function EditSalesJobPage({
           is_taxable: it.is_taxable,
           unit_of_measure: it.unit_of_measure,
           package_label: it.package_label ?? null,
+          package_group: it.package_group ?? null,
+          oil_type_id: it.oil_type_id ?? null,
+          transmission_service_id: it.transmission_service_id ?? null,
+          merged_unit_price: it.merged_unit_price ?? null,
           is_customer_supplied: it.is_customer_supplied ?? false,
           part_category_id: it.part_category_id ?? null,
         }))}

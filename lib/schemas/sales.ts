@@ -10,6 +10,14 @@ export const SalesJobItemInput = z.object({
   unit_price: z.coerce.number().min(0, "Price must be ≥ 0").max(9999999),
   is_taxable: z.coerce.boolean().default(true),
   package_label: z.string().trim().max(120).nullable().optional(),
+  // Per-instance group id so all lines from one package collapse to a single
+  // display line. Null for standalone items.
+  package_group: z.string().uuid().nullable().optional(),
+  // Source refs for overlap detection (oil item / Trans & Diff service item).
+  oil_type_id: z.string().uuid().nullable().optional(),
+  transmission_service_id: z.string().uuid().nullable().optional(),
+  // Waived unit price when this line is a merged duplicate (billed at $0).
+  merged_unit_price: z.coerce.number().min(0).nullable().optional(),
   // True when the customer brought the part themselves; line_total forced to 0.
   is_customer_supplied: z.coerce.boolean().default(false),
 });

@@ -72,20 +72,39 @@ export function PartPackageFormDialog({
       setItems(
         pkg.items
           // Skip oil-typed package items in this editor — they are managed
-          // through the oil grid linkage and surface only at expansion time.
-          .filter((it) => it.part != null && it.part_id != null)
-          .map((it) => ({
-            part_id: it.part_id as string,
-            quantity: Number(it.quantity),
-            unit_price: it.unit_price == null ? "" : String(Number(it.unit_price)),
-            part: {
-              brand: it.part!.brand,
-              part_number: it.part!.part_number,
-              description: it.part!.description,
-              list_price: Number(it.part!.list_price),
-              unit_of_measure: it.part!.unit_of_measure,
-            },
-          })),
+          // through the oil grid linkage and surface only at expansion time
+          // (they are preserved untouched on save).
+          .filter((it) => it.part != null || it.transmission_service != null)
+          .map<PackageItemDraft>((it) => {
+            const unit_price = it.unit_price == null ? "" : String(Number(it.unit_price));
+            if (it.transmission_service) {
+              const s = it.transmission_service;
+              const syn =
+                s.service_kind === "coolant_flush" ? "" : s.is_synthetic ? " (Syn)" : " (Reg)";
+              return {
+                source: "trans",
+                part_id: null,
+                transmission_service_id: s.id,
+                quantity: Number(it.quantity),
+                unit_price,
+                label: `${s.name}${syn}`,
+                subLabel: s.oil_type_name,
+                catalogPrice: (Number(s.sell_price) || 0) + (Number(s.labour) || 0),
+                unitOfMeasure: "each",
+              };
+            }
+            return {
+              source: "part",
+              part_id: it.part_id as string,
+              transmission_service_id: null,
+              quantity: Number(it.quantity),
+              unit_price,
+              label: `${it.part!.brand} ${it.part!.part_number}`,
+              subLabel: it.part!.description,
+              catalogPrice: Number(it.part!.list_price),
+              unitOfMeasure: it.part!.unit_of_measure,
+            };
+          }),
       );
     } else {
       form.reset(blank);
@@ -96,7 +115,7 @@ export function PartPackageFormDialog({
 
   const onSubmit = form.handleSubmit((values) => {
     if (items.length === 0) {
-      setItemsError("Add at least one part.");
+      setItemsError("Add at least one part or service.");
       return;
     }
     setItemsError(null);
@@ -111,7 +130,8 @@ export function PartPackageFormDialog({
       items: items.map((it) => {
         const trimmed = it.unit_price.trim();
         return {
-          part_id: it.part_id,
+          part_id: it.source === "part" ? it.part_id : null,
+          transmission_service_id: it.source === "trans" ? it.transmission_service_id : null,
           quantity: it.quantity,
           unit_price: trimmed === "" ? null : Number(trimmed),
         };
@@ -224,9 +244,9 @@ export function PartPackageFormDialog({
 
             <div className="space-y-2">
               <div className="flex items-baseline justify-between">
-                <p className="text-sm font-medium">Parts in this package</p>
+                <p className="text-sm font-medium">Parts &amp; services in this package</p>
                 <p className="text-xs text-muted-foreground">
-                  Unit price comes from the catalogue when added to a job.
+                  Prices come from the catalogue when added to a job.
                 </p>
               </div>
               <PackageItemsEditor items={items} onChange={setItems} />

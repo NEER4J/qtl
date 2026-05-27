@@ -207,15 +207,30 @@ export const ToggleActiveInput = z.object({
 // ============================================================================
 // part_packages — pre-defined bundles of parts with default qty
 // ============================================================================
-export const PartPackageItemInput = z.object({
-  part_id: z.string().uuid(),
-  quantity: z.coerce.number().positive("Qty must be > 0").max(99999),
-  // Optional override; null/undefined → use parts.list_price at expansion.
-  unit_price: z
-    .union([z.coerce.number().min(0).max(9999999), z.null()])
-    .optional()
-    .nullable(),
-});
+export const PartPackageItemInput = z
+  .object({
+    // Exactly one source: a catalogue part OR a Trans & Diff service.
+    // (Oil-typed package items are seeded/managed outside this form and are
+    // preserved on edit rather than sent through here.)
+    part_id: z.string().uuid().nullable().optional(),
+    transmission_service_id: z.string().uuid().nullable().optional(),
+    quantity: z.coerce.number().positive("Qty must be > 0").max(99999),
+    // Optional override; null/undefined → use the catalogue price at expansion.
+    unit_price: z
+      .union([z.coerce.number().min(0).max(9999999), z.null()])
+      .optional()
+      .nullable(),
+  })
+  .superRefine((it, ctx) => {
+    const sources = [it.part_id, it.transmission_service_id].filter(Boolean).length;
+    if (sources !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["part_id"],
+        message: "Each item must be either a part or a Trans & Diff service.",
+      });
+    }
+  });
 export type PartPackageItemInput = z.infer<typeof PartPackageItemInput>;
 
 export const CreatePartPackageInput = z.object({
@@ -232,18 +247,23 @@ export const CreatePartPackageInput = z.object({
     .transform((v) => (v == null || v === "" ? null : v)),
   items: z
     .array(PartPackageItemInput)
-    .min(1, "Add at least one part")
+    .min(1, "Add at least one item")
     .superRefine((items, ctx) => {
       const seen = new Set<string>();
       items.forEach((it, i) => {
-        if (seen.has(it.part_id)) {
+        const key = it.part_id
+          ? `part:${it.part_id}`
+          : it.transmission_service_id
+          ? `trans:${it.transmission_service_id}`
+          : `?:${i}`;
+        if (seen.has(key)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: [i, "part_id"],
-            message: "Each part can only appear once in a package.",
+            message: "Each item can only appear once in a package.",
           });
         }
-        seen.add(it.part_id);
+        seen.add(key);
       });
     }),
 });

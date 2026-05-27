@@ -100,8 +100,13 @@ export function pageKeyForRequestPath(pathname: string): string | null {
 // Column registry
 // ----------------------------------------------------------------------------
 // One entry per table where the owner can hide columns for a given user.
-// `defaultHiddenFor` (optional) is purely advisory text for the UI — used to
-// say "Staff usually don't see this".
+//
+// IMPORTANT: every key listed here MUST correspond to a column the matching
+// list table actually renders behind a `show(key)` / `visible(key)` guard.
+// Listing a column the table doesn't gate produces a toggle in the matrix
+// that silently does nothing — confusing for the owner. These lists are the
+// columns currently enforced in the *list* views (detail-page columns are not
+// hideable yet; that would be a separate feature).
 
 export interface ColumnDef {
   key: string;
@@ -135,15 +140,11 @@ export const COLUMN_REGISTRY: PageColumns[] = [
     columns: [
       { key: "invoice_no", label: "Invoice no." },
       { key: "customer", label: "Customer" },
-      { key: "vehicle", label: "Vehicle" },
+      { key: "vehicle", label: "Vehicle / plate" },
       { key: "bay", label: "Bay" },
-      { key: "tech", label: "Technicians" },
-      { key: "sub_total", label: "Subtotal" },
-      { key: "hst", label: "HST" },
       { key: "total", label: "Total" },
       { key: "paid", label: "Paid" },
       { key: "outstanding", label: "Outstanding" },
-      { key: "payment_mode", label: "Payment mode" },
       { key: "payment_status", label: "Payment status" },
     ],
   },
@@ -154,51 +155,37 @@ export const COLUMN_REGISTRY: PageColumns[] = [
       { key: "subcategory", label: "Sub-category" },
       { key: "vendor", label: "Vendor" },
       { key: "invoice_no", label: "Invoice no." },
-      { key: "sub_total", label: "Subtotal" },
-      { key: "hst", label: "HST" },
       { key: "total", label: "Total" },
       { key: "paid", label: "Paid" },
       { key: "balance", label: "Balance" },
-      { key: "payment_mode", label: "Payment mode" },
-      { key: "notes", label: "Notes" },
     ],
   },
   {
     pageKey: "customers",
     columns: [
-      { key: "code", label: "Customer code" },
       { key: "phone", label: "Phone" },
       { key: "email", label: "Email" },
-      { key: "address", label: "Address" },
-      { key: "discount", label: "Discounts" },
-      { key: "card_number", label: "Card number" },
-      { key: "free_offers", label: "Free offers" },
     ],
   },
   {
     pageKey: "vendors",
     columns: [
-      { key: "code", label: "Vendor code" },
       { key: "category", label: "Category" },
       { key: "account_no", label: "Account no." },
-      { key: "contact", label: "Contact" },
+      { key: "contact", label: "Phone / contact" },
       { key: "email", label: "Email" },
-      { key: "notes", label: "Notes" },
     ],
   },
   {
     pageKey: "payroll",
     columns: [
-      { key: "hours", label: "Hours" },
-      { key: "rate", label: "Rate" },
+      { key: "hours", label: "Reg hours" },
+      { key: "overtime", label: "Overtime hours" },
       { key: "gross", label: "Gross wages" },
-      { key: "overtime", label: "Overtime" },
       { key: "holiday_vacation", label: "Holiday + Vacation" },
-      { key: "bonus", label: "Bonus" },
-      { key: "misc_extra", label: "Misc/Extra" },
       { key: "ei_cpp", label: "EI + CPP" },
       { key: "income_tax", label: "Income tax" },
-      { key: "benefits", label: "Benefits" },
+      { key: "benefits", label: "Employer remit (EI/CPP/WSIB)" },
       { key: "net_pay", label: "Net pay" },
     ],
   },

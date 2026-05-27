@@ -80,7 +80,11 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
       />
       <SidebarInset
         className={cn(
-          "max-w-full",
+          // min-w-0 is essential: SidebarInset is a flex child, and without it
+          // a wide child (e.g. the Users / Sales tables) forces the whole
+          // content area past the viewport instead of scrolling inside its own
+          // overflow-auto container — which clips the toolbar + row actions.
+          "min-w-0 max-w-full",
         )}
       >
         <header
@@ -97,7 +101,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
             </div>
           </div>
         </header>
-        <div className="h-full p-4 md:p-6">{children}</div>
+        <div className="h-full min-w-0 p-4 md:p-6">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );

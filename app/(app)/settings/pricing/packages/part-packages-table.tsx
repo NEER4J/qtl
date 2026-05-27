@@ -46,6 +46,9 @@ import { PartPackageFormDialog } from "./part-package-form-dialog";
 function lineCost(it: PartPackageItemRow): number {
   const qty = Number(it.quantity) || 0;
   if (it.part) return (Number(it.part.cost) + Number(it.part.mhsw_fee)) * qty;
+  // Trans & Diff services carry no tracked cost — treated as pure margin,
+  // same as labour.
+  if (it.transmission_service) return 0;
   if (it.oil_type) {
     const lpg = Number(it.oil_type.litres_per_gallon) || 4.546;
     const ratePerLitre =
@@ -88,6 +91,7 @@ function summarise(pkg: PartPackageWithItems): string {
       const qty = Number(it.quantity);
       if (it.part) return `${qty}× ${it.part.brand} ${it.part.part_number}`;
       if (it.oil_type) return `${qty}× ${it.oil_type.code} (oil)`;
+      if (it.transmission_service) return `${qty}× ${it.transmission_service.name} (T&D)`;
       return `${qty}× —`;
     })
     .join(", ");
@@ -380,9 +384,17 @@ function PackageBreakdown({
         ? `${it.part.brand} ${it.part.part_number}${it.part.description ? ` — ${it.part.description}` : ""}`
         : it.oil_type
         ? `${it.oil_type.code} — ${it.oil_type.name}${it.oil_container ? ` (${it.oil_container})` : ""}${it.litres ? ` × ${it.litres}L` : ""}`
+        : it.transmission_service
+        ? `${it.transmission_service.name}${
+            it.transmission_service.service_kind === "coolant_flush"
+              ? ""
+              : it.transmission_service.is_synthetic
+              ? " (Syn)"
+              : " (Reg)"
+          }`
         : "—",
       qty,
-      uom: it.part?.unit_of_measure ?? (it.oil_type ? "ltr" : "—"),
+      uom: it.part?.unit_of_measure ?? (it.oil_type ? "ltr" : it.transmission_service ? "each" : "—"),
       costPerUnit,
       sellPerUnit,
       lineCostTotal,

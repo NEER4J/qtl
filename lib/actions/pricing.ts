@@ -53,6 +53,7 @@ import {
 import { normalizePartPricing } from "@/lib/utils/part-pricing";
 import { excelOilLabel } from "@/lib/utils/oil-labels";
 import { applyPartsSearch } from "@/lib/utils/parts-search";
+import { TRANSMISSION_KIND_LABEL } from "@/lib/utils/transmission";
 
 // ============================================================================
 // Read-only catalog queries — RLS already allows SELECT to all authenticated.
@@ -1975,9 +1976,10 @@ async function fetchPackageItems(
   const { data, error } = await supabase
     .from("part_package_items")
     .select(
-      "id, package_id, part_id, quantity, unit_price, locked_unit_price, position, created_at, oil_type_id, litres, oil_container, " +
+      "id, package_id, part_id, quantity, unit_price, locked_unit_price, position, created_at, oil_type_id, litres, oil_container, transmission_service_id, " +
         "part:parts(id, brand, part_number, description, list_price, extra_price, category_id, cost, mhsw_fee, is_taxable, part_categories:category_id(name, unit_of_measure)), " +
-        "oil_type:oil_types(id, code, name, bulk_cost_per_litre, gallon_cost_per_litre, litres_per_gallon, is_taxable)",
+        "oil_type:oil_types(id, code, name, bulk_cost_per_litre, gallon_cost_per_litre, litres_per_gallon, is_taxable), " +
+        "transmission_service:transmission_services(id, name, service_kind, is_synthetic, sell_price, labour, litres, oil_types:oil_type_id(code, name))",
     )
     .in("package_id", packageIds)
     .order("position");
@@ -2007,10 +2009,21 @@ async function fetchPackageItems(
     litres_per_gallon: number;
     is_taxable: boolean;
   };
+  type TransShape = {
+    id: string;
+    name: string;
+    service_kind: string;
+    is_synthetic: boolean;
+    sell_price: number;
+    labour: number | null;
+    litres: number | null;
+    oil_types: { code: string; name: string } | null;
+  };
   type RowFromDb = Omit<PartPackageItem, "id"> & {
     id: string;
     part: PartShape | null;
     oil_type: OilShape | null;
+    transmission_service: TransShape | null;
   };
   for (const row of (data ?? []) as unknown as RowFromDb[]) {
     const cat = row.part?.part_categories;
@@ -2026,6 +2039,7 @@ async function fetchPackageItems(
       oil_type_id: row.oil_type_id,
       litres: row.litres,
       oil_container: row.oil_container,
+      transmission_service_id: row.transmission_service_id,
       part: row.part
         ? {
             id: row.part.id,
@@ -2043,6 +2057,26 @@ async function fetchPackageItems(
           }
         : null,
       oil_type: row.oil_type ?? null,
+      transmission_service: row.transmission_service
+        ? {
+            id: row.transmission_service.id,
+            name: row.transmission_service.name,
+            service_kind: row.transmission_service.service_kind,
+            is_synthetic: row.transmission_service.is_synthetic,
+            sell_price: Number(row.transmission_service.sell_price),
+            labour:
+              row.transmission_service.labour == null
+                ? null
+                : Number(row.transmission_service.labour),
+            litres: row.transmission_service.litres,
+            oil_type_name: row.transmission_service.oil_types
+              ? excelOilLabel(
+                  row.transmission_service.oil_types.code,
+                  row.transmission_service.oil_types.name,
+                )
+              : null,
+          }
+        : null,
     };
     const arr = out.get(row.package_id) ?? [];
     arr.push(merged);
@@ -2118,7 +2152,8 @@ export const createPartPackage = wrapAction({
 
     const rows = input.items.map((it, i) => ({
       package_id: (pkg as PartPackage).id,
-      part_id: it.part_id,
+      part_id: it.part_id ?? null,
+      transmission_service_id: it.transmission_service_id ?? null,
       quantity: it.quantity,
       unit_price: it.unit_price ?? null,
       position: i,
@@ -2167,20 +2202,32 @@ export const updatePartPackage = wrapAction({
       .single();
     if (pkgErr) throw pkgErr;
 
-    // Replace-all items: delete then insert in fresh order. Same pattern as
-    // replaceJobItems in lib/actions/sales.ts.
+    // Replace-all for the items this form manages (parts + Trans & Diff
+    // services), preserving oil-typed rows — those are seeded / managed via the
+    // oil-grid linkage and never sent through this form, so a blanket delete
+    // would silently wipe them.
     const { error: delErr } = await supabase
       .from("part_package_items")
       .delete()
-      .eq("package_id", id);
+      .eq("package_id", id)
+      .is("oil_type_id", null);
     if (delErr) throw delErr;
+
+    // New part/trans rows go after any preserved oil rows.
+    const { count: oilCount } = await supabase
+      .from("part_package_items")
+      .select("id", { count: "exact", head: true })
+      .eq("package_id", id)
+      .not("oil_type_id", "is", null);
+    const offset = oilCount ?? 0;
 
     const rows = items.map((it, i) => ({
       package_id: id,
-      part_id: it.part_id,
+      part_id: it.part_id ?? null,
+      transmission_service_id: it.transmission_service_id ?? null,
       quantity: it.quantity,
       unit_price: it.unit_price ?? null,
-      position: i,
+      position: offset + i,
     }));
     const { error: insErr } = await supabase.from("part_package_items").insert(rows);
     if (insErr) throw insErr;
@@ -2347,15 +2394,6 @@ export interface TransmissionService {
   active: boolean;
 }
 
-const TRANSMISSION_KIND_LABEL: Record<TransmissionServiceKind, string> = {
-  allison_trans:   "Allison Transmission",
-  diff:            "Differential oil change",
-  trans:           "Transmission oil change",
-  combined:        "Combined Trans + Diff",
-  specialty_trans: "Specialty Transmission",
-  coolant_flush:   "Coolant Flush",
-};
-
 export async function listTransmissionServices(): Promise<{
   groups: { kind: TransmissionServiceKind; label: string; rows: TransmissionService[] }[];
 }> {
@@ -2404,4 +2442,45 @@ export async function listTransmissionServices(): Promise<{
       rows: byKind.get(kind) ?? [],
     }));
   return { groups };
+}
+
+/**
+ * Flat, searchable list of active Trans & Diff services for the package
+ * builder's picker. Searches name + kind label.
+ */
+export async function listTransServicesForPicker(
+  q?: string,
+): Promise<TransmissionService[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("transmission_services")
+    .select("*, oil_types:oil_type_id(code, name)")
+    .eq("active", true)
+    .order("sort_order")
+    .order("name")
+    .limit(100);
+  if (q && q.trim()) {
+    const term = `%${q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+    query = query.or(`name.ilike.${term},notes.ilike.${term}`);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+
+  type Row = Omit<TransmissionService, "oil_type_name"> & {
+    oil_types: { code: string; name: string } | null;
+  };
+  return (data ?? []).map((r: Row) => ({
+    id: r.id,
+    name: r.name,
+    service_kind: r.service_kind,
+    is_synthetic: r.is_synthetic,
+    oil_type_id: r.oil_type_id,
+    oil_type_name: r.oil_types ? excelOilLabel(r.oil_types.code, r.oil_types.name) : null,
+    litres: r.litres,
+    sell_price: Number(r.sell_price),
+    labour: r.labour == null ? null : Number(r.labour),
+    notes: r.notes,
+    sort_order: r.sort_order,
+    active: r.active,
+  }));
 }

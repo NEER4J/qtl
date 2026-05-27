@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, CreditCard, Pencil } from "lucide-react";
@@ -20,6 +21,7 @@ import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { getSalesJob } from "@/lib/actions/sales";
 import { formatDate, formatMoney } from "@/lib/utils/format";
+import { buildDisplayRows } from "@/lib/utils/sales-display";
 
 export const dynamic = "force-dynamic";
 
@@ -179,7 +181,75 @@ export default async function SalesJobDetailPage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {job.items.map((it) => {
+                {buildDisplayRows(
+                  job.items,
+                  (it) => Number(it.line_total ?? 0),
+                  (it) => it.is_taxable === true,
+                  (it) => it.package_label ?? "Package",
+                ).map((row) => {
+                  if (row.type === "package") {
+                    const mergedSaved = row.items.reduce(
+                      (s, m) =>
+                        s +
+                        (m.merged_unit_price != null
+                          ? Number(m.merged_unit_price) * Number(m.quantity)
+                          : 0),
+                      0,
+                    );
+                    return (
+                      <Fragment key={row.key}>
+                        <TableRow>
+                          <TableCell>
+                            <div className="font-medium">{row.label}</div>
+                            <div className="text-xs text-muted-foreground">
+                              Package · {row.items.length} item
+                              {row.items.length === 1 ? "" : "s"}
+                              {mergedSaved > 0 &&
+                                ` · merged, saved ${formatMoney(mergedSaved)}`}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums text-muted-foreground">
+                            1
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums text-muted-foreground">
+                            —
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums font-medium">
+                            {formatMoney(row.total)}
+                          </TableCell>
+                        </TableRow>
+                        {row.items.map((m) => {
+                          const isMerged = m.merged_unit_price != null;
+                          return (
+                            <TableRow key={m.id} className="border-0">
+                              <TableCell className="py-1 pl-8 text-sm text-muted-foreground">
+                                {m.description}
+                                {isMerged && (
+                                  <span className="ml-1 text-xs text-amber-700 dark:text-amber-500">
+                                    · merged (already on the job)
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="py-1 text-right tabular-nums text-muted-foreground">
+                                {Number(m.quantity)}
+                              </TableCell>
+                              <TableCell className="py-1 text-right text-xs uppercase text-muted-foreground">
+                                {isMerged ? (
+                                  <span className="line-through normal-case">
+                                    {formatMoney(Number(m.merged_unit_price))}
+                                  </span>
+                                ) : (
+                                  "Included"
+                                )}
+                              </TableCell>
+                              <TableCell className="py-1" />
+                            </TableRow>
+                          );
+                        })}
+                      </Fragment>
+                    );
+                  }
+                  const it = row.item;
                   const cs = it.is_customer_supplied === true;
                   const wouldHaveCharged =
                     Math.round(Number(it.quantity) * Number(it.unit_price) * 100) / 100;
@@ -190,11 +260,6 @@ export default async function SalesJobDetailPage({
                         {it.part_id && (
                           <div className="text-xs text-muted-foreground">
                             Catalog: {it.part_brand} {it.part_number}
-                          </div>
-                        )}
-                        {it.package_label && (
-                          <div className="text-xs text-muted-foreground italic">
-                            from {it.package_label}
                           </div>
                         )}
                         {cs && (

@@ -483,6 +483,10 @@ async function replaceJobItems(
         unit_price: number;
         is_taxable?: boolean;
         package_label?: string | null;
+        package_group?: string | null;
+        oil_type_id?: string | null;
+        transmission_service_id?: string | null;
+        merged_unit_price?: number | null;
         is_customer_supplied?: boolean;
       }[]
     | undefined,
@@ -507,6 +511,10 @@ async function replaceJobItems(
     unit_price: it.unit_price,
     is_taxable: it.is_taxable ?? true,
     package_label: it.package_label ?? null,
+    package_group: it.package_group ?? null,
+    oil_type_id: it.oil_type_id ?? null,
+    transmission_service_id: it.transmission_service_id ?? null,
+    merged_unit_price: it.merged_unit_price ?? null,
     is_customer_supplied: it.is_customer_supplied ?? false,
     position: idx,
     created_by: userId,

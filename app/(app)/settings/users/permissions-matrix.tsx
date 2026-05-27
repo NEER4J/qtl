@@ -93,11 +93,24 @@ export function PermissionsMatrix({
     nextHidden: Record<string, Set<string>>,
     nextUsingDefault: boolean,
   ) => {
-    setAllowed(nextAllowed);
+    // Safety net for the client invariant: a page that's ON must keep at least
+    // one visible column. Any path that would leave an enabled page with every
+    // column hidden (Select all, Copy from user, legacy saved data) gets the
+    // page dropped here, so the rule holds no matter how `allowed` was built.
+    const normalizedAllowed = new Set(nextAllowed);
+    for (const pageKey of nextAllowed) {
+      const cols = columnsForPage(pageKey);
+      const hiddenSet = nextHidden[pageKey];
+      if (cols.length > 0 && hiddenSet && hiddenSet.size >= cols.length) {
+        normalizedAllowed.delete(pageKey);
+      }
+    }
+
+    setAllowed(normalizedAllowed);
     setHidden(nextHidden);
     setUsingRoleDefault(nextUsingDefault);
     onChange({
-      allowed_pages: nextUsingDefault ? null : Array.from(nextAllowed),
+      allowed_pages: nextUsingDefault ? null : Array.from(normalizedAllowed),
       hidden_columns: Object.fromEntries(
         Object.entries(nextHidden)
           .filter(([, v]) => v.size > 0)
@@ -109,9 +122,21 @@ export function PermissionsMatrix({
   const togglePage = (key: string) => {
     if (!isGrantable(key)) return; // hard-blocked roles can't be granted via UI
     const next = new Set(allowed);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    commit(next, hidden, false);
+    let nextHidden = hidden;
+    if (next.has(key)) {
+      next.delete(key);
+    } else {
+      next.add(key);
+      // Invariant (client rule): an enabled page must keep at least one
+      // visible column. If every column was hidden, restore them all so the
+      // page isn't "on but blank".
+      const cols = columnsForPage(key);
+      const hiddenForKey = hidden[key];
+      if (cols.length > 0 && hiddenForKey && hiddenForKey.size >= cols.length) {
+        nextHidden = { ...hidden, [key]: new Set<string>() };
+      }
+    }
+    commit(next, nextHidden, false);
   };
 
   const allPageKeys = PAGE_REGISTRY.map((p) => p.key);
@@ -120,7 +145,10 @@ export function PermissionsMatrix({
   const noneSelected = allowed.size === 0;
   const roleDefaultSet = new Set(defaultAllowedPagesForRole(role));
 
-  const selectAllPages = () => commit(new Set(grantableKeys), hidden, false);
+  // Select all = full access: every grantable page, all columns visible.
+  // (Clearing hidden also avoids the commit normalizer dropping a page that
+  // happened to have all its columns hidden.)
+  const selectAllPages = () => commit(new Set(grantableKeys), {}, false);
   const clearAllPages = () => commit(new Set(), hidden, false);
   const resetToRoleDefault = () =>
     commit(new Set(defaultAllowedPagesForRole(role).filter(isGrantable)), {}, true);
@@ -144,14 +172,28 @@ export function PermissionsMatrix({
     const set = new Set(hidden[pageKey] ?? []);
     if (set.has(columnKey)) set.delete(columnKey);
     else set.add(columnKey);
-    const next = { ...hidden, [pageKey]: set };
-    commit(allowed, next, usingRoleDefault);
+    const nextHidden = { ...hidden, [pageKey]: set };
+
+    // Client rule: a page must keep at least one visible column. If hiding
+    // this column leaves none visible, switch the page off entirely (you
+    // can't grant a page with zero columns to show).
+    const totalCols = columnsForPage(pageKey).length;
+    const noneVisible = totalCols > 0 && set.size >= totalCols;
+    const nextAllowed = new Set(allowed);
+    if (noneVisible) nextAllowed.delete(pageKey);
+
+    // Removing the page from the allowlist makes it a custom (non-default)
+    // selection, so drop the role-default flag in that case.
+    commit(nextAllowed, nextHidden, noneVisible ? false : usingRoleDefault);
   };
 
   const hideAllColumns = (pageKey: string) => {
     const allCols = columnsForPage(pageKey).map((c) => c.key);
-    const next = { ...hidden, [pageKey]: new Set(allCols) };
-    commit(allowed, next, usingRoleDefault);
+    const nextHidden = { ...hidden, [pageKey]: new Set(allCols) };
+    // Hiding every column == no access to the page, so switch it off.
+    const nextAllowed = new Set(allowed);
+    nextAllowed.delete(pageKey);
+    commit(nextAllowed, nextHidden, false);
   };
   const showAllColumns = (pageKey: string) => {
     const next = { ...hidden, [pageKey]: new Set<string>() };
@@ -408,14 +450,21 @@ function ColumnDetail({
             className="h-7 px-2 text-xs"
             onClick={onHideAll}
             disabled={allHidden}
+            title="Hides every column, which turns the page off for this user"
           >
             Hide all
           </Button>
         </div>
       </div>
-      {!pageEnabled && (
+      {pageEnabled ? (
+        <div className="px-4 py-2 text-[11px] text-muted-foreground">
+          At least one column must stay visible. Hiding the last one turns the
+          page off for this user.
+        </div>
+      ) : (
         <div className="px-4 py-2 text-xs text-muted-foreground">
-          This page is currently disabled for the user. Enabling it will show the columns ticked below.
+          This page is off for the user. Tick the page on the left to re-enable
+          it — all its columns become visible again.
         </div>
       )}
       <ul className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3">
@@ -425,13 +474,18 @@ function ColumnDetail({
             <li key={c.key} className="bg-card">
               <label
                 className={cn(
-                  "flex cursor-pointer items-start gap-2 px-3 py-2 text-sm hover:bg-muted/40",
-                  !visible && "opacity-60",
+                  "flex items-start gap-2 px-3 py-2 text-sm",
+                  // Columns are only editable while the page is on. When it's
+                  // off, the page checkbox (which restores all columns) is the
+                  // single re-enable path — keeps the on/off rule unambiguous.
+                  pageEnabled ? "cursor-pointer hover:bg-muted/40" : "cursor-not-allowed opacity-50",
+                  !visible && pageEnabled && "opacity-60",
                 )}
-                title={c.hint}
+                title={pageEnabled ? c.hint : "Enable the page first"}
               >
                 <Checkbox
                   checked={visible}
+                  disabled={!pageEnabled}
                   onCheckedChange={() => onToggle(c.key)}
                   className="mt-0.5 size-4"
                 />

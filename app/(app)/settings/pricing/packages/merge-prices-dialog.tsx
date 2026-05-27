@@ -57,6 +57,8 @@ export function MergePricesDialog({
         ? `${it.part.brand} ${it.part.part_number}`
         : it.oil_type
         ? `${it.oil_type.code} (${it.oil_container ?? "bulk"})`
+        : it.transmission_service
+        ? it.transmission_service.name
         : "—";
       return { id: it.id, label, qty: Number(it.quantity), locked, catalog };
     });

@@ -481,6 +481,10 @@ export function SalesJobForm({
           unit_price: Number(it.unit_price) || 0,
           is_taxable: it.is_taxable,
           package_label: it.package_label ?? null,
+          package_group: it.package_group ?? null,
+          oil_type_id: it.oil_type_id ?? null,
+          transmission_service_id: it.transmission_service_id ?? null,
+          merged_unit_price: it.merged_unit_price ?? null,
           is_customer_supplied: it.is_customer_supplied ?? false,
         })),
       };

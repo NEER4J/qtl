@@ -17,6 +17,7 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer";
 import type { SalesJobDetail } from "@/lib/actions/sales";
+import { buildDisplayRows } from "@/lib/utils/sales-display";
 
 const LOGO_PATH = path.join(process.cwd(), "public", "logo.png");
 
@@ -142,6 +143,9 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     marginTop: 1,
   },
+  includedItem: { fontSize: 8, color: MUTED, paddingLeft: 8 },
+  includedAmt: { fontSize: 8, color: MUTED },
+  mergedAmt: { textDecoration: "line-through" },
 
   // ----- Comments
   commentsBox: {
@@ -252,11 +256,31 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
     opts.hstRate != null
       ? `HST (${Math.round(opts.hstRate * 1000) / 10}%)`
       : "HST";
-  // Split lines into Labour (custom items, no part_id) and Parts (catalog items).
-  const labour = job.items.filter((it) => !it.part_id);
-  const parts = job.items.filter((it) => !!it.part_id);
-  const totalLabour = labour.reduce((s, it) => s + Number(it.line_total ?? 0), 0);
+  // Collapse package instances into a single "Description of Work" line, then
+  // split the remaining standalone items into Labour (custom items, no part_id)
+  // and Parts (catalog items).
+  const display = buildDisplayRows(
+    job.items,
+    (it) => Number(it.line_total ?? 0),
+    (it) => it.is_taxable === true,
+    (it) => it.package_label ?? "Package",
+  );
+  const packageRows = display.flatMap((r) =>
+    r.type === "package"
+      ? [{ key: r.key, label: r.label, total: r.total, items: r.items }]
+      : [],
+  );
+  const singles = display.flatMap((r) => (r.type === "single" ? [r.item] : []));
+  const labour = singles.filter((it) => !it.part_id);
+  const parts = singles.filter((it) => !!it.part_id);
+  const packagesTotal = packageRows.reduce((s, r) => s + r.total, 0);
+  // Packages render in the Description-of-Work section, so their total rolls
+  // into Total Labour. (Subtotal/HST/Total come from the stored job fields, so
+  // this split is cosmetic and always reconciles to the stored subtotal.)
+  const totalLabour =
+    labour.reduce((s, it) => s + Number(it.line_total ?? 0), 0) + packagesTotal;
   const totalParts = parts.reduce((s, it) => s + Number(it.line_total ?? 0), 0);
+  const hasWork = packageRows.length > 0 || labour.length > 0;
 
   return (
     <Document title={`Invoice ${job.invoice_no ?? ""}`} author="Quick Truck Lube">
@@ -374,28 +398,75 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
             </Text>
             <Text style={[styles.sectionHeaderCellLast, styles.labourAmt]}>Amount</Text>
           </View>
-          {labour.length === 0 ? (
+          {!hasWork ? (
             <View style={styles.sectionRowLast}>
               <Text style={[styles.sectionCell, styles.labourDesc]}> </Text>
               <Text style={[styles.sectionCellLast, styles.labourAmt]}> </Text>
             </View>
           ) : (
-            labour.map((it, i) => {
-              const last = i === labour.length - 1;
-              return (
-                <View key={it.id} style={last ? styles.sectionRowLast : styles.sectionRow}>
-                  <View style={[styles.sectionCell, styles.labourDesc]}>
-                    <Text>{it.description}</Text>
-                    {it.package_label && (
-                      <Text style={styles.packageBadge}>(from {it.package_label})</Text>
-                    )}
+            (() => {
+              // Each package: one header line with the total, then its items
+              // listed for transparency with "Included" instead of a price.
+              // Standalone labour items follow.
+              type WorkRow = {
+                id: string;
+                description: string;
+                amount: number | null; // null → show "Included"
+                included?: boolean;
+                merged?: boolean;
+                mergedPrice?: number;
+              };
+              const work: WorkRow[] = [];
+              for (const r of packageRows) {
+                work.push({ id: r.key, description: r.label, amount: r.total });
+                for (const m of r.items) {
+                  const merged = m.merged_unit_price != null;
+                  work.push({
+                    id: m.id,
+                    description: merged
+                      ? `${m.description} — merged (already on the job)`
+                      : m.description,
+                    amount: null,
+                    included: true,
+                    merged,
+                    mergedPrice: merged ? Number(m.merged_unit_price) : undefined,
+                  });
+                }
+              }
+              for (const it of labour) {
+                work.push({
+                  id: it.id,
+                  description: it.description,
+                  amount: Number(it.line_total),
+                });
+              }
+              return work.map((w, i) => {
+                const last = i === work.length - 1;
+                return (
+                  <View key={w.id} style={last ? styles.sectionRowLast : styles.sectionRow}>
+                    <View style={[styles.sectionCell, styles.labourDesc]}>
+                      <Text style={w.included ? styles.includedItem : undefined}>
+                        {w.included ? `•  ${w.description}` : w.description}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.sectionCellLast,
+                        styles.labourAmt,
+                        w.included ? styles.includedAmt : {},
+                        w.merged ? styles.mergedAmt : {},
+                      ]}
+                    >
+                      {w.merged && w.mergedPrice != null
+                        ? money(w.mergedPrice)
+                        : w.amount == null
+                        ? "Included"
+                        : money(w.amount)}
+                    </Text>
                   </View>
-                  <Text style={[styles.sectionCellLast, styles.labourAmt]}>
-                    {money(Number(it.line_total))}
-                  </Text>
-                </View>
-              );
-            })
+                );
+              });
+            })()
           )}
         </View>
 
@@ -430,9 +501,6 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
                   <Text style={[styles.sectionCell, styles.partsQty]}>{qtyLabel}</Text>
                   <View style={[styles.sectionCell, styles.partsDesc]}>
                     <Text>{it.description}</Text>
-                    {it.package_label && (
-                      <Text style={styles.packageBadge}>(from {it.package_label})</Text>
-                    )}
                     {cs && (
                       <Text style={styles.packageBadge}>
                         (customer supplied — saved {money(wouldHaveCharged)})

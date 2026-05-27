@@ -363,6 +363,15 @@ export interface SalesJobItem {
   position: number;
   /** Snapshot of the package name this line was expanded from. */
   package_label: string | null;
+  /** Groups all lines expanded from one package instance so they collapse to a
+   *  single display line. NULL for standalone lines and pre-0068 rows. */
+  package_group: string | null;
+  /** Oil type this line came from (package oil item) — for overlap detection. */
+  oil_type_id: string | null;
+  /** Trans & Diff service this line came from — for overlap detection. */
+  transmission_service_id: string | null;
+  /** When set, this is a merged duplicate billed at $0; value is the waived unit price. */
+  merged_unit_price: number | null;
   /** True when the customer brought the part themselves; line_total forced to 0. */
   is_customer_supplied: boolean;
   created_at: string;
@@ -770,6 +779,9 @@ export interface PartPackageItem {
   oil_type_id: string | null;
   litres: number | null;
   oil_container: "bulk" | "gallon" | null;
+  // Third pricing source: a Trans & Diff service. When set, part_id and
+  // oil_type_id are null and unit_price comes from sell_price + labour.
+  transmission_service_id: string | null;
 }
 
 export interface PartPackageItemRow extends PartPackageItem {
@@ -792,6 +804,19 @@ export interface PartPackageItemRow extends PartPackageItem {
     | null;
   oil_type:
     | Pick<OilType, "id" | "code" | "name" | "bulk_cost_per_litre" | "gallon_cost_per_litre" | "litres_per_gallon" | "is_taxable">
+    | null;
+  /** Joined Trans & Diff service when transmission_service_id is set. */
+  transmission_service:
+    | {
+        id: string;
+        name: string;
+        service_kind: string;
+        is_synthetic: boolean;
+        sell_price: number;
+        labour: number | null;
+        litres: number | null;
+        oil_type_name: string | null;
+      }
     | null;
 }
 

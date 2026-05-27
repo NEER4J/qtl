@@ -8,6 +8,12 @@ import type { PartPackage, PartPackageItemRow } from "@/lib/db/types";
 export function effectiveCatalogPriceForItem(item: PartPackageItemRow): number {
   if (item.unit_price != null) return Number(item.unit_price) || 0;
 
+  if (item.transmission_service_id && item.transmission_service) {
+    const s = item.transmission_service;
+    const v = (Number(s.sell_price) || 0) + (Number(s.labour) || 0);
+    return Number.isFinite(v) ? v : 0;
+  }
+
   if (item.oil_type_id && item.oil_type) {
     const lpg = Number(item.oil_type.litres_per_gallon) || 4.546;
     const ratePerLitre =

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Fragment, useState } from "react";
+import { Boxes, Plus, Trash2 } from "lucide-react";
 
 import {
   AlertDialog,
@@ -20,7 +20,6 @@ import { PartPickerButton } from "@/components/pricing/part-picker";
 import { PackagePickerButton } from "@/components/sales/package-picker-button";
 import type {
   Part,
-  PartPackageItemRow,
   PartPackageWithItems,
   UnitOfMeasure,
 } from "@/lib/db/types";
@@ -31,6 +30,7 @@ import {
   isPartPackageLocked,
 } from "@/lib/utils/package-pricing";
 import { excelOilLabel } from "@/lib/utils/oil-labels";
+import { buildDisplayRows, packageGroupKey } from "@/lib/utils/sales-display";
 
 export interface LineItem {
   /** Local key for React; not persisted. */
@@ -46,10 +46,19 @@ export interface LineItem {
   unit_of_measure: UnitOfMeasure | null;
   /** Snapshot of the package this row was expanded from; null for individual lines. */
   package_label?: string | null;
+  /** Per-instance group id shared by every row from one package expansion, so
+   *  the package collapses to a single display line. Null for individual lines. */
+  package_group?: string | null;
   /** True when the customer brought the part themselves; line_total forced to 0. */
   is_customer_supplied?: boolean;
   /** Category id of the linked part — used for same-category dup detection. */
   part_category_id?: string | null;
+  /** Oil type this line came from (package oil item) — for overlap detection. */
+  oil_type_id?: string | null;
+  /** Trans & Diff service this line came from — for overlap detection. */
+  transmission_service_id?: string | null;
+  /** When set, this is a merged duplicate billed at $0; value is the waived unit price. */
+  merged_unit_price?: number | null;
 }
 
 export function newLineItem(partial: Partial<LineItem> = {}): LineItem {
@@ -65,10 +74,21 @@ export function newLineItem(partial: Partial<LineItem> = {}): LineItem {
     is_taxable: true,
     unit_of_measure: null,
     package_label: null,
+    package_group: null,
     is_customer_supplied: false,
     part_category_id: null,
+    oil_type_id: null,
+    transmission_service_id: null,
+    merged_unit_price: null,
     ...partial,
   };
+}
+
+/** Generate a fresh package-instance group id. */
+function newGroupId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `grp-${Math.random().toString(36).slice(2)}`;
 }
 
 export function lineItemTotal(item: LineItem): number {
@@ -95,25 +115,24 @@ export function lineItemsTaxableSubTotal(items: LineItem[]): number {
 }
 
 /**
- * One same-category collision between an item already on the job and a
- * part-row inside the package the user just dropped.
+ * One overlap between an item already on the job and an item inside the package
+ * the user just dropped — same part category, same oil, or same Trans & Diff
+ * service. Used to offer "Merge" (drop the duplicate) vs "Add separately".
  */
-type CategoryMatch = {
-  /** key of the existing job line being upcharged. */
-  existingKey: string;
-  /** Snapshot of the existing row label (for the dialog). */
+type Overlap = {
+  /** id of the package item that duplicates something already on the job. */
+  pkgItemId: string;
+  /** Label of the package item (what would be dropped on Merge). */
+  itemLabel: string;
+  /** Label of the existing job line it duplicates. */
   existingLabel: string;
-  /** The package item that triggered the match. */
-  pkgItem: PartPackageItemRow;
-  /** parts.extra_price — signed delta to apply to the existing line. */
-  delta: number;
 };
 
 type PendingAdd =
   | {
       kind: "package";
       pkg: PartPackageWithItems;
-      matches: CategoryMatch[];
+      overlaps: Overlap[];
     }
   | {
       kind: "picker";
@@ -135,6 +154,9 @@ export function SalesLineItems({
     onChange(items.map((it) => (it.key === key ? { ...it, ...patch } : it)));
   };
   const remove = (key: string) => onChange(items.filter((it) => it.key !== key));
+  /** Remove every line belonging to one collapsed package instance. */
+  const removeGroup = (groupKey: string) =>
+    onChange(items.filter((it) => packageGroupKey(it) !== groupKey));
   const addCustom = () => onChange([...items, newLineItem()]);
 
   const lineFromPart = (p: Part, unitPriceOverride?: number): LineItem =>
@@ -146,6 +168,24 @@ export function SalesLineItems({
       is_taxable: p.is_taxable,
       unit_of_measure: p.unit_of_measure,
       part_category_id: p.category_id,
+    });
+
+  /**
+   * A visible upgrade charge as its own line — e.g. "Upgrade: Cat 1R-0716".
+   * `delta` must be positive; credits are handled by reducing the existing line
+   * instead, because unit_price can't be negative.
+   */
+  const upgradeLine = (
+    part: { brand: string; part_number: string; is_taxable?: boolean | null },
+    delta: number,
+  ): LineItem =>
+    newLineItem({
+      part_id: null,
+      description: `Upgrade: ${part.brand} ${part.part_number}`,
+      quantity: 1,
+      unit_price: Math.round(delta * 100) / 100,
+      is_taxable: part.is_taxable ?? true,
+      unit_of_measure: null,
     });
 
   const addPart = (p: Part) => {
@@ -180,18 +220,23 @@ export function SalesLineItems({
 
   const buildPackageRows = (
     pkg: PartPackageWithItems,
-    skipPkgItemIds: Set<string>,
+    // Items to bring in as merged duplicates: kept visible but billed at $0,
+    // with the waived price recorded for the "merged / saved" indicator.
+    mergeItemIds: Set<string>,
   ): LineItem[] => {
     const locked = isPartPackageLocked(pkg);
+    // One group id per expansion so the whole package collapses to one line,
+    // and adding the same package twice stays as two independent lines.
+    const groupId = newGroupId();
     const rows: LineItem[] = [];
     for (const it of pkg.items) {
-      if (skipPkgItemIds.has(it.id)) continue;
-
       let price: number;
       let description: string;
       let isTaxable: boolean;
       let unitOfMeasure: LineItem["unit_of_measure"];
-      let categoryId: string | null;
+      let categoryId: string | null = null;
+      let oilTypeId: string | null = null;
+      let transId: string | null = null;
       if (it.oil_type_id && it.oil_type) {
         price = locked
           ? effectiveLockedPriceForItem(it)
@@ -202,7 +247,18 @@ export function SalesLineItems({
         }${litres ? ` × ${litres}L` : ""}`;
         isTaxable = it.oil_type.is_taxable;
         unitOfMeasure = "ltr";
-        categoryId = null;
+        oilTypeId = it.oil_type_id;
+      } else if (it.transmission_service_id && it.transmission_service) {
+        price = locked
+          ? effectiveLockedPriceForItem(it)
+          : effectiveCatalogPriceForItem(it);
+        const s = it.transmission_service;
+        const syn =
+          s.service_kind === "coolant_flush" ? "" : s.is_synthetic ? " (Syn)" : " (Reg)";
+        description = `${s.name}${syn}`;
+        isTaxable = true; // services are HST-taxable
+        unitOfMeasure = null;
+        transId = it.transmission_service_id;
       } else if (it.part) {
         price = locked
           ? effectiveLockedPriceForItem(it)
@@ -216,16 +272,24 @@ export function SalesLineItems({
       } else {
         continue;
       }
+      const basePrice = Number.isFinite(price) ? price : 0;
+      const merged = mergeItemIds.has(it.id);
       rows.push(
         newLineItem({
           part_id: it.part_id ?? null,
           description,
           quantity: Number(it.quantity) || 1,
-          unit_price: Number.isFinite(price) ? price : 0,
-          is_taxable: isTaxable,
+          // Merged duplicates are billed at $0; their waived price is kept for
+          // the indicator.
+          unit_price: merged ? 0 : basePrice,
+          merged_unit_price: merged ? basePrice : null,
+          is_taxable: merged ? false : isTaxable,
           unit_of_measure: unitOfMeasure,
           package_label: pkg.name,
+          package_group: groupId,
           part_category_id: categoryId,
+          oil_type_id: oilTypeId,
+          transmission_service_id: transId,
         }),
       );
     }
@@ -244,43 +308,58 @@ export function SalesLineItems({
           is_taxable: true,
           unit_of_measure: null,
           package_label: pkg.name,
+          package_group: groupId,
         }),
       );
     }
     return rows;
   };
 
-  const findCategoryMatches = (pkg: PartPackageWithItems): CategoryMatch[] => {
-    // Build "first existing line per category" so each existing line is
-    // upcharged at most once even if the package has multiple items in the
-    // same category.
+  /**
+   * Find items in `pkg` that duplicate something already on the job — by part
+   * category, oil type, or Trans & Diff service. Each existing line is claimed
+   * at most once so two package items don't both point at the same line.
+   */
+  const findPackageOverlaps = (pkg: PartPackageWithItems): Overlap[] => {
     const claimedKeys = new Set<string>();
-    const matches: CategoryMatch[] = [];
+    const overlaps: Overlap[] = [];
     for (const pkgItem of pkg.items) {
-      if (!pkgItem.part || !pkgItem.part.category_id) continue;
-      const cat = pkgItem.part.category_id;
-      const existing = items.find(
-        (it) =>
-          it.part_category_id != null &&
-          it.part_category_id === cat &&
-          !claimedKeys.has(it.key),
-      );
+      let match: ((it: LineItem) => boolean) | null = null;
+      let itemLabel = "";
+      if (pkgItem.part && pkgItem.part.category_id) {
+        const cat = pkgItem.part.category_id;
+        match = (it) => it.part_category_id != null && it.part_category_id === cat;
+        itemLabel = `${pkgItem.part.brand} ${pkgItem.part.part_number}`;
+      } else if (pkgItem.oil_type_id) {
+        const oid = pkgItem.oil_type_id;
+        match = (it) => it.oil_type_id === oid;
+        itemLabel = pkgItem.oil_type
+          ? excelOilLabel(pkgItem.oil_type.code, pkgItem.oil_type.name)
+          : "oil";
+      } else if (pkgItem.transmission_service_id) {
+        const sid = pkgItem.transmission_service_id;
+        match = (it) => it.transmission_service_id === sid;
+        itemLabel = pkgItem.transmission_service?.name ?? "service";
+      }
+      if (!match) continue;
+      const existing = items.find((it) => match!(it) && !claimedKeys.has(it.key));
       if (!existing) continue;
       claimedKeys.add(existing.key);
-      matches.push({
-        existingKey: existing.key,
-        existingLabel: existing.description || "(no description)",
-        pkgItem,
-        delta: Number(pkgItem.part.extra_price ?? 0),
+      overlaps.push({
+        pkgItemId: pkgItem.id,
+        itemLabel,
+        existingLabel: existing.package_label
+          ? `${existing.description || "item"} (from ${existing.package_label})`
+          : existing.description || "(no description)",
       });
     }
-    return matches;
+    return overlaps;
   };
 
   const addPackage = (pkg: PartPackageWithItems) => {
-    const matches = findCategoryMatches(pkg);
-    if (matches.length > 0) {
-      setPending({ kind: "package", pkg, matches });
+    const overlaps = findPackageOverlaps(pkg);
+    if (overlaps.length > 0) {
+      setPending({ kind: "package", pkg, overlaps });
       return;
     }
     onChange([...items, ...buildPackageRows(pkg, new Set())]);
@@ -298,25 +377,18 @@ export function SalesLineItems({
 
   /**
    * Primary action.
-   * - Package: apply each match's delta to its existing line; skip those package items.
-   * - Picker: apply delta to the existing line; do NOT add a new line.
+   * - Package ("Merge"): add the package but drop the overlapping items so the
+   *   duplicate isn't billed twice; the package total reflects only what's left.
+   * - Picker ("Charge upgrade"): positive delta becomes its own upgrade line;
+   *   a negative delta (credit) reduces the existing line (can't be a line).
    */
   const confirmPending = () => {
     if (!pending) return;
     if (pending.kind === "package") {
-      const skip = new Set<string>(pending.matches.map((m) => m.pkgItem.id));
-      const deltaByKey = new Map<string, number>();
-      for (const m of pending.matches) {
-        const prev = deltaByKey.get(m.existingKey) ?? 0;
-        deltaByKey.set(m.existingKey, prev + m.delta);
-      }
-      const adjusted = items.map((it) => {
-        const d = deltaByKey.get(it.key);
-        if (d == null || d === 0) return it;
-        const newPrice = Math.max(0, Math.round((Number(it.unit_price) + d) * 100) / 100);
-        return { ...it, unit_price: newPrice };
-      });
-      onChange([...adjusted, ...buildPackageRows(pending.pkg, skip)]);
+      const mergeIds = new Set<string>(pending.overlaps.map((o) => o.pkgItemId));
+      onChange([...items, ...buildPackageRows(pending.pkg, mergeIds)]);
+    } else if (pending.delta > 0) {
+      onChange([...items, upgradeLine(pending.part, pending.delta)]);
     } else {
       onChange(bumpExisting(pending.existing.key, pending.delta));
     }
@@ -325,14 +397,13 @@ export function SalesLineItems({
 
   /**
    * Secondary action.
-   * - Package: skip the matched package items entirely; don't touch existing lines.
+   * - Package ("Add separately"): add the package whole — both copies billed.
    * - Picker: add the new part as a separate line at list price.
    */
   const declinePending = () => {
     if (!pending) return;
     if (pending.kind === "package") {
-      const skip = new Set<string>(pending.matches.map((m) => m.pkgItem.id));
-      onChange([...items, ...buildPackageRows(pending.pkg, skip)]);
+      onChange([...items, ...buildPackageRows(pending.pkg, new Set())]);
     } else {
       onChange([...items, lineFromPart(pending.part)]);
     }
@@ -342,6 +413,98 @@ export function SalesLineItems({
   const total = lineItemsSubTotal(items);
   const taxable = lineItemsTaxableSubTotal(items);
   const exempt = Math.round((total - taxable) * 100) / 100;
+
+  // Collapse each package instance into one read-only line; standalone lines
+  // stay individually editable.
+  const displayRows = buildDisplayRows(
+    items,
+    (it) => lineItemTotal(it),
+    (it) => it.is_taxable === true,
+    (it) => it.package_label ?? "Package",
+  );
+
+  const renderEditableRow = (it: LineItem) => {
+    const cs = it.is_customer_supplied === true;
+    const wouldHaveCharged = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+    return (
+      <tr key={it.key} className="border-b last:border-0 align-top">
+        <td className="py-2 pr-2">
+          <Input
+            value={it.description}
+            onChange={(e) => update(it.key, { description: e.target.value, part_id: it.part_id })}
+            placeholder={it.part_id ? "Part description" : "Custom item description"}
+          />
+          {(it.part_id || cs) && (
+            <p className="text-[10px] text-muted-foreground mt-1">
+              {it.part_id && <span>From catalog</span>}
+              {cs && (
+                <span className="ml-1 text-emerald-600">
+                  · customer supplied — saved {formatMoney(wouldHaveCharged)}
+                </span>
+              )}
+            </p>
+          )}
+        </td>
+        <td className="py-2 px-2 text-right">
+          <div className="flex items-center justify-end gap-1">
+            <Input
+              type="number"
+              step="0.01"
+              min="0.01"
+              value={String(it.quantity)}
+              onChange={(e) => update(it.key, { quantity: Number(e.target.value) || 0 })}
+              className="text-right"
+            />
+            {it.unit_of_measure && (
+              <span className="text-[10px] uppercase text-muted-foreground w-10 text-left">
+                {it.unit_of_measure}
+              </span>
+            )}
+          </div>
+        </td>
+        <td className="py-2 px-2 text-right">
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={String(it.unit_price)}
+            onChange={(e) => update(it.key, { unit_price: Number(e.target.value) || 0 })}
+            className={`text-right ${cs ? "opacity-60" : ""}`}
+          />
+        </td>
+        <td className="py-2 px-2 text-center">
+          <Checkbox
+            checked={it.is_taxable}
+            onCheckedChange={(v) => update(it.key, { is_taxable: v === true })}
+            aria-label="HST taxable"
+          />
+        </td>
+        <td className="py-2 px-2 text-center">
+          <Checkbox
+            checked={cs}
+            disabled={!it.part_id}
+            onCheckedChange={(v) => update(it.key, { is_customer_supplied: v === true })}
+            aria-label="Customer supplied"
+          />
+        </td>
+        <td className="py-2 px-2 text-right tabular-nums font-medium">
+          {formatMoney(lineItemTotal(it))}
+        </td>
+        <td className="py-2 pl-2 text-right">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground hover:text-destructive"
+            onClick={() => remove(it.key)}
+            aria-label="Remove line"
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        </td>
+      </tr>
+    );
+  };
 
   return (
     <div className="space-y-3">
@@ -368,90 +531,111 @@ export function SalesLineItems({
               </tr>
             </thead>
             <tbody>
-              {items.map((it) => {
-                const cs = it.is_customer_supplied === true;
-                const wouldHaveCharged = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+              {displayRows.map((row) => {
+                if (row.type === "single") return renderEditableRow(row.item);
+                // Collapsed package — shown as one read-only line (name + total).
+                // Price is fixed from the package definition; edit the package
+                // in Settings to change it, or remove and re-add here.
+                const mergedSaved = row.items.reduce(
+                  (s, it) =>
+                    s +
+                    (it.merged_unit_price != null
+                      ? Number(it.merged_unit_price) * (Number(it.quantity) || 1)
+                      : 0),
+                  0,
+                );
+                const mergedCount = row.items.filter(
+                  (it) => it.merged_unit_price != null,
+                ).length;
                 return (
-                  <tr key={it.key} className="border-b last:border-0 align-top">
-                    <td className="py-2 pr-2">
-                      <Input
-                        value={it.description}
-                        onChange={(e) => update(it.key, { description: e.target.value, part_id: it.part_id })}
-                        placeholder={it.part_id ? "Part description" : "Custom item description"}
-                      />
-                      {(it.part_id || it.package_label || cs) && (
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          {it.package_label ? (
-                            <span className="italic">from {it.package_label}</span>
-                          ) : (
-                            it.part_id && <span>From catalog</span>
-                          )}
-                          {cs && (
-                            <span className="ml-1 text-emerald-600">
-                              · customer supplied — saved {formatMoney(wouldHaveCharged)}
+                  <Fragment key={row.key}>
+                    {/* Package header — name + single total; price is fixed
+                        from the package definition. */}
+                    <tr className="align-top bg-muted/30">
+                      <td className="py-2 pr-2">
+                        <div className="flex items-center gap-2">
+                          <Boxes className="size-4 text-muted-foreground shrink-0" />
+                          <span className="font-medium">{row.label}</span>
+                          {mergedCount > 0 && (
+                            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-amber-700 dark:bg-amber-950/40 dark:text-amber-500">
+                              Merged · saved {formatMoney(mergedSaved)}
                             </span>
                           )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          Package · {row.items.length} item{row.items.length === 1 ? "" : "s"}
+                          {mergedCount > 0 &&
+                            ` · ${mergedCount} already on the job (not charged)`}
                         </p>
-                      )}
-                    </td>
-                    <td className="py-2 px-2 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0.01"
-                          value={String(it.quantity)}
-                          onChange={(e) => update(it.key, { quantity: Number(e.target.value) || 0 })}
-                          className="text-right"
-                        />
-                        {it.unit_of_measure && (
-                          <span className="text-[10px] uppercase text-muted-foreground w-10 text-left">
-                            {it.unit_of_measure}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2 px-2 text-right">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={String(it.unit_price)}
-                        onChange={(e) => update(it.key, { unit_price: Number(e.target.value) || 0 })}
-                        className={`text-right ${cs ? "opacity-60" : ""}`}
-                      />
-                    </td>
-                    <td className="py-2 px-2 text-center">
-                      <Checkbox
-                        checked={it.is_taxable}
-                        onCheckedChange={(v) => update(it.key, { is_taxable: v === true })}
-                        aria-label="HST taxable"
-                      />
-                    </td>
-                    <td className="py-2 px-2 text-center">
-                      <Checkbox
-                        checked={cs}
-                        disabled={!it.part_id}
-                        onCheckedChange={(v) => update(it.key, { is_customer_supplied: v === true })}
-                        aria-label="Customer supplied"
-                      />
-                    </td>
-                    <td className="py-2 px-2 text-right tabular-nums font-medium">
-                      {formatMoney(lineItemTotal(it))}
-                    </td>
-                    <td className="py-2 pl-2 text-right">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => remove(it.key)}
-                        aria-label="Remove line"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </td>
-                  </tr>
+                      </td>
+                      <td className="py-2 px-2 text-right text-muted-foreground tabular-nums">1</td>
+                      <td className="py-2 px-2" />
+                      <td className="py-2 px-2 text-center text-[10px] uppercase text-muted-foreground">
+                        {row.taxableTotal <= 0
+                          ? "Exempt"
+                          : row.taxableTotal >= row.total
+                          ? "Yes"
+                          : "Mixed"}
+                      </td>
+                      <td className="py-2 px-2 text-center text-muted-foreground">—</td>
+                      <td className="py-2 px-2 text-right tabular-nums font-medium">
+                        {formatMoney(row.total)}
+                      </td>
+                      <td className="py-2 pl-2 text-right">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => removeGroup(row.key)}
+                          aria-label="Remove package"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                    {/* Included items — shown for transparency, no per-item price.
+                        Merged duplicates show their waived price struck through. */}
+                    {row.items.map((it, i) => {
+                      const isMerged = it.merged_unit_price != null;
+                      return (
+                        <tr
+                          key={it.key}
+                          className={`align-top bg-muted/30 ${
+                            i === row.items.length - 1 ? "border-b" : ""
+                          }`}
+                        >
+                          <td className="py-1.5 pr-2 pl-9">
+                            <span className="text-muted-foreground">{it.description}</span>
+                            {isMerged && (
+                              <span className="ml-1 text-[10px] text-amber-700 dark:text-amber-500">
+                                · merged (already on the job)
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-1.5 px-2 text-right text-muted-foreground tabular-nums">
+                            {Number(it.quantity)}
+                            {it.unit_of_measure && (
+                              <span className="text-[10px] uppercase ml-1">{it.unit_of_measure}</span>
+                            )}
+                          </td>
+                          <td className="py-1.5 px-2 text-right text-[10px] uppercase text-muted-foreground">
+                            {isMerged ? (
+                              <span className="line-through normal-case">
+                                {formatMoney(Number(it.merged_unit_price))}
+                              </span>
+                            ) : (
+                              "Included"
+                            )}
+                          </td>
+                          <td className="py-1.5 px-2" />
+                          <td className="py-1.5 px-2" />
+                          <td className="py-1.5 px-2" />
+                          <td className="py-1.5 pl-2" />
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
                 );
               })}
               <tr>
@@ -526,21 +710,22 @@ function CategoryDuplicateDialog({
           {pending.kind === "package" ? (
             <>
               <Button type="button" variant="outline" onClick={onDecline}>
-                Skip duplicates
+                Add separately
               </Button>
               <AlertDialogAction onClick={onConfirm}>
-                Apply deltas
+                Merge (drop duplicates)
               </AlertDialogAction>
             </>
           ) : (
             <>
               <Button type="button" variant="outline" onClick={onDecline}>
-                Add as separate line
+                Add as a new line
               </Button>
               {pending.delta !== 0 && (
                 <AlertDialogAction onClick={onConfirm}>
-                  Apply {pending.delta > 0 ? "+" : ""}
-                  {formatMoney(pending.delta)} to existing
+                  {pending.delta > 0
+                    ? `Charge +${formatMoney(pending.delta)} upgrade`
+                    : `Apply ${formatMoney(pending.delta)} credit`}
                 </AlertDialogAction>
               )}
             </>
@@ -556,63 +741,33 @@ function PackageDupBody({
 }: {
   pending: Extract<PendingAdd, { kind: "package" }>;
 }) {
-  const totalDelta =
-    Math.round(
-      pending.matches.reduce(
-        (s, m) => s + (Number.isFinite(m.delta) ? m.delta : 0),
-        0,
-      ) * 100,
-    ) / 100;
-
   return (
     <AlertDialogHeader>
-      <AlertDialogTitle>
-        Same-category parts already on this job
-      </AlertDialogTitle>
+      <AlertDialogTitle>Some items are already on this job</AlertDialogTitle>
       <AlertDialogDescription asChild>
         <div className="space-y-2 text-sm">
           <p>
-            <strong>{pending.pkg.name}</strong> contains parts in the same
-            category as lines already on this job. Apply the extra-price delta
-            to the existing line (recommended for variant upgrades), or skip the
-            package&rsquo;s same-category items entirely.
+            <strong>{pending.pkg.name}</strong> includes{" "}
+            {pending.overlaps.length === 1 ? "an item" : "items"} the job already
+            has:
           </p>
           <ul className="list-disc pl-5 space-y-1">
-            {pending.matches.map((m) => (
-              <li key={m.pkgItem.id}>
-                <strong>{m.existingLabel}</strong> ←{" "}
-                {m.pkgItem.part?.brand} {m.pkgItem.part?.part_number}{" "}
-                <span
-                  className={
-                    m.delta > 0
-                      ? "text-rose-600"
-                      : m.delta < 0
-                      ? "text-emerald-600"
-                      : "text-muted-foreground"
-                  }
-                >
-                  ({m.delta > 0 ? "+" : ""}
-                  {formatMoney(m.delta)})
+            {pending.overlaps.map((o) => (
+              <li key={o.pkgItemId}>
+                <strong>{o.itemLabel}</strong>
+                <span className="text-muted-foreground">
+                  {" "}
+                  — already on the job as {o.existingLabel}
                 </span>
               </li>
             ))}
           </ul>
           <p className="text-xs text-muted-foreground">
-            Net change to existing lines if applied:{" "}
-            <span
-              className={
-                totalDelta > 0
-                  ? "text-rose-600"
-                  : totalDelta < 0
-                  ? "text-emerald-600"
-                  : ""
-              }
-            >
-              {totalDelta > 0 ? "+" : ""}
-              {formatMoney(totalDelta)}
-            </span>
-            . The remaining (non-matching) package items and labor are added
-            either way.
+            <strong>Merge</strong> drops {pending.overlaps.length === 1 ? "it" : "these"}{" "}
+            from the package so {pending.overlaps.length === 1 ? "it isn't" : "they aren't"}{" "}
+            billed twice (the package total drops accordingly).{" "}
+            <strong>Add separately</strong> brings the package in whole, charging
+            for both.
           </p>
         </div>
       </AlertDialogDescription>
@@ -628,34 +783,36 @@ function PickerDupBody({
   const p = pending.part;
   return (
     <AlertDialogHeader>
-      <AlertDialogTitle>Same-category part already on this job</AlertDialogTitle>
+      <AlertDialogTitle>This job already has a similar part</AlertDialogTitle>
       <AlertDialogDescription asChild>
         <div className="space-y-2 text-sm">
           <p>
             <strong>
               {p.brand} {p.part_number}
             </strong>{" "}
-            is the same category as{" "}
-            <strong>{pending.existing.description || "an existing line"}</strong>
+            is the same kind of part as{" "}
+            <strong>{pending.existing.description || "a line already on the job"}</strong>
             .
           </p>
           {pending.delta !== 0 ? (
             <p>
-              Apply{" "}
+              You can charge just the{" "}
               <span
                 className={pending.delta > 0 ? "text-rose-600" : "text-emerald-600"}
               >
                 {pending.delta > 0 ? "+" : ""}
                 {formatMoney(pending.delta)}
               </span>{" "}
-              to the existing line (variant upgrade/credit), or add{" "}
-              {p.brand} {p.part_number} as a separate line at{" "}
+              {pending.delta > 0
+                ? "upgrade as its own line, or"
+                : "credit on the existing line, or"}{" "}
+              add {p.brand} {p.part_number} as a full line at{" "}
               {formatMoney(Number(p.list_price) || 0)}.
             </p>
           ) : (
             <p className="text-muted-foreground">
-              No extra-price delta is set on this part — choose whether to add
-              it as a separate line anyway.
+              No upgrade price is set for this part — choose whether to add it as
+              its own line anyway.
             </p>
           )}
         </div>

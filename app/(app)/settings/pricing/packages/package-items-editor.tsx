@@ -6,24 +6,37 @@ import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PartPickerButton } from "@/components/pricing/part-picker";
+import {
+  TransServicePickerButton,
+  transServiceLabel,
+  transServicePrice,
+} from "@/components/pricing/trans-service-picker";
+import type { TransmissionService } from "@/lib/actions/pricing";
 import type { Part, UnitOfMeasure } from "@/lib/db/types";
 import { formatMoney } from "@/lib/utils/format";
 
 export interface PackageItemDraft {
-  part_id: string;
+  /** Which catalogue this item is drawn from. */
+  source: "part" | "trans";
+  /** Set when source === "part". */
+  part_id: string | null;
+  /** Set when source === "trans". */
+  transmission_service_id: string | null;
   quantity: number;
   /**
-   * Override price. null/undefined → use the catalog list_price at expansion.
-   * Stored as a string in the form so an empty input means "no override".
+   * Override price. blank → use the catalogue price at expansion (part list
+   * price, or service sell + labour). Stored as a string so empty = no override.
    */
   unit_price: string;
-  part: {
-    brand: string;
-    part_number: string;
-    description: string | null;
-    list_price: number;
-    unit_of_measure: UnitOfMeasure;
-  };
+  /** Display label + the catalogue price used as the override placeholder. */
+  label: string;
+  subLabel: string | null;
+  catalogPrice: number;
+  unitOfMeasure: string;
+}
+
+function draftKey(it: PackageItemDraft): string {
+  return it.source === "part" ? `part:${it.part_id}` : `trans:${it.transmission_service_id}`;
 }
 
 export function PackageItemsEditor({
@@ -33,70 +46,95 @@ export function PackageItemsEditor({
   items: PackageItemDraft[];
   onChange: (items: PackageItemDraft[]) => void;
 }) {
-  const excludeIds = useMemo(() => new Set(items.map((it) => it.part_id)), [items]);
+  const excludePartIds = useMemo(
+    () => new Set(items.filter((it) => it.source === "part").map((it) => it.part_id as string)),
+    [items],
+  );
+  const excludeTransIds = useMemo(
+    () =>
+      new Set(
+        items
+          .filter((it) => it.source === "trans")
+          .map((it) => it.transmission_service_id as string),
+      ),
+    [items],
+  );
 
   const addPart = (p: Part) => {
-    if (excludeIds.has(p.id)) return;
+    if (excludePartIds.has(p.id)) return;
     onChange([
       ...items,
       {
+        source: "part",
         part_id: p.id,
+        transmission_service_id: null,
         quantity: 1,
-        unit_price: "", // blank = use catalog price
-        part: {
-          brand: p.brand,
-          part_number: p.part_number,
-          description: p.description,
-          list_price: Number(p.list_price) || 0,
-          unit_of_measure: p.unit_of_measure,
-        },
+        unit_price: "",
+        label: `${p.brand} ${p.part_number}`,
+        subLabel: p.description,
+        catalogPrice: Number(p.list_price) || 0,
+        unitOfMeasure: (p.unit_of_measure as UnitOfMeasure) ?? "pcs",
       },
     ]);
   };
 
-  const updateRow = (part_id: string, patch: Partial<PackageItemDraft>) => {
-    onChange(items.map((it) => (it.part_id === part_id ? { ...it, ...patch } : it)));
+  const addTrans = (s: TransmissionService) => {
+    if (excludeTransIds.has(s.id)) return;
+    onChange([
+      ...items,
+      {
+        source: "trans",
+        part_id: null,
+        transmission_service_id: s.id,
+        quantity: 1,
+        unit_price: "",
+        label: transServiceLabel(s),
+        subLabel: s.oil_type_name,
+        catalogPrice: transServicePrice(s),
+        unitOfMeasure: "each",
+      },
+    ]);
   };
 
-  const remove = (part_id: string) => {
-    onChange(items.filter((it) => it.part_id !== part_id));
+  const updateRow = (key: string, patch: Partial<PackageItemDraft>) => {
+    onChange(items.map((it) => (draftKey(it) === key ? { ...it, ...patch } : it)));
+  };
+
+  const remove = (key: string) => {
+    onChange(items.filter((it) => draftKey(it) !== key));
   };
 
   return (
     <div className="space-y-3">
       {items.length === 0 ? (
         <p className="text-xs text-muted-foreground border rounded-md py-3 text-center">
-          No parts yet — pick one from the catalogue below.
+          No items yet — add a part or a Trans &amp; Diff service below.
         </p>
       ) : (
         <div className="overflow-x-auto rounded-md border">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-xs uppercase text-muted-foreground border-b bg-muted/40">
-                <th className="text-left font-medium py-2 px-3">Part</th>
+                <th className="text-left font-medium py-2 px-3">Item</th>
                 <th className="text-right font-medium py-2 px-2 w-24">Qty</th>
-                <th className="text-right font-medium py-2 px-2 w-32">
-                  Price override
-                </th>
+                <th className="text-right font-medium py-2 px-2 w-32">Price override</th>
                 <th className="w-10" />
               </tr>
             </thead>
             <tbody>
               {items.map((it) => {
+                const key = draftKey(it);
                 const overridden = it.unit_price.trim() !== "";
                 return (
-                  <tr key={it.part_id} className="border-b last:border-0 align-top">
+                  <tr key={key} className="border-b last:border-0 align-top">
                     <td className="py-2 px-3">
-                      <div className="font-medium">
-                        {it.part.brand} {it.part.part_number}
-                      </div>
-                      {it.part.description && (
-                        <div className="text-xs text-muted-foreground">
-                          {it.part.description}
-                        </div>
+                      <div className="font-medium">{it.label}</div>
+                      {it.subLabel && (
+                        <div className="text-xs text-muted-foreground">{it.subLabel}</div>
                       )}
                       <div className="text-[10px] text-muted-foreground mt-0.5">
-                        Catalog: {formatMoney(it.part.list_price)}
+                        {it.source === "trans" ? "Trans & Diff · " : ""}
+                        Catalog: {formatMoney(it.catalogPrice)}
                         {overridden && (
                           <span className="ml-1 text-amber-600 dark:text-amber-500">
                             · overridden
@@ -112,14 +150,12 @@ export function PackageItemsEditor({
                           min="0.01"
                           value={String(it.quantity)}
                           onChange={(e) =>
-                            updateRow(it.part_id, {
-                              quantity: Number(e.target.value) || 0,
-                            })
+                            updateRow(key, { quantity: Number(e.target.value) || 0 })
                           }
                           className="text-right"
                         />
                         <span className="text-[10px] uppercase text-muted-foreground w-10 text-left">
-                          {it.part.unit_of_measure}
+                          {it.unitOfMeasure}
                         </span>
                       </div>
                     </td>
@@ -129,10 +165,8 @@ export function PackageItemsEditor({
                         step="0.01"
                         min="0"
                         value={it.unit_price}
-                        placeholder={formatMoney(it.part.list_price)}
-                        onChange={(e) =>
-                          updateRow(it.part_id, { unit_price: e.target.value })
-                        }
+                        placeholder={formatMoney(it.catalogPrice)}
+                        onChange={(e) => updateRow(key, { unit_price: e.target.value })}
                         className="text-right"
                       />
                     </td>
@@ -142,8 +176,8 @@ export function PackageItemsEditor({
                         variant="ghost"
                         size="icon"
                         className="size-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => remove(it.part_id)}
-                        aria-label="Remove part"
+                        onClick={() => remove(key)}
+                        aria-label="Remove item"
                       >
                         <Trash2 className="size-4" />
                       </Button>
@@ -157,15 +191,18 @@ export function PackageItemsEditor({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Leave the price blank to use the catalogue list price (so future price changes
-        flow through). Enter a value to lock the price for this package.
+        Leave the price blank to use the catalogue price (so future price changes flow
+        through). Enter a value to lock the price for this package.
       </p>
 
-      <PartPickerButton
-        onSelect={addPart}
-        excludeIds={excludeIds}
-        label="Add part to package"
-      />
+      <div className="flex flex-wrap gap-2">
+        <PartPickerButton
+          onSelect={addPart}
+          excludeIds={excludePartIds}
+          label="Add part to package"
+        />
+        <TransServicePickerButton onSelect={addTrans} excludeIds={excludeTransIds} />
+      </div>
     </div>
   );
 }
