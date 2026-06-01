@@ -89,8 +89,7 @@ export const createVehicle = wrapAction({
         created_by: profile.id,
         updated_by: profile.id,
       })
-      .select("*")
-      .single();
+      .select("*");
     if (error) {
       const field = uniqueErrorToField(error.message);
       if (field) {
@@ -104,8 +103,19 @@ export const createVehicle = wrapAction({
       }
       throw error;
     }
+    // Deliberately avoid .single() on the insert read-back: if a policy or
+    // trigger ever hides the just-inserted row, .single() throws the cryptic
+    // PGRST116 "cannot coerce the result to a single JSON object" even though
+    // the row WAS written. Take the first row and surface a clear message
+    // instead so the user knows the vehicle saved and not to retry.
+    const row = (data ?? [])[0] as Vehicle | undefined;
+    if (!row) {
+      throw new Error(
+        "The vehicle was saved, but the app could not read it back. Please refresh the page to confirm — do not re-enter it.",
+      );
+    }
     revalidatePath(`/customers/${input.customer_id}`);
-    return data as Vehicle;
+    return row;
   },
 });
 

@@ -418,7 +418,20 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
               };
               const work: WorkRow[] = [];
               for (const r of packageRows) {
-                work.push({ id: r.key, description: r.label, amount: r.total });
+                const saved = r.items.reduce(
+                  (s, m) =>
+                    s +
+                    (m.merged_unit_price != null
+                      ? Number(m.merged_unit_price) * Number(m.quantity)
+                      : 0),
+                  0,
+                );
+                work.push({
+                  id: r.key,
+                  description:
+                    saved > 0 ? `${r.label}  (merged — saved ${money(saved)})` : r.label,
+                  amount: r.total,
+                });
                 for (const m of r.items) {
                   const merged = m.merged_unit_price != null;
                   work.push({

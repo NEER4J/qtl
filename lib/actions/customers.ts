@@ -262,11 +262,20 @@ export const createCustomer = wrapAction({
         created_by: profile.id,
         updated_by: profile.id,
       })
-      .select("*")
-      .single();
+      .select("*");
     if (error) throw error;
+    // Avoid .single() on the insert read-back: if a policy/trigger ever hides
+    // the just-inserted row, .single() throws the cryptic PGRST116 "cannot
+    // coerce the result to a single JSON object" even though the row WAS
+    // written. Take the first row and give a clear message otherwise.
+    const row = (data ?? [])[0] as Customer | undefined;
+    if (!row) {
+      throw new Error(
+        "The customer was saved, but the app could not read it back. Please refresh the page to confirm — do not re-enter them.",
+      );
+    }
     revalidatePath("/customers");
-    return data as Customer;
+    return row;
   },
 });
 

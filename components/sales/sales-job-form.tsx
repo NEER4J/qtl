@@ -18,6 +18,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { TimeField12h } from "@/components/ui/time-field-12h";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -1113,7 +1114,11 @@ export function SalesJobForm({
                   <FormItem>
                     <FormLabel>Start time</FormLabel>
                     <FormControl>
-                      <Input type="time" {...field} />
+                      <TimeField12h
+                        value={field.value ?? ""}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1126,7 +1131,11 @@ export function SalesJobForm({
                   <FormItem>
                     <FormLabel>End time</FormLabel>
                     <FormControl>
-                      <Input type="time" {...field} />
+                      <TimeField12h
+                        value={field.value ?? ""}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
