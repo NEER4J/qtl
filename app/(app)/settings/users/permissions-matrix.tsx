@@ -1,18 +1,18 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ChevronRight, EyeOff, RotateCcw, Sparkles, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, EyeOff, RotateCcw, Sparkles, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import {
   PAGE_GROUPS,
@@ -46,27 +46,12 @@ export function PermissionsMatrix({
   otherUsers,
   onChange,
 }: Props) {
-  // Grantable = the role's `defaultRoles` whitelist on the page. Roles outside
-  // it can't actually reach the page even if ticked here — page-level guards
-  // and server-action role checks reject them — so we mark those rows as
-  // disabled with a badge instead of pretending the tick will take effect.
-  const isGrantable = (key: string): boolean => {
-    const def = PAGE_REGISTRY.find((p) => p.key === key);
-    return !!def && def.defaultRoles.includes(role);
-  };
-  const labelForUngrantable = (key: string): string => {
-    const def = PAGE_REGISTRY.find((p) => p.key === key);
-    if (!def) return "Not available";
-    if (def.defaultRoles.length === 1) {
-      return `${def.defaultRoles[0][0].toUpperCase()}${def.defaultRoles[0].slice(1)} only`;
-    }
-    return `Not available for ${role}`;
-  };
+  // Every page can be granted to every user — the owner has full control over a
+  // user's allowlist regardless of role, so no page is locked in this UI. Role
+  // defaults still seed the "Apply default" button and the +/- divergence hint.
 
   const initialAllowed = useMemo<string[]>(
-    // Drop any keys for pages this role can't be granted, in case a legacy
-    // override saved them.
-    () => (allowedPages ?? defaultAllowedPagesForRole(role)).filter(isGrantable),
+    () => allowedPages ?? defaultAllowedPagesForRole(role),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -120,7 +105,6 @@ export function PermissionsMatrix({
   };
 
   const togglePage = (key: string) => {
-    if (!isGrantable(key)) return; // hard-blocked roles can't be granted via UI
     const next = new Set(allowed);
     let nextHidden = hidden;
     if (next.has(key)) {
@@ -139,8 +123,7 @@ export function PermissionsMatrix({
     commit(next, nextHidden, false);
   };
 
-  const allPageKeys = PAGE_REGISTRY.map((p) => p.key);
-  const grantableKeys = allPageKeys.filter(isGrantable);
+  const grantableKeys = PAGE_REGISTRY.map((p) => p.key);
   const allSelected = grantableKeys.length > 0 && grantableKeys.every((k) => allowed.has(k));
   const noneSelected = allowed.size === 0;
   const roleDefaultSet = new Set(defaultAllowedPagesForRole(role));
@@ -151,16 +134,15 @@ export function PermissionsMatrix({
   const selectAllPages = () => commit(new Set(grantableKeys), {}, false);
   const clearAllPages = () => commit(new Set(), hidden, false);
   const resetToRoleDefault = () =>
-    commit(new Set(defaultAllowedPagesForRole(role).filter(isGrantable)), {}, true);
+    commit(new Set(defaultAllowedPagesForRole(role)), {}, true);
 
   const copyFromUser = (sourceUserId: string) => {
     const src = otherUsers?.find((u) => u.id === sourceUserId);
     if (!src) return;
-    // Filter the source's allowlist down to what THIS role can be granted —
-    // copying a manager's settings onto a staff user shouldn't grant pages
-    // the staff role can't actually reach.
+    // Copy the source user's full allowlist verbatim — every page is grantable
+    // to any role, so there's nothing to filter out.
     const srcAllowed = src.allowed_pages ?? defaultAllowedPagesForRole(src.role);
-    const nextAllowed = new Set(srcAllowed.filter(isGrantable));
+    const nextAllowed = new Set(srcAllowed);
     const nextHidden: Record<string, Set<string>> = {};
     for (const [k, v] of Object.entries(src.hidden_columns ?? {})) {
       nextHidden[k] = new Set(v);
@@ -202,11 +184,11 @@ export function PermissionsMatrix({
 
   // ----- counts for the toolbar
   const allowedCount = allowed.size;
-  // Denominator is the number of pages this role can actually be granted,
-  // not the total registry size — otherwise a staff user reads "5/24" even
-  // when they've got every page their role permits.
+  // Every page is grantable to every user, so the denominator is the full
+  // registry — "x/24 pages".
   const totalPages = grantableKeys.length;
   const hiddenColumnTotal = Object.values(hidden).reduce((acc, s) => acc + s.size, 0);
+  const hasCopySource = !!otherUsers && otherUsers.length > 0;
 
   return (
     <div className="flex flex-col gap-3">
@@ -236,23 +218,48 @@ export function PermissionsMatrix({
           <Button type="button" variant="ghost" size="sm" onClick={clearAllPages} disabled={noneSelected}>
             <X className="size-3.5" /> Clear
           </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={resetToRoleDefault}>
-            <RotateCcw className="size-3.5" /> Reset
-          </Button>
-          {otherUsers && otherUsers.length > 0 && (
-            <Select onValueChange={copyFromUser}>
-              <SelectTrigger className="h-8 w-[170px] text-xs">
-                <SelectValue placeholder="Copy from user…" />
-              </SelectTrigger>
-              <SelectContent>
-                {otherUsers.map((u) => (
-                  <SelectItem key={u.id} value={u.id} className="text-xs">
-                    {u.full_name || u.username || u.email} · {u.role}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          {/* Apply default = reset to the role's matrix defaults. The chevron
+              opens a menu to instead copy another user's permissions. */}
+          <div className="inline-flex items-center">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={resetToRoleDefault}
+              className={hasCopySource ? "rounded-r-none border-r-0" : undefined}
+            >
+              <RotateCcw className="size-3.5" /> Apply default
+            </Button>
+            {hasCopySource && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-l-none px-2"
+                    aria-label="Copy permissions from another user"
+                  >
+                    <ChevronDown className="size-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="max-h-[320px] overflow-y-auto">
+                  <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                    Copy permissions from…
+                  </DropdownMenuLabel>
+                  {otherUsers?.map((u) => (
+                    <DropdownMenuItem
+                      key={u.id}
+                      onSelect={() => copyFromUser(u.id)}
+                      className="text-xs"
+                    >
+                      {u.full_name || u.username || u.email} · {u.role}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
         </div>
       </div>
 
@@ -274,13 +281,12 @@ export function PermissionsMatrix({
                   </div>
                   <ul>
                     {groupPages.map((p) => {
-                      const grantable = isGrantable(p.key);
                       const isOn = allowed.has(p.key);
                       const isFocused = focusedPage === p.key;
                       const isRoleDefault = roleDefaultSet.has(p.key);
                       const hasColumns = PAGES_WITH_COLUMNS.has(p.key);
                       const hiddenCount = hidden[p.key]?.size ?? 0;
-                      const diverged = grantable && isRoleDefault !== isOn;
+                      const diverged = isRoleDefault !== isOn;
                       return (
                         <li key={p.key}>
                           {/*
@@ -292,13 +298,11 @@ export function PermissionsMatrix({
                             while the Checkbox keeps its own button semantics.
                           */}
                           <div
-                            role={grantable && hasColumns ? "button" : undefined}
-                            tabIndex={grantable && hasColumns ? 0 : -1}
-                            aria-disabled={!grantable}
-                            title={grantable ? undefined : labelForUngrantable(p.key)}
-                            onClick={() => grantable && hasColumns && setFocusedPage(p.key)}
+                            role={hasColumns ? "button" : undefined}
+                            tabIndex={hasColumns ? 0 : -1}
+                            onClick={() => hasColumns && setFocusedPage(p.key)}
                             onKeyDown={(e) => {
-                              if (!grantable || !hasColumns) return;
+                              if (!hasColumns) return;
                               if (e.key === "Enter") {
                                 e.preventDefault();
                                 setFocusedPage(p.key);
@@ -306,18 +310,14 @@ export function PermissionsMatrix({
                             }}
                             className={cn(
                               "group flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm",
-                              !grantable && "opacity-50 cursor-not-allowed",
-                              grantable && hasColumns ? "cursor-pointer" : "cursor-default",
-                              grantable && isFocused && "bg-accent",
-                              grantable && !isFocused && hasColumns && "hover:bg-muted/60",
+                              hasColumns ? "cursor-pointer" : "cursor-default",
+                              isFocused && "bg-accent",
+                              !isFocused && hasColumns && "hover:bg-muted/60",
                             )}
                           >
                             <Checkbox
                               checked={isOn}
-                              disabled={!grantable}
-                              onCheckedChange={() => {
-                                if (grantable) togglePage(p.key);
-                              }}
+                              onCheckedChange={() => togglePage(p.key)}
                               // Stop the row click from also firing — otherwise
                               // ticking the box would additionally focus the
                               // page in the detail panel, which is surprising.
@@ -327,19 +327,11 @@ export function PermissionsMatrix({
                             <span
                               className={cn(
                                 "flex-1 truncate",
-                                !isOn && grantable && "text-muted-foreground",
+                                !isOn && "text-muted-foreground",
                               )}
                             >
                               {p.label}
                             </span>
-                            {!grantable && (
-                              <Badge
-                                variant="outline"
-                                className="h-4 px-1 text-[9px] font-medium uppercase tracking-wide border-muted-foreground/30 text-muted-foreground"
-                              >
-                                {labelForUngrantable(p.key)}
-                              </Badge>
-                            )}
                             {diverged && (
                               <Badge
                                 variant="outline"
@@ -351,7 +343,7 @@ export function PermissionsMatrix({
                                 {isOn ? "+" : "−"}
                               </Badge>
                             )}
-                            {grantable && hiddenCount > 0 && (
+                            {hiddenCount > 0 && (
                               <span
                                 className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground"
                                 title={`${hiddenCount} column${hiddenCount === 1 ? "" : "s"} hidden`}
@@ -360,7 +352,7 @@ export function PermissionsMatrix({
                                 {hiddenCount}
                               </span>
                             )}
-                            {grantable && hasColumns && (
+                            {hasColumns && (
                               <ChevronRight
                                 className={cn(
                                   "size-3.5 shrink-0 text-muted-foreground/60 transition-transform",
