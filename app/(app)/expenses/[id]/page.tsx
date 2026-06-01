@@ -17,7 +17,7 @@ import { AddExpensePaymentDialog } from "@/components/expenses/add-expense-payme
 import { StatusBadge } from "@/components/sales/status-badge";
 import { requireProfile } from "@/lib/auth/require";
 import { getExpense } from "@/lib/actions/expenses";
-import { formatDate, formatMoney } from "@/lib/utils/format";
+import { formatDate, formatMoney, formatUnitCost } from "@/lib/utils/format";
 
 export const dynamic = "force-dynamic";
 
@@ -155,7 +155,7 @@ export default async function ExpenseDetailPage({
                   <TableRow key={it.id}>
                     <TableCell>{it.description}</TableCell>
                     <TableCell className="text-right tabular-nums">{Number(it.quantity)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatMoney(it.unit_cost)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatUnitCost(it.unit_cost)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(it.line_total)}</TableCell>
                   </TableRow>
                 ))}

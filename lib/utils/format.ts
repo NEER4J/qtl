@@ -15,6 +15,23 @@ export function formatMoney(value: number | string | null | undefined): string {
   return money.format(n);
 }
 
+// Unit costs can carry sub-cent precision (e.g. per-litre buying prices like
+// 1.3712). Show at least 2 decimals, up to 6, trimming trailing zeros so a
+// plain $1.37 still reads cleanly but 1.3712 isn't silently rounded.
+const unitCost = new Intl.NumberFormat("en-CA", {
+  style: "currency",
+  currency: "CAD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 6,
+});
+
+export function formatUnitCost(value: number | string | null | undefined): string {
+  if (value == null || value === "") return "—";
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return unitCost.format(n);
+}
+
 const dateFmt = new Intl.DateTimeFormat("en-CA", {
   year: "numeric",
   month: "short",
