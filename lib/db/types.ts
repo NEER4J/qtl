@@ -2,7 +2,7 @@
 //   supabase gen types typescript --local > lib/db/types.ts
 // once `supabase start` has applied the migrations.
 
-export type UserRole = 'owner' | 'co_owner' | 'manager' | 'accountant' | 'staff' | 'employee' | 'portal_customer';
+export type UserRole = 'owner' | 'co_owner' | 'manager' | 'supervisor' | 'accountant' | 'staff' | 'technician' | 'employee' | 'portal_customer';
 
 export type PaymentMode =
   | 'visa'

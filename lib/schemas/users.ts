@@ -29,8 +29,10 @@ const usernameField = z
   .optional();
 
 /** Roles that authenticate by username instead of real email.
- *  owner / co_owner / accountant log in with a real email. */
-export const USERNAME_LOGIN_ROLES = ["manager", "staff", "employee"] as const;
+ *  owner / co_owner / accountant log in with a real email.
+ *  supervisor (a manager-equivalent) and technician (a staff-equivalent) are
+ *  floor roles, so they use username login like manager / staff. */
+export const USERNAME_LOGIN_ROLES = ["manager", "supervisor", "staff", "technician", "employee"] as const;
 type UsernameRole = (typeof USERNAME_LOGIN_ROLES)[number];
 
 export function isUsernameRole(role: string): role is UsernameRole {
@@ -54,7 +56,14 @@ const roleLocationRefine = (
   data: { role: z.infer<typeof userRoleSchema>; location_id: string | null },
   ctx: z.RefinementCtx,
 ) => {
-  if ((data.role === "manager" || data.role === "staff" || data.role === "employee") && !data.location_id) {
+  if (
+    (data.role === "manager" ||
+      data.role === "supervisor" ||
+      data.role === "staff" ||
+      data.role === "technician" ||
+      data.role === "employee") &&
+    !data.location_id
+  ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["location_id"],

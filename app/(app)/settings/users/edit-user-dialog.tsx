@@ -48,8 +48,10 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "owner", label: "Owner" },
   { value: "co_owner", label: "Co-owner" },
   { value: "manager", label: "Manager" },
+  { value: "supervisor", label: "Supervisor" },
   { value: "accountant", label: "Accountant" },
   { value: "staff", label: "Staff" },
+  { value: "technician", label: "Technician" },
   { value: "employee", label: "Employee" },
 ];
 
@@ -111,9 +113,11 @@ export function EditUserDialog({
 
   const role = form.watch("role");
   const usernameMode = isUsernameRole(role);
-  const showLocation = role === "manager" || role === "staff" || role === "employee";
-  const showExpensesFlag = role === "staff";
-  const showCrossLocation = role === "manager" || role === "staff" || role === "employee";
+  const showLocation =
+    role === "manager" || role === "supervisor" || role === "staff" || role === "technician" || role === "employee";
+  const showExpensesFlag = role === "staff" || role === "technician";
+  const showCrossLocation =
+    role === "manager" || role === "supervisor" || role === "staff" || role === "technician" || role === "employee";
 
   const onSubmit = (values: UpdateUserInput) => {
     startTransition(async () => {

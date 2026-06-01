@@ -49,8 +49,10 @@ const ROLE_OPTIONS: { value: UserRole; label: string; helper: string }[] = [
   { value: "owner", label: "Owner", helper: "Full access to every location. Logs in with email." },
   { value: "co_owner", label: "Co-owner", helper: "Functional equal of the owner — every page, every setting. Logs in with email." },
   { value: "manager", label: "Manager", helper: "Manages one location. Logs in with username." },
+  { value: "supervisor", label: "Supervisor", helper: "Same access as a manager, for one location. Logs in with username." },
   { value: "accountant", label: "Accountant", helper: "Cross-location access to expenses and payroll. Logs in with email." },
   { value: "staff", label: "Staff", helper: "Front-line user at one location. Logs in with username." },
+  { value: "technician", label: "Technician", helper: "Same access as front-line staff, for one location. Logs in with username." },
   { value: "employee", label: "Employee", helper: "Can only see own pay stubs. Logs in with username." },
 ];
 
@@ -88,9 +90,11 @@ export function InviteUserDialog({
   const role = form.watch("role");
   const password = form.watch("password") ?? "";
   const usernameMode = isUsernameRole(role);
-  const showLocation = role === "manager" || role === "staff" || role === "employee";
-  const showExpensesFlag = role === "staff";
-  const showCrossLocation = role === "manager" || role === "staff" || role === "employee";
+  const showLocation =
+    role === "manager" || role === "supervisor" || role === "staff" || role === "technician" || role === "employee";
+  const showExpensesFlag = role === "staff" || role === "technician";
+  const showCrossLocation =
+    role === "manager" || role === "supervisor" || role === "staff" || role === "technician" || role === "employee";
 
   const resetState = () => {
     form.reset();

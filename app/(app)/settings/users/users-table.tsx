@@ -43,8 +43,10 @@ const ROLE_LABELS: Record<UserRole, string> = {
   owner: "Owner",
   co_owner: "Co-owner",
   manager: "Manager",
+  supervisor: "Supervisor",
   accountant: "Accountant",
   staff: "Staff",
+  technician: "Technician",
   employee: "Employee",
   portal_customer: "Portal Customer",
 };

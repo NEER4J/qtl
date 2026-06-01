@@ -33,31 +33,37 @@ export type PageGroup = (typeof PAGE_GROUPS)[number];
 
 export const PAGE_REGISTRY: PageDef[] = [
   // Overview
-  { key: "dashboard", label: "Dashboard", group: "Overview", path: "/dashboard", defaultRoles: ["owner", "co_owner", "manager", "accountant"] },
+  // Matrix leaves Dashboard blank for every role → not granted by default.
+  // owner/co_owner still reach it via bypass; other roles land on their first
+  // allowed page (Sales) via defaultLandingPath.
+  { key: "dashboard", label: "Dashboard", group: "Overview", path: "/dashboard", defaultRoles: ["owner", "co_owner"] },
 
   // Operations
-  { key: "sales", label: "Sales", group: "Operations", path: "/sales", defaultRoles: ["owner", "co_owner", "manager", "accountant", "staff"] },
-  { key: "invoices", label: "Invoices", group: "Operations", path: "/invoices", defaultRoles: ["owner", "co_owner", "manager", "accountant"] },
-  { key: "expenses", label: "Expenses", group: "Operations", path: "/expenses", defaultRoles: ["owner", "co_owner", "manager", "accountant", "staff"] },
-  { key: "payroll", label: "Payroll", group: "Operations", path: "/payroll", defaultRoles: ["owner", "co_owner", "manager", "accountant"] },
+  { key: "sales", label: "Sales", group: "Operations", path: "/sales", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
+  { key: "invoices", label: "Invoices", group: "Operations", path: "/invoices", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
+  { key: "expenses", label: "Expenses", group: "Operations", path: "/expenses", defaultRoles: ["owner", "co_owner", "accountant"] },
+  { key: "payroll", label: "Payroll", group: "Operations", path: "/payroll", defaultRoles: ["owner", "co_owner", "accountant"] },
 
   // Catalog & directory
-  { key: "customers", label: "Customers", group: "Catalog", path: "/customers", defaultRoles: ["owner", "co_owner", "manager", "staff"] },
-  { key: "vendors", label: "Vendors", group: "Catalog", path: "/vendors", defaultRoles: ["owner", "co_owner", "accountant", "manager"] },
-  { key: "pricing", label: "Pricing", group: "Catalog", path: "/pricing", defaultRoles: ["owner", "co_owner", "manager", "accountant", "staff"] },
+  { key: "customers", label: "Customers", group: "Catalog", path: "/customers", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
+  { key: "vendors", label: "Vendors", group: "Catalog", path: "/vendors", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant"] },
+  { key: "pricing", label: "Pricing", group: "Catalog", path: "/pricing", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
   // Note: the sidebar's "Inventory" tile points at /settings/pricing and is
   // permission-covered by the `settings_pricing` key in the Settings group.
   // A duplicate registry entry for the same path would make pageKeyForPath
   // and pageKeyForRequestPath disagree about which key represents the URL.
 
   // Insights
-  { key: "analytics", label: "Analytics", group: "Insights", path: "/analytics", defaultRoles: ["owner", "co_owner", "manager", "accountant"] },
+  // Matrix: Analytics, Reports and Reports — HST are owner/co_owner only.
+  // Accounting keeps Analytics — Payroll (its one ✓ in this group).
+  { key: "analytics", label: "Analytics", group: "Insights", path: "/analytics", defaultRoles: ["owner", "co_owner"] },
   { key: "analytics_payroll", label: "Analytics — Payroll", group: "Insights", path: "/analytics/payroll", defaultRoles: ["owner", "co_owner", "accountant"] },
-  { key: "reports", label: "Reports", group: "Insights", path: "/reports", defaultRoles: ["owner", "co_owner", "manager", "accountant"] },
-  { key: "reports_hst", label: "Reports — HST", group: "Insights", path: "/reports/hst", defaultRoles: ["owner", "co_owner", "accountant"] },
+  { key: "reports", label: "Reports", group: "Insights", path: "/reports", defaultRoles: ["owner", "co_owner"] },
+  { key: "reports_hst", label: "Reports — HST", group: "Insights", path: "/reports/hst", defaultRoles: ["owner", "co_owner"] },
 
   // Settings
-  { key: "settings", label: "Settings (root)", group: "Settings", path: "/settings", defaultRoles: ["owner", "co_owner", "accountant"] },
+  // Matrix: every Settings row (incl. Audit Log) is ✗ for all but owner.
+  { key: "settings", label: "Settings (root)", group: "Settings", path: "/settings", defaultRoles: ["owner", "co_owner"] },
   { key: "settings_users", label: "Users", group: "Settings", path: "/settings/users", defaultRoles: ["owner", "co_owner"] },
   { key: "settings_locations", label: "Locations", group: "Settings", path: "/settings/locations", defaultRoles: ["owner", "co_owner"] },
   { key: "settings_categories", label: "Expense Categories", group: "Settings", path: "/settings/categories", defaultRoles: ["owner", "co_owner"] },
@@ -66,7 +72,7 @@ export const PAGE_REGISTRY: PageDef[] = [
   { key: "settings_pricing", label: "Pricing Catalogue", group: "Settings", path: "/settings/pricing", defaultRoles: ["owner", "co_owner"] },
   { key: "settings_recurring", label: "Recurring Expenses", group: "Settings", path: "/settings/recurring-expenses", defaultRoles: ["owner", "co_owner"] },
   { key: "settings_statutory", label: "Statutory Rates", group: "Settings", path: "/settings/statutory-rates", defaultRoles: ["owner", "co_owner"] },
-  { key: "settings_audit_log", label: "Audit Log", group: "Settings", path: "/settings/audit-log", defaultRoles: ["owner", "co_owner", "accountant"] },
+  { key: "settings_audit_log", label: "Audit Log", group: "Settings", path: "/settings/audit-log", defaultRoles: ["owner", "co_owner"] },
 ];
 
 const PAGE_KEY_BY_PATH = new Map(PAGE_REGISTRY.map((p) => [p.path, p.key]));
