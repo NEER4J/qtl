@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Check, Copy, Eye, EyeOff, Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, Eye, EyeOff, Lock, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -26,6 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  applyDefaultPermissions,
   bulkUserAction,
   deleteUser,
   toggleUserActive,
@@ -81,7 +82,9 @@ export function UsersTable({
   const [inviting, setInviting] = useState(false);
   const [editing, setEditing] = useState<UserListRow | null>(null);
   const [deleting, setDeleting] = useState<UserListRow | null>(null);
-  const [bulkConfirm, setBulkConfirm] = useState<null | "deactivate" | "reactivate" | "delete">(null);
+  const [bulkConfirm, setBulkConfirm] = useState<
+    null | "deactivate" | "reactivate" | "delete" | "reset_permissions"
+  >(null);
   const [settingPassword, setSettingPassword] = useState<UserListRow | null>(null);
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState<string | null>(null);
@@ -163,6 +166,22 @@ export function UsersTable({
     });
   };
 
+  const handleApplyDefaults = () => {
+    const ids = Array.from(selected);
+    startTransition(async () => {
+      const res = await applyDefaultPermissions({ ids });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(
+        `Role defaults applied to ${res.data.affected} user${res.data.affected === 1 ? "" : "s"}`,
+      );
+      setBulkConfirm(null);
+      setSelected(new Set());
+    });
+  };
+
   const selectableIds = useMemo(
     () => users.filter((u) => u.id !== viewer.id).map((u) => u.id),
     [users, viewer.id],
@@ -218,6 +237,15 @@ export function UsersTable({
                 disabled={isPending}
               >
                 Reactivate
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setBulkConfirm("reset_permissions")}
+                disabled={isPending}
+                title="Clear custom overrides so these users inherit their role's default permissions"
+              >
+                <Sparkles className="size-4" /> Apply role defaults
               </Button>
               <Button
                 variant="outline"
@@ -520,14 +548,18 @@ export function UsersTable({
                 ? `Delete ${selected.size} user${selected.size === 1 ? "" : "s"}?`
                 : bulkConfirm === "deactivate"
                   ? `Deactivate ${selected.size} user${selected.size === 1 ? "" : "s"}?`
-                  : `Reactivate ${selected.size} user${selected.size === 1 ? "" : "s"}?`}
+                  : bulkConfirm === "reset_permissions"
+                    ? `Apply role defaults to ${selected.size} user${selected.size === 1 ? "" : "s"}?`
+                    : `Reactivate ${selected.size} user${selected.size === 1 ? "" : "s"}?`}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {bulkConfirm === "delete"
                 ? "This permanently removes their logins. History rows stay but lose name attribution. Cannot be undone."
                 : bulkConfirm === "deactivate"
                   ? "They will be unable to sign in until reactivated. History preserved."
-                  : "They will be able to sign in again."}
+                  : bulkConfirm === "reset_permissions"
+                    ? "Any custom page/column overrides on these users are cleared, so each one falls back to its role's default access from the staff matrix. Their role, login, and location are unchanged."
+                    : "They will be able to sign in again."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -535,7 +567,8 @@ export function UsersTable({
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
-                if (bulkConfirm) handleBulk(bulkConfirm);
+                if (bulkConfirm === "reset_permissions") handleApplyDefaults();
+                else if (bulkConfirm) handleBulk(bulkConfirm);
               }}
               disabled={isPending}
               className={bulkConfirm === "delete" ? "bg-rose-600 hover:bg-rose-700" : undefined}

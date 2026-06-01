@@ -191,3 +191,12 @@ export const BulkUserAction = z.object({
   action: z.enum(["deactivate", "reactivate", "delete"]),
 });
 export type BulkUserAction = z.infer<typeof BulkUserAction>;
+
+// ----------------------------------------------------------------------------
+// Apply role-default permissions — clears any per-user override so the
+// selected users fall back to their role's defaults (the staff access matrix).
+// ----------------------------------------------------------------------------
+export const ApplyDefaultPermissionsInput = z.object({
+  ids: z.array(z.string().uuid()).min(1, "Pick at least one user"),
+});
+export type ApplyDefaultPermissionsInput = z.infer<typeof ApplyDefaultPermissionsInput>;

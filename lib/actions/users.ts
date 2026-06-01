@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { wrapAction } from "@/lib/actions/_utils";
 import {
+  ApplyDefaultPermissionsInput,
   BulkUserAction,
   InviteUserInput,
   SetUserPasswordInput,
@@ -234,6 +235,28 @@ export const updateUserPermissions = wrapAction({
     if (error) throw error;
     revalidatePath("/settings/users");
     return data as Profile;
+  },
+});
+
+// ----------------------------------------------------------------------------
+// Apply role-default permissions to one or more users.
+// Clears the per-user override (allowed_pages = NULL, hidden_columns = {}) so
+// each selected user falls back to their role's defaults — the staff access
+// matrix in lib/permissions/registry.ts. Owner-only, like the other writes.
+// ----------------------------------------------------------------------------
+export const applyDefaultPermissions = wrapAction({
+  schema: ApplyDefaultPermissionsInput,
+  roles: ["owner", "co_owner"],
+  handler: async (input): Promise<{ affected: number }> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ allowed_pages: null, hidden_columns: {} })
+      .in("id", input.ids)
+      .select("id");
+    if (error) throw error;
+    revalidatePath("/settings/users");
+    return { affected: data?.length ?? 0 };
   },
 });
 
