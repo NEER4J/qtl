@@ -78,6 +78,7 @@ type FormValues = {
   phone_alt_1: string;
   phone_alt_2: string;
   contact_no: string;
+  email: string;
   other_contact: string;
   comments: string;
   phone_notes: Record<string, string>;
@@ -122,6 +123,7 @@ const empty: FormValues = {
   phone_alt_1: "",
   phone_alt_2: "",
   contact_no: "",
+  email: "",
   other_contact: "",
   comments: "",
   phone_notes: {},
@@ -178,6 +180,7 @@ function valuesFromCustomer(c: Customer): FormValues {
     phone_alt_1: c.phone_alt_1 ?? "",
     phone_alt_2: c.phone_alt_2 ?? "",
     contact_no: c.contact_no ?? "",
+    email: c.email ?? "",
     other_contact: c.other_contact ?? "",
     comments: c.comments ?? "",
     phone_notes: c.phone_notes ?? {},
@@ -311,6 +314,7 @@ export function CustomerForm({
       phone_alt_1: values.phone_alt_1 || null,
       phone_alt_2: values.phone_alt_2 || null,
       contact_no: values.contact_no || null,
+      email: values.email || null,
       other_contact: values.other_contact || null,
       comments: values.comments || null,
       phone_notes: values.phone_notes ?? {},
@@ -688,7 +692,20 @@ export function CustomerForm({
               <PhoneSlot form={form} name="phone_alt_2" label="Alternate 2" notesKey="alt_2" />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="Email address" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="contact_method"
