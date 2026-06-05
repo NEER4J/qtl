@@ -59,11 +59,13 @@ export const inviteUser = wrapAction({
   ): Promise<{ id: string; identity: string; existed: boolean }> => {
     const admin = createAdminClient();
 
-    // Resolve the auth-email Supabase will use. Username-only roles get a
-    // synthetic email so signInWithPassword keeps working.
+    // Resolve the auth-email Supabase will use. Username roles may OPTIONALLY
+    // supply a real email — if present it becomes the actual auth email (so
+    // they can sign in with username or email); otherwise a synthetic address
+    // keeps signInWithPassword working.
     const usingUsername = isUsernameRole(input.role) && !!input.username;
     const authEmail = usingUsername
-      ? syntheticEmailForUsername(input.username!)
+      ? (input.email ?? syntheticEmailForUsername(input.username!))
       : (input.email as string);
 
     const identity = usingUsername ? input.username! : authEmail;
@@ -116,12 +118,10 @@ export const inviteUser = wrapAction({
       userId = data.user.id;
     }
 
-    // Real email for an owner/accountant goes into profiles.email straight.
-    // For username users we still need a unique non-null email in profiles
-    // because the column is NOT NULL — store the synthetic one. The display
-    // layer must use `username` for username users so the synthetic value
-    // is never shown.
-    const profileEmail = usingUsername ? authEmail : input.email!;
+    // profiles.email must equal the auth email (it's what
+    // auth_email_for_username resolves to). That's the real email when one was
+    // supplied, otherwise the synthetic address.
+    const profileEmail = authEmail;
 
     // Ensure a profile row exists (upsert — covers the rare case where the
     // trigger didn't fire, e.g. on a user imported via SQL).
@@ -172,8 +172,9 @@ export const updateUser = wrapAction({
     const supabase = await createClient();
 
     const usingUsername = isUsernameRole(input.role) && !!input.username;
+    // Username roles keep a real email if one is supplied, else synthetic.
     const authEmail = usingUsername
-      ? syntheticEmailForUsername(input.username!)
+      ? (input.email ?? syntheticEmailForUsername(input.username!))
       : (input.email as string);
 
     // Sync the auth.users email if it diverges from what we'd compute now.
@@ -190,7 +191,7 @@ export const updateUser = wrapAction({
       }
     }
 
-    const profileEmail = usingUsername ? authEmail : input.email!;
+    const profileEmail = authEmail;
 
     const { data, error } = await supabase
       .from("profiles")

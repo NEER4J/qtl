@@ -28,11 +28,13 @@ const usernameField = z
   .nullable()
   .optional();
 
-/** Roles that authenticate by username instead of real email.
- *  owner / co_owner / accountant log in with a real email.
- *  supervisor (a manager-equivalent) and technician (a staff-equivalent) are
- *  floor roles, so they use username login like manager / staff. */
-export const USERNAME_LOGIN_ROLES = ["manager", "supervisor", "staff", "technician", "employee"] as const;
+/** Roles that authenticate by username. Owner and accountant log in with a
+ *  real email; everyone else — including the co_owner "Admin" — logs in with a
+ *  username. For these roles email is OPTIONAL: if provided it becomes the
+ *  account's real auth email (so they can sign in with the username OR that
+ *  email); if omitted, a synthetic <username>@team.qtl.app address is used
+ *  under the hood so Supabase Auth still has an address. */
+export const USERNAME_LOGIN_ROLES = ["co_owner", "manager", "supervisor", "staff", "technician", "employee"] as const;
 type UsernameRole = (typeof USERNAME_LOGIN_ROLES)[number];
 
 export function isUsernameRole(role: string): role is UsernameRole {

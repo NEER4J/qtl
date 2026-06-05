@@ -47,7 +47,7 @@ import { PermissionsMatrix } from "./permissions-matrix";
 
 const ROLE_OPTIONS: { value: UserRole; label: string; helper: string }[] = [
   { value: "owner", label: "Owner", helper: "Full access to all business data and every location, EXCEPT the Settings section. Logs in with email." },
-  { value: "co_owner", label: "Admin", helper: "Full access to everything, including Settings — manages the whole platform. Logs in with email." },
+  { value: "co_owner", label: "Admin", helper: "Full access to everything, including Settings — manages the whole platform. Logs in with a username (email optional)." },
   { value: "manager", label: "Manager", helper: "Manages one location. Logs in with username." },
   { value: "supervisor", label: "Supervisor", helper: "Same access as a manager, for one location. Logs in with username." },
   { value: "accountant", label: "Accountant", helper: "Cross-location access to expenses and payroll. Logs in with email." },
