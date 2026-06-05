@@ -124,11 +124,32 @@ export const sidebarItems: NavGroup[] = [
         // Per-location stock counts for catalogue parts. Top-level so owner
         // (no Settings) and managers can reach it. Edit is gated server-side
         // to owner / co_owner / manager; everyone else is view-only.
-        // (The parts CATALOGUE itself lives under Settings → Pricing Catalogue.)
         title: "Inventory",
         url: "/inventory",
         icon: Boxes,
         roles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"],
+      },
+      {
+        // Parts / pricing CATALOGUE shortcuts. These pages live under
+        // /settings/pricing, which is Admin-only — so this tile is gated to
+        // co_owner (Admin). Other roles don't see it and can't open it; the
+        // permission is honoured, the links are just hidden from them.
+        title: "Pricing Catalogue",
+        url: "/settings/pricing",
+        icon: Package,
+        roles: ["co_owner"],
+        subItems: [
+          { title: "Parts", url: "/settings/pricing/parts" },
+          { title: "Packages", url: "/settings/pricing/packages" },
+          { title: "Part categories", url: "/settings/pricing/categories" },
+          { title: "Part brands", url: "/settings/pricing/brands" },
+          { title: "Oil types", url: "/settings/pricing/oil-types" },
+          { title: "Engine types", url: "/settings/pricing/engine-types" },
+          { title: "Service costs", url: "/settings/pricing/service-costs" },
+          { title: "Volume tiers", url: "/settings/pricing/volume-tiers" },
+          { title: "Price history", url: "/settings/pricing/price-history" },
+          { title: "Manage catalogue", url: "/settings/pricing" },
+        ],
       },
     ],
   },
