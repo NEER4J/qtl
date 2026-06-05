@@ -11,10 +11,9 @@ import { cn } from "@/lib/utils";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { createClient } from "@/lib/supabase/server";
 import { SearchDialog } from "@/components/sidebar/search-dialog";
-import { isOwnerProfile, isPageAllowed } from "@/lib/permissions/check";
+import { effectiveAllowedPageKeys, isAdminProfile, isPageAllowed } from "@/lib/permissions/check";
 import {
   PAGE_REGISTRY,
-  defaultAllowedPagesForRole,
   pageKeyForRequestPath,
 } from "@/lib/permissions/registry";
 
@@ -32,10 +31,11 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   if (!profile.active) redirect("/auth/login?error=account_disabled");
   if (profile.role === "portal_customer") redirect("/portal/invoices");
 
-  // Per-user `allowed_pages` enforcement. Owner bypasses. For non-owners the
-  // `x-pathname` header is set by middleware (lib/supabase/proxy.ts) so we can
-  // identify which registered page the current URL belongs to.
-  if (!isOwnerProfile(profile)) {
+  // Per-user `allowed_pages` enforcement. Only the Admin (co_owner) bypasses;
+  // owner is subject to it now (so the Settings section is blocked for owner).
+  // The `x-pathname` header is set by middleware (lib/supabase/proxy.ts) so we
+  // can identify which registered page the current URL belongs to.
+  if (!isAdminProfile(profile)) {
     const pathname = (await headers()).get("x-pathname") ?? "";
     const pageKey = pageKeyForRequestPath(pathname);
     if (pageKey && !isPageAllowed(profile, pageKey)) {
@@ -43,10 +43,10 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
       // landing pad, but if it's been revoked we fall back to the first page
       // they still have. If nothing is allowed at all, sign them out — there
       // is nothing for them in the app.
-      const allowed = profile.allowed_pages ?? defaultAllowedPagesForRole(profile.role);
+      const allowed = effectiveAllowedPageKeys(profile);
       const fallback =
-        (allowed.includes("dashboard") ? "/dashboard" : null) ??
-        PAGE_REGISTRY.find((p) => allowed.includes(p.key))?.path ??
+        (allowed.has("dashboard") ? "/dashboard" : null) ??
+        PAGE_REGISTRY.find((p) => allowed.has(p.key))?.path ??
         null;
       redirect(fallback ?? "/auth/login?error=no_access");
     }

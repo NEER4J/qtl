@@ -48,10 +48,12 @@ export const PAGE_REGISTRY: PageDef[] = [
   { key: "customers", label: "Customers", group: "Catalog", path: "/customers", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
   { key: "vendors", label: "Vendors", group: "Catalog", path: "/vendors", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant"] },
   { key: "pricing", label: "Pricing", group: "Catalog", path: "/pricing", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
-  // Note: the sidebar's "Inventory" tile points at /settings/pricing and is
-  // permission-covered by the `settings_pricing` key in the Settings group.
-  // A duplicate registry entry for the same path would make pageKeyForPath
-  // and pageKeyForRequestPath disagree about which key represents the URL.
+  // Top-level Inventory (per-location stock counts). Viewable by everyone;
+  // editing counts is gated server-side to owner / co_owner / manager.
+  { key: "inventory", label: "Inventory", group: "Catalog", path: "/inventory", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
+  // Note: the Settings "Pricing Catalogue" tile (/settings/pricing) is covered
+  // by the `settings_pricing` key in the Settings group — that's the part
+  // CATALOGUE, distinct from the Inventory stock page above.
 
   // Insights
   // Matrix: Analytics, Reports and Reports — HST are owner/co_owner only.

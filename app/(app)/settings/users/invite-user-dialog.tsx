@@ -46,8 +46,8 @@ import type { Location, UserRole } from "@/lib/db/types";
 import { PermissionsMatrix } from "./permissions-matrix";
 
 const ROLE_OPTIONS: { value: UserRole; label: string; helper: string }[] = [
-  { value: "owner", label: "Owner", helper: "Full access to every location. Logs in with email." },
-  { value: "co_owner", label: "Co-owner", helper: "Functional equal of the owner — every page, every setting. Logs in with email." },
+  { value: "owner", label: "Owner", helper: "Full access to all business data and every location, EXCEPT the Settings section. Logs in with email." },
+  { value: "co_owner", label: "Admin", helper: "Full access to everything, including Settings — manages the whole platform. Logs in with email." },
   { value: "manager", label: "Manager", helper: "Manages one location. Logs in with username." },
   { value: "supervisor", label: "Supervisor", helper: "Same access as a manager, for one location. Logs in with username." },
   { value: "accountant", label: "Accountant", helper: "Cross-location access to expenses and payroll. Logs in with email." },
@@ -174,7 +174,16 @@ export function InviteUserDialog({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Role</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={(v) => {
+                          field.onChange(v);
+                          // Manager & Supervisor default to all-locations.
+                          if (v === "manager" || v === "supervisor") {
+                            form.setValue("cross_location", true, { shouldDirty: true });
+                          }
+                        }}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select a role" />
@@ -391,7 +400,9 @@ export function InviteUserDialog({
               <TabsContent value="permissions" className="pt-2">
                 {role === "owner" || role === "co_owner" ? (
                   <div className="rounded-md border bg-muted/40 p-4 text-sm text-muted-foreground">
-                    {role === "owner" ? "Owners" : "Co-owners"} always have full access.
+                    {role === "co_owner"
+                      ? "Admins have full access to every page and column, including Settings."
+                      : "Owners have full access to everything except the Settings section."}{" "}
                     Page and column overrides don&apos;t apply.
                   </div>
                 ) : (

@@ -121,22 +121,14 @@ export const sidebarItems: NavGroup[] = [
         ],
       },
       {
+        // Per-location stock counts for catalogue parts. Top-level so owner
+        // (no Settings) and managers can reach it. Edit is gated server-side
+        // to owner / co_owner / manager; everyone else is view-only.
+        // (The parts CATALOGUE itself lives under Settings → Pricing Catalogue.)
         title: "Inventory",
-        url: "/settings/pricing",
+        url: "/inventory",
         icon: Boxes,
-        roles: ["owner", "co_owner"],
-        subItems: [
-          { title: "Parts", url: "/settings/pricing/parts" },
-          { title: "Packages", url: "/settings/pricing/packages" },
-          { title: "Part categories", url: "/settings/pricing/categories" },
-          { title: "Part brands", url: "/settings/pricing/brands" },
-          { title: "Oil types", url: "/settings/pricing/oil-types" },
-          { title: "Engine types", url: "/settings/pricing/engine-types" },
-          { title: "Service costs", url: "/settings/pricing/service-costs" },
-          { title: "Volume tiers", url: "/settings/pricing/volume-tiers" },
-          { title: "Price history", url: "/settings/pricing/price-history" },
-          { title: "Manage catalogue", url: "/settings/pricing" },
-        ],
+        roles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"],
       },
     ],
   },
@@ -176,20 +168,21 @@ export const sidebarItems: NavGroup[] = [
     id: 5,
     items: [
       {
+        // Settings is the Admin (co_owner) section only — owner no longer has it.
         title: "Settings",
         url: "/settings",
         icon: Settings,
-        roles: ["owner", "co_owner", "accountant"],
+        roles: ["co_owner"],
         subItems: [
-          { title: "Users", url: "/settings/users", roles: ["owner", "co_owner"] },
-          { title: "Locations", url: "/settings/locations", roles: ["owner", "co_owner"] },
-          { title: "Expense Categories", url: "/settings/categories", roles: ["owner", "co_owner"] },
-          { title: "Service Types", url: "/settings/services", roles: ["owner", "co_owner"] },
-          { title: "Technicians", url: "/settings/technicians", roles: ["owner", "co_owner"] },
-          { title: "Pricing Catalogue", url: "/settings/pricing", roles: ["owner", "co_owner"] },
-          { title: "Recurring Expenses", url: "/settings/recurring-expenses", roles: ["owner", "co_owner"] },
-          { title: "Statutory Rates", url: "/settings/statutory-rates", roles: ["owner", "co_owner"] },
-          { title: "Audit Log", url: "/settings/audit-log", roles: ["owner", "co_owner", "accountant"] },
+          { title: "Users", url: "/settings/users", roles: ["co_owner"] },
+          { title: "Locations", url: "/settings/locations", roles: ["co_owner"] },
+          { title: "Expense Categories", url: "/settings/categories", roles: ["co_owner"] },
+          { title: "Service Types", url: "/settings/services", roles: ["co_owner"] },
+          { title: "Technicians", url: "/settings/technicians", roles: ["co_owner"] },
+          { title: "Pricing Catalogue", url: "/settings/pricing", roles: ["co_owner"] },
+          { title: "Recurring Expenses", url: "/settings/recurring-expenses", roles: ["co_owner"] },
+          { title: "Statutory Rates", url: "/settings/statutory-rates", roles: ["co_owner"] },
+          { title: "Audit Log", url: "/settings/audit-log", roles: ["co_owner"] },
         ],
       },
     ],
@@ -233,7 +226,9 @@ export function filterSidebar(
   allowedPages: string[] | null | undefined,
 ): NavGroup[] {
   if (!role) return [];
-  // Owner and co_owner bypass the override allowlist — both are full admins.
+  // Owner and co_owner are driven purely by role-based nav (no per-user
+  // override allowlist). co_owner (Admin) sees everything; owner sees
+  // everything its role grants — which now excludes the Settings section.
   if (role === "owner" || role === "co_owner") return filterSidebarByRole(role);
 
   const overrideSet = allowedPages ? new Set(allowedPages) : null;

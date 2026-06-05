@@ -46,7 +46,7 @@ import { PermissionsMatrix } from "./permissions-matrix";
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "owner", label: "Owner" },
-  { value: "co_owner", label: "Co-owner" },
+  { value: "co_owner", label: "Admin" },
   { value: "manager", label: "Manager" },
   { value: "supervisor", label: "Supervisor" },
   { value: "accountant", label: "Accountant" },
@@ -178,7 +178,16 @@ export function EditUserDialog({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Role</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={(v) => {
+                          field.onChange(v);
+                          // Manager & Supervisor default to all-locations.
+                          if (v === "manager" || v === "supervisor") {
+                            form.setValue("cross_location", true, { shouldDirty: true });
+                          }
+                        }}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue />
@@ -364,7 +373,9 @@ export function EditUserDialog({
               <TabsContent value="permissions" className="pt-2">
                 {role === "owner" || role === "co_owner" ? (
                   <div className="rounded-md border bg-muted/40 p-4 text-sm text-muted-foreground">
-                    {role === "owner" ? "Owners" : "Co-owners"} always have full access.
+                    {role === "co_owner"
+                      ? "Admins have full access to every page and column, including Settings."
+                      : "Owners have full access to everything except the Settings section."}{" "}
                     Page and column overrides don&apos;t apply.
                   </div>
                 ) : (

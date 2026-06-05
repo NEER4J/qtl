@@ -5,33 +5,62 @@ import { PAGE_REGISTRY, defaultAllowedPagesForRole, pageKeyForPath } from "./reg
 // Per-user permission checks
 // ----------------------------------------------------------------------------
 // Centralised so every gate (sidebar, page guards, table columns) reads from
-// the same source of truth. Owner role bypasses every check by design.
+// the same source of truth.
+//
+//   co_owner ("Admin")  → bypasses every check; full access incl. Settings.
+//   owner               → full access EXCEPT the Settings section, which the
+//                         Admin manages. Owner is no longer a blanket bypass
+//                         for page access (but still sees all columns).
+//   everyone else       → role default / per-user allowlist as before.
 
 type ProfileSubset = Pick<Profile, "role" | "allowed_pages" | "hidden_columns"> | null | undefined;
 
+// Keys of every page that belongs to the Settings section. Owner does not get
+// these; the Admin (co_owner) does.
+const SETTINGS_PAGE_KEYS = new Set(
+  PAGE_REGISTRY.filter((p) => p.group === "Settings").map((p) => p.key),
+);
+
 export function effectiveAllowedPageKeys(profile: ProfileSubset): Set<string> {
   if (!profile) return new Set();
-  if (isOwnerProfile(profile)) {
-    // Owner / co_owner gets EVERY registered page. Returning the full keyset
+  if (isAdminProfile(profile)) {
+    // Admin (co_owner) gets EVERY registered page. Returning the full keyset
     // (rather than an empty "sentinel" set) means callers who forget to
-    // special-case owner still get the correct answer instead of silently
+    // special-case admin still get the correct answer instead of silently
     // locking them out.
     return new Set(PAGE_REGISTRY.map((p) => p.key));
+  }
+  if (isOwnerProfile(profile)) {
+    // Owner gets everything except the Settings section.
+    return new Set(
+      PAGE_REGISTRY.filter((p) => !SETTINGS_PAGE_KEYS.has(p.key)).map((p) => p.key),
+    );
   }
   const allowed = profile.allowed_pages ?? defaultAllowedPagesForRole(profile.role);
   return new Set(allowed);
 }
 
-/** True for owner and co_owner. They share the same effective permission set. */
+/** The "Admin": co_owner has unrestricted access to every page and column. */
+export function isAdminProfile(profile: ProfileSubset): boolean {
+  return profile?.role === "co_owner";
+}
+
+/** Owner: full access EXCEPT the Settings section. */
 export function isOwnerProfile(profile: ProfileSubset): boolean {
-  return profile?.role === "owner" || profile?.role === "co_owner";
+  return profile?.role === "owner";
+}
+
+/** Owner + Admin both see every column (no column-hiding applies to them). */
+function bypassesColumnHiding(profile: ProfileSubset): boolean {
+  return isAdminProfile(profile) || isOwnerProfile(profile);
 }
 
 export function isPageAllowed(profile: ProfileSubset, pageKey: string): boolean {
   if (!profile) return false;
-  if (isOwnerProfile(profile)) return true;
-  const set = effectiveAllowedPageKeys(profile);
-  return set.has(pageKey);
+  if (isAdminProfile(profile)) return true;
+  // Owner and everyone else go through the effective allowlist (owner = all
+  // pages minus the Settings section).
+  return effectiveAllowedPageKeys(profile).has(pageKey);
 }
 
 export function isPathAllowed(profile: ProfileSubset, path: string): boolean {
@@ -45,14 +74,14 @@ export function isPathAllowed(profile: ProfileSubset, path: string): boolean {
 // ----------------------------------------------------------------------------
 
 export function hiddenColumnsForPage(profile: ProfileSubset, pageKey: string): Set<string> {
-  if (!profile || isOwnerProfile(profile)) return new Set();
+  if (!profile || bypassesColumnHiding(profile)) return new Set();
   const arr = profile.hidden_columns?.[pageKey] ?? [];
   return new Set(arr);
 }
 
 export function isColumnVisible(profile: ProfileSubset, pageKey: string, columnKey: string): boolean {
   if (!profile) return false;
-  if (isOwnerProfile(profile)) return true;
+  if (bypassesColumnHiding(profile)) return true;
   return !hiddenColumnsForPage(profile, pageKey).has(columnKey);
 }
 
@@ -66,7 +95,7 @@ export function visibleColumnKeys<T extends string>(
   allKeys: readonly T[],
 ): T[] {
   if (!profile) return [];
-  if (isOwnerProfile(profile)) return [...allKeys];
+  if (bypassesColumnHiding(profile)) return [...allKeys];
   const hidden = hiddenColumnsForPage(profile, pageKey);
   return allKeys.filter((k) => !hidden.has(k));
 }

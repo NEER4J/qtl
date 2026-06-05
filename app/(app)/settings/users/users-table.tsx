@@ -42,7 +42,7 @@ import { SetPasswordDialog } from "./set-password-dialog";
 
 const ROLE_LABELS: Record<UserRole, string> = {
   owner: "Owner",
-  co_owner: "Co-owner",
+  co_owner: "Admin",
   manager: "Manager",
   supervisor: "Supervisor",
   accountant: "Accountant",
