@@ -44,7 +44,8 @@ export async function listInventory(): Promise<InventoryData> {
     supabase.from("locations").select("id, name").eq("active", true).order("name"),
     supabase
       .from("parts")
-      .select("id, part_number, brand, category, description")
+      // `category` is a FK now (category_id -> part_categories); pull its name.
+      .select("id, part_number, brand, description, part_categories:category_id(name)")
       .eq("active", true)
       .order("part_number"),
     supabase.from("part_location_stock").select("part_id, location_id, qty"),
@@ -71,11 +72,16 @@ export async function listInventory(): Promise<InventoryData> {
       qtyByLocation[loc.id] = q;
       total += q;
     }
+    // The category relation comes back as an object (or array, depending on
+    // the join) — normalise to its name.
+    const cat = (p as { part_categories?: { name: string } | { name: string }[] | null })
+      .part_categories;
+    const categoryName = Array.isArray(cat) ? (cat[0]?.name ?? "") : (cat?.name ?? "");
     return {
       id: p.id as string,
       part_number: p.part_number as string,
       brand: p.brand as string,
-      category: p.category as string,
+      category: categoryName,
       description: (p.description as string | null) ?? null,
       qtyByLocation,
       total,
