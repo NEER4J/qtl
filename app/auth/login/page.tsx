@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { Globe } from "lucide-react";
 
 import { APP_CONFIG } from "@/config/app-config";
@@ -16,15 +14,6 @@ export default function LoginV2() {
         </div>
         <div className="space-y-4">
           <LoginForm />
-        </div>
-      </div>
-
-      <div className="absolute top-5 flex w-full justify-end px-10">
-        <div className="text-muted-foreground text-sm">
-          Don&apos;t have an account?{" "}
-          <Link className="text-primary font-medium hover:underline" href="register">
-            Register
-          </Link>
         </div>
       </div>
 

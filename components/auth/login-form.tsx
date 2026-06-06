@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -120,14 +119,6 @@ export function LoginForm() {
             </FormItem>
           )}
         />
-        <div className="flex items-center justify-between">
-          <Link
-            href="/auth/forgot-password"
-            className="text-primary text-sm font-medium hover:underline"
-          >
-            Forgot password?
-          </Link>
-        </div>
         <Button className="w-full" type="submit" disabled={isLoading}>
           {isLoading ? "Signing in..." : "Login"}
         </Button>
