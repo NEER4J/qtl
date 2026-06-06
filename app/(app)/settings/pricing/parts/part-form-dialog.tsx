@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { CreatableCombobox } from "@/components/pricing/creatable-combobox";
 import { ServiceCostCombobox } from "@/components/pricing/service-cost-combobox";
+import { InfoTip } from "@/components/help/info-tip";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -42,6 +43,7 @@ import {
 import type { AdminPartRow, PartCategoryOption } from "@/lib/actions/pricing";
 import type { PartMarginType, ServiceCost } from "@/lib/db/types";
 import { calculatePartListPrice } from "@/lib/utils/part-pricing";
+import { formatMoney } from "@/lib/utils/format";
 
 type FormValues = {
   part_number: string;
@@ -50,6 +52,9 @@ type FormValues = {
   description: string;
   cost: string;
   mhsw_fee: string;
+  mhsw_buy: string;
+  counter_premium: string;
+  customer_supplies_labour: string;
   margin_type: PartMarginType;
   margin_value: string;
   service_cost_id: string | null;
@@ -66,6 +71,9 @@ const blank: FormValues = {
   description: "",
   cost: "0",
   mhsw_fee: "0",
+  mhsw_buy: "0",
+  counter_premium: "",
+  customer_supplies_labour: "",
   margin_type: "fixed",
   margin_value: "0",
   service_cost_id: null,
@@ -83,6 +91,8 @@ export function PartFormDialog({
   serviceCosts,
   categories,
   brands,
+  globalCounterPremium,
+  globalCustomerSuppliesLabour,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -91,6 +101,10 @@ export function PartFormDialog({
   serviceCosts: ServiceCost[];
   categories: PartCategoryOption[];
   brands: string[];
+  /** Global app_settings defaults — shown as placeholders when the part leaves
+   *  its own counter premium / customer-supplies labour blank. */
+  globalCounterPremium: number;
+  globalCustomerSuppliesLabour: number;
 }) {
   const [isPending, startTransition] = useTransition();
   const form = useForm<FormValues>({ defaultValues: blank });
@@ -130,6 +144,10 @@ export function PartFormDialog({
             description: part.description ?? "",
             cost: String(part.cost),
             mhsw_fee: String(part.mhsw_fee),
+            mhsw_buy: String(part.mhsw_buy ?? 0),
+            counter_premium: part.counter_premium == null ? "" : String(part.counter_premium),
+            customer_supplies_labour:
+              part.customer_supplies_labour == null ? "" : String(part.customer_supplies_labour),
             margin_type: part.margin_type,
             margin_value: String(part.margin_value),
             service_cost_id: part.service_cost_id,
@@ -174,6 +192,8 @@ export function PartFormDialog({
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
       const extraTrimmed = values.extra_price.trim();
+      const counterTrimmed = values.counter_premium.trim();
+      const suppliesTrimmed = values.customer_supplies_labour.trim();
       const payload = {
         part_number: values.part_number.trim(),
         brand: values.brand.trim(),
@@ -181,6 +201,9 @@ export function PartFormDialog({
         description: values.description.trim() === "" ? null : values.description.trim(),
         cost: Number(values.cost),
         mhsw_fee: Number(values.mhsw_fee),
+        mhsw_buy: Number(values.mhsw_buy),
+        counter_premium: counterTrimmed === "" ? null : Number(counterTrimmed),
+        customer_supplies_labour: suppliesTrimmed === "" ? null : Number(suppliesTrimmed),
         margin_type: values.margin_type,
         margin_value: Number(values.margin_value),
         service_cost_id: values.service_cost_id || null,
@@ -320,7 +343,7 @@ export function PartFormDialog({
               )}
             />
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <FormField
                 control={form.control}
                 name="cost"
@@ -339,9 +362,81 @@ export function PartFormDialog({
                 name="mhsw_fee"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>MHSW fee</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      Sell MHSW
+                      <InfoTip>Customer-facing MHSW — added into the list/sell price.</InfoTip>
+                    </FormLabel>
                     <FormControl>
                       <Input type="number" min="0" step="0.01" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="mhsw_buy"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1">
+                      Buy MHSW
+                      <InfoTip>Cost-side MHSW you pay. Reference only — not added to the sell price.</InfoTip>
+                    </FormLabel>
+                    <FormControl>
+                      <Input type="number" min="0" step="0.01" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="counter_premium"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1">
+                      Counter premium
+                      <InfoTip>
+                        Added to the Without-Service / Over-Counter price. Leave blank to use the
+                        global default ({formatMoney(globalCounterPremium)}).
+                      </InfoTip>
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder={`Default ${formatMoney(globalCounterPremium)}`}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="customer_supplies_labour"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1">
+                      Customer-supplies labour
+                      <InfoTip>
+                        Flat labour fee when the customer brings their own filter. Leave blank to use
+                        the global default ({formatMoney(globalCustomerSuppliesLabour)}).
+                      </InfoTip>
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder={`Default ${formatMoney(globalCustomerSuppliesLabour)}`}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

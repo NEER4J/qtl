@@ -16,8 +16,10 @@ import {
 } from "@/components/ui/table";
 import { requireRole } from "@/lib/auth/require";
 import { listPayrollWeeks } from "@/lib/actions/payroll";
+import { getAppSettings } from "@/lib/actions/reference";
 import { formatDate, formatMoney } from "@/lib/utils/format";
 import { NewWeekDialog } from "@/components/payroll/new-week-dialog";
+import { PayrollSettingsCard } from "@/components/payroll/payroll-settings-card";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +38,9 @@ export default async function PayrollPage() {
   const weeks = await listPayrollWeeks(locationId);
 
   const canCreate = (profile.role === "owner" || profile.role === "co_owner") || profile.role === "manager";
+  // Vacation / WSIB rate editing is owner / co_owner only (matches the action).
+  const canEditSettings = profile.role === "owner" || profile.role === "co_owner";
+  const settings = canEditSettings ? await getAppSettings() : null;
 
   // ------- 12-month rolling totals -------
   const cutoff = new Date();
@@ -79,7 +84,7 @@ export default async function PayrollPage() {
         <ul>
           <li><strong>New week</strong> — pick a Monday and a shop. Each week moves through three states: Draft, Approved, Paid.</li>
           <li><strong>Entries can only be edited while the week is in Draft.</strong> Once approved or paid, the numbers are locked.</li>
-          <li><strong>EI, CPP (tier 1 + 2), employer EI/CPP, and WSIB</strong> are calculated automatically from <Link href="/settings/statutory-rates" className="underline">Settings → Statutory Rates</Link>. Vacation pay (4% default) and WSIB rate live in <Link href="/settings" className="underline">app settings</Link>.</li>
+          <li><strong>EI, CPP (tier 1 + 2), employer EI/CPP, and WSIB</strong> are calculated automatically from <Link href="/settings/statutory-rates" className="underline">Settings → Statutory Rates</Link>. The Vacation pay rate (4% default) and WSIB rate are set in the Payroll settings panel below.</li>
           <li><strong>Employee vs management</strong> — management pay can include a cheque portion + daily cash; regular employees use just the standard fields.</li>
         </ul>
       </PageHelp>
@@ -191,6 +196,15 @@ export default async function PayrollPage() {
           )}
         </CardContent>
       </Card>
+
+      {settings && (
+        <PayrollSettingsCard
+          initial={{
+            vacation_pay_rate: Number(settings.vacation_pay_rate ?? 0.04),
+            wsib_rate: Number(settings.wsib_rate ?? 0),
+          }}
+        />
+      )}
     </div>
   );
 }

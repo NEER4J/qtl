@@ -17,10 +17,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { PartPickerButton } from "@/components/pricing/part-picker";
+import { ServiceCostPickerButton } from "@/components/pricing/service-cost-picker";
 import { PackagePickerButton } from "@/components/sales/package-picker-button";
+import type { PartForPicker } from "@/lib/actions/pricing";
 import type {
   Part,
   PartPackageWithItems,
+  ServiceCost,
   UnitOfMeasure,
 } from "@/lib/db/types";
 import { formatMoney } from "@/lib/utils/format";
@@ -135,18 +138,25 @@ type PendingAdd =
       overlaps: Overlap[];
     }
   | {
-      kind: "picker";
-      part: Part;
-      existing: LineItem;
+      // Single part picked from the catalogue — ask which price tier to charge
+      // (With Service / Without Service / Over Counter). `existing` is the
+      // same-category line already on the job (if any), so we can still offer
+      // the package upgrade/credit shortcut. `delta` = part.extra_price.
+      kind: "tier";
+      part: PartForPicker;
+      existing: LineItem | null;
       delta: number;
     };
 
 export function SalesLineItems({
   items,
   onChange,
+  serviceCosts = [],
 }: {
   items: LineItem[];
   onChange: (items: LineItem[]) => void;
+  /** Service (labour) costs catalogue — pickable as job lines. */
+  serviceCosts?: ServiceCost[];
 }) {
   const [pending, setPending] = useState<PendingAdd | null>(null);
 
@@ -158,6 +168,23 @@ export function SalesLineItems({
   const removeGroup = (groupKey: string) =>
     onChange(items.filter((it) => packageGroupKey(it) !== groupKey));
   const addCustom = () => onChange([...items, newLineItem()]);
+
+  /** Add a free-form labour line (taxable, user fills the amount). */
+  const addLabour = () =>
+    onChange([...items, newLineItem({ description: "Labour", is_taxable: true })]);
+
+  /** Drop a Service (labour) cost from the catalogue in as a taxable line at its cost. */
+  const addServiceCost = (sc: ServiceCost) =>
+    onChange([
+      ...items,
+      newLineItem({
+        part_id: null,
+        description: sc.name,
+        quantity: 1,
+        unit_price: Number(sc.cost) || 0,
+        is_taxable: true,
+      }),
+    ]);
 
   const lineFromPart = (p: Part, unitPriceOverride?: number): LineItem =>
     newLineItem({
@@ -188,34 +215,21 @@ export function SalesLineItems({
       unit_of_measure: null,
     });
 
-  const addPart = (p: Part) => {
-    // Bundled-package rule: when the same part is already on the job (typically
-    // expanded from a package at unit_price=0) and the part is flagged
-    // in_package, the second occurrence is "the customer wants an extra one
-    // off the shelf" — bill it at over_counter_price, not list_price.
-    const alreadyOnJob = items.some((it) => it.part_id === p.id);
-    if (alreadyOnJob && p.in_package) {
-      const overCounter = Number(p.over_counter_price ?? 0);
-      const fallback = Number(p.list_price) || 0;
-      const price = overCounter > 0 ? overCounter : fallback;
-      onChange([...items, lineFromPart(p, price)]);
-      return;
-    }
-
-    // If the picked part shares a category with an existing line, prompt.
-    const existing = items.find(
-      (it) => it.part_category_id != null && it.part_category_id === p.category_id,
-    );
-    if (existing) {
-      setPending({
-        kind: "picker",
-        part: p,
-        existing,
-        delta: Number(p.extra_price ?? 0),
-      });
-      return;
-    }
-    onChange([...items, lineFromPart(p)]);
+  const addPart = (p: PartForPicker) => {
+    // Every part add asks which price tier to charge (client 2026-06):
+    // With Service / Without Service / Over Counter. We also surface the
+    // same-category line already on the job (if any) so the package
+    // upgrade/credit shortcut stays available.
+    const existing =
+      items.find(
+        (it) => it.part_category_id != null && it.part_category_id === p.category_id,
+      ) ?? null;
+    setPending({
+      kind: "tier",
+      part: p,
+      existing,
+      delta: Number(p.extra_price ?? 0),
+    });
   };
 
   const buildPackageRows = (
@@ -376,36 +390,44 @@ export function SalesLineItems({
     });
 
   /**
-   * Primary action.
-   * - Package ("Merge"): add the package but drop the overlapping items so the
-   *   duplicate isn't billed twice; the package total reflects only what's left.
-   * - Picker ("Charge upgrade"): positive delta becomes its own upgrade line;
-   *   a negative delta (credit) reduces the existing line (can't be a line).
+   * Package "Merge": add the package but drop the overlapping items so the
+   * duplicate isn't billed twice; the package total reflects only what's left.
    */
   const confirmPending = () => {
-    if (!pending) return;
-    if (pending.kind === "package") {
-      const mergeIds = new Set<string>(pending.overlaps.map((o) => o.pkgItemId));
-      onChange([...items, ...buildPackageRows(pending.pkg, mergeIds)]);
-    } else if (pending.delta > 0) {
-      onChange([...items, upgradeLine(pending.part, pending.delta)]);
-    } else {
-      onChange(bumpExisting(pending.existing.key, pending.delta));
-    }
+    if (!pending || pending.kind !== "package") return;
+    const mergeIds = new Set<string>(pending.overlaps.map((o) => o.pkgItemId));
+    onChange([...items, ...buildPackageRows(pending.pkg, mergeIds)]);
     setPending(null);
   };
 
   /**
-   * Secondary action.
-   * - Package ("Add separately"): add the package whole — both copies billed.
-   * - Picker: add the new part as a separate line at list price.
+   * Package "Add separately": add the package whole — both copies billed.
    */
   const declinePending = () => {
-    if (!pending) return;
-    if (pending.kind === "package") {
-      onChange([...items, ...buildPackageRows(pending.pkg, new Set())]);
-    } else {
-      onChange([...items, lineFromPart(pending.part)]);
+    if (!pending || pending.kind !== "package") return;
+    onChange([...items, ...buildPackageRows(pending.pkg, new Set())]);
+    setPending(null);
+  };
+
+  /** Tier dialog: add the picked part as a line at the chosen price tier. */
+  const addPartAtPrice = (price: number) => {
+    if (!pending || pending.kind !== "tier") return;
+    onChange([...items, lineFromPart(pending.part, price)]);
+    setPending(null);
+  };
+
+  /**
+   * Tier dialog shortcut when the job already has a same-category line and the
+   * part carries an extra_price: charge just the upgrade/credit instead of a
+   * full line. Positive delta becomes its own line; negative reduces the
+   * existing line (unit_price can't go negative).
+   */
+  const chargeUpgrade = () => {
+    if (!pending || pending.kind !== "tier" || pending.delta === 0) return;
+    if (pending.delta > 0) {
+      onChange([...items, upgradeLine(pending.part, pending.delta)]);
+    } else if (pending.existing) {
+      onChange(bumpExisting(pending.existing.key, pending.delta));
     }
     setPending(null);
   };
@@ -666,6 +688,12 @@ export function SalesLineItems({
       <div className="flex flex-wrap gap-2">
         <PartPickerButton onSelect={addPart} />
         <PackagePickerButton onSelect={addPackage} />
+        {serviceCosts.length > 0 && (
+          <ServiceCostPickerButton serviceCosts={serviceCosts} onSelect={addServiceCost} />
+        )}
+        <Button type="button" variant="outline" size="sm" onClick={addLabour}>
+          <Plus className="size-4" /> Add labour
+        </Button>
         <Button type="button" variant="outline" size="sm" onClick={addCustom}>
           <Plus className="size-4" /> Add custom item
         </Button>
@@ -675,6 +703,8 @@ export function SalesLineItems({
         pending={pending}
         onConfirm={confirmPending}
         onDecline={declinePending}
+        onAddAtPrice={addPartAtPrice}
+        onChargeUpgrade={chargeUpgrade}
         onCancel={() => setPending(null)}
       />
     </div>
@@ -685,11 +715,15 @@ function CategoryDuplicateDialog({
   pending,
   onConfirm,
   onDecline,
+  onAddAtPrice,
+  onChargeUpgrade,
   onCancel,
 }: {
   pending: PendingAdd | null;
   onConfirm: () => void;
   onDecline: () => void;
+  onAddAtPrice: (price: number) => void;
+  onChargeUpgrade: () => void;
   onCancel: () => void;
 }) {
   if (!pending) return null;
@@ -701,38 +735,127 @@ function CategoryDuplicateDialog({
     >
       <AlertDialogContent>
         {pending.kind === "package" ? (
-          <PackageDupBody pending={pending} />
-        ) : (
-          <PickerDupBody pending={pending} />
-        )}
-        <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
-          {pending.kind === "package" ? (
-            <>
+          <>
+            <PackageDupBody pending={pending} />
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
               <Button type="button" variant="outline" onClick={onDecline}>
                 Add separately
               </Button>
               <AlertDialogAction onClick={onConfirm}>
                 Merge (drop duplicates)
               </AlertDialogAction>
-            </>
-          ) : (
-            <>
-              <Button type="button" variant="outline" onClick={onDecline}>
-                Add as a new line
-              </Button>
-              {pending.delta !== 0 && (
-                <AlertDialogAction onClick={onConfirm}>
-                  {pending.delta > 0
-                    ? `Charge +${formatMoney(pending.delta)} upgrade`
-                    : `Apply ${formatMoney(pending.delta)} credit`}
-                </AlertDialogAction>
-              )}
-            </>
-          )}
-        </AlertDialogFooter>
+            </AlertDialogFooter>
+          </>
+        ) : (
+          <TierDialogBody
+            pending={pending}
+            onAddAtPrice={onAddAtPrice}
+            onChargeUpgrade={onChargeUpgrade}
+            onCancel={onCancel}
+          />
+        )}
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+/**
+ * Tier picker shown on every single-part add — With Service / Without Service /
+ * Over Counter. Prices come from the part's computed sell tiers; a tier with no
+ * usable price (e.g. Without Service for a bundled part) is disabled. When the
+ * job already has a same-category line and the part has an extra_price, an
+ * upgrade/credit shortcut is also offered.
+ */
+function TierDialogBody({
+  pending,
+  onAddAtPrice,
+  onChargeUpgrade,
+  onCancel,
+}: {
+  pending: Extract<PendingAdd, { kind: "tier" }>;
+  onAddAtPrice: (price: number) => void;
+  onChargeUpgrade: () => void;
+  onCancel: () => void;
+}) {
+  const p = pending.part;
+  const tiers: { key: string; label: string; price: number | null; hint?: string }[] = [
+    { key: "with", label: "With Service", price: p.with_service },
+    {
+      key: "without",
+      label: "Without Service",
+      price: p.without_service,
+      hint: p.in_package ? "bundled in a package" : undefined,
+    },
+    { key: "over", label: "Over Counter", price: p.over_counter },
+  ];
+  const anyTier = tiers.some((t) => t.price != null && t.price > 0);
+  const listPrice = Number(p.list_price) || 0;
+
+  return (
+    <>
+      <AlertDialogHeader>
+        <AlertDialogTitle>
+          Add {p.brand} {p.part_number}
+        </AlertDialogTitle>
+        <AlertDialogDescription>
+          Choose which price to charge.
+          {pending.existing
+            ? ` This job already has a similar part (${
+                pending.existing.description || "a line already on the job"
+              }).`
+            : ""}
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+
+      <div className="grid gap-2">
+        {tiers.map((t) => {
+          const available = t.price != null && t.price > 0;
+          return (
+            <Button
+              key={t.key}
+              type="button"
+              variant="outline"
+              disabled={!available}
+              onClick={() => available && onAddAtPrice(t.price as number)}
+              className="flex h-auto w-full items-center justify-between py-2"
+            >
+              <span className="text-left">
+                {t.label}
+                {t.hint ? (
+                  <span className="ml-1 text-xs text-muted-foreground">· {t.hint}</span>
+                ) : null}
+              </span>
+              <span className="tabular-nums font-medium">
+                {available ? formatMoney(t.price as number) : "—"}
+              </span>
+            </Button>
+          );
+        })}
+        {!anyTier && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onAddAtPrice(listPrice)}
+            className="flex h-auto w-full items-center justify-between py-2"
+          >
+            <span>List price</span>
+            <span className="tabular-nums font-medium">{formatMoney(listPrice)}</span>
+          </Button>
+        )}
+      </div>
+
+      <AlertDialogFooter>
+        <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
+        {pending.delta !== 0 && (
+          <Button type="button" variant="secondary" onClick={onChargeUpgrade}>
+            {pending.delta > 0
+              ? `Charge +${formatMoney(pending.delta)} upgrade`
+              : `Apply ${formatMoney(pending.delta)} credit`}
+          </Button>
+        )}
+      </AlertDialogFooter>
+    </>
   );
 }
 
@@ -775,48 +898,3 @@ function PackageDupBody({
   );
 }
 
-function PickerDupBody({
-  pending,
-}: {
-  pending: Extract<PendingAdd, { kind: "picker" }>;
-}) {
-  const p = pending.part;
-  return (
-    <AlertDialogHeader>
-      <AlertDialogTitle>This job already has a similar part</AlertDialogTitle>
-      <AlertDialogDescription asChild>
-        <div className="space-y-2 text-sm">
-          <p>
-            <strong>
-              {p.brand} {p.part_number}
-            </strong>{" "}
-            is the same kind of part as{" "}
-            <strong>{pending.existing.description || "a line already on the job"}</strong>
-            .
-          </p>
-          {pending.delta !== 0 ? (
-            <p>
-              You can charge just the{" "}
-              <span
-                className={pending.delta > 0 ? "text-rose-600" : "text-emerald-600"}
-              >
-                {pending.delta > 0 ? "+" : ""}
-                {formatMoney(pending.delta)}
-              </span>{" "}
-              {pending.delta > 0
-                ? "upgrade as its own line, or"
-                : "credit on the existing line, or"}{" "}
-              add {p.brand} {p.part_number} as a full line at{" "}
-              {formatMoney(Number(p.list_price) || 0)}.
-            </p>
-          ) : (
-            <p className="text-muted-foreground">
-              No upgrade price is set for this part — choose whether to add it as
-              its own line anyway.
-            </p>
-          )}
-        </div>
-      </AlertDialogDescription>
-    </AlertDialogHeader>
-  );
-}

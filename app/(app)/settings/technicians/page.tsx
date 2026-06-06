@@ -1,6 +1,7 @@
 import { PageHelp } from "@/components/help/page-help";
 import { requireRole } from "@/lib/auth/require";
 import { listAllTechnicians } from "@/lib/actions/technicians";
+import { listLocations } from "@/lib/actions/locations";
 
 import { TechniciansTable } from "./technicians-table";
 
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function TechniciansPage() {
   await requireRole("owner", "co_owner");
-  const rows = await listAllTechnicians();
+  const [rows, locations] = await Promise.all([listAllTechnicians(), listLocations()]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -25,13 +26,14 @@ export default async function TechniciansPage() {
           <strong> not</strong> login users — they&apos;re just labels for who worked which job.
         </p>
         <ul>
-          <li><strong>Role</strong> is informational only (Technician, Front Counter, etc.) — every name shows up in every dropdown.</li>
+          <li><strong>Role</strong> is informational only (Technician, Front Counter, etc.).</li>
+          <li><strong>Location</strong> filters the <strong>Advisor</strong> picker on a job — a technician only appears as an advisor for their location. Leave it on <em>All locations</em> to show everywhere. The Upper/Lower tech pickers are not filtered.</li>
           <li><strong>Deactivate</strong> hides a name from new jobs but keeps it on past jobs intact.</li>
           <li><strong>Rename</strong> updates the roster only; existing sales jobs keep the name they were saved with.</li>
         </ul>
       </PageHelp>
 
-      <TechniciansTable rows={rows} />
+      <TechniciansTable rows={rows} locations={locations} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import { wrapAction } from "@/lib/actions/_utils";
@@ -23,6 +24,36 @@ import type {
   StatutoryRate,
 } from "@/lib/db/types";
 import { computeStatutoryDeductions as _computeStatutoryDeductions } from "@/lib/utils/payroll-math";
+
+// ============================================================================
+// Payroll settings — vacation pay rate + WSIB rate. Stored on app_settings
+// (singleton id=1), but edited from the Payroll page (they are a payroll
+// concern, moved out of the Pricing settings card — client 2026-06).
+// Rates are stored as fractions (0.04 = 4%). Owner / co_owner only.
+// ============================================================================
+
+const PayrollSettingsInput = z.object({
+  vacation_pay_rate: z.coerce.number().min(0).max(1),
+  wsib_rate: z.coerce.number().min(0).max(1),
+});
+
+export const updatePayrollSettings = wrapAction({
+  schema: PayrollSettingsInput,
+  roles: ["owner", "co_owner"],
+  handler: async (input): Promise<{ ok: true }> => {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("app_settings")
+      .update({
+        vacation_pay_rate: input.vacation_pay_rate,
+        wsib_rate: input.wsib_rate,
+      })
+      .eq("id", 1);
+    if (error) throw error;
+    revalidatePath("/payroll");
+    return { ok: true };
+  },
+});
 
 // ============================================================================
 // Employees

@@ -44,12 +44,16 @@ export function PartsTable({
   serviceCosts,
   categories,
   brands,
+  globalCounterPremium,
+  globalCustomerSuppliesLabour,
   initialFilters,
 }: {
   parts: AdminPartRow[];
   serviceCosts: ServiceCost[];
   categories: PartCategoryOption[];
   brands: string[];
+  globalCounterPremium: number;
+  globalCustomerSuppliesLabour: number;
   initialFilters: { q: string; category_id: string; brand: string };
 }) {
   const router = useRouter();
@@ -155,7 +159,8 @@ export function PartsTable({
               <TableHead>Description</TableHead>
               <TableHead className="w-32">Service</TableHead>
               <TableHead className="w-24 text-right">Cost</TableHead>
-              <TableHead className="w-24 text-right">MHSW</TableHead>
+              <TableHead className="w-24 text-right">Sell MHSW</TableHead>
+              <TableHead className="w-24 text-right">Buy MHSW</TableHead>
               <TableHead className="w-24 text-right">Margin</TableHead>
               <TableHead className="w-24 text-right">List</TableHead>
               <TableHead className="w-20">Tax</TableHead>
@@ -166,7 +171,7 @@ export function PartsTable({
           <TableBody>
             {parts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={13} className="text-center text-muted-foreground py-8">
                   {filtersActive ? "No parts match your filter." : "No parts yet. Click New part to add one."}
                 </TableCell>
               </TableRow>
@@ -185,6 +190,7 @@ export function PartsTable({
                   <TableCell className="text-xs text-muted-foreground">{p.service_cost_name ?? "—"}</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(p.cost)}</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(p.mhsw_fee)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(p.mhsw_buy)}</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">{formatMargin(p)}</TableCell>
                   <TableCell className="text-right tabular-nums font-medium">{formatMoney(p.list_price)}</TableCell>
                   <TableCell>
@@ -224,6 +230,8 @@ export function PartsTable({
         serviceCosts={serviceCosts}
         categories={categories}
         brands={brands}
+        globalCounterPremium={globalCounterPremium}
+        globalCustomerSuppliesLabour={globalCustomerSuppliesLabour}
       />
       <PartFormDialog
         open={editing !== null}
@@ -233,6 +241,8 @@ export function PartsTable({
         serviceCosts={serviceCosts}
         categories={categories}
         brands={brands}
+        globalCounterPremium={globalCounterPremium}
+        globalCustomerSuppliesLabour={globalCustomerSuppliesLabour}
       />
     </>
   );

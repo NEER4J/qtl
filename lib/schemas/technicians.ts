@@ -10,6 +10,14 @@ export const CreateTechnicianInput = z.object({
     .nullable()
     .or(z.literal(""))
     .transform((v) => (v == null || v === "" ? null : v)),
+  // Home location. Empty = NULL = show in every location's advisor picker.
+  location_id: z
+    .string()
+    .uuid()
+    .optional()
+    .nullable()
+    .or(z.literal(""))
+    .transform((v) => (v == null || v === "" ? null : v)),
   sort_order: z.coerce.number().int().min(0).default(100),
   active: z.coerce.boolean().default(true),
 });

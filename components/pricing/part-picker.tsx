@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { listPartsForPicker } from "@/lib/actions/pricing";
-import type { Part } from "@/lib/db/types";
+import type { PartForPicker } from "@/lib/actions/pricing";
 import { formatMoney } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 
@@ -23,14 +23,14 @@ export function PartPickerButton({
   label = "Add part from catalog",
   excludeIds,
 }: {
-  onSelect: (part: Part) => void;
+  onSelect: (part: PartForPicker) => void;
   label?: string;
   /** Hide these part_ids from the result list (e.g. parts already in the package). */
   excludeIds?: ReadonlySet<string>;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<Part[]>([]);
+  const [results, setResults] = useState<PartForPicker[]>([]);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {

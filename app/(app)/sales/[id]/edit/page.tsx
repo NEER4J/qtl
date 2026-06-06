@@ -11,7 +11,7 @@ import {
   listActiveLocations,
   listActiveServiceTypes,
 } from "@/lib/actions/reference";
-import { listEngineTypes, listOilTypes } from "@/lib/actions/pricing";
+import { listEngineTypes, listOilTypes, listServiceCosts } from "@/lib/actions/pricing";
 import { listActiveTechnicians } from "@/lib/actions/technicians";
 import { formatDate } from "@/lib/utils/format";
 
@@ -34,7 +34,7 @@ export default async function EditSalesJobPage({
   if (!canEdit) redirect(`/sales/${id}`);
   if (job.deactivated_at) redirect(`/sales/${id}`);
 
-  const [locations, serviceTypes, settings, engineTypes, oilTypes, technicians] =
+  const [locations, serviceTypes, settings, engineTypes, oilTypes, technicians, serviceCosts] =
     await Promise.all([
       listActiveLocations(),
       listActiveServiceTypes(),
@@ -42,6 +42,7 @@ export default async function EditSalesJobPage({
       listEngineTypes(),
       listOilTypes(),
       listActiveTechnicians(),
+      listServiceCosts(),
     ]);
 
   return (
@@ -67,6 +68,7 @@ export default async function EditSalesJobPage({
         engineTypes={engineTypes}
         oilTypes={oilTypes}
         technicians={technicians}
+        serviceCosts={serviceCosts}
         hstRate={Number(settings.hst_rate)}
         initialItems={job.items.map((it) => ({
           key: it.id,

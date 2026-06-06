@@ -43,6 +43,7 @@ import type {
   Location,
   OilType,
   PaymentMode,
+  ServiceCost,
   ServiceType,
   Technician,
   Vehicle,
@@ -124,6 +125,8 @@ export interface SalesJobFormProps {
   oilTypes: OilType[];
   /** Active roster used to populate Upper tech / Lower tech / Advisor pickers. */
   technicians: Technician[];
+  /** Service (labour) costs catalogue — pickable as job line items. */
+  serviceCosts?: ServiceCost[];
   hstRate: number;
   /** Force location to this value (staff role). */
   lockedLocationId?: string | null;
@@ -139,6 +142,7 @@ export function SalesJobForm({
   engineTypes,
   oilTypes,
   technicians,
+  serviceCosts = [],
   hstRate,
   lockedLocationId,
   initialItems,
@@ -260,6 +264,18 @@ export function SalesJobForm({
   const engineTypeId = useWatch({ control: form.control, name: "engine_type_id" });
   const oilTypeId = useWatch({ control: form.control, name: "oil_type_id" });
   const oilContainer = useWatch({ control: form.control, name: "oil_container" });
+
+  // Advisor picker is filtered by the job's location (client 2026-06): show only
+  // technicians whose home location matches, plus any left unassigned (null).
+  // Upper/Lower tech pickers stay unfiltered (use technicianSuggestions).
+  const selectedLocationId = useWatch({ control: form.control, name: "location_id" });
+  const advisorSuggestions = useMemo(
+    () =>
+      technicians
+        .filter((t) => t.location_id == null || t.location_id === selectedLocationId)
+        .map((t) => t.name),
+    [technicians, selectedLocationId],
+  );
 
   const isOilChange = serviceTypes.find((s) => s.id === serviceTypeId)?.code === "OC";
 
@@ -949,11 +965,11 @@ export function SalesJobForm({
                       <CreatableCombobox
                         value={field.value ?? ""}
                         onChange={field.onChange}
-                        suggestions={technicianSuggestions}
+                        suggestions={advisorSuggestions}
                         descriptionFor={technicianRoleFor}
                         placeholder="Pick advisor"
                         searchPlaceholder="Search by name or role…"
-                        emptyLabel="Roster empty."
+                        emptyLabel="No advisors at this location."
                         addLabel="Add"
                         allowClear
                       />
@@ -1173,7 +1189,11 @@ export function SalesJobForm({
                 </span>
               )}
             </div>
-            <SalesLineItems items={lineItems} onChange={setLineItems} />
+            <SalesLineItems
+              items={lineItems}
+              onChange={setLineItems}
+              serviceCosts={serviceCosts}
+            />
           </section>
 
           {/* ----------------------------------------------------------------

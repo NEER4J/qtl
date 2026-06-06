@@ -90,7 +90,21 @@ export const CreatePartInput = z.object({
   category_id: z.string().uuid("Pick a category"),
   description: trimmedOrNull,
   cost: z.coerce.number().min(0, "Must be ≥ 0"),
+  // Sell-side MHSW (added into list_price).
   mhsw_fee: z.coerce.number().min(0, "Must be ≥ 0").default(0),
+  // Buy/cost-side MHSW — reference-only, no formula change.
+  mhsw_buy: z.coerce.number().min(0, "Must be ≥ 0").default(0),
+  // Per-part overrides. Empty = NULL = fall back to the global app_settings value.
+  counter_premium: z
+    .union([z.coerce.number().min(0, "Must be ≥ 0").max(9999999), z.literal("")])
+    .optional()
+    .nullable()
+    .transform((v) => (v == null || v === "" ? null : Number(v))),
+  customer_supplies_labour: z
+    .union([z.coerce.number().min(0, "Must be ≥ 0").max(9999999), z.literal("")])
+    .optional()
+    .nullable()
+    .transform((v) => (v == null || v === "" ? null : Number(v))),
   margin_type: z.enum(["fixed", "percent"]).default("fixed"),
   margin_value: z.coerce.number().min(0, "Must be ≥ 0").default(0),
   // Signed delta applied to an existing same-category line when this part is added via a package.

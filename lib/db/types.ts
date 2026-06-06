@@ -282,6 +282,10 @@ export interface Technician {
   id: string;
   name: string;
   role: string | null;
+  /** Home location FK. NULL = show in every location's advisor picker. */
+  location_id: string | null;
+  /** Joined location name (filled by the action layer where needed). */
+  location_name?: string | null;
   sort_order: number;
   active: boolean;
   deactivated_at: string | null;
@@ -700,11 +704,18 @@ export interface Part {
   list_price: number;
   /** Signed delta applied to an existing same-category line when this part is added via a package. Positive = upcharge, negative = credit. */
   extra_price: number;
+  /** Sell-side MHSW — added into list_price (existing behaviour). */
   mhsw_fee: number;
+  /** Buy/cost-side MHSW. Reference-only — not added to list_price or sell math (client 2026-06). */
+  mhsw_buy: number;
   margin_type: PartMarginType;
   margin_value: number;
   service_cost_id: string | null;
   is_taxable: boolean;
+  /** Per-part counter premium. NULL = fall back to app_settings.counter_premium. */
+  counter_premium: number | null;
+  /** Per-part customer-supplies labour. NULL = fall back to app_settings.customer_supplies_labour. */
+  customer_supplies_labour: number | null;
   /** Per-part sell-price overrides for the "All Filter Sell Price" view. NULL = fall back to cost-up. */
   without_service_price: number | null;
   with_service_price: number | null;

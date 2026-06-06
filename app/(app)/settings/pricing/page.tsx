@@ -103,8 +103,6 @@ export default async function PricingAdminHubPage() {
         initial={{
           counter_premium: Number(settings.counter_premium ?? 10),
           customer_supplies_labour: Number(settings.customer_supplies_labour ?? 20),
-          vacation_pay_rate: Number(settings.vacation_pay_rate ?? 0.04),
-          wsib_rate: Number(settings.wsib_rate ?? 0),
           price_list_effective_date: settings.price_list_effective_date ?? null,
         }}
       />

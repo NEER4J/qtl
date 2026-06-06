@@ -6,6 +6,7 @@ import {
   listPartBrands,
   listPartCategories,
 } from "@/lib/actions/pricing";
+import { getAppSettings } from "@/lib/actions/reference";
 
 import { PartsTable } from "./parts-table";
 
@@ -19,11 +20,12 @@ export default async function PartsAdminPage({
   await requireRole("owner", "co_owner");
   const sp = await searchParams;
 
-  const [parts, serviceCosts, categories, brands] = await Promise.all([
+  const [parts, serviceCosts, categories, brands, settings] = await Promise.all([
     listAllParts({ category_id: sp.category_id, brand: sp.brand, q: sp.q }),
     listAllServiceCosts(),
     listPartCategories(),
     listPartBrands(),
+    getAppSettings(),
   ]);
 
   return (
@@ -54,6 +56,8 @@ export default async function PartsAdminPage({
         serviceCosts={serviceCosts}
         categories={categories}
         brands={brands}
+        globalCounterPremium={settings.counter_premium}
+        globalCustomerSuppliesLabour={settings.customer_supplies_labour}
         initialFilters={{ q: sp.q ?? "", category_id: sp.category_id ?? "", brand: sp.brand ?? "" }}
       />
     </div>

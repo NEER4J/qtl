@@ -51,6 +51,7 @@ import {
   isPartPackageLocked,
 } from "@/lib/utils/package-pricing";
 import { normalizePartPricing } from "@/lib/utils/part-pricing";
+import { computePartSellTiers } from "@/lib/utils/part-sell-prices";
 import { excelOilLabel } from "@/lib/utils/oil-labels";
 import { applyPartsSearch } from "@/lib/utils/parts-search";
 import { TRANSMISSION_KIND_LABEL } from "@/lib/utils/transmission";
@@ -425,11 +426,6 @@ export async function getAllFilterSellPrices(filter?: {
   const customerSuppliesLabour = Number(settingsRes.data?.customer_supplies_labour ?? 20);
   const effectiveDate = settingsRes.data?.price_list_effective_date ?? null;
 
-  /** Round positive prices to .99; anything ≤ 0 returns null (so "—" shows
-   *  instead of "-$0.01" for parts with no cost set). */
-  const round99 = (n: number): number | null =>
-    Number.isFinite(n) && n > 0 ? Math.ceil(n) - 0.01 : null;
-
   type Row = PartJoinRow & {
     service_costs: { name: string; cost: number } | null;
     without_service_price: number | null;
@@ -441,23 +437,19 @@ export async function getAllFilterSellPrices(filter?: {
     const merged = mergePartCategory(r);
     const part = normalizePartPricing(merged);
     const svcCost = Number(r.service_costs?.cost ?? 0);
-    const partBase = Number(part.cost) + Number(part.mhsw_fee);
-    // Manual override (per-part) wins over cost-up computation. Null override =
-    // fall back to the formula. The override columns are populated from the
-    // Excel "All Filter Sell Price" tab (see supabase/seed/may2026_*.sql).
-    const computedWithSvc = round99(partBase + svcCost);
-    const withSvc = r.with_service_price != null ? Number(r.with_service_price) : computedWithSvc;
-    // Bundled parts have no standalone "Without Service" price — the customer
-    // pays for the package, not the part. Force to 0 regardless of any
-    // historical override that may still be sitting on the row.
-    const withoutSvc = r.in_package
-      ? 0
-      : r.without_service_price != null
-        ? Number(r.without_service_price)
-        : round99(partBase + svcCost + counterPremium);
-    const overCounter = r.over_counter_price != null ? Number(r.over_counter_price) : withSvc;
-    // Excel "Customer Supplies Filter" is a flat $ value, NOT .99-rounded.
-    const customerSupplies = customerSuppliesLabour;
+    // Per-part overrides + per-part counter/labour (fall back to global) — see
+    // computePartSellTiers. The override columns are populated from the Excel
+    // "All Filter Sell Price" tab (see supabase/seed/may2026_*.sql).
+    const tiers = computePartSellTiers(
+      part,
+      svcCost,
+      counterPremium,
+      customerSuppliesLabour,
+    );
+    const withSvc = tiers.with_service;
+    const withoutSvc = tiers.without_service;
+    const overCounter = tiers.over_counter;
+    const customerSupplies = tiers.customer_supplies;
     return {
       id: part.id,
       part_number: part.part_number,
@@ -1061,11 +1053,22 @@ export async function listAllPartBrands(): Promise<PartBrand[]> {
   return (data ?? []) as PartBrand[];
 }
 
-export async function listPartsForPicker(q?: string): Promise<Part[]> {
+/** A pickable part plus its computed sell tiers (With Service / Without Service
+ *  / Over Counter + Customer Supplies). Used by the sales job part-add dialog so
+ *  the user can choose which price applies. Tiers fold in per-part counter
+ *  premium / customer-supplies labour with the global fallback. */
+export type PartForPicker = Part & {
+  with_service: number | null;
+  without_service: number | null;
+  over_counter: number | null;
+  customer_supplies: number;
+};
+
+export async function listPartsForPicker(q?: string): Promise<PartForPicker[]> {
   const supabase = await createClient();
   let query = supabase
     .from("parts")
-    .select(PART_SELECT)
+    .select(`${PART_SELECT}, service_costs:service_cost_id(cost)`)
     .eq("active", true)
     .order("brand")
     .order("part_number")
@@ -1075,9 +1078,35 @@ export async function listPartsForPicker(q?: string): Promise<Part[]> {
     "description",
     "brand",
   ]);
-  const { data, error } = await query;
-  if (error) throw error;
-  return ((data ?? []) as unknown as PartJoinRow[]).map(mergePartCategory);
+  const [partsRes, settingsRes] = await Promise.all([
+    query,
+    supabase
+      .from("app_settings")
+      .select("counter_premium, customer_supplies_labour")
+      .eq("id", 1)
+      .single(),
+  ]);
+  if (partsRes.error) throw partsRes.error;
+  const counterPremium = Number(settingsRes.data?.counter_premium ?? 10);
+  const customerSuppliesLabour = Number(settingsRes.data?.customer_supplies_labour ?? 20);
+  type Row = PartJoinRow & { service_costs: { cost: number } | null };
+  return ((partsRes.data ?? []) as unknown as Row[]).map((row) => {
+    const part = normalizePartPricing(mergePartCategory(row));
+    const svcCost = Number(row.service_costs?.cost ?? 0);
+    const tiers = computePartSellTiers(
+      part,
+      svcCost,
+      counterPremium,
+      customerSuppliesLabour,
+    );
+    return {
+      ...part,
+      with_service: tiers.with_service,
+      without_service: tiers.without_service,
+      over_counter: tiers.over_counter,
+      customer_supplies: tiers.customer_supplies,
+    };
+  });
 }
 
 export interface EngineFilterRow extends EngineFilter {
@@ -1899,15 +1928,19 @@ export const deleteEngineSellPrice = wrapAction({
 });
 
 // ============================================================================
-// Pricing-related app_settings — counter premium, customer-supplies labour,
-// price-list effective date, vacation rate, WSIB rate. Owner-only.
+// Pricing-related app_settings — counter premium + customer-supplies labour
+// (these are the GLOBAL DEFAULTS; per-part values override them), and the
+// price-list effective date. Owner-only.
+//
+// NOTE: vacation_pay_rate / wsib_rate used to live here too, but they are a
+// payroll concern and now live in the Payroll settings panel
+// (updatePayrollSettings in lib/actions/payroll.ts). They are still stored on
+// app_settings — just edited from /payroll.
 // ============================================================================
 
 const PricingSettingsInput = z.object({
   counter_premium: z.coerce.number().min(0),
   customer_supplies_labour: z.coerce.number().min(0),
-  vacation_pay_rate: z.coerce.number().min(0).max(1),
-  wsib_rate: z.coerce.number().min(0).max(1),
   price_list_effective_date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -1926,8 +1959,6 @@ export const updatePricingSettings = wrapAction({
       .update({
         counter_premium: input.counter_premium,
         customer_supplies_labour: input.customer_supplies_labour,
-        vacation_pay_rate: input.vacation_pay_rate,
-        wsib_rate: input.wsib_rate,
         price_list_effective_date: input.price_list_effective_date || null,
       })
       .eq("id", 1);
@@ -1935,7 +1966,6 @@ export const updatePricingSettings = wrapAction({
     revalidatePath("/settings/pricing");
     revalidatePath("/pricing/all-filter-price");
     revalidatePath("/pricing/print-list");
-    revalidatePath("/payroll");
     return { ok: true };
   },
 });

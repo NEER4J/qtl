@@ -117,6 +117,7 @@ export function PackageItemsEditor({
               <tr className="text-xs uppercase text-muted-foreground border-b bg-muted/40">
                 <th className="text-left font-medium py-2 px-3">Item</th>
                 <th className="text-right font-medium py-2 px-2 w-24">Qty</th>
+                <th className="text-right font-medium py-2 px-2 w-28">Total</th>
                 <th className="text-right font-medium py-2 px-2 w-32">Price override</th>
                 <th className="w-10" />
               </tr>
@@ -125,6 +126,12 @@ export function PackageItemsEditor({
               {items.map((it) => {
                 const key = draftKey(it);
                 const overridden = it.unit_price.trim() !== "";
+                // Effective per-unit price = override (when set) else catalogue.
+                // Total recomputes live as Qty or the override changes.
+                const effectiveUnit = overridden
+                  ? Number(it.unit_price) || 0
+                  : it.catalogPrice;
+                const lineTotal = (Number(it.quantity) || 0) * effectiveUnit;
                 return (
                   <tr key={key} className="border-b last:border-0 align-top">
                     <td className="py-2 px-3">
@@ -159,6 +166,9 @@ export function PackageItemsEditor({
                         </span>
                       </div>
                     </td>
+                    <td className="py-2 px-2 text-right tabular-nums font-medium">
+                      {formatMoney(lineTotal)}
+                    </td>
                     <td className="py-2 px-2 text-right">
                       <Input
                         type="number"
@@ -191,8 +201,9 @@ export function PackageItemsEditor({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Leave the price blank to use the catalogue price (so future price changes flow
-        through). Enter a value to lock the price for this package.
+        <strong>Total</strong> = Qty × price and updates as you change them. <strong>Price
+        override</strong> is per-unit — leave it blank to use the catalogue price (so future
+        price changes flow through), or enter a value to lock this package&apos;s per-unit price.
       </p>
 
       <div className="flex flex-wrap gap-2">
