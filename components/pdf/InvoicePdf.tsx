@@ -40,6 +40,7 @@ const styles = StyleSheet.create({
   headerLeft: { flexDirection: "row", alignItems: "center" },
   logo: { width: 48, height: 48, objectFit: "contain", marginRight: 10 },
   shopName: { fontSize: 18, fontFamily: "Helvetica-Bold" },
+  shopLocation: { fontSize: 10, fontFamily: "Helvetica-Bold", marginTop: 1 },
   shopMeta: { fontSize: 8, color: MUTED, marginTop: 1 },
   shopMetaRow: { flexDirection: "row", marginTop: 1 },
   shopMetaCell: { fontSize: 8, color: MUTED, marginRight: 14 },
@@ -281,7 +282,6 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
   const totalLabour =
     labour.reduce((s, it) => s + Number(it.line_total ?? 0), 0) + packagesTotal;
   const totalParts = parts.reduce((s, it) => s + Number(it.line_total ?? 0), 0);
-  const hasWork = packageRows.length > 0 || labour.length > 0;
 
   return (
     <Document title={`Invoice ${job.invoice_no ?? ""}`} author="Quick Truck Lube">
@@ -294,6 +294,9 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
               <Text style={styles.shopName}>
                 {job.location_invoice_name || job.location_name || "Quick Truck Lube"}
               </Text>
+              {job.location_invoice_name && job.location_name ? (
+                <Text style={styles.shopLocation}>{job.location_name}</Text>
+              ) : null}
               <Text style={styles.shopMeta}>
                 {job.location_address || "1010 Industrial Road, Ayr, Ontario, N0B 1E0"}
               </Text>
@@ -399,151 +402,136 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
           </View>
         </View>
 
-        {/* ---------------- Description of Work (labour) ---------------- */}
-        <View style={styles.sectionTable}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={[styles.sectionHeaderCell, styles.labourDesc]}>
-              Description of Work
-            </Text>
-            <Text style={[styles.sectionHeaderCellLast, styles.labourAmt]}>Amount</Text>
-          </View>
-          {!hasWork ? (
-            <View style={styles.sectionRowLast}>
-              <Text style={[styles.sectionCell, styles.labourDesc]}> </Text>
-              <Text style={[styles.sectionCellLast, styles.labourAmt]}> </Text>
-            </View>
-          ) : (
-            (() => {
-              // Each package: one header line with the total, then its items
-              // listed for transparency with "Included" instead of a price.
-              // Standalone labour items follow.
-              type WorkRow = {
-                id: string;
-                description: string;
-                amount: number | null; // null → show "Included"
-                included?: boolean;
-                merged?: boolean;
-                mergedPrice?: number;
-              };
-              const work: WorkRow[] = [];
-              for (const r of packageRows) {
-                const saved = r.items.reduce(
-                  (s, m) =>
-                    s +
-                    (m.merged_unit_price != null
-                      ? Number(m.merged_unit_price) * Number(m.quantity)
-                      : 0),
-                  0,
-                );
-                work.push({
-                  id: r.key,
-                  description:
-                    saved > 0 ? `${r.label}  (merged — saved ${money(saved)})` : r.label,
-                  amount: r.total,
-                });
-                for (const m of r.items) {
-                  const merged = m.merged_unit_price != null;
-                  work.push({
-                    id: m.id,
-                    description: merged
-                      ? `${m.description} — merged (already on the job)`
-                      : m.description,
-                    amount: null,
-                    included: true,
-                    merged,
-                    mergedPrice: merged ? Number(m.merged_unit_price) : undefined,
-                  });
-                }
-              }
-              for (const it of labour) {
-                work.push({
-                  id: it.id,
-                  description: it.description,
-                  amount: Number(it.line_total),
-                });
-              }
-              return work.map((w, i) => {
-                const last = i === work.length - 1;
-                return (
-                  <View key={w.id} style={last ? styles.sectionRowLast : styles.sectionRow}>
-                    <View style={[styles.sectionCell, styles.labourDesc]}>
-                      <Text style={w.included ? styles.includedItem : undefined}>
-                        {w.included ? `•  ${w.description}` : w.description}
-                      </Text>
-                    </View>
-                    <Text
-                      style={[
-                        styles.sectionCellLast,
-                        styles.labourAmt,
-                        w.included ? styles.includedAmt : {},
-                        w.merged ? styles.mergedAmt : {},
-                      ]}
-                    >
-                      {w.merged && w.mergedPrice != null
-                        ? money(w.mergedPrice)
-                        : w.amount == null
-                        ? "Included"
-                        : money(w.amount)}
-                    </Text>
-                  </View>
-                );
-              });
-            })()
-          )}
-        </View>
-
-        {/* ---------------- Parts ---------------- */}
+        {/* ---------------- Line items (work + parts in one table) ---------------- */}
         <View style={styles.sectionTable}>
           <View style={styles.sectionHeaderRow}>
             <Text style={[styles.sectionHeaderCell, styles.partsQty]}>Qty</Text>
-            <Text style={[styles.sectionHeaderCell, styles.partsDesc]}>
-              Parts Description
-            </Text>
+            <Text style={[styles.sectionHeaderCell, styles.partsDesc]}>Description</Text>
             <Text style={[styles.sectionHeaderCell, styles.partsUnit]}>Unit Price</Text>
             <Text style={[styles.sectionHeaderCell, styles.partsMhsw]}>MHSW</Text>
             <Text style={[styles.sectionHeaderCellLast, styles.partsAmt]}>Amount</Text>
           </View>
-          {parts.length === 0 ? (
-            <View style={styles.sectionRowLast}>
-              <Text style={[styles.sectionCell, styles.partsQty]}> </Text>
-              <Text style={[styles.sectionCell, styles.partsDesc]}> </Text>
-              <Text style={[styles.sectionCell, styles.partsUnit]}> </Text>
-              <Text style={[styles.sectionCell, styles.partsMhsw]}> </Text>
-              <Text style={[styles.sectionCellLast, styles.partsAmt]}> </Text>
-            </View>
-          ) : (
-            parts.map((it, i) => {
-              const last = i === parts.length - 1;
-              const qtyLabel = it.unit_of_measure
-                ? `${Number(it.quantity)} ${it.unit_of_measure}`
-                : String(Number(it.quantity));
+          {(() => {
+            // One table for everything: packages (collapsed — items shown as
+            // "Included"), then labour, then catalog parts. Amounts already
+            // include MHSW; the MHSW column shows the portion baked into each part.
+            type LineRow = {
+              id: string;
+              qty: string;
+              description: string;
+              unit: string;
+              unitMuted?: boolean;
+              unitStrike?: boolean;
+              mhsw: string;
+              amount: string;
+              indent?: boolean;
+              note?: string;
+            };
+            const rows: LineRow[] = [];
+
+            for (const r of packageRows) {
+              const saved = r.items.reduce(
+                (s, m) =>
+                  s +
+                  (m.merged_unit_price != null
+                    ? Number(m.merged_unit_price) * Number(m.quantity)
+                    : 0),
+                0,
+              );
+              rows.push({
+                id: r.key,
+                qty: "1",
+                description:
+                  saved > 0 ? `${r.label}  (merged — saved ${money(saved)})` : r.label,
+                unit: "",
+                mhsw: "",
+                amount: money(r.total),
+              });
+              for (const m of r.items) {
+                const merged = m.merged_unit_price != null;
+                rows.push({
+                  id: m.id,
+                  qty: "",
+                  description: merged
+                    ? `${m.description} — merged (already on the job)`
+                    : m.description,
+                  unit: merged ? money(Number(m.merged_unit_price)) : "Included",
+                  unitMuted: true,
+                  unitStrike: merged,
+                  mhsw: "",
+                  amount: "",
+                  indent: true,
+                });
+              }
+            }
+
+            for (const it of labour) {
+              rows.push({
+                id: it.id,
+                qty: String(Number(it.quantity)),
+                description: it.description,
+                unit: money(Number(it.unit_price)),
+                mhsw: "—",
+                amount: money(Number(it.line_total)),
+              });
+            }
+
+            for (const it of parts) {
               const cs = it.is_customer_supplied === true;
               const wouldHaveCharged =
                 Math.round(Number(it.quantity) * Number(it.unit_price) * 100) / 100;
+              rows.push({
+                id: it.id,
+                qty: it.unit_of_measure
+                  ? `${Number(it.quantity)} ${it.unit_of_measure}`
+                  : String(Number(it.quantity)),
+                description: it.description,
+                unit: money(Number(it.unit_price)),
+                mhsw: Number(it.mhsw_unit) > 0 ? money(Number(it.mhsw_unit)) : "—",
+                amount: money(Number(it.line_total)),
+                note: cs ? `(customer supplied — saved ${money(wouldHaveCharged)})` : undefined,
+              });
+            }
+
+            if (rows.length === 0) {
               return (
-                <View key={it.id} style={last ? styles.sectionRowLast : styles.sectionRow}>
-                  <Text style={[styles.sectionCell, styles.partsQty]}>{qtyLabel}</Text>
-                  <View style={[styles.sectionCell, styles.partsDesc]}>
-                    <Text>{it.description}</Text>
-                    {cs && (
-                      <Text style={styles.packageBadge}>
-                        (customer supplied — saved {money(wouldHaveCharged)})
-                      </Text>
-                    )}
-                  </View>
-                  <Text style={[styles.sectionCell, styles.partsUnit]}>
-                    {money(Number(it.unit_price))}
-                  </Text>
-                  <Text style={[styles.sectionCell, styles.partsMhsw]}>
-                    {Number(it.mhsw_unit) > 0 ? money(Number(it.mhsw_unit)) : "—"}
-                  </Text>
-                  <Text style={[styles.sectionCellLast, styles.partsAmt]}>
-                    {money(Number(it.line_total))}
-                  </Text>
+                <View style={styles.sectionRowLast}>
+                  <Text style={[styles.sectionCell, styles.partsQty]}> </Text>
+                  <Text style={[styles.sectionCell, styles.partsDesc]}> </Text>
+                  <Text style={[styles.sectionCell, styles.partsUnit]}> </Text>
+                  <Text style={[styles.sectionCell, styles.partsMhsw]}> </Text>
+                  <Text style={[styles.sectionCellLast, styles.partsAmt]}> </Text>
                 </View>
               );
-            })
-          )}
+            }
+
+            return rows.map((w, i) => {
+              const last = i === rows.length - 1;
+              return (
+                <View key={w.id} style={last ? styles.sectionRowLast : styles.sectionRow}>
+                  <Text style={[styles.sectionCell, styles.partsQty]}>{w.qty}</Text>
+                  <View style={[styles.sectionCell, styles.partsDesc]}>
+                    <Text style={w.indent ? styles.includedItem : undefined}>
+                      {w.indent ? `•  ${w.description}` : w.description}
+                    </Text>
+                    {w.note ? <Text style={styles.packageBadge}>{w.note}</Text> : null}
+                  </View>
+                  <Text
+                    style={[
+                      styles.sectionCell,
+                      styles.partsUnit,
+                      w.unitMuted ? styles.includedAmt : {},
+                      w.unitStrike ? styles.mergedAmt : {},
+                    ]}
+                  >
+                    {w.unit}
+                  </Text>
+                  <Text style={[styles.sectionCell, styles.partsMhsw]}>{w.mhsw}</Text>
+                  <Text style={[styles.sectionCellLast, styles.partsAmt]}>{w.amount}</Text>
+                </View>
+              );
+            });
+          })()}
         </View>
 
         {/* ---------------- Comments ---------------- */}

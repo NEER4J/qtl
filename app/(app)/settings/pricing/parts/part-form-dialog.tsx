@@ -111,21 +111,29 @@ export function PartFormDialog({
   const [
     cost = "0",
     mhswFee = "0",
+    mhswBuy = "0",
     marginType = "fixed",
     marginValue = "0",
     categoryId,
     partNumber = "",
   ] = useWatch({
     control: form.control,
-    name: ["cost", "mhsw_fee", "margin_type", "margin_value", "category_id", "part_number"],
+    name: ["cost", "mhsw_fee", "mhsw_buy", "margin_type", "margin_value", "category_id", "part_number"],
   });
 
   const [duplicateMatches, setDuplicateMatches] = useState<
     { id: string; part_number: string; brand: string; active: boolean }[]
   >([]);
 
+  // Cost and Buy MHSW are independent inputs. The "Total cost" below = base Cost
+  // + Buy MHSW; that total is what's saved to the DB cost column and drives the
+  // margin / list price.
+  const baseCostNum = Number(cost) || 0;
+  const buyMhswNum = Number(mhswBuy) || 0;
+  const totalCost = Math.round((baseCostNum + buyMhswNum) * 100) / 100;
+
   const calculatedListPrice = calculatePartListPrice({
-    cost: Number(cost),
+    cost: totalCost,
     mhsw_fee: Number(mhswFee),
     margin_type: marginType,
     margin_value: Number(marginValue),
@@ -142,7 +150,9 @@ export function PartFormDialog({
             brand: part.brand,
             category_id: part.category_id,
             description: part.description ?? "",
-            cost: String(part.cost),
+            // Stored cost includes Buy MHSW; show the BASE in the Cost input so
+            // the Total cost below re-derives to the stored value (no double add).
+            cost: String(Math.round((Number(part.cost) - Number(part.mhsw_buy ?? 0)) * 100) / 100),
             mhsw_fee: String(part.mhsw_fee),
             mhsw_buy: String(part.mhsw_buy ?? 0),
             counter_premium: part.counter_premium == null ? "" : String(part.counter_premium),
@@ -199,7 +209,9 @@ export function PartFormDialog({
         brand: values.brand.trim(),
         category_id: values.category_id,
         description: values.description.trim() === "" ? null : values.description.trim(),
-        cost: Number(values.cost),
+        // Saved cost = Total cost = base Cost + Buy MHSW.
+        cost:
+          Math.round(((Number(values.cost) || 0) + (Number(values.mhsw_buy) || 0)) * 100) / 100,
         mhsw_fee: Number(values.mhsw_fee),
         mhsw_buy: Number(values.mhsw_buy),
         counter_premium: counterTrimmed === "" ? null : Number(counterTrimmed),
@@ -232,13 +244,13 @@ export function PartFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "New part" : "Edit part"}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={onSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <FormField
                 control={form.control}
                 name="part_number"
@@ -294,40 +306,39 @@ export function PartFormDialog({
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="category_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Category *</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pick a category" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {categories.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}{" "}
+                            <span className="text-muted-foreground">
+                              ({c.unit_of_measure})
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedCategory && (
+                      <FormDescription>
+                        Shown in <strong>{selectedCategory.unit_of_measure}</strong>.
+                      </FormDescription>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
-
-            <FormField
-              control={form.control}
-              name="category_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Category *</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pick a category" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {categories.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}{" "}
-                          <span className="text-muted-foreground">
-                            ({c.unit_of_measure})
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedCategory && (
-                    <FormDescription>
-                      Quantities of this part will be shown in <strong>{selectedCategory.unit_of_measure}</strong>.
-                    </FormDescription>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}
@@ -351,7 +362,7 @@ export function PartFormDialog({
                   <FormItem>
                     <FormLabel className="flex items-center gap-1">
                       Buy MHSW
-                      <InfoTip>Cost-side MHSW you pay. Reference only — not added to the sell price.</InfoTip>
+                      <InfoTip>Cost-side MHSW you pay. Added to the base Cost in the Total cost below, which is what gets saved.</InfoTip>
                     </FormLabel>
                     <FormControl>
                       <Input type="number" min="0" step="0.01" {...field} />
@@ -381,7 +392,10 @@ export function PartFormDialog({
                 name="cost"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Cost *</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      Cost *
+                      <InfoTip>Base cost you pay. Buy MHSW is added to it in the Total cost below.</InfoTip>
+                    </FormLabel>
                     <FormControl>
                       <Input type="number" min="0" step="0.01" {...field} />
                     </FormControl>
@@ -391,7 +405,24 @@ export function PartFormDialog({
               />
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {/* Total cost = base Cost + Buy MHSW. This is the value saved to the
+                DB cost column and used for the margin / list price. */}
+            <div className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2">
+              <div className="flex items-center gap-1 text-sm font-medium">
+                Total cost
+                <InfoTip>Base Cost + Buy MHSW. Saved to the part&apos;s cost and used for the margin and list price.</InfoTip>
+              </div>
+              <div className="text-right">
+                <div className="text-base font-semibold tabular-nums">{formatMoney(totalCost)}</div>
+                {buyMhswNum > 0 && (
+                  <div className="text-xs text-muted-foreground tabular-nums">
+                    {formatMoney(baseCostNum)} + {formatMoney(buyMhswNum)} Buy MHSW
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <FormField
                 control={form.control}
                 name="counter_premium"
@@ -436,6 +467,23 @@ export function PartFormDialog({
                         step="0.01"
                         placeholder={`Default ${formatMoney(globalCustomerSuppliesLabour)}`}
                         {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="service_cost_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Linked labour charge</FormLabel>
+                    <FormControl>
+                      <ServiceCostCombobox
+                        value={field.value}
+                        onChange={field.onChange}
+                        serviceCosts={serviceCosts}
                       />
                     </FormControl>
                     <FormMessage />
@@ -489,24 +537,6 @@ export function PartFormDialog({
 
             <FormField
               control={form.control}
-              name="service_cost_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Linked labour charge</FormLabel>
-                  <FormControl>
-                    <ServiceCostCombobox
-                      value={field.value}
-                      onChange={field.onChange}
-                      serviceCosts={serviceCosts}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
               name="extra_price"
               render={({ field }) => (
                 <FormItem>
@@ -527,44 +557,46 @@ export function PartFormDialog({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="is_taxable"
-              render={({ field }) => (
-                <FormItem className="flex items-center gap-2 space-y-0">
-                  <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />
-                  </FormControl>
-                  <div className="leading-none">
-                    <FormLabel className="cursor-pointer">HST taxable</FormLabel>
-                    <FormDescription className="text-xs">
-                      Uncheck for HST-exempt parts. Applies to the list price on every job that uses this part.
-                    </FormDescription>
-                  </div>
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="is_taxable"
+                render={({ field }) => (
+                  <FormItem className="flex items-start gap-2 space-y-0 rounded-md border p-3">
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />
+                    </FormControl>
+                    <div className="leading-none">
+                      <FormLabel className="cursor-pointer">HST taxable</FormLabel>
+                      <FormDescription className="text-xs">
+                        Uncheck for HST-exempt parts. Applies to the list price on every job that uses this part.
+                      </FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="in_package"
-              render={({ field }) => (
-                <FormItem className="flex items-start gap-2 space-y-0">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={(v) => field.onChange(v === true)}
-                    />
-                  </FormControl>
-                  <div className="leading-none">
-                    <FormLabel className="cursor-pointer">Bundled in a package</FormLabel>
-                    <FormDescription className="text-xs">
-                      When on, the All Filter Sell Price shows <strong>Without Service = $0</strong> for this part (the customer pays for the package). If the same part is added to a sales job a second time, the extra one auto-uses the <strong>Over Counter</strong> price.
-                    </FormDescription>
-                  </div>
-                </FormItem>
-              )}
-            />
+              <FormField
+                control={form.control}
+                name="in_package"
+                render={({ field }) => (
+                  <FormItem className="flex items-start gap-2 space-y-0 rounded-md border p-3">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={(v) => field.onChange(v === true)}
+                      />
+                    </FormControl>
+                    <div className="leading-none">
+                      <FormLabel className="cursor-pointer">Bundled in a package</FormLabel>
+                      <FormDescription className="text-xs">
+                        When on, the All Filter Sell Price shows <strong>Without Service = $0</strong> for this part (the customer pays for the package). If the same part is added to a sales job a second time, the extra one auto-uses the <strong>Over Counter</strong> price.
+                      </FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+            </div>
 
             {mode === "edit" && (
               <FormField
