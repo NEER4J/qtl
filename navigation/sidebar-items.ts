@@ -62,6 +62,7 @@ export const sidebarItems: NavGroup[] = [
     ],
   },
   {
+    // Operations — day-to-day shop work.
     id: 2,
     items: [
       {
@@ -71,33 +72,19 @@ export const sidebarItems: NavGroup[] = [
         roles: ["owner", "co_owner", "manager", "accountant", "staff"],
       },
       {
-        title: "Invoices",
-        url: "/invoices",
-        icon: FileText,
-        roles: ["owner", "co_owner", "manager", "accountant"],
-      },
-      {
-        title: "Expenses",
-        url: "/expenses",
-        icon: Receipt,
-        roles: ["owner", "co_owner", "manager", "accountant", "staff"],
-      },
-      {
-        title: "Payroll",
-        url: "/payroll",
-        icon: Wallet,
-        roles: ["owner", "co_owner", "manager", "accountant"],
-      },
-    ],
-  },
-  {
-    id: 3,
-    items: [
-      {
         title: "Customers",
         url: "/customers",
         icon: Users,
         roles: ["owner", "co_owner", "manager", "staff"],
+      },
+      {
+        // Per-location stock counts for catalogue parts. Top-level so owner
+        // (no Settings) and managers can reach it. Edit is gated server-side
+        // to owner / co_owner / manager; everyone else is view-only.
+        title: "Inventory",
+        url: "/inventory",
+        icon: Boxes,
+        roles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"],
       },
       {
         title: "Vendors",
@@ -105,6 +92,12 @@ export const sidebarItems: NavGroup[] = [
         icon: Truck,
         roles: ["owner", "co_owner", "accountant", "manager"],
       },
+    ],
+  },
+  {
+    // Pricing & catalogue.
+    id: 3,
+    items: [
       {
         title: "Pricing",
         url: "/pricing",
@@ -119,15 +112,6 @@ export const sidebarItems: NavGroup[] = [
           { title: "Print list", url: "/pricing/print-list" },
           { title: "Trans & Diff", url: "/pricing/trans-diff" },
         ],
-      },
-      {
-        // Per-location stock counts for catalogue parts. Top-level so owner
-        // (no Settings) and managers can reach it. Edit is gated server-side
-        // to owner / co_owner / manager; everyone else is view-only.
-        title: "Inventory",
-        url: "/inventory",
-        icon: Boxes,
-        roles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"],
       },
       {
         // Parts / pricing CATALOGUE shortcuts. These pages live under
@@ -154,7 +138,31 @@ export const sidebarItems: NavGroup[] = [
     ],
   },
   {
+    // Finance — invoicing, expenses, payroll. Below the catalogue.
     id: 4,
+    items: [
+      {
+        title: "Invoices",
+        url: "/invoices",
+        icon: FileText,
+        roles: ["owner", "co_owner", "manager", "accountant"],
+      },
+      {
+        title: "Expenses",
+        url: "/expenses",
+        icon: Receipt,
+        roles: ["owner", "co_owner", "manager", "accountant", "staff"],
+      },
+      {
+        title: "Payroll",
+        url: "/payroll",
+        icon: Wallet,
+        roles: ["owner", "co_owner", "manager", "accountant"],
+      },
+    ],
+  },
+  {
+    id: 5,
     items: [
       {
         title: "Analytics",
@@ -186,7 +194,7 @@ export const sidebarItems: NavGroup[] = [
     ],
   },
   {
-    id: 5,
+    id: 6,
     items: [
       {
         // Settings is the Admin (co_owner) section only — owner no longer has it.

@@ -34,3 +34,22 @@ export const DeleteVendorLocationInput = z.object({
   vendor_id: z.string().uuid(),
   location_id: z.string().uuid(),
 });
+
+// One account row in the per-location accounts list.
+export const VendorLocationAccountInput = z.object({
+  label: textOptional(60),
+  account_no: textOptional(60),
+  account_type: textOptional(60),
+  is_default: z.coerce.boolean().default(false),
+});
+export type VendorLocationAccountInput = z.infer<typeof VendorLocationAccountInput>;
+
+// Replace-all for a (vendor, location)'s accounts. Empty rows are dropped.
+export const ReplaceVendorLocationAccountsInput = z.object({
+  vendor_id: z.string().uuid(),
+  location_id: z.string().uuid(),
+  accounts: z.array(VendorLocationAccountInput).max(20).default([]),
+});
+export type ReplaceVendorLocationAccountsInput = z.infer<
+  typeof ReplaceVendorLocationAccountsInput
+>;

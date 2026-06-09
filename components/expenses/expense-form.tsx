@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { EmptyDropdownHint } from "@/components/help/empty-state";
 import { createExpense, updateExpense } from "@/lib/actions/expenses";
+import { listVendorAccountsForLocation } from "@/lib/actions/vendors";
 import { ExpenseInput } from "@/lib/schemas/expenses";
 import type {
   ExpenseCategory,
@@ -32,6 +33,7 @@ import type {
   Location,
   PaymentMode,
   Vendor,
+  VendorLocationAccount,
 } from "@/lib/db/types";
 import { todayISO } from "@/lib/utils/format";
 
@@ -130,6 +132,35 @@ export function ExpenseForm({
   const categoryId = useWatch({ control: form.control, name: "category_id" });
   const subTotalRaw = useWatch({ control: form.control, name: "sub_total" });
   const paidRaw = useWatch({ control: form.control, name: "paid_amount" });
+  const vendorIdW = useWatch({ control: form.control, name: "vendor_id" });
+  const locationIdW = useWatch({ control: form.control, name: "location_id" });
+
+  // Location-wise account selector: when a vendor + location are both chosen,
+  // load that vendor's accounts at that location so the user can pick one.
+  const [vendorAccounts, setVendorAccounts] = useState<VendorLocationAccount[]>([]);
+  useEffect(() => {
+    if (!vendorIdW || !locationIdW) {
+      setVendorAccounts([]);
+      return;
+    }
+    let active = true;
+    (async () => {
+      try {
+        const accts = await listVendorAccountsForLocation(vendorIdW, locationIdW);
+        if (active) setVendorAccounts(accts);
+      } catch {
+        if (active) setVendorAccounts([]);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [vendorIdW, locationIdW]);
+
+  const applyAccount = (acct: VendorLocationAccount) => {
+    form.setValue("account_number", acct.account_no ?? "", { shouldDirty: true });
+    form.setValue("account_type", acct.account_type ?? "", { shouldDirty: true });
+  };
 
   // When line items exist, they drive the sub-total. Without items the user
   // can still enter sub_total directly (back-compat for expenses without
@@ -405,6 +436,34 @@ export function ExpenseForm({
                 </FormItem>
               )}
             />
+
+            {vendorAccounts.length > 0 && (
+              <FormItem>
+                <FormLabel>Account (for this location)</FormLabel>
+                <Select
+                  onValueChange={(id) => {
+                    const acct = vendorAccounts.find((a) => a.id === id);
+                    if (acct) applyAccount(acct);
+                  }}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pick an account to fill the fields below" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {vendorAccounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {[a.label, a.account_no, a.account_type]
+                          .filter(Boolean)
+                          .join(" · ") || "Account"}
+                        {a.is_default ? " (default)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            )}
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <FormField

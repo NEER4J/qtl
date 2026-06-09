@@ -135,6 +135,7 @@ const styles = StyleSheet.create({
   partsQty: { width: 50, textAlign: "right" },
   partsDesc: { flex: 1 },
   partsUnit: { width: 70, textAlign: "right" },
+  partsMhsw: { width: 50, textAlign: "right" },
   partsAmt: { width: 70, textAlign: "right" },
 
   packageBadge: {
@@ -290,12 +291,20 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
           <View style={styles.headerLeft}>
             <Image src={LOGO_PATH} style={styles.logo} />
             <View>
-              <Text style={styles.shopName}>Quick Truck Lube</Text>
-              <Text style={styles.shopMeta}>1010 Industrial Road, Ayr, Ontario, N0B 1E0</Text>
+              <Text style={styles.shopName}>
+                {job.location_invoice_name || job.location_name || "Quick Truck Lube"}
+              </Text>
+              <Text style={styles.shopMeta}>
+                {job.location_address || "1010 Industrial Road, Ayr, Ontario, N0B 1E0"}
+              </Text>
               <View style={styles.shopMetaRow}>
-                <Text style={styles.shopMetaCell}>(519) 622-0660</Text>
-                <Text style={styles.shopMetaCell}>GST 84754-0960 RT 001</Text>
-                <Text style={styles.shopMetaCell}>FAX 519-622-2493</Text>
+                <Text style={styles.shopMetaCell}>{job.location_phone || "(519) 622-0660"}</Text>
+                <Text style={styles.shopMetaCell}>
+                  GST {job.location_hst_number || "84754-0960 RT 001"}
+                </Text>
+                <Text style={styles.shopMetaCell}>
+                  FAX {job.location_fax || "519-622-2493"}
+                </Text>
               </View>
             </View>
           </View>
@@ -491,6 +500,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
               Parts Description
             </Text>
             <Text style={[styles.sectionHeaderCell, styles.partsUnit]}>Unit Price</Text>
+            <Text style={[styles.sectionHeaderCell, styles.partsMhsw]}>MHSW</Text>
             <Text style={[styles.sectionHeaderCellLast, styles.partsAmt]}>Amount</Text>
           </View>
           {parts.length === 0 ? (
@@ -498,6 +508,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
               <Text style={[styles.sectionCell, styles.partsQty]}> </Text>
               <Text style={[styles.sectionCell, styles.partsDesc]}> </Text>
               <Text style={[styles.sectionCell, styles.partsUnit]}> </Text>
+              <Text style={[styles.sectionCell, styles.partsMhsw]}> </Text>
               <Text style={[styles.sectionCellLast, styles.partsAmt]}> </Text>
             </View>
           ) : (
@@ -522,6 +533,9 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
                   </View>
                   <Text style={[styles.sectionCell, styles.partsUnit]}>
                     {money(Number(it.unit_price))}
+                  </Text>
+                  <Text style={[styles.sectionCell, styles.partsMhsw]}>
+                    {Number(it.mhsw_unit) > 0 ? money(Number(it.mhsw_unit)) : "—"}
                   </Text>
                   <Text style={[styles.sectionCellLast, styles.partsAmt]}>
                     {money(Number(it.line_total))}

@@ -134,6 +134,14 @@ export interface SalesJobFormProps {
   initialItems?: LineItem[];
 }
 
+/** Description for the $0 line item that represents the free-grease offer. */
+const FREE_GREASE_LINE_DESC = "Free Grease (offer)";
+
+/** A line is the free-grease offer line when it's a non-catalog $0 row with our label. */
+function isFreeGreaseLine(it: LineItem): boolean {
+  return it.part_id == null && it.description === FREE_GREASE_LINE_DESC;
+}
+
 export function SalesJobForm({
   mode,
   initial,
@@ -496,6 +504,7 @@ export function SalesJobForm({
           description: it.description,
           quantity: Number(it.quantity) || 0,
           unit_price: Number(it.unit_price) || 0,
+          mhsw_unit: Number(it.mhsw_unit) || 0,
           is_taxable: it.is_taxable,
           package_label: it.package_label ?? null,
           package_group: it.package_group ?? null,
@@ -680,7 +689,27 @@ export function SalesJobForm({
                     until={selectedCustomer.free_grease_until!}
                     applied={form.watch("free_grease_applied")}
                     overrideReason={form.watch("free_grease_override_reason")}
-                    onChangeApplied={(v) => form.setValue("free_grease_applied", v)}
+                    onChangeApplied={(v) => {
+                      form.setValue("free_grease_applied", v);
+                      // Reflect the offer as a real $0 line item rather than a
+                      // hidden flag: the grease shows on the job/invoice, and a
+                      // free-only job is a tangible $0 line (not an empty,
+                      // bogus-outstanding invoice).
+                      setLineItems((prev) => {
+                        const without = prev.filter((it) => !isFreeGreaseLine(it));
+                        return v
+                          ? [
+                              ...without,
+                              newLineItem({
+                                description: FREE_GREASE_LINE_DESC,
+                                quantity: 1,
+                                unit_price: 0,
+                                is_taxable: false,
+                              }),
+                            ]
+                          : without;
+                      });
+                    }}
                     onChangeReason={(v) => form.setValue("free_grease_override_reason", v)}
                   />
                 )}

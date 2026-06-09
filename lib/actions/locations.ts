@@ -34,6 +34,9 @@ export const createLocation = wrapAction({
         address: input.address || null,
         phone: input.phone || null,
         email: input.email || null,
+        invoice_name: input.invoice_name || null,
+        fax: input.fax || null,
+        hst_number: input.hst_number || null,
         active: input.active,
       })
       .select("*")
@@ -57,6 +60,9 @@ export const updateLocation = wrapAction({
         address: input.address || null,
         phone: input.phone || null,
         email: input.email || null,
+        invoice_name: input.invoice_name || null,
+        fax: input.fax || null,
+        hst_number: input.hst_number || null,
         active: input.active,
       })
       .eq("id", input.id)

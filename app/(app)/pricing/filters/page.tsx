@@ -95,7 +95,10 @@ export default async function FilterListPage({
               </TableHeader>
               <TableBody>
                 {parts.map((p) => (
-                  <TableRow key={p.id}>
+                  <TableRow
+                    key={p.id}
+                    className="[content-visibility:auto] [contain-intrinsic-size:auto_41px]"
+                  >
                     <TableCell className="font-mono text-sm">{p.part_number}</TableCell>
                     <TableCell>{p.brand}</TableCell>
                     <TableCell className="text-sm">

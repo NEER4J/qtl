@@ -20,20 +20,31 @@ function roundMoney(value: number): number {
   return Object.is(rounded, -0) ? 0 : rounded;
 }
 
+/**
+ * Margin amount. Sell MHSW is folded into the cost basis FIRST, then the
+ * margin is calculated on that combined basis (cost + Sell MHSW). For a percent
+ * margin this means MHSW is marked up too; for a fixed margin the basis is
+ * irrelevant. See `calculatePartListPrice` for the full chain.
+ */
 export function calculatePartMarginAmount({
   cost,
+  mhsw_fee,
   margin_type,
   margin_value,
-}: Pick<PartPriceInputs, "cost" | "margin_type" | "margin_value">): number {
-  const safeCost = toFiniteNumber(cost);
+}: Pick<PartPriceInputs, "cost" | "mhsw_fee" | "margin_type" | "margin_value">): number {
+  const costBasis = toFiniteNumber(cost) + toFiniteNumber(mhsw_fee);
   const safeMarginValue = clampNonNegative(margin_value);
   return roundMoney(
     margin_type === "percent"
-      ? (safeCost * safeMarginValue) / 100
+      ? (costBasis * safeMarginValue) / 100
       : safeMarginValue,
   );
 }
 
+/**
+ * List price = (cost + Sell MHSW) + margin, where margin is computed on the
+ * combined cost basis. Mirror of the `set_part_list_price()` DB trigger.
+ */
 export function calculatePartListPrice(input: PartPriceInputs): number {
   return roundMoney(
     toFiniteNumber(input.cost) +

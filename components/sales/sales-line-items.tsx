@@ -43,6 +43,9 @@ export interface LineItem {
   description: string;
   quantity: number;
   unit_price: number;
+  /** Per-unit Sell MHSW for the linked part (already inside unit_price); shown
+   *  as the MHSW column. 0 for non-part / labour / package-collapsed lines. */
+  mhsw_unit?: number;
   /** Whether this line contributes to the HST taxable subtotal. Defaults true. */
   is_taxable: boolean;
   /** Unit label shown beside qty ("3 ltr"). null for custom rows. */
@@ -74,6 +77,7 @@ export function newLineItem(partial: Partial<LineItem> = {}): LineItem {
     description: "",
     quantity: 1,
     unit_price: 0,
+    mhsw_unit: 0,
     is_taxable: true,
     unit_of_measure: null,
     package_label: null,
@@ -192,6 +196,7 @@ export function SalesLineItems({
       description: `${p.brand} ${p.part_number}${p.description ? ` — ${p.description}` : ""}`,
       quantity: 1,
       unit_price: unitPriceOverride ?? (Number(p.list_price) || 0),
+      mhsw_unit: Number(p.mhsw_fee) || 0,
       is_taxable: p.is_taxable,
       unit_of_measure: p.unit_of_measure,
       part_category_id: p.category_id,

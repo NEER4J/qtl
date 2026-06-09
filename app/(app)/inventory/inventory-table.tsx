@@ -113,7 +113,7 @@ export function InventoryTable({
         />
       </div>
 
-      <div className="rounded-lg border overflow-x-auto">
+      <div className="rounded-lg border max-h-[calc(100vh-220px)] overflow-auto">
         <Table>
           <TableHeader>
             <TableRow>

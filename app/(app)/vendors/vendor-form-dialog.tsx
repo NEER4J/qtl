@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +36,8 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   createVendor,
   getVendorLocations,
+  listVendorLocationAccounts,
+  replaceVendorLocationAccounts,
   updateVendor,
   upsertVendorLocation,
 } from "@/lib/actions/vendors";
@@ -54,22 +57,34 @@ type FormValues = {
   notes: string;
 };
 
-type LocRow = {
+type AccountRow = {
+  label: string;
   account_no: string;
   account_type: string;
+  is_default: boolean;
+};
+
+type LocRow = {
   contact_no: string;
   email: string;
   sales_rep_name: string;
   notes: string;
+  accounts: AccountRow[];
 };
 
 const blankLocRow: LocRow = {
-  account_no: "",
-  account_type: "",
   contact_no: "",
   email: "",
   sales_rep_name: "",
   notes: "",
+  accounts: [],
+};
+
+const blankAccount: AccountRow = {
+  label: "",
+  account_no: "",
+  account_type: "",
+  is_default: false,
 };
 
 export function VendorFormDialog({
@@ -89,7 +104,6 @@ export function VendorFormDialog({
 }) {
   const [isPending, startTransition] = useTransition();
   const [locRows, setLocRows] = useState<Record<string, LocRow>>({});
-  const [savingLocId, setSavingLocId] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     defaultValues: {
@@ -117,19 +131,30 @@ export function VendorFormDialog({
         category_id: vendor.category_id ?? NO_CATEGORY,
         notes: vendor.notes ?? "",
       });
-      // Load per-location data
+      // Load per-location data + the accounts list for each location.
       (async () => {
-        const rows = await getVendorLocations(vendor.id);
+        const [rows, accounts] = await Promise.all([
+          getVendorLocations(vendor.id),
+          listVendorLocationAccounts(vendor.id),
+        ]);
         const byLoc: Record<string, LocRow> = {};
         for (const r of rows) {
           byLoc[r.location_id] = {
-            account_no: r.account_no ?? "",
-            account_type: r.account_type ?? "",
             contact_no: r.contact_no ?? "",
             email: r.email ?? "",
             sales_rep_name: r.sales_rep_name ?? "",
             notes: r.notes ?? "",
+            accounts: [],
           };
+        }
+        for (const a of accounts) {
+          if (!byLoc[a.location_id]) byLoc[a.location_id] = { ...blankLocRow, accounts: [] };
+          byLoc[a.location_id].accounts.push({
+            label: a.label ?? "",
+            account_no: a.account_no ?? "",
+            account_type: a.account_type ?? "",
+            is_default: a.is_default,
+          });
         }
         setLocRows(byLoc);
       })();
@@ -187,6 +212,53 @@ export function VendorFormDialog({
         }
         return;
       }
+
+      // Persist per-location details + accounts for every location that has any
+      // data. Works the same on create (vendor id comes back here) and edit.
+      const vendorId = res.data.id;
+      for (const loc of locations) {
+        const row = locRows[loc.id];
+        if (!row) continue;
+        const accts = (row.accounts ?? []).filter(
+          (a) => a.account_no || a.account_type || a.label,
+        );
+        const hasContact =
+          !!row.contact_no || !!row.email || !!row.sales_rep_name || !!row.notes;
+        if (accts.length === 0 && !hasContact) continue;
+
+        if (hasContact) {
+          const lr = await upsertVendorLocation({
+            vendor_id: vendorId,
+            location_id: loc.id,
+            account_no: null,
+            account_type: null,
+            contact_no: row.contact_no || null,
+            email: row.email || null,
+            sales_rep_name: row.sales_rep_name || null,
+            notes: row.notes || null,
+          });
+          if (!lr.ok) {
+            toast.error(`${loc.code ?? loc.name}: ${lr.error}`);
+            return;
+          }
+        }
+
+        const ar = await replaceVendorLocationAccounts({
+          vendor_id: vendorId,
+          location_id: loc.id,
+          accounts: accts.map((a) => ({
+            label: a.label || null,
+            account_no: a.account_no || null,
+            account_type: a.account_type || null,
+            is_default: a.is_default,
+          })),
+        });
+        if (!ar.ok) {
+          toast.error(`${loc.code ?? loc.name}: ${ar.error}`);
+          return;
+        }
+      }
+
       toast.success(mode === "create" ? "Vendor created" : "Vendor updated");
       onOpenChange(false);
     });
@@ -199,26 +271,43 @@ export function VendorFormDialog({
     }));
   };
 
-  const saveLocRow = async (locId: string) => {
-    if (!vendor) return;
-    const row = locRows[locId] ?? blankLocRow;
-    setSavingLocId(locId);
-    const res = await upsertVendorLocation({
-      vendor_id: vendor.id,
-      location_id: locId,
-      account_no: row.account_no || null,
-      account_type: row.account_type || null,
-      contact_no: row.contact_no || null,
-      email: row.email || null,
-      sales_rep_name: row.sales_rep_name || null,
-      notes: row.notes || null,
-    });
-    setSavingLocId(null);
-    if (!res.ok) {
-      toast.error(res.error);
-      return;
+  const getAccounts = (locId: string): AccountRow[] =>
+    locRows[locId]?.accounts ?? [];
+
+  const setAccounts = (locId: string, accounts: AccountRow[]) =>
+    updateLocRow(locId, { accounts });
+
+  const addAccount = (locId: string) => {
+    const current = getAccounts(locId);
+    setAccounts(locId, [
+      ...current,
+      { ...blankAccount, is_default: current.length === 0 },
+    ]);
+  };
+
+  const updateAccount = (locId: string, idx: number, patch: Partial<AccountRow>) => {
+    const current = getAccounts(locId);
+    setAccounts(
+      locId,
+      current.map((a, i) => (i === idx ? { ...a, ...patch } : a)),
+    );
+  };
+
+  const removeAccount = (locId: string, idx: number) => {
+    const current = getAccounts(locId).filter((_, i) => i !== idx);
+    // Keep a default selected if any remain.
+    if (current.length > 0 && !current.some((a) => a.is_default)) {
+      current[0]!.is_default = true;
     }
-    toast.success("Location details saved");
+    setAccounts(locId, current);
+  };
+
+  const setDefaultAccount = (locId: string, idx: number) => {
+    const current = getAccounts(locId).map((a, i) => ({
+      ...a,
+      is_default: i === idx,
+    }));
+    setAccounts(locId, current);
   };
 
   return (
@@ -367,6 +456,150 @@ export function VendorFormDialog({
               )}
             />
 
+            {/* Per-location details (item #16). Shown on create AND edit; saved
+                together with the vendor when you click Create / Save. */}
+            {locations.length > 0 && (
+              <div className="mt-2 border-t pt-4">
+                <div className="mb-3">
+                  <h3 className="text-sm font-semibold">Per-location details</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Override the defaults above for a specific shop, and add one or more
+                    accounts per location. The expense form uses these to fill the right
+                    account.
+                  </p>
+                </div>
+                <Tabs defaultValue={locations[0]?.id}>
+                  <TabsList className="w-full justify-start">
+                    {locations.map((loc) => (
+                      <TabsTrigger key={loc.id} value={loc.id}>
+                        {loc.code ?? loc.name}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                  {locations.map((loc) => {
+                    const row = locRows[loc.id] ?? blankLocRow;
+                    const accounts = row.accounts ?? [];
+                    return (
+                      <TabsContent key={loc.id} value={loc.id} className="mt-4 space-y-4">
+                        {/* Accounts list */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-semibold">Accounts</label>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => addAccount(loc.id)}
+                            >
+                              Add account
+                            </Button>
+                          </div>
+                          {accounts.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              No accounts yet. Add one to make it pickable on expenses for
+                              this location.
+                            </p>
+                          ) : (
+                            accounts.map((acc, idx) => (
+                              <div
+                                key={idx}
+                                className="grid grid-cols-[1fr_1fr_1fr_auto_auto] items-end gap-2 rounded-md border p-2"
+                              >
+                                <div>
+                                  <label className="text-xs text-muted-foreground">Label</label>
+                                  <Input
+                                    value={acc.label}
+                                    placeholder="Parts a/c"
+                                    onChange={(e) =>
+                                      updateAccount(loc.id, idx, { label: e.target.value })
+                                    }
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs text-muted-foreground">Account #</label>
+                                  <Input
+                                    value={acc.account_no}
+                                    onChange={(e) =>
+                                      updateAccount(loc.id, idx, { account_no: e.target.value })
+                                    }
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs text-muted-foreground">Type</label>
+                                  <Input
+                                    value={acc.account_type}
+                                    placeholder="Chequing"
+                                    onChange={(e) =>
+                                      updateAccount(loc.id, idx, { account_type: e.target.value })
+                                    }
+                                  />
+                                </div>
+                                <label className="flex h-9 items-center gap-1 text-xs">
+                                  <input
+                                    type="radio"
+                                    name={`default-${loc.id}`}
+                                    checked={acc.is_default}
+                                    onChange={() => setDefaultAccount(loc.id, idx)}
+                                  />
+                                  Default
+                                </label>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removeAccount(loc.id, idx)}
+                                  aria-label="Remove account"
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+
+                        {/* Per-location contact */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs text-muted-foreground">Phone</label>
+                            <PhoneInput
+                              value={row.contact_no}
+                              onChange={(v) => updateLocRow(loc.id, { contact_no: v })}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-muted-foreground">Email</label>
+                            <Input
+                              type="email"
+                              value={row.email}
+                              onChange={(e) => updateLocRow(loc.id, { email: e.target.value })}
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="text-xs text-muted-foreground">Sales rep name</label>
+                            <Input
+                              value={row.sales_rep_name}
+                              onChange={(e) =>
+                                updateLocRow(loc.id, { sales_rep_name: e.target.value })
+                              }
+                              placeholder="e.g. Jane Doe"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="text-xs text-muted-foreground">Notes</label>
+                            <Textarea
+                              rows={2}
+                              value={row.notes}
+                              onChange={(e) => updateLocRow(loc.id, { notes: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                      </TabsContent>
+                    );
+                  })}
+                </Tabs>
+              </div>
+            )}
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
                 Cancel
@@ -377,92 +610,6 @@ export function VendorFormDialog({
             </DialogFooter>
           </form>
         </Form>
-
-        {/* Per-location tabs (item #16) — edit mode only, since they FK to vendor.id */}
-        {mode === "edit" && vendor && locations.length > 0 && (
-          <div className="mt-6 border-t pt-6">
-            <div className="mb-3">
-              <h3 className="text-sm font-semibold">Per-location details</h3>
-              <p className="text-xs text-muted-foreground">
-                Override the defaults above for a specific shop. Used by the expense form
-                to prefill the right account number.
-              </p>
-            </div>
-            <Tabs defaultValue={locations[0]?.id}>
-              <TabsList className="w-full justify-start">
-                {locations.map((loc) => (
-                  <TabsTrigger key={loc.id} value={loc.id}>
-                    {loc.code ?? loc.name}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-              {locations.map((loc) => {
-                const row = locRows[loc.id] ?? blankLocRow;
-                return (
-                  <TabsContent key={loc.id} value={loc.id} className="mt-4 space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs text-muted-foreground">Account #</label>
-                        <Input
-                          value={row.account_no}
-                          onChange={(e) => updateLocRow(loc.id, { account_no: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground">Account type</label>
-                        <Input
-                          value={row.account_type}
-                          onChange={(e) => updateLocRow(loc.id, { account_type: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground">Phone</label>
-                        <PhoneInput
-                          value={row.contact_no}
-                          onChange={(v) => updateLocRow(loc.id, { contact_no: v })}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground">Email</label>
-                        <Input
-                          type="email"
-                          value={row.email}
-                          onChange={(e) => updateLocRow(loc.id, { email: e.target.value })}
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="text-xs text-muted-foreground">Sales rep name</label>
-                        <Input
-                          value={row.sales_rep_name}
-                          onChange={(e) => updateLocRow(loc.id, { sales_rep_name: e.target.value })}
-                          placeholder="e.g. Jane Doe"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="text-xs text-muted-foreground">Notes</label>
-                        <Textarea
-                          rows={2}
-                          value={row.notes}
-                          onChange={(e) => updateLocRow(loc.id, { notes: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex justify-end">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => saveLocRow(loc.id)}
-                        disabled={savingLocId === loc.id}
-                      >
-                        {savingLocId === loc.id ? "Saving…" : `Save ${loc.code ?? loc.name} details`}
-                      </Button>
-                    </div>
-                  </TabsContent>
-                );
-              })}
-            </Tabs>
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );

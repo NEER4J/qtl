@@ -346,10 +346,13 @@ export function PartFormDialog({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <FormField
                 control={form.control}
-                name="cost"
+                name="mhsw_buy"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Cost *</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      Buy MHSW
+                      <InfoTip>Cost-side MHSW you pay. Reference only — not added to the sell price.</InfoTip>
+                    </FormLabel>
                     <FormControl>
                       <Input type="number" min="0" step="0.01" {...field} />
                     </FormControl>
@@ -364,7 +367,7 @@ export function PartFormDialog({
                   <FormItem>
                     <FormLabel className="flex items-center gap-1">
                       Sell MHSW
-                      <InfoTip>Customer-facing MHSW — added into the list/sell price.</InfoTip>
+                      <InfoTip>Customer-facing MHSW — added into the cost basis first, then marked up by the margin into the list/sell price.</InfoTip>
                     </FormLabel>
                     <FormControl>
                       <Input type="number" min="0" step="0.01" {...field} />
@@ -375,13 +378,10 @@ export function PartFormDialog({
               />
               <FormField
                 control={form.control}
-                name="mhsw_buy"
+                name="cost"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center gap-1">
-                      Buy MHSW
-                      <InfoTip>Cost-side MHSW you pay. Reference only — not added to the sell price.</InfoTip>
-                    </FormLabel>
+                    <FormLabel>Cost *</FormLabel>
                     <FormControl>
                       <Input type="number" min="0" step="0.01" {...field} />
                     </FormControl>
@@ -459,7 +459,7 @@ export function PartFormDialog({
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="fixed">Fixed amount</SelectItem>
-                        <SelectItem value="percent">Percent of cost</SelectItem>
+                        <SelectItem value="percent">Percent of (cost + Sell MHSW)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

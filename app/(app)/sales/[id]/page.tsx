@@ -177,6 +177,7 @@ export default async function SalesJobDetailPage({
                   <TableHead>Description</TableHead>
                   <TableHead className="w-24 text-right">Qty</TableHead>
                   <TableHead className="w-32 text-right">Unit price</TableHead>
+                  <TableHead className="w-24 text-right">MHSW</TableHead>
                   <TableHead className="w-32 text-right">Line total</TableHead>
                 </TableRow>
               </TableHeader>
@@ -214,6 +215,9 @@ export default async function SalesJobDetailPage({
                           <TableCell className="text-right tabular-nums text-muted-foreground">
                             —
                           </TableCell>
+                          <TableCell className="text-right tabular-nums text-muted-foreground">
+                            —
+                          </TableCell>
                           <TableCell className="text-right tabular-nums font-medium">
                             {formatMoney(row.total)}
                           </TableCell>
@@ -242,6 +246,7 @@ export default async function SalesJobDetailPage({
                                   "Included"
                                 )}
                               </TableCell>
+                              <TableCell className="py-1" />
                               <TableCell className="py-1" />
                             </TableRow>
                           );
@@ -273,6 +278,9 @@ export default async function SalesJobDetailPage({
                       </TableCell>
                       <TableCell className={`text-right tabular-nums ${cs ? "line-through text-muted-foreground" : ""}`}>
                         {formatMoney(it.unit_price)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
+                        {Number(it.mhsw_unit) > 0 ? formatMoney(Number(it.mhsw_unit)) : "—"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums font-medium">
                         {formatMoney(it.line_total)}

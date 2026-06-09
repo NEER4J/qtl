@@ -98,6 +98,12 @@ export async function listSalesJobs(
 export interface SalesJobDetail extends SalesJob {
   location_name: string | null;
   location_code: string | null;
+  location_address: string | null;
+  location_phone: string | null;
+  location_email: string | null;
+  location_invoice_name: string | null;
+  location_fax: string | null;
+  location_hst_number: string | null;
   service_type_name: string | null;
   customer_license_plates: string[] | null;
   payments: SalesPaymentRow[];
@@ -134,7 +140,7 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
     supabase
       .from("sales_jobs")
       .select(
-        "*, locations:location_id(code, name), service_types:service_type_id(code, name), customers:customer_id(license_plates)",
+        "*, locations:location_id(code, name, address, phone, email, invoice_name, fax, hst_number), service_types:service_type_id(code, name), customers:customer_id(license_plates)",
       )
       .eq("id", id)
       .maybeSingle(),
@@ -159,8 +165,18 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
   if (itemsErr) throw itemsErr;
   if (!job) return null;
 
+  type LocJoin = {
+    code: string | null;
+    name: string | null;
+    address: string | null;
+    phone: string | null;
+    email: string | null;
+    invoice_name: string | null;
+    fax: string | null;
+    hst_number: string | null;
+  };
   type JoinedRow = SalesJob & {
-    locations: { code: string | null; name: string | null } | { code: string | null; name: string | null }[] | null;
+    locations: LocJoin | LocJoin[] | null;
     service_types: { code: string | null; name: string | null } | { code: string | null; name: string | null }[] | null;
     customers: { license_plates: string[] | null } | { license_plates: string[] | null }[] | null;
   };
@@ -196,6 +212,12 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
     ...(rest as SalesJob),
     location_code: loc?.code ?? null,
     location_name: loc?.name ?? null,
+    location_address: loc?.address ?? null,
+    location_phone: loc?.phone ?? null,
+    location_email: loc?.email ?? null,
+    location_invoice_name: loc?.invoice_name ?? null,
+    location_fax: loc?.fax ?? null,
+    location_hst_number: loc?.hst_number ?? null,
     service_type_name: svc?.name ?? null,
     customer_license_plates: cust?.license_plates ?? null,
     payments: (payments ?? []) as SalesPaymentRow[],
@@ -481,6 +503,7 @@ async function replaceJobItems(
         description: string;
         quantity: number;
         unit_price: number;
+        mhsw_unit?: number;
         is_taxable?: boolean;
         package_label?: string | null;
         package_group?: string | null;
@@ -509,6 +532,7 @@ async function replaceJobItems(
     description: it.description.trim(),
     quantity: it.quantity,
     unit_price: it.unit_price,
+    mhsw_unit: it.mhsw_unit ?? 0,
     is_taxable: it.is_taxable ?? true,
     package_label: it.package_label ?? null,
     package_group: it.package_group ?? null,
@@ -524,6 +548,8 @@ async function replaceJobItems(
 }
 
 function deriveStatus(total: number, paid: number): PaymentStatus {
+  // Nothing owed (e.g. a free-grease-only $0 job) is settled, not outstanding.
+  if (total <= 0.005) return "paid";
   if (paid <= 0) return "outstanding";
   if (paid < total) return "partial";
   return "paid";

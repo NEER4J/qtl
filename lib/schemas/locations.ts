@@ -18,6 +18,10 @@ export const CreateLocationInput = z.object({
     .optional()
     .nullable()
     .or(z.literal("")),
+  // Invoice header fields — printed on this location's invoices.
+  invoice_name: z.string().trim().max(120).optional().nullable().or(z.literal("")),
+  fax: z.string().trim().max(30).optional().nullable().or(z.literal("")),
+  hst_number: z.string().trim().max(60).optional().nullable().or(z.literal("")),
   active: z.coerce.boolean().default(true),
 });
 export type CreateLocationInput = z.infer<typeof CreateLocationInput>;

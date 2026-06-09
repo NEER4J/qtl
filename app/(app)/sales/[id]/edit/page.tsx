@@ -76,6 +76,7 @@ export default async function EditSalesJobPage({
           description: it.description,
           quantity: Number(it.quantity),
           unit_price: Number(it.unit_price),
+          mhsw_unit: Number(it.mhsw_unit) || 0,
           is_taxable: it.is_taxable,
           unit_of_measure: it.unit_of_measure,
           package_label: it.package_label ?? null,

@@ -32,6 +32,12 @@ export interface Location {
   address: string | null;
   phone: string | null;
   email: string | null;
+  /** Business name printed on this location's invoices. Falls back to `name`. */
+  invoice_name: string | null;
+  /** Fax number printed on this location's invoices. */
+  fax: string | null;
+  /** HST/GST registration number printed on this location's invoices. */
+  hst_number: string | null;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -204,6 +210,22 @@ export interface VendorLocation {
   updated_by: string | null;
 }
 
+/** One of possibly several accounts a vendor has at a given location. */
+export interface VendorLocationAccount {
+  id: string;
+  vendor_id: string;
+  location_id: string;
+  label: string | null;
+  account_no: string | null;
+  account_type: string | null;
+  is_default: boolean;
+  deactivated_at: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
 export interface Vendor {
   id: string;
   code: string | null;
@@ -360,6 +382,10 @@ export interface SalesJobItem {
   quantity: number;
   unit_price: number;
   line_total: number;
+  /** Per-unit Sell MHSW for the linked part, already included in unit_price.
+   *  Snapshot at insert time so historical invoices stay stable. 0 for
+   *  non-part / labour / package-collapsed lines. */
+  mhsw_unit: number;
   /** Whether this line contributes to the HST taxable subtotal. Snapshot at
    *  insert time so historical invoices stay stable when a part's taxability
    *  is later toggled. */
@@ -651,6 +677,9 @@ export interface OilType {
   litres_per_gallon: number;
   /** Item #21 — gallon oil sales attract HST when true. */
   is_taxable: boolean;
+  /** When true, this grade is an engine oil and shows in the Oil-change grid.
+   *  Coolants / trans / diff fluids are false. */
+  is_engine_oil: boolean;
   sort_order: number;
   active: boolean;
   created_at: string;

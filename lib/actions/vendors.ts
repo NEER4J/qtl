@@ -12,9 +12,15 @@ import {
 } from "@/lib/schemas/vendors";
 import {
   DeleteVendorLocationInput,
+  ReplaceVendorLocationAccountsInput,
   UpsertVendorLocationInput,
 } from "@/lib/schemas/vendor-locations";
-import type { Expense, Vendor, VendorLocation } from "@/lib/db/types";
+import type {
+  Expense,
+  Vendor,
+  VendorLocation,
+  VendorLocationAccount,
+} from "@/lib/db/types";
 
 // ----------------------------------------------------------------------------
 // Search
@@ -243,5 +249,92 @@ export const deleteVendorLocation = wrapAction({
     if (error) throw error;
     revalidatePath(`/vendors/${input.vendor_id}`);
     return input;
+  },
+});
+
+// ----------------------------------------------------------------------------
+// Vendor per-location ACCOUNTS (multiple accounts per location)
+// ----------------------------------------------------------------------------
+export async function listVendorLocationAccounts(
+  vendorId: string,
+): Promise<VendorLocationAccount[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("vendor_location_accounts")
+    .select("*")
+    .eq("vendor_id", vendorId)
+    .is("deactivated_at", null)
+    .order("is_default", { ascending: false })
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as VendorLocationAccount[];
+}
+
+// Accounts for one (vendor, location) — used by the expense form to populate
+// the location-wise account selector.
+export async function listVendorAccountsForLocation(
+  vendorId: string,
+  locationId: string,
+): Promise<VendorLocationAccount[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("vendor_location_accounts")
+    .select("*")
+    .eq("vendor_id", vendorId)
+    .eq("location_id", locationId)
+    .is("deactivated_at", null)
+    .order("is_default", { ascending: false })
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as VendorLocationAccount[];
+}
+
+// Replace-all for a (vendor, location)'s accounts. Soft-deactivates the current
+// active set (no DELETE, per repo convention) and inserts the provided rows.
+export const replaceVendorLocationAccounts = wrapAction({
+  schema: ReplaceVendorLocationAccountsInput,
+  roles: ["owner", "co_owner", "accountant", "manager"],
+  handler: async (input, profile): Promise<{ vendor_id: string; location_id: string }> => {
+    const supabase = await createClient();
+
+    const { error: deErr } = await supabase
+      .from("vendor_location_accounts")
+      .update({ deactivated_at: new Date().toISOString(), updated_by: profile.id })
+      .eq("vendor_id", input.vendor_id)
+      .eq("location_id", input.location_id)
+      .is("deactivated_at", null);
+    if (deErr) throw deErr;
+
+    // Drop fully-empty rows; keep at most one default.
+    const rows = input.accounts.filter(
+      (a) => a.account_no || a.account_type || a.label,
+    );
+    let defaulted = false;
+    if (rows.length > 0) {
+      const insertRows = rows.map((a) => {
+        const isDefault = a.is_default && !defaulted;
+        if (isDefault) defaulted = true;
+        return {
+          vendor_id: input.vendor_id,
+          location_id: input.location_id,
+          label: a.label,
+          account_no: a.account_no,
+          account_type: a.account_type,
+          is_default: isDefault,
+          created_by: profile.id,
+          updated_by: profile.id,
+        };
+      });
+      // If nothing was marked default, make the first row the default.
+      if (!defaulted) insertRows[0]!.is_default = true;
+      const { error: insErr } = await supabase
+        .from("vendor_location_accounts")
+        .insert(insertRows);
+      if (insErr) throw insErr;
+    }
+
+    revalidatePath("/vendors");
+    revalidatePath(`/vendors/${input.vendor_id}`);
+    return { vendor_id: input.vendor_id, location_id: input.location_id };
   },
 });

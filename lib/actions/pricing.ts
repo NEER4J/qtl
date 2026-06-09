@@ -213,6 +213,7 @@ export async function getOilChangeGrid(): Promise<{
         .from("oil_types")
         .select("*")
         .eq("active", true)
+        .eq("is_engine_oil", true)
         .order("sort_order")
         .order("name"),
       supabase

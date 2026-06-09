@@ -177,7 +177,13 @@ export function PartsTable({
               </TableRow>
             ) : (
               parts.map((p) => (
-                <TableRow key={p.id} className={!p.active ? "opacity-60" : undefined}>
+                <TableRow
+                  key={p.id}
+                  // content-visibility lets the browser skip layout/paint for
+                  // off-screen rows, so a long catalogue (1000s of parts)
+                  // scrolls smoothly instead of lagging.
+                  className={`[content-visibility:auto] [contain-intrinsic-size:auto_41px] ${!p.active ? "opacity-60" : ""}`}
+                >
                   <TableCell className="font-mono text-sm">{p.part_number}</TableCell>
                   <TableCell>{p.brand}</TableCell>
                   <TableCell className="text-sm">

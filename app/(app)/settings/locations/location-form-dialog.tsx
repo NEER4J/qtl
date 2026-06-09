@@ -56,6 +56,9 @@ export function LocationFormDialog({
       address: "",
       phone: "",
       email: "",
+      invoice_name: "",
+      fax: "",
+      hst_number: "",
       active: true,
     },
   });
@@ -68,6 +71,9 @@ export function LocationFormDialog({
         address: location.address ?? "",
         phone: location.phone ?? "",
         email: location.email ?? "",
+        invoice_name: location.invoice_name ?? "",
+        fax: location.fax ?? "",
+        hst_number: location.hst_number ?? "",
         active: location.active,
       });
     } else if (mode === "create") {
@@ -77,6 +83,9 @@ export function LocationFormDialog({
         address: "",
         phone: "",
         email: "",
+        invoice_name: "",
+        fax: "",
+        hst_number: "",
         active: true,
       });
     }
@@ -193,6 +202,54 @@ export function LocationFormDialog({
                   </FormItem>
                 )}
               />
+            </div>
+
+            <div className="space-y-4 rounded-md border p-3">
+              <p className="text-sm font-medium">Invoice header</p>
+              <p className="-mt-2 text-xs text-muted-foreground">
+                Printed at the top of invoices for jobs at this location. Leave a field blank to fall back to the name.
+              </p>
+              <FormField
+                control={form.control}
+                name="invoice_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Business name on invoice</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Quick Truck Lube" {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="hst_number"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>HST / GST number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="84754-0960 RT 001" {...field} value={field.value ?? ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="fax"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Fax</FormLabel>
+                      <FormControl>
+                        <Input placeholder="519-622-2493" {...field} value={field.value ?? ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </div>
 
             <DialogFooter>

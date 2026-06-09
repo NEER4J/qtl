@@ -8,6 +8,9 @@ export const SalesJobItemInput = z.object({
   description: z.string().trim().min(1, "Description required").max(300),
   quantity: z.coerce.number().positive("Qty must be > 0").max(99999),
   unit_price: z.coerce.number().min(0, "Price must be ≥ 0").max(9999999),
+  // Per-unit Sell MHSW snapshot (already inside unit_price); shown as its own
+  // column on the job / invoice. 0 for non-part lines.
+  mhsw_unit: z.coerce.number().min(0).max(9999999).default(0),
   is_taxable: z.coerce.boolean().default(true),
   package_label: z.string().trim().max(120).nullable().optional(),
   // Per-instance group id so all lines from one package collapse to a single

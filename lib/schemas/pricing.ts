@@ -45,6 +45,7 @@ export const CreateOilTypeInput = z.object({
     .max(20, "That doesn't look like a gallon")
     .default(4.546),
   is_taxable: z.coerce.boolean().default(true),
+  is_engine_oil: z.coerce.boolean().default(true),
   sort_order: z.coerce.number().int().min(0).default(100),
   active: z.coerce.boolean().default(true),
 });

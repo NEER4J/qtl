@@ -34,6 +34,7 @@ type FormValues = {
   gallon_cost_per_litre: string;
   litres_per_gallon: string;
   is_taxable: boolean;
+  is_engine_oil: boolean;
   sort_order: string;
   active: boolean;
 };
@@ -46,6 +47,7 @@ const blank: FormValues = {
   gallon_cost_per_litre: "0",
   litres_per_gallon: "4.546",
   is_taxable: true,
+  is_engine_oil: true,
   sort_order: "100",
   active: true,
 };
@@ -76,6 +78,7 @@ export function OilTypeFormDialog({
             gallon_cost_per_litre: String(oilType.gallon_cost_per_litre),
             litres_per_gallon: String(oilType.litres_per_gallon),
             is_taxable: oilType.is_taxable,
+            is_engine_oil: oilType.is_engine_oil,
             sort_order: String(oilType.sort_order),
             active: oilType.active,
           }
@@ -93,6 +96,7 @@ export function OilTypeFormDialog({
         gallon_cost_per_litre: Number(values.gallon_cost_per_litre),
         litres_per_gallon: Number(values.litres_per_gallon),
         is_taxable: values.is_taxable,
+        is_engine_oil: values.is_engine_oil,
         sort_order: Number(values.sort_order),
         active: values.active,
       };
@@ -246,6 +250,24 @@ export function OilTypeFormDialog({
                     <FormLabel className="cursor-pointer">Taxable (gallon)</FormLabel>
                     <FormDescription className="text-xs">
                       When checked, gallon oil sales of this grade attract HST. The price grid shows pre- and post-tax columns.
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="is_engine_oil"
+              render={({ field }) => (
+                <FormItem className="flex items-center gap-2 space-y-0">
+                  <FormControl>
+                    <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />
+                  </FormControl>
+                  <div className="leading-none">
+                    <FormLabel className="cursor-pointer">Engine oil</FormLabel>
+                    <FormDescription className="text-xs">
+                      When checked, this grade appears in the Oil-change price grid. Uncheck for coolant / transmission / differential fluids.
                     </FormDescription>
                   </div>
                 </FormItem>
