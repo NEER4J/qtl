@@ -370,6 +370,19 @@ export const updateSalesJob = wrapAction({
       ? { invoice_no: input.invoice_no.trim() }
       : {};
 
+    // Re-settle the payment status from the (possibly edited) total. Editing a
+    // job down to a free-grease-only $0 job must flip it to 'paid', not leave a
+    // stale 'outstanding'. The job-level update doesn't touch the payment
+    // ledger, so read the current paid amount to derive against (the payments
+    // rollup trigger only fires on payment changes, not on job edits).
+    const { data: existing, error: existingErr } = await supabase
+      .from("sales_jobs")
+      .select("paid_amount")
+      .eq("id", input.id)
+      .single();
+    if (existingErr) throw existingErr;
+    const status = deriveStatus(input.total, existing?.paid_amount ?? 0);
+
     const { data, error } = await supabase
       .from("sales_jobs")
       .update({
@@ -405,6 +418,7 @@ export const updateSalesJob = wrapAction({
         hst: input.hst,
         total: input.total,
         payment_mode: input.payment_mode ?? null,
+        payment_status: status,
         free_grease_applied: input.free_grease_applied,
         free_grease_override_reason: input.free_grease_override_reason || null,
         engine_type_id: input.engine_type_id ?? null,
