@@ -47,8 +47,10 @@ export default async function SalesJobDetailPage({
   if (!job) notFound();
 
   const canEdit =
-    (profile.role === "owner" || profile.role === "co_owner") ||
-    (profile.role === "manager" && profile.location_id === job.location_id);
+    profile.role === "owner" ||
+    profile.role === "co_owner" ||
+    (["manager", "supervisor", "staff", "technician"].includes(profile.role) &&
+      profile.location_id === job.location_id);
 
   const canAddPayment =
     profile.role !== "employee" &&
@@ -92,7 +94,7 @@ export default async function SalesJobDetailPage({
         <p>The full invoice. From here you can:</p>
         <ul>
           <li><strong>Download PDF</strong> — a branded invoice PDF you can email or print for the customer.</li>
-          <li><strong>Edit</strong> — owners, and managers at the same shop, can make changes. Every edit is recorded in the audit log so you know who changed what.</li>
+          <li><strong>Edit</strong> — owners, and managers / supervisors / staff at the same shop, can make changes. Every edit is recorded in the audit log so you know who changed what.</li>
           <li><strong>Record payment</strong> — appears when there&apos;s an unpaid balance. You can add partial payments over time; the status moves from Outstanding to Partial to Paid automatically.</li>
         </ul>
         <p>

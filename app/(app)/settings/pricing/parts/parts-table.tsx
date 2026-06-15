@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Pencil, Plus } from "lucide-react";
+import { Loader2, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +62,7 @@ export function PartsTable({
   const [creating, setCreating] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const [isFiltering, startFilterTransition] = useTransition();
   const [q, setQ] = useState(initialFilters.q);
   const [categoryId, setCategoryId] = useState(initialFilters.category_id);
   const [brand, setBrand] = useState(initialFilters.brand);
@@ -73,14 +74,14 @@ export function PartsTable({
     set("q", q.trim());
     set("category_id", categoryId);
     set("brand", brand.trim());
-    router.push(`?${params.toString()}`);
+    startFilterTransition(() => router.push(`?${params.toString()}`));
   };
 
   const onClear = () => {
     setQ("");
     setCategoryId("");
     setBrand("");
-    router.push("?");
+    startFilterTransition(() => router.push("?"));
   };
 
   const handleToggle = (p: AdminPartRow) => {
@@ -98,12 +99,17 @@ export function PartsTable({
   return (
     <>
       <form onSubmit={onFilter} className="flex flex-wrap items-end gap-2">
-        <Input
-          placeholder="Search part number or description…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          className="w-[280px]"
-        />
+        <div className="relative w-[280px]">
+          <Input
+            placeholder="Search part number or description…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="w-full pr-8"
+          />
+          {isFiltering && (
+            <Loader2 className="absolute right-2.5 top-2.5 size-4 animate-spin text-muted-foreground" />
+          )}
+        </div>
         <div className="w-[220px]">
           <Select
             value={categoryId === "" ? ANY_CATEGORY : categoryId}

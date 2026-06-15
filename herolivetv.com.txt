@@ -1,0 +1,36 @@
+$ORIGIN herolivetv.com.
+$TTL 7200
+
+; -----------------------
+; A Records
+; -----------------------
+@                       IN A      216.198.79.1
+autoconfig             IN A      209.42.24.75
+autodiscover           IN A      209.42.24.75
+cpanel                 IN A      209.42.24.75
+cpcalendars            IN A      209.42.24.75
+cpcontacts             IN A      209.42.24.75
+webdisk                IN A      209.42.24.75
+webmail                IN A      209.42.24.75
+whm                    IN A      209.42.24.75
+
+; -----------------------
+; CNAME Records
+; -----------------------
+mail                   IN CNAME  herolivetv.com.
+ftp                    IN CNAME  herolivetv.com.
+www                    IN CNAME  52f45c1c2ece3c0b.vercel-dns-017.com.
+
+; -----------------------
+; MX Record
+; -----------------------
+@                       IN MX 0   herolivetv.com.
+
+; -----------------------
+; TXT Records
+; -----------------------
+default._domainkey     IN TXT "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvosduRufhQmpfkdo05HcXki0cQCmxaC86MLttKM5XBvROx3s/kn2a81MMbyN+bC6fKHYFcvXzYNXqBrJ3vagC6E+ywdHaDUqj5gvUXeF43YhP5t3i+zMn5nqPU7Bdy1p+hapWh1bLsILJhYM/w8ywSMWGzFSxFF+QNL+YN6thRfHMLAnPlK/jwSHEFGmf5hQibDfZ8g+XymznRvIBQ5o0WWYOyx7QWpsWb3uYfwdLm7B/tCkoja/zVA0zogg7yJITDkmvNfS2j+xsSgYlhFA3zFabDehFWGQ9N+RoNNm3t/0Vikq5kM/nse3tQIVvDBmD+jB+3st1GGfnE8PwCizeQIDAQAB;"
+
+@                       IN TXT "v=spf1 +ip4:209.42.24.71 +include:spf.mysecurecloudhost.com +ip4:70.32.23.67 +include:spf.supercp.com +a +mx +ip4:70.32.23.18 ~all"
+
+_dmarc                 IN TXT "v=DMARC1; p=none;"

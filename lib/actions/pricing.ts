@@ -357,15 +357,16 @@ export async function getOilChangeGrid(): Promise<{
 
 // ============================================================================
 // "All Filter Sell Price" — mirrors the eponymous Excel tab. Computes the 4
-// service-mode prices per filter and rounds each to .99.
+// service-mode prices per filter (see computePartSellTiers for the source).
 //
-//   With Service   = (cost + mhsw) + service_cost              (installed)
-//   Without Service= (cost + mhsw) + service_cost + counter_premium  (parts on the counter; labour for ringing up)
-//   Over Counter   = With Service                              (separate pure-sale price; reserved for future per-part override)
-//   Customer Supplies = customer_supplies_labour (flat — customer brings their own filter, QTL only does labour)
+//   Over the Counter = List price (cost + Sell MHSW + margin)
+//   With Service     = Total cost (incl. Buy MHSW) + Service charge  (may be −)
+//   Without Service  = Linked labour (service_cost) + List price; 0 if bundled
+//   Customer Supplies = customer_supplies_labour (flat — customer brings their own filter)
 //
-// Both the counter_premium and customer_supplies_labour are configurable on
-// app_settings so the owner can tune them without touching code.
+// "Service charge" is the app_settings.counter_premium default (per-part
+// override on parts.counter_premium); customer_supplies_labour is likewise
+// configurable so the owner can tune them without touching code.
 // ============================================================================
 
 export interface FilterSellPriceRow {
@@ -1940,7 +1941,8 @@ export const deleteEngineSellPrice = wrapAction({
 // ============================================================================
 
 const PricingSettingsInput = z.object({
-  counter_premium: z.coerce.number().min(0),
+  // Service charge — may be negative (discounts the With Service price).
+  counter_premium: z.coerce.number().min(-9999999),
   customer_supplies_labour: z.coerce.number().min(0),
   price_list_effective_date: z
     .string()

@@ -27,10 +27,13 @@ export default async function EditSalesJobPage({
   const job = await getSalesJob(id);
   if (!job) notFound();
 
-  // Only owner + manager (own location) can edit — staff and accountant cannot.
+  // Owner / co_owner edit anything; manager / supervisor / staff / technician
+  // edit jobs at their own location (RLS enforces the write either way).
   const canEdit =
-    (profile.role === "owner" || profile.role === "co_owner") ||
-    (profile.role === "manager" && profile.location_id === job.location_id);
+    profile.role === "owner" ||
+    profile.role === "co_owner" ||
+    (["manager", "supervisor", "staff", "technician"].includes(profile.role) &&
+      profile.location_id === job.location_id);
   if (!canEdit) redirect(`/sales/${id}`);
   if (job.deactivated_at) redirect(`/sales/${id}`);
 

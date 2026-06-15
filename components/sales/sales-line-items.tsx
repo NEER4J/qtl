@@ -792,7 +792,7 @@ function TierDialogBody({
       price: p.without_service,
       hint: p.in_package ? "bundled in a package" : undefined,
     },
-    { key: "over", label: "Over Counter", price: p.over_counter },
+    { key: "over", label: "Over the Counter", price: p.over_counter },
   ];
   const anyTier = tiers.some((t) => t.price != null && t.price > 0);
   const listPrice = Number(p.list_price) || 0;

@@ -51,15 +51,16 @@ export function PricingSettingsCard({ initial }: Props) {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Global defaults for the All-Filter-Price page and Print List. Counter premium and
+          Global defaults for the All-Filter-Price page and Print List. Service charge and
           customer-supplies labour can be overridden per part on the Parts catalogue.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field
-            label="Counter premium ($)"
+            label="Service charge ($)"
             value={counter}
             onChange={setCounter}
-            tip="Default added to With-Service filter price to produce the Without-Service / Over-Counter price. Per-part overrides win."
+            min="-9999999"
+            tip="Default added to Total cost to produce the With-Service price. May be negative. Per-part overrides win."
           />
           <Field
             label="Customer-supplies labour ($)"
@@ -99,9 +100,11 @@ interface FieldProps {
   onChange: (v: string) => void;
   step?: string;
   tip?: string;
+  /** Minimum for the number input. Defaults to "0"; pass a negative to allow it. */
+  min?: string;
 }
 
-function Field({ label, value, onChange, step = "0.01", tip }: FieldProps) {
+function Field({ label, value, onChange, step = "0.01", tip, min = "0" }: FieldProps) {
   return (
     <div>
       <label className="text-sm font-medium flex items-center gap-1">
@@ -110,7 +113,7 @@ function Field({ label, value, onChange, step = "0.01", tip }: FieldProps) {
       </label>
       <Input
         type="number"
-        min="0"
+        min={min}
         step={step}
         value={value}
         onChange={(e) => onChange(e.target.value)}

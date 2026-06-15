@@ -359,7 +359,7 @@ export const createSalesJob = wrapAction({
 // ----------------------------------------------------------------------------
 export const updateSalesJob = wrapAction({
   schema: UpdateSalesJobInput,
-  roles: ["owner", "co_owner", "manager"],
+  roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input, profile): Promise<SalesJob> => {
     const supabase = await createClient();
 

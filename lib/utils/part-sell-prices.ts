@@ -1,20 +1,30 @@
 import type { Part } from "@/lib/db/types";
 
 // ============================================================================
-// Per-part sell-price tiers — the With Service / Without Service / Over Counter
-// (+ Customer Supplies) prices used by the All-Filter-Price page AND by the
-// sales job part-add tier dialog. Kept in one place so both surfaces agree.
+// Per-part sell-price tiers — the With Service / Without Service / Over the
+// Counter (+ Customer Supplies) prices used by the All-Filter-Price page AND by
+// the sales job part-add tier dialog. Kept in one place so both surfaces agree.
 //
-// Counter premium and customer-supplies labour are per-part (client 2026-06):
-// a part's own value wins; NULL falls back to the global app_settings value.
+// Pricing model (client 2026-06):
+//   * Over the Counter = List price (cost + Sell MHSW + margin).
+//   * With Service     = Total cost + Service charge.
+//                        (Total cost = part.cost, which already includes Buy
+//                        MHSW. "Service charge" is the per-part counter_premium
+//                        column, relabelled — it may be NEGATIVE.)
+//   * Without Service  = Linked labour charge + List price. Bundled parts → 0.
+//   * Customer Supplies = flat labour fee (unchanged).
+//
+// Service charge and customer-supplies labour are per-part: a part's own value
+// wins; NULL falls back to the global app_settings value. Each tier also keeps
+// an optional per-part override column which, when set, wins over the formula.
 // ============================================================================
 
 export type PartSellTiers = {
-  /** Installed price (cost + mhsw + service cost), or the per-part override. */
+  /** Total cost + Service charge, or the per-part override. */
   with_service: number | null;
-  /** Counter price incl. premium; 0 for bundled (in_package) parts. */
+  /** Linked labour + List price; 0 for bundled (in_package) parts. */
   without_service: number | null;
-  /** Over-counter price; defaults to With Service when no override. */
+  /** List price (= Over the Counter), or the per-part override. */
   over_counter: number | null;
   /** Flat labour charged when the customer brings their own filter. */
   customer_supplies: number;
@@ -24,6 +34,7 @@ type TierPart = Pick<
   Part,
   | "cost"
   | "mhsw_fee"
+  | "list_price"
   | "in_package"
   | "with_service_price"
   | "without_service_price"
@@ -32,11 +43,13 @@ type TierPart = Pick<
   | "customer_supplies_labour"
 >;
 
-/** Round positive prices to .99; anything ≤ 0 returns null (so "—" shows). */
-function round99(n: number): number | null {
-  return Number.isFinite(n) && n > 0 ? Math.ceil(n) - 0.01 : null;
+/** Round to 2 decimals; anything ≤ 0 returns null (so "—" shows). */
+function round2(n: number): number | null {
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
 }
 
+// "Service charge" is the relabelled per-part counter_premium. It may be
+// negative, so this can return a negative number.
 export function effectiveCounterPremium(
   part: Pick<Part, "counter_premium">,
   globalCounterPremium: number,
@@ -61,25 +74,29 @@ export function computePartSellTiers(
   globalCounterPremium: number,
   globalCustomerSuppliesLabour: number,
 ): PartSellTiers {
-  const partBase = Number(part.cost) + Number(part.mhsw_fee);
-  const counterPremium = effectiveCounterPremium(part, globalCounterPremium);
+  const totalCost = Number(part.cost); // already includes Buy MHSW
+  const listPrice = Number(part.list_price);
+  const serviceCharge = effectiveCounterPremium(part, globalCounterPremium);
 
-  const computedWithSvc = round99(partBase + serviceCost);
+  // Over the Counter = List price.
+  const overCounter =
+    part.over_counter_price != null
+      ? Number(part.over_counter_price)
+      : round2(listPrice);
+
+  // With Service = Total cost + Service charge.
   const withSvc =
     part.with_service_price != null
       ? Number(part.with_service_price)
-      : computedWithSvc;
+      : round2(totalCost + serviceCharge);
 
-  // Bundled parts have no standalone "Without Service" price — the customer
-  // pays for the package, not the part. Force to 0 regardless of any override.
+  // Without Service = Linked labour charge + List price. Bundled parts have no
+  // standalone counter price (the customer pays for the package) → force 0.
   const withoutSvc = part.in_package
     ? 0
     : part.without_service_price != null
       ? Number(part.without_service_price)
-      : round99(partBase + serviceCost + counterPremium);
-
-  const overCounter =
-    part.over_counter_price != null ? Number(part.over_counter_price) : withSvc;
+      : round2(serviceCost + listPrice);
 
   return {
     with_service: withSvc,

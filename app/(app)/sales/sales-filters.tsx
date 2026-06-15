@@ -2,7 +2,7 @@
 
 import { useCallback, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, X } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,7 +63,11 @@ export function SalesFilters({
     <div className="flex flex-wrap items-end gap-3 rounded-md border p-4">
       <form onSubmit={onSearchSubmit} className="flex items-center gap-2">
         <div className="relative">
-          <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
+          {isPending ? (
+            <Loader2 className="absolute left-2 top-2.5 size-4 animate-spin text-muted-foreground" />
+          ) : (
+            <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
+          )}
           <Input
             name="q"
             defaultValue={initial.q ?? ""}

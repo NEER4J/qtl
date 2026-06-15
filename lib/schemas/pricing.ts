@@ -96,8 +96,9 @@ export const CreatePartInput = z.object({
   // Buy/cost-side MHSW — reference-only, no formula change.
   mhsw_buy: z.coerce.number().min(0, "Must be ≥ 0").default(0),
   // Per-part overrides. Empty = NULL = fall back to the global app_settings value.
+  // Service charge — may be negative (discounts the With Service price).
   counter_premium: z
-    .union([z.coerce.number().min(0, "Must be ≥ 0").max(9999999), z.literal("")])
+    .union([z.coerce.number().min(-9999999).max(9999999), z.literal("")])
     .optional()
     .nullable()
     .transform((v) => (v == null || v === "" ? null : Number(v))),

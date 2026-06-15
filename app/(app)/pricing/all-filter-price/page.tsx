@@ -48,17 +48,17 @@ export default async function AllFilterPricePage({
       <PageHelp id="pricing-all-filter-price">
         <p>
           One row per filter. Each row shows the four service-mode prices the counter staff need
-          to look up: Without Service (counter sale + labour), With Service (installed), Over Counter
-          (raw sale), and Customer Supplies Filter (labour only).
+          to look up: Without Service, With Service, Over the Counter, and Customer Supplies Filter
+          (labour only).
         </p>
         <ul>
-          <li><strong>With Service</strong> = filter cost + MHSW + labour for installing it.</li>
-          <li><strong>Without Service</strong> = With Service + ${counter_premium.toFixed(2)} counter premium.</li>
-          <li><strong>Over Counter</strong> = same as With Service unless a per-part override is set.</li>
+          <li><strong>Over the Counter</strong> = the part&apos;s List price.</li>
+          <li><strong>With Service</strong> = Total cost (incl. Buy MHSW) + ${counter_premium.toFixed(2)} service charge.</li>
+          <li><strong>Without Service</strong> = Linked labour charge + List price.</li>
           <li><strong>Customer Supplies</strong> = flat ${customer_supplies_labour.toFixed(2)} labour fee.</li>
         </ul>
         <p>
-          Counter premium and customer-supplies labour are set in{" "}
+          Service charge and customer-supplies labour are set in{" "}
           <Link href="/settings/pricing" className="underline">Pricing catalogue admin</Link>.
         </p>
       </PageHelp>

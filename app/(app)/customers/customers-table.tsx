@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus, Search } from "lucide-react";
+import { Loader2, Pencil, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +36,14 @@ export function CustomersTable({
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
+  // Debounced applied query so the filter settles ~200ms after typing stops; the
+  // gap drives the search spinner.
+  const [applied, setApplied] = useState("");
+  const searching = search !== applied;
+  useEffect(() => {
+    const t = setTimeout(() => setApplied(search), 200);
+    return () => clearTimeout(t);
+  }, [search]);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [creating, setCreating] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -45,9 +53,9 @@ export function CustomersTable({
   const visibleCount = 3 + [show("phone"), show("email")].filter(Boolean).length;
 
   const filtered = customers.filter((c) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    const phoneDigits = digitsOnly(search);
+    if (!applied) return true;
+    const q = applied.toLowerCase();
+    const phoneDigits = digitsOnly(applied);
     const name = customerDisplayName(c).toLowerCase();
     return (
       name.includes(q) ||
@@ -72,7 +80,11 @@ export function CustomersTable({
     <>
       <div className="flex items-center justify-between gap-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+          {searching ? (
+            <Loader2 className="absolute left-2.5 top-2.5 size-4 animate-spin text-muted-foreground" />
+          ) : (
+            <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+          )}
           <Input
             placeholder="Search by name, plate, phone…"
             value={search}

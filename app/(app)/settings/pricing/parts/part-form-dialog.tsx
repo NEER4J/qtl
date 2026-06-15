@@ -429,16 +429,15 @@ export function PartFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center gap-1">
-                      Counter premium
+                      Service charge
                       <InfoTip>
-                        Added to the Without-Service / Over-Counter price. Leave blank to use the
-                        global default ({formatMoney(globalCounterPremium)}).
+                        Added to Total cost to make the <strong>With Service</strong> price. May be
+                        negative. Leave blank to use the global default ({formatMoney(globalCounterPremium)}).
                       </InfoTip>
                     </FormLabel>
                     <FormControl>
                       <Input
                         type="number"
-                        min="0"
                         step="0.01"
                         placeholder={`Default ${formatMoney(globalCounterPremium)}`}
                         {...field}
@@ -590,7 +589,7 @@ export function PartFormDialog({
                     <div className="leading-none">
                       <FormLabel className="cursor-pointer">Bundled in a package</FormLabel>
                       <FormDescription className="text-xs">
-                        When on, the All Filter Sell Price shows <strong>Without Service = $0</strong> for this part (the customer pays for the package). If the same part is added to a sales job a second time, the extra one auto-uses the <strong>Over Counter</strong> price.
+                        When on, the All Filter Sell Price shows <strong>Without Service = $0</strong> for this part (the customer pays for the package). If the same part is added to a sales job a second time, the extra one auto-uses the <strong>Over the Counter</strong> price.
                       </FormDescription>
                     </div>
                   </FormItem>
