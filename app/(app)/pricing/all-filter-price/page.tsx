@@ -117,7 +117,7 @@ export default async function AllFilterPricePage({
                   {showCost && <TableHead className="text-right">Service</TableHead>}
                   <TableHead className="text-right">Without service</TableHead>
                   <TableHead className="text-right">With service</TableHead>
-                  <TableHead className="text-right">Over counter</TableHead>
+                  <TableHead className="text-right">Over the Counter</TableHead>
                   <TableHead className="text-right">Customer supplies</TableHead>
                 </TableRow>
               </TableHeader>
