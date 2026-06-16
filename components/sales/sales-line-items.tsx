@@ -640,25 +640,71 @@ export function SalesLineItems({
                               </span>
                             )}
                           </td>
-                          <td className="py-1.5 px-2 text-right text-muted-foreground tabular-nums">
-                            {Number(it.quantity)}
-                            {it.unit_of_measure && (
-                              <span className="text-[10px] uppercase ml-1">{it.unit_of_measure}</span>
+                          <td className="py-1.5 px-2 text-right">
+                            {isMerged ? (
+                              <span className="text-muted-foreground tabular-nums">
+                                {Number(it.quantity)}
+                                {it.unit_of_measure && (
+                                  <span className="text-[10px] uppercase ml-1">{it.unit_of_measure}</span>
+                                )}
+                              </span>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0.01"
+                                  value={String(it.quantity)}
+                                  onChange={(e) =>
+                                    update(it.key, { quantity: Number(e.target.value) || 0 })
+                                  }
+                                  className="h-8 text-right"
+                                  aria-label="Item quantity"
+                                />
+                                {it.unit_of_measure && (
+                                  <span className="text-[10px] uppercase text-muted-foreground w-8 text-left">
+                                    {it.unit_of_measure}
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </td>
-                          <td className="py-1.5 px-2 text-right text-[10px] uppercase text-muted-foreground">
+                          <td className="py-1.5 px-2 text-right">
                             {isMerged ? (
-                              <span className="line-through normal-case">
+                              <span className="text-[10px] uppercase text-muted-foreground line-through">
                                 {formatMoney(Number(it.merged_unit_price))}
                               </span>
                             ) : (
-                              "Included"
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={String(it.unit_price)}
+                                onChange={(e) =>
+                                  update(it.key, { unit_price: Number(e.target.value) || 0 })
+                                }
+                                className="h-8 text-right"
+                                aria-label="Item price"
+                              />
                             )}
                           </td>
                           <td className="py-1.5 px-2" />
                           <td className="py-1.5 px-2" />
-                          <td className="py-1.5 px-2" />
-                          <td className="py-1.5 pl-2" />
+                          <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">
+                            {isMerged ? formatMoney(0) : formatMoney(lineItemTotal(it))}
+                          </td>
+                          <td className="py-1.5 pl-2 text-right">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 text-muted-foreground hover:text-destructive"
+                              onClick={() => remove(it.key)}
+                              aria-label="Remove item from package"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </td>
                         </tr>
                       );
                     })}
