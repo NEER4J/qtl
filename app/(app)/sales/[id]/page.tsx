@@ -77,6 +77,17 @@ export default async function SalesJobDetailPage({
           <p className="text-sm text-muted-foreground">
             {formatDate(job.job_date)} · {job.location_name} · {job.service_type_name}
           </p>
+          {job.updated_at && (
+            <p className="text-xs text-muted-foreground">
+              Last edited{" "}
+              {new Date(job.updated_at).toLocaleString("en-CA", {
+                timeZone: "America/Toronto",
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+              {job.updated_by_name ? ` by ${job.updated_by_name}` : ""}
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <DownloadInvoiceButton jobId={job.id} invoiceNo={job.invoice_no} />

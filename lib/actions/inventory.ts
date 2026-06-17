@@ -28,6 +28,23 @@ export interface InventoryPartRow {
   total: number;
 }
 
+// On-hand stock summary for a single part across all locations. Used to warn
+// before deactivating a part that still has inventory.
+export async function getPartStockSummary(
+  partId: string,
+): Promise<{ total: number; locations: number }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("part_location_stock")
+    .select("qty")
+    .eq("part_id", partId)
+    .gt("qty", 0);
+  if (error) throw error;
+  const rows = (data ?? []) as { qty: number }[];
+  const total = rows.reduce((s, r) => s + Number(r.qty), 0);
+  return { total, locations: rows.length };
+}
+
 export interface InventoryData {
   locations: InventoryLocation[];
   parts: InventoryPartRow[];

@@ -7,7 +7,8 @@ export const SalesJobItemInput = z.object({
   part_id: z.string().uuid().nullable().optional(),
   description: z.string().trim().min(1, "Description required").max(300),
   quantity: z.coerce.number().positive("Qty must be > 0").max(99999),
-  unit_price: z.coerce.number().min(0, "Price must be ≥ 0").max(9999999),
+  // Negative allowed so a discount / credit line can be entered.
+  unit_price: z.coerce.number().min(-9999999).max(9999999),
   // Per-unit Sell MHSW snapshot (already inside unit_price); shown as its own
   // column on the job / invoice. 0 for non-part lines.
   mhsw_unit: z.coerce.number().min(0).max(9999999).default(0),

@@ -13,6 +13,32 @@ import {
 import type { Customer, SalesJob } from "@/lib/db/types";
 import { digitsOnly } from "@/lib/utils/phone";
 
+// Live "this name already exists" check for the customer form. Matches on
+// billing_name OR last_or_company (contains, case-insensitive).
+export async function checkCustomerNameExists(input: {
+  name: string;
+  excludeId?: string | null;
+}): Promise<{ matches: { id: string; billing_name: string | null; active: boolean }[] }> {
+  const name = input.name.trim();
+  if (name.length < 3) return { matches: [] };
+
+  const supabase = await createClient();
+  const term = `%${name.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+  let query = supabase
+    .from("customers")
+    .select("id, billing_name, active")
+    .or(`billing_name.ilike.${term},last_or_company.ilike.${term}`)
+    .order("billing_name")
+    .limit(5);
+  if (input.excludeId) query = query.neq("id", input.excludeId);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return {
+    matches: (data ?? []) as { id: string; billing_name: string | null; active: boolean }[],
+  };
+}
+
 // Pull only the fields we want to write — the rest come from defaults / triggers.
 function customerWritablePayload(input: z.infer<typeof CreateCustomerInput>) {
   const billing_name = input.billing_name ?? input.last_or_company ?? null;

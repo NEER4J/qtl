@@ -54,7 +54,6 @@ export function OilTypesTable({ oilTypes }: { oilTypes: OilType[] }) {
               <TableHead className="w-28 text-right">Bulk $/L</TableHead>
               <TableHead className="w-28 text-right">$/gal</TableHead>
               <TableHead className="w-20 text-right">L/gal</TableHead>
-              <TableHead className="w-20">Sort</TableHead>
               <TableHead className="w-24">Status</TableHead>
               <TableHead className="w-40 text-right">Actions</TableHead>
             </TableRow>
@@ -62,7 +61,7 @@ export function OilTypesTable({ oilTypes }: { oilTypes: OilType[] }) {
           <TableBody>
             {oilTypes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                   No oil types yet. Click <strong>New oil type</strong> to add one.
                 </TableCell>
               </TableRow>
@@ -79,7 +78,6 @@ export function OilTypesTable({ oilTypes }: { oilTypes: OilType[] }) {
                   <TableCell className="text-right tabular-nums text-muted-foreground">
                     {Number(oil.litres_per_gallon).toFixed(3)}
                   </TableCell>
-                  <TableCell>{oil.sort_order}</TableCell>
                   <TableCell>
                     <Badge variant={oil.active ? "default" : "secondary"}>
                       {oil.active ? "Active" : "Inactive"}

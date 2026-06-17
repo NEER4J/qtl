@@ -19,14 +19,15 @@ export const dynamic = "force-dynamic";
 export default async function NewSalesJobPage({
   searchParams,
 }: {
-  searchParams: Promise<{ customer_id?: string }>;
+  searchParams: Promise<{ customer_id?: string; vehicle_id?: string }>;
 }) {
   const profile = await requireProfile();
   if (profile.role === "accountant" || profile.role === "employee") {
     redirect("/sales");
   }
 
-  const { customer_id: preselectCustomerId } = await searchParams;
+  const { customer_id: preselectCustomerId, vehicle_id: preselectVehicleId } =
+    await searchParams;
 
   const [locations, serviceTypes, settings, engineTypes, oilTypes, technicians, serviceCosts] =
     await Promise.all([
@@ -81,7 +82,11 @@ export default async function NewSalesJobPage({
         serviceCosts={serviceCosts}
         hstRate={Number(settings.hst_rate)}
         lockedLocationId={lockedLocationId}
-        initial={preselectCustomerId ? { customer_id: preselectCustomerId } : undefined}
+        initial={
+          preselectCustomerId
+            ? { customer_id: preselectCustomerId, vehicle_id: preselectVehicleId ?? null }
+            : undefined
+        }
       />
     </div>
   );

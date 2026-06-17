@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { createCustomer, updateCustomer } from "@/lib/actions/customers";
+import {
+  checkCustomerNameExists,
+  createCustomer,
+  updateCustomer,
+} from "@/lib/actions/customers";
 import {
   createVehicle,
   deactivateVehicle,
@@ -236,7 +240,37 @@ export function CustomerForm({
   const country = form.watch("country");
   const mailingCountry = form.watch("mailing_country");
   const mailingSameAsBilling = form.watch("mailing_same_as_billing");
+  const lastOrCompany = form.watch("last_or_company");
   const mode: "create" | "edit" = customer ? "edit" : "create";
+
+  // Live "this name already exists" warning (debounced), like the part-number
+  // check. Excludes the current customer in edit mode.
+  const [nameMatches, setNameMatches] = useState<
+    { id: string; billing_name: string | null; active: boolean }[]
+  >([]);
+  useEffect(() => {
+    const trimmed = (lastOrCompany ?? "").trim();
+    if (trimmed.length < 3) {
+      setNameMatches([]);
+      return;
+    }
+    let cancelled = false;
+    const handle = setTimeout(async () => {
+      try {
+        const res = await checkCustomerNameExists({
+          name: trimmed,
+          excludeId: customer?.id ?? null,
+        });
+        if (!cancelled) setNameMatches(res.matches);
+      } catch {
+        if (!cancelled) setNameMatches([]);
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [lastOrCompany, customer?.id]);
 
   // Edit mode — vehicles are real DB rows.
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
@@ -369,6 +403,7 @@ export function CustomerForm({
 
       // Batch-create staged vehicles now that we have customer.id.
       // Note: any failures are surfaced but the customer is already saved.
+      const createdVehicleIds: string[] = [];
       if (mode === "create" && stagedVehicles.length > 0) {
         const customerId = res.data.id;
         let okCount = 0;
@@ -380,6 +415,7 @@ export function CustomerForm({
           const v = await createVehicle(payload);
           if (v.ok) {
             okCount++;
+            createdVehicleIds.push(v.data.id);
           } else {
             console.error("[staged-vehicle-save] failed", { payload, error: v });
             failed.push(`${sv.license_plate}: ${v.error}`);
@@ -408,7 +444,10 @@ export function CustomerForm({
       // with the customer pre-selected. The form runs in create mode only;
       // editing existing customers always uses plain "save".
       if (mode === "create" && submitIntent === "save-and-add-job") {
-        router.push(`/sales/new?customer_id=${res.data.id}`);
+        // If exactly one vehicle was created, pre-select it on the new job.
+        const vqs =
+          createdVehicleIds.length === 1 ? `&vehicle_id=${createdVehicleIds[0]}` : "";
+        router.push(`/sales/new?customer_id=${res.data.id}${vqs}`);
         return;
       }
 
@@ -431,7 +470,21 @@ export function CustomerForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={onSubmit} className="space-y-6">
+      <form
+        onSubmit={onSubmit}
+        className="space-y-6"
+        onKeyDown={(e) => {
+          // Save only via the Save button — Enter in a field must not submit.
+          if (
+            e.key === "Enter" &&
+            e.target instanceof HTMLElement &&
+            e.target.tagName === "INPUT" &&
+            !e.target.closest("[cmdk-root]")
+          ) {
+            e.preventDefault();
+          }
+        }}
+      >
         <div className="space-y-8">
 
           {/* ------------------------------------------------------ Identity */}
@@ -446,6 +499,27 @@ export function CustomerForm({
                   <FormControl>
                     <UppercaseInput placeholder="Last name or company name" {...field} />
                   </FormControl>
+                  {nameMatches.length > 0 && (
+                    <div className="mt-1 flex items-start gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                      <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                      <div>
+                        <div className="font-medium">
+                          Similar customer{nameMatches.length > 1 ? "s" : ""} already exist
+                          {nameMatches.length > 1 ? "" : "s"}
+                        </div>
+                        <ul className="mt-0.5 space-y-0.5">
+                          {nameMatches.slice(0, 3).map((m) => (
+                            <li key={m.id}>
+                              {m.billing_name ?? "—"}
+                              {!m.active && (
+                                <span className="ml-1 text-muted-foreground">(inactive)</span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}

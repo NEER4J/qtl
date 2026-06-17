@@ -18,9 +18,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { PartPickerButton } from "@/components/pricing/part-picker";
 import { ServiceCostPickerButton } from "@/components/pricing/service-cost-picker";
+import { OilPickerButton, type OilContainer } from "@/components/sales/oil-picker-button";
 import { PackagePickerButton } from "@/components/sales/package-picker-button";
 import type { PartForPicker } from "@/lib/actions/pricing";
 import type {
+  OilType,
   Part,
   PartPackageWithItems,
   ServiceCost,
@@ -156,11 +158,14 @@ export function SalesLineItems({
   items,
   onChange,
   serviceCosts = [],
+  oilTypes = [],
 }: {
   items: LineItem[];
   onChange: (items: LineItem[]) => void;
   /** Service (labour) costs catalogue — pickable as job lines. */
   serviceCosts?: ServiceCost[];
+  /** Oil grades — pickable as standalone oil line items. */
+  oilTypes?: OilType[];
 }) {
   const [pending, setPending] = useState<PendingAdd | null>(null);
 
@@ -189,6 +194,27 @@ export function SalesLineItems({
         is_taxable: true,
       }),
     ]);
+
+  /** Add an oil grade as a standalone line: qty = litres, price = per-litre rate
+   *  (editable in the row). */
+  const addOil = (oil: OilType, container: OilContainer) => {
+    const rate =
+      container === "gallon"
+        ? Number(oil.gallon_cost_per_litre)
+        : Number(oil.bulk_cost_per_litre);
+    onChange([
+      ...items,
+      newLineItem({
+        part_id: null,
+        description: `${excelOilLabel(oil.code, oil.name)} (${container})`,
+        quantity: 1,
+        unit_price: Number.isFinite(rate) ? Math.round(rate * 100) / 100 : 0,
+        is_taxable: oil.is_taxable,
+        unit_of_measure: "ltr",
+        oil_type_id: oil.id,
+      }),
+    ]);
+  };
 
   const lineFromPart = (p: Part, unitPriceOverride?: number): LineItem =>
     newLineItem({
@@ -493,7 +519,6 @@ export function SalesLineItems({
           <Input
             type="number"
             step="0.01"
-            min="0"
             value={String(it.unit_price)}
             onChange={(e) => update(it.key, { unit_price: Number(e.target.value) || 0 })}
             className={`text-right ${cs ? "opacity-60" : ""}`}
@@ -678,7 +703,6 @@ export function SalesLineItems({
                               <Input
                                 type="number"
                                 step="0.01"
-                                min="0"
                                 value={String(it.unit_price)}
                                 onChange={(e) =>
                                   update(it.key, { unit_price: Number(e.target.value) || 0 })
@@ -739,6 +763,7 @@ export function SalesLineItems({
       <div className="flex flex-wrap gap-2">
         <PartPickerButton onSelect={addPart} />
         <PackagePickerButton onSelect={addPackage} />
+        {oilTypes.length > 0 && <OilPickerButton oilTypes={oilTypes} onSelect={addOil} />}
         {serviceCosts.length > 0 && (
           <ServiceCostPickerButton serviceCosts={serviceCosts} onSelect={addServiceCost} />
         )}
@@ -840,7 +865,9 @@ function TierDialogBody({
     },
     { key: "over", label: "Over the Counter", price: p.over_counter },
   ];
-  const anyTier = tiers.some((t) => t.price != null && t.price > 0);
+  // A tier with a computed price (incl. $0, e.g. a discounted With Service) is
+  // selectable; only genuinely null tiers (no data) are unavailable.
+  const anyTier = tiers.some((t) => t.price != null);
   const listPrice = Number(p.list_price) || 0;
 
   return (
@@ -861,7 +888,7 @@ function TierDialogBody({
 
       <div className="grid gap-2">
         {tiers.map((t) => {
-          const available = t.price != null && t.price > 0;
+          const available = t.price != null;
           return (
             <Button
               key={t.key}
@@ -896,13 +923,27 @@ function TierDialogBody({
         )}
       </div>
 
+      {pending.delta !== 0 && pending.existing && (
+        <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          This is{" "}
+          {pending.delta > 0 ? "an upgrade over" : "cheaper than"}{" "}
+          <strong>{pending.existing.description || "the part already on the job"}</strong>. Instead
+          of a second line you can just adjust that line by{" "}
+          <strong>
+            {pending.delta > 0 ? "+" : ""}
+            {formatMoney(pending.delta)}
+          </strong>
+          .
+        </p>
+      )}
+
       <AlertDialogFooter>
         <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
         {pending.delta !== 0 && (
           <Button type="button" variant="secondary" onClick={onChargeUpgrade}>
             {pending.delta > 0
-              ? `Charge +${formatMoney(pending.delta)} upgrade`
-              : `Apply ${formatMoney(pending.delta)} credit`}
+              ? `Just charge the +${formatMoney(pending.delta)} upgrade`
+              : `Just apply the ${formatMoney(pending.delta)} credit`}
           </Button>
         )}
       </AlertDialogFooter>

@@ -680,7 +680,6 @@ export interface OilType {
   /** When true, this grade is an engine oil and shows in the Oil-change grid.
    *  Coolants / trans / diff fluids are false. */
   is_engine_oil: boolean;
-  sort_order: number;
   active: boolean;
   created_at: string;
   updated_at: string;

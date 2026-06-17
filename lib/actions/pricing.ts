@@ -90,7 +90,6 @@ export async function listOilTypes(): Promise<OilType[]> {
     .from("oil_types")
     .select("*")
     .eq("active", true)
-    .order("sort_order")
     .order("name");
   if (error) throw error;
   return (data ?? []) as OilType[];
@@ -214,7 +213,6 @@ export async function getOilChangeGrid(): Promise<{
         .select("*")
         .eq("active", true)
         .eq("is_engine_oil", true)
-        .order("sort_order")
         .order("name"),
       supabase
         .from("engine_filters")
@@ -532,7 +530,6 @@ export async function getOilDetail(
         .from("oil_types")
         .select("*")
         .eq("active", true)
-        .order("sort_order")
         .order("name"),
       supabase
         .from("engine_filters")
@@ -933,7 +930,6 @@ export async function listAllOilTypes(): Promise<OilType[]> {
   const { data, error } = await supabase
     .from("oil_types")
     .select("*")
-    .order("sort_order")
     .order("name");
   if (error) throw error;
   return (data ?? []) as OilType[];
@@ -968,6 +964,7 @@ export async function listAllParts(filter?: {
   category_id?: string;
   brand?: string;
   q?: string;
+  status?: "all" | "active" | "inactive";
 }): Promise<AdminPartRow[]> {
   const supabase = await createClient();
   let query = supabase
@@ -977,6 +974,8 @@ export async function listAllParts(filter?: {
     .order("part_number")
     .limit(2000);
 
+  if (filter?.status === "active") query = query.eq("active", true);
+  else if (filter?.status === "inactive") query = query.eq("active", false);
   if (filter?.category_id) query = query.eq("category_id", filter.category_id);
   if (filter?.brand) query = query.eq("brand", filter.brand);
   if (filter?.q) {

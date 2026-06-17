@@ -3,7 +3,6 @@
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -14,10 +13,10 @@ import {
 
 // A 12-hour time entry (hour / minute / AM-PM) that stores 24-hour "HH:mm".
 //
-// We deliberately avoid the native <input type="time">: in 12-hour locales
-// (Canada/US) it renders an AM/PM segment that the browser leaves blank when
-// only digits are typed, then rejects the value as "incomplete". Splitting the
-// segments ourselves keeps AM/PM always populated, so that error can't happen.
+// Dropdowns for hour (1-12) and minute (15-min steps) + AM/PM. We deliberately
+// avoid the native <input type="time">: in 12-hour locales (Canada/US) it
+// renders an AM/PM segment the browser leaves blank when only digits are typed,
+// then rejects the value as "incomplete".
 type Period = "AM" | "PM";
 
 type Props = {
@@ -28,6 +27,9 @@ type Props = {
   id?: string;
   className?: string;
 };
+
+const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1));
+const MINUTE_STEPS = ["00", "15", "30", "45"];
 
 function parse24(value?: string): { hour: string; minute: string; period: Period } | null {
   const m = /^(\d{1,2}):(\d{2})/.exec(value ?? "");
@@ -64,80 +66,73 @@ export function TimeField12h({ value, onChange, onBlur, disabled, id, className 
     setPeriod(p?.period ?? "AM");
   }, [value]);
 
+  // 15-min steps, plus the current minute if it's off-step (legacy data).
+  const minuteOptions = React.useMemo(() => {
+    const set = new Set(MINUTE_STEPS);
+    if (minute) set.add(minute.padStart(2, "0"));
+    return Array.from(set).sort((a, b) => Number(a) - Number(b));
+  }, [minute]);
+
   function emit(h: string, m: string, p: Period) {
     if (h === "" && m === "") {
       onChange("");
+      onBlur?.();
       return;
     }
     const next = to24(h, m, p);
     if (next != null) onChange(next);
-  }
-
-  function handleHour(raw: string) {
-    const v = raw.replace(/\D/g, "").slice(0, 2);
-    setHour(v);
-    emit(v, minute, period);
-  }
-
-  function handleMinute(raw: string) {
-    const v = raw.replace(/\D/g, "").slice(0, 2);
-    setMinute(v);
-    emit(hour, v, period);
-  }
-
-  function handlePeriod(p: Period) {
-    setPeriod(p);
-    emit(hour, minute, p);
-  }
-
-  // Tidy up on blur: pad minute, clamp hour into 1-12, then re-emit.
-  function normalize() {
-    let h = hour;
-    let m = minute;
-    if (h !== "") {
-      let n = Number(h);
-      if (Number.isNaN(n) || n < 1) n = 12;
-      if (n > 12) n = 12;
-      h = String(n);
-      setHour(h);
-    }
-    if (m !== "") {
-      let n = Number(m);
-      if (Number.isNaN(n) || n > 59) n = 59;
-      m = String(n).padStart(2, "0");
-      setMinute(m);
-    }
-    emit(h, m, period);
     onBlur?.();
   }
 
   return (
     <div className={cn("flex items-center gap-1", className)}>
-      <Input
-        id={id}
-        type="text"
-        inputMode="numeric"
-        aria-label="Hour"
-        placeholder="08"
+      <Select
         value={hour}
+        onValueChange={(v) => {
+          setHour(v);
+          emit(v, minute, period);
+        }}
         disabled={disabled}
-        onChange={(e) => handleHour(e.target.value)}
-        onBlur={normalize}
-        className="w-12 text-center tabular-nums"
-      />
+      >
+        <SelectTrigger id={id} className="w-[4.5rem]" aria-label="Hour">
+          <SelectValue placeholder="Hr" />
+        </SelectTrigger>
+        <SelectContent>
+          {HOUR_OPTIONS.map((h) => (
+            <SelectItem key={h} value={h}>
+              {h}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <span className="text-muted-foreground">:</span>
-      <Input
-        type="text"
-        inputMode="numeric"
-        aria-label="Minute"
-        placeholder="00"
+      <Select
         value={minute}
+        onValueChange={(v) => {
+          setMinute(v);
+          emit(hour, v, period);
+        }}
         disabled={disabled}
-        onChange={(e) => handleMinute(e.target.value)}
-        onBlur={normalize}
-        className="w-12 text-center tabular-nums"
-      />
-      <Select value={period} onValueChange={(v) => handlePeriod(v as Period)} disabled={disabled}>
+      >
+        <SelectTrigger className="w-[4.5rem]" aria-label="Minute">
+          <SelectValue placeholder="Min" />
+        </SelectTrigger>
+        <SelectContent>
+          {minuteOptions.map((m) => (
+            <SelectItem key={m} value={m}>
+              {m}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select
+        value={period}
+        onValueChange={(v) => {
+          setPeriod(v as Period);
+          emit(hour, minute, v as Period);
+        }}
+        disabled={disabled}
+      >
         <SelectTrigger className="w-[4.5rem]" aria-label="AM or PM">
           <SelectValue />
         </SelectTrigger>

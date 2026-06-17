@@ -267,7 +267,21 @@ export function ExpenseForm({
   return (
     <>
       <Form {...form}>
-        <form onSubmit={onSubmit} className="space-y-6">
+        <form
+          onSubmit={onSubmit}
+          className="space-y-6"
+          onKeyDown={(e) => {
+            // Save only via the Save button — Enter in a field must not submit.
+            if (
+              e.key === "Enter" &&
+              e.target instanceof HTMLElement &&
+              e.target.tagName === "INPUT" &&
+              !e.target.closest("[cmdk-root]")
+            ) {
+              e.preventDefault();
+            }
+          }}
+        >
           {/* --------------------------------------------------------------
               Header
           -------------------------------------------------------------- */}

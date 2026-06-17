@@ -84,11 +84,14 @@ export function computePartSellTiers(
       ? Number(part.over_counter_price)
       : round2(listPrice);
 
-  // With Service = Total cost + Service charge.
+  // With Service = Total cost + Service charge. The Service charge may be
+  // negative (a discount), so floor the billable price at 0 and ALWAYS return a
+  // number — never null it out (which used to hide the tier when the charge was
+  // a large negative). A per-part override still wins.
   const withSvc =
     part.with_service_price != null
       ? Number(part.with_service_price)
-      : round2(totalCost + serviceCharge);
+      : Math.max(0, Math.round((totalCost + serviceCharge) * 100) / 100);
 
   // Without Service = Linked labour charge + List price. Bundled parts have no
   // standalone counter price (the customer pays for the package) → force 0.

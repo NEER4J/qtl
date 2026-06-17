@@ -24,6 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { togglePartActive } from "@/lib/actions/pricing";
+import { getPartStockSummary } from "@/lib/actions/inventory";
 import type { AdminPartRow, PartCategoryOption } from "@/lib/actions/pricing";
 import type { ServiceCost } from "@/lib/db/types";
 import { formatMoney } from "@/lib/utils/format";
@@ -54,7 +55,12 @@ export function PartsTable({
   brands: string[];
   globalCounterPremium: number;
   globalCustomerSuppliesLabour: number;
-  initialFilters: { q: string; category_id: string; brand: string };
+  initialFilters: {
+    q: string;
+    category_id: string;
+    brand: string;
+    status: "all" | "active" | "inactive";
+  };
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -84,9 +90,33 @@ export function PartsTable({
     startFilterTransition(() => router.push("?"));
   };
 
+  const setStatusFilter = (s: "all" | "active" | "inactive") => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (s === "all") params.delete("status");
+    else params.set("status", s);
+    startFilterTransition(() => router.push(`?${params.toString()}`));
+  };
+
   const handleToggle = (p: AdminPartRow) => {
-    setPendingId(p.id);
     startTransition(async () => {
+      setPendingId(p.id);
+      // Deactivating a part that still has stock on hand → warn first.
+      if (p.active) {
+        try {
+          const stock = await getPartStockSummary(p.id);
+          if (stock.total > 0) {
+            const ok = window.confirm(
+              `${p.brand} ${p.part_number} has ${stock.total} unit(s) in inventory across ${stock.locations} location(s).\n\nDeactivate anyway?`,
+            );
+            if (!ok) {
+              setPendingId(null);
+              return;
+            }
+          }
+        } catch {
+          // If the stock check fails, fall through and let the toggle proceed.
+        }
+      }
       const res = await togglePartActive({ id: p.id, active: !p.active });
       setPendingId(null);
       if (!res.ok) toast.error(res.error);
@@ -154,6 +184,21 @@ export function PartsTable({
           </Button>
         </div>
       </form>
+
+      <div className="flex items-center gap-1">
+        {(["all", "active", "inactive"] as const).map((s) => (
+          <Button
+            key={s}
+            type="button"
+            size="sm"
+            variant={initialFilters.status === s ? "default" : "outline"}
+            disabled={isFiltering}
+            onClick={() => setStatusFilter(s)}
+          >
+            {s === "all" ? "All" : s === "active" ? "Active" : "Inactive"}
+          </Button>
+        ))}
+      </div>
 
       <div className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
         <Table>

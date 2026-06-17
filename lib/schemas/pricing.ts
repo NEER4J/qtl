@@ -46,7 +46,6 @@ export const CreateOilTypeInput = z.object({
     .default(4.546),
   is_taxable: z.coerce.boolean().default(true),
   is_engine_oil: z.coerce.boolean().default(true),
-  sort_order: z.coerce.number().int().min(0).default(100),
   active: z.coerce.boolean().default(true),
 });
 export type CreateOilTypeInput = z.infer<typeof CreateOilTypeInput>;

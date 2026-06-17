@@ -105,6 +105,8 @@ export interface SalesJobDetail extends SalesJob {
   location_fax: string | null;
   location_hst_number: string | null;
   service_type_name: string | null;
+  /** Display name of whoever last updated the job (updated_by). */
+  updated_by_name: string | null;
   customer_license_plates: string[] | null;
   payments: SalesPaymentRow[];
   items: SalesJobItemRow[];
@@ -208,6 +210,19 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
     },
   );
 
+  // Resolve the last-editor's name (updated_by → auth.users, so PostgREST can't
+  // embed profiles; do a small lookup). Falls back to null if not visible.
+  let updatedByName: string | null = null;
+  const editorId = (rest as SalesJob).updated_by;
+  if (editorId) {
+    const { data: editor } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", editorId)
+      .maybeSingle();
+    updatedByName = (editor as { full_name: string | null } | null)?.full_name ?? null;
+  }
+
   return {
     ...(rest as SalesJob),
     location_code: loc?.code ?? null,
@@ -220,6 +235,7 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
     location_hst_number: loc?.hst_number ?? null,
     service_type_name: svc?.name ?? null,
     customer_license_plates: cust?.license_plates ?? null,
+    updated_by_name: updatedByName,
     payments: (payments ?? []) as SalesPaymentRow[],
     items,
   };
@@ -377,10 +393,25 @@ export const updateSalesJob = wrapAction({
     // rollup trigger only fires on payment changes, not on job edits).
     const { data: existing, error: existingErr } = await supabase
       .from("sales_jobs")
-      .select("paid_amount")
+      .select("paid_amount, created_at")
       .eq("id", input.id)
       .single();
     if (existingErr) throw existingErr;
+
+    // Staff (and technician) may only edit a job on the SAME calendar day it was
+    // created (Toronto time). Owner / co_owner / manager / accountant are
+    // unrestricted.
+    if (profile.role === "staff" || profile.role === "technician") {
+      const dayOf = (iso: string) =>
+        new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Toronto" });
+      const today = new Date().toLocaleDateString("en-CA", {
+        timeZone: "America/Toronto",
+      });
+      if (existing?.created_at && dayOf(existing.created_at) !== today) {
+        throw new Error("You can only edit a job on the day it was created.");
+      }
+    }
+
     const status = deriveStatus(input.total, existing?.paid_amount ?? 0);
 
     const { data, error } = await supabase

@@ -32,6 +32,7 @@ import { createSalesJob, updateSalesJob } from "@/lib/actions/sales";
 import { createCustomer, getCustomer } from "@/lib/actions/customers";
 import { excelOilLabel } from "@/lib/utils/oil-labels";
 import { getCustomerVehicles } from "@/lib/actions/vehicles";
+import { VehicleFormDialog } from "@/components/customers/vehicle-form-dialog";
 import { isFreeGreaseEligible } from "@/lib/utils/free-grease";
 import { isFreeOilChangeEligible } from "@/lib/utils/free-oil-change";
 import { lookupOilChangePrice } from "@/lib/actions/pricing";
@@ -160,6 +161,7 @@ export function SalesJobForm({
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerVehicles, setCustomerVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [addVehicleOpen, setAddVehicleOpen] = useState(false);
   // Track the last auto-filled price so we can detect manual overrides on submit.
   const [lastAutoPrice, setLastAutoPrice] = useState<string | null>(
     initial?.auto_priced_at && initial?.sub_total ? initial.sub_total : null,
@@ -173,12 +175,10 @@ export function SalesJobForm({
     { id: string; mode: PaymentMode; amount: string }[]
   >([]);
 
-  // Roster suggestions for the tech/advisor pickers. We expose every active
-  // name in every dropdown so the user has flexibility (a Front Counter
-  // person can still be tagged on a job if they helped). The combobox is
+  // Roster lookups for the tech/advisor pickers. The suggestion list itself is
+  // location-filtered (see locationTechSuggestions below). The combobox is
   // creatable — typing a brand-new name commits it on this job; managing the
   // canonical roster happens at /settings/technicians.
-  const technicianSuggestions = technicians.map((t) => t.name);
   const technicianRoleByName = useMemo(() => {
     const m = new Map<string, string>();
     for (const t of technicians) if (t.role) m.set(t.name, t.role);
@@ -272,17 +272,32 @@ export function SalesJobForm({
   const oilTypeId = useWatch({ control: form.control, name: "oil_type_id" });
   const oilContainer = useWatch({ control: form.control, name: "oil_container" });
 
-  // Advisor picker is filtered by the job's location (client 2026-06): show only
-  // technicians whose home location matches, plus any left unassigned (null).
-  // Upper/Lower tech pickers stay unfiltered (use technicianSuggestions).
+  // Advisor + Upper/Lower tech pickers are all filtered by the job's location
+  // (client 2026-06): show only technicians whose home location matches, plus
+  // any left unassigned (null). Free-text entries are still allowed.
   const selectedLocationId = useWatch({ control: form.control, name: "location_id" });
-  const advisorSuggestions = useMemo(
+  const locationTechSuggestions = useMemo(
     () =>
       technicians
         .filter((t) => t.location_id == null || t.location_id === selectedLocationId)
         .map((t) => t.name),
     [technicians, selectedLocationId],
   );
+
+  // Catalog auto-pricing engine list, narrowed by the vehicle Make when it
+  // matches an engine manufacturer; falls back to ALL engines if nothing
+  // matches (engine_types.manufacturer often differs from the truck Make).
+  const vehicleMake = useWatch({ control: form.control, name: "vehicle_make" });
+  const { engineOptions, engineMakeFiltered } = useMemo(() => {
+    const make = (vehicleMake ?? "").trim().toLowerCase();
+    if (!make) return { engineOptions: engineTypes, engineMakeFiltered: false };
+    const matched = engineTypes.filter((e) =>
+      e.manufacturer.toLowerCase().includes(make),
+    );
+    return matched.length > 0
+      ? { engineOptions: matched, engineMakeFiltered: true }
+      : { engineOptions: engineTypes, engineMakeFiltered: false };
+  }, [engineTypes, vehicleMake]);
 
   const isOilChange = serviceTypes.find((s) => s.id === serviceTypeId)?.code === "OC";
 
@@ -335,9 +350,19 @@ export function SalesJobForm({
           }
         }
         setCustomerVehicles(vs);
-        if (initial.vehicle_id) {
-          const v = vs.find((x) => x.id === initial.vehicle_id) ?? null;
-          setSelectedVehicle(v);
+        // Auto-select the vehicle: an explicit vehicle_id wins; otherwise in
+        // create mode (e.g. "Save & add new job") pick the only vehicle so it's
+        // pre-filled without the user re-picking it.
+        const target = initial.vehicle_id
+          ? vs.find((x) => x.id === initial.vehicle_id) ?? null
+          : mode === "create" && vs.length === 1
+            ? vs[0]
+            : null;
+        if (target) {
+          // create: also fill the vehicle snapshot fields; edit: keep the saved
+          // snapshot, just mark the selection.
+          if (mode === "create") applyVehicle(target);
+          else setSelectedVehicle(target);
         }
       })();
     }
@@ -355,6 +380,15 @@ export function SalesJobForm({
     form.setValue("engine_size", v?.engine_size ?? "");
     form.setValue("unit_no", v?.unit_number ?? "");
     if (v?.mileage != null) form.setValue("odometer", String(v.mileage));
+  };
+
+  // After adding a vehicle inline, refresh the picker and select the new one.
+  const handleVehicleSaved = async (v: Vehicle) => {
+    const vs = selectedCustomer
+      ? await getCustomerVehicles(selectedCustomer.id)
+      : [v];
+    setCustomerVehicles(vs);
+    applyVehicle(vs.find((x) => x.id === v.id) ?? v);
   };
 
   const applyCustomer = async (c: Customer) => {
@@ -572,7 +606,22 @@ export function SalesJobForm({
   return (
     <>
       <Form {...form}>
-        <form onSubmit={onSubmit} className="space-y-6">
+        <form
+          onSubmit={onSubmit}
+          className="space-y-6"
+          onKeyDown={(e) => {
+            // Save only via the Save button — pressing Enter in a field must not
+            // submit. Comboboxes (cmdk) still use Enter to pick an option.
+            if (
+              e.key === "Enter" &&
+              e.target instanceof HTMLElement &&
+              e.target.tagName === "INPUT" &&
+              !e.target.closest("[cmdk-root]")
+            ) {
+              e.preventDefault();
+            }
+          }}
+        >
           {/* ----------------------------------------------------------------
                Step 1 — Customer
           ---------------------------------------------------------------- */}
@@ -641,46 +690,53 @@ export function SalesJobForm({
                 {/* Vehicle picker (item #4 — multiple trucks) */}
                 <FormItem>
                   <FormLabel>Vehicle</FormLabel>
-                  <FormControl>
-                    {customerVehicles.length === 0 ? (
-                      <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                        This customer has no registered vehicles.{" "}
-                        <a
-                          href={`/customers/${selectedCustomer.id}/vehicles/new`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-primary underline"
+                  <div className="flex items-stretch gap-2">
+                    <div className="flex-1">
+                      {customerVehicles.length === 0 ? (
+                        <div className="flex h-9 items-center rounded-md border border-dashed px-3 text-sm text-muted-foreground">
+                          No vehicles yet — add one →
+                        </div>
+                      ) : (
+                        <Select
+                          value={selectedVehicle?.id ?? ""}
+                          onValueChange={(vid) => {
+                            const v = customerVehicles.find((x) => x.id === vid) ?? null;
+                            applyVehicle(v);
+                          }}
                         >
-                          Add a vehicle
-                        </a>{" "}
-                        first, then refresh this page.
-                      </div>
-                    ) : (
-                      <Select
-                        value={selectedVehicle?.id ?? ""}
-                        onValueChange={(vid) => {
-                          const v = customerVehicles.find((x) => x.id === vid) ?? null;
-                          applyVehicle(v);
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a vehicle" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {customerVehicles.map((v) => (
-                            <SelectItem key={v.id} value={v.id}>
-                              <span className="font-mono">{v.license_plate}</span>
-                              {v.year || v.make || v.model
-                                ? ` — ${[v.year, v.make, v.model].filter(Boolean).join(" ")}`
-                                : ""}
-                              {v.carrier_name ? ` · ${v.carrier_name}` : ""}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a vehicle" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {customerVehicles.map((v) => (
+                              <SelectItem key={v.id} value={v.id}>
+                                <span className="font-mono">{v.license_plate}</span>
+                                {v.year || v.make || v.model
+                                  ? ` — ${[v.year, v.make, v.model].filter(Boolean).join(" ")}`
+                                  : ""}
+                                {v.carrier_name ? ` · ${v.carrier_name}` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => setAddVehicleOpen(true)}
+                      className="shrink-0 font-semibold"
+                    >
+                      <Plus className="size-4" /> Add vehicle
+                    </Button>
+                  </div>
                 </FormItem>
+
+                <VehicleFormDialog
+                  open={addVehicleOpen}
+                  onOpenChange={setAddVehicleOpen}
+                  customerId={selectedCustomer.id}
+                  onSaved={handleVehicleSaved}
+                />
 
                 {/* Free grease banner — item #15 */}
                 {isFreeGreaseEligible(selectedCustomer) && (
@@ -993,7 +1049,7 @@ export function SalesJobForm({
                       <CreatableCombobox
                         value={field.value ?? ""}
                         onChange={field.onChange}
-                        suggestions={advisorSuggestions}
+                        suggestions={locationTechSuggestions}
                         descriptionFor={technicianRoleFor}
                         placeholder="Pick advisor"
                         searchPlaceholder="Search by name or role…"
@@ -1047,13 +1103,18 @@ export function SalesJobForm({
                             <SelectTrigger><SelectValue placeholder="Select engine" /></SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {engineTypes.map((e) => (
+                            {engineOptions.map((e) => (
                               <SelectItem key={e.id} value={e.id}>
                                 {e.manufacturer} {e.model} ({e.oil_capacity_litres}L)
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
+                        {engineMakeFiltered && (
+                          <p className="text-[10px] text-muted-foreground">
+                            Filtered by Make: {vehicleMake}
+                          </p>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
@@ -1115,7 +1176,7 @@ export function SalesJobForm({
                       <CreatableCombobox
                         value={field.value ?? ""}
                         onChange={field.onChange}
-                        suggestions={technicianSuggestions}
+                        suggestions={locationTechSuggestions}
                         descriptionFor={technicianRoleFor}
                         placeholder="Pick technician"
                         searchPlaceholder="Search by name or role…"
@@ -1138,7 +1199,7 @@ export function SalesJobForm({
                       <CreatableCombobox
                         value={field.value ?? ""}
                         onChange={field.onChange}
-                        suggestions={technicianSuggestions}
+                        suggestions={locationTechSuggestions}
                         descriptionFor={technicianRoleFor}
                         placeholder="Pick technician"
                         searchPlaceholder="Search by name or role…"
@@ -1221,6 +1282,7 @@ export function SalesJobForm({
               items={lineItems}
               onChange={setLineItems}
               serviceCosts={serviceCosts}
+              oilTypes={oilTypes}
             />
           </section>
 

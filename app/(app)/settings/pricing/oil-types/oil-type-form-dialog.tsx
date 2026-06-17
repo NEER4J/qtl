@@ -35,7 +35,6 @@ type FormValues = {
   litres_per_gallon: string;
   is_taxable: boolean;
   is_engine_oil: boolean;
-  sort_order: string;
   active: boolean;
 };
 
@@ -48,7 +47,6 @@ const blank: FormValues = {
   litres_per_gallon: "4.546",
   is_taxable: true,
   is_engine_oil: true,
-  sort_order: "100",
   active: true,
 };
 
@@ -79,7 +77,6 @@ export function OilTypeFormDialog({
             litres_per_gallon: String(oilType.litres_per_gallon),
             is_taxable: oilType.is_taxable,
             is_engine_oil: oilType.is_engine_oil,
-            sort_order: String(oilType.sort_order),
             active: oilType.active,
           }
         : blank,
@@ -97,7 +94,6 @@ export function OilTypeFormDialog({
         litres_per_gallon: Number(values.litres_per_gallon),
         is_taxable: values.is_taxable,
         is_engine_oil: values.is_engine_oil,
-        sort_order: Number(values.sort_order),
         active: values.active,
       };
       const res =
@@ -126,40 +122,25 @@ export function OilTypeFormDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={onSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="code"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Code *</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="15W40"
-                        maxLength={30}
-                        className="uppercase"
-                        {...field}
-                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="sort_order"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Sort order</FormLabel>
-                    <FormControl>
-                      <Input type="number" min="0" step="1" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            <FormField
+              control={form.control}
+              name="code"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Code *</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="15W40"
+                      maxLength={30}
+                      className="uppercase"
+                      {...field}
+                      onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

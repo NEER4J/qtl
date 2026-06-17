@@ -19,9 +19,11 @@ export default async function PartsAdminPage({
 }) {
   await requireRole("owner", "co_owner");
   const sp = await searchParams;
+  const status: "all" | "active" | "inactive" =
+    sp.status === "active" || sp.status === "inactive" ? sp.status : "all";
 
   const [parts, serviceCosts, categories, brands, settings] = await Promise.all([
-    listAllParts({ category_id: sp.category_id, brand: sp.brand, q: sp.q }),
+    listAllParts({ category_id: sp.category_id, brand: sp.brand, q: sp.q, status }),
     listAllServiceCosts(),
     listPartCategories(),
     listPartBrands(),
@@ -58,7 +60,7 @@ export default async function PartsAdminPage({
         brands={brands}
         globalCounterPremium={settings.counter_premium}
         globalCustomerSuppliesLabour={settings.customer_supplies_labour}
-        initialFilters={{ q: sp.q ?? "", category_id: sp.category_id ?? "", brand: sp.brand ?? "" }}
+        initialFilters={{ q: sp.q ?? "", category_id: sp.category_id ?? "", brand: sp.brand ?? "", status }}
       />
     </div>
   );
