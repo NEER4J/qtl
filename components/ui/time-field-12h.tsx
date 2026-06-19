@@ -29,7 +29,7 @@ type Props = {
 };
 
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1));
-const MINUTE_STEPS = ["00", "15", "30", "45"];
+const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
 
 function parse24(value?: string): { hour: string; minute: string; period: Period } | null {
   const m = /^(\d{1,2}):(\d{2})/.exec(value ?? "");
@@ -65,13 +65,6 @@ export function TimeField12h({ value, onChange, onBlur, disabled, id, className 
     setMinute(p?.minute ?? "");
     setPeriod(p?.period ?? "AM");
   }, [value]);
-
-  // 15-min steps, plus the current minute if it's off-step (legacy data).
-  const minuteOptions = React.useMemo(() => {
-    const set = new Set(MINUTE_STEPS);
-    if (minute) set.add(minute.padStart(2, "0"));
-    return Array.from(set).sort((a, b) => Number(a) - Number(b));
-  }, [minute]);
 
   function emit(h: string, m: string, p: Period) {
     if (h === "" && m === "") {
@@ -118,7 +111,7 @@ export function TimeField12h({ value, onChange, onBlur, disabled, id, className 
           <SelectValue placeholder="Min" />
         </SelectTrigger>
         <SelectContent>
-          {minuteOptions.map((m) => (
+          {MINUTE_OPTIONS.map((m) => (
             <SelectItem key={m} value={m}>
               {m}
             </SelectItem>

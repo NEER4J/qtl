@@ -18,6 +18,7 @@ import {
 } from "@react-pdf/renderer";
 import type { SalesJobDetail } from "@/lib/actions/sales";
 import { buildDisplayRows } from "@/lib/utils/sales-display";
+import { roundUpTo99 } from "@/lib/utils/format";
 
 const LOGO_PATH = path.join(process.cwd(), "public", "logo.png");
 
@@ -263,7 +264,12 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
   // and Parts (catalog items).
   const display = buildDisplayRows(
     job.items,
-    (it) => Number(it.line_total ?? 0),
+    // Standalone lines round to .99; package items stay raw (the package TOTAL
+    // is rounded instead).
+    (it) =>
+      it.package_group
+        ? Number(it.line_total ?? 0)
+        : roundUpTo99(Number(it.line_total ?? 0)),
     (it) => it.is_taxable === true,
     (it) => it.package_label ?? "Package",
   );
@@ -275,13 +281,13 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
   const singles = display.flatMap((r) => (r.type === "single" ? [r.item] : []));
   const labour = singles.filter((it) => !it.part_id);
   const parts = singles.filter((it) => !!it.part_id);
-  const packagesTotal = packageRows.reduce((s, r) => s + r.total, 0);
+  const packagesTotal = packageRows.reduce((s, r) => s + roundUpTo99(r.total), 0);
   // Packages render in the Description-of-Work section, so their total rolls
   // into Total Labour. (Subtotal/HST/Total come from the stored job fields, so
   // this split is cosmetic and always reconciles to the stored subtotal.)
   const totalLabour =
-    labour.reduce((s, it) => s + Number(it.line_total ?? 0), 0) + packagesTotal;
-  const totalParts = parts.reduce((s, it) => s + Number(it.line_total ?? 0), 0);
+    labour.reduce((s, it) => s + roundUpTo99(Number(it.line_total ?? 0)), 0) + packagesTotal;
+  const totalParts = parts.reduce((s, it) => s + roundUpTo99(Number(it.line_total ?? 0)), 0);
 
   return (
     <Document title={`Invoice ${job.invoice_no ?? ""}`} author="Quick Truck Lube">
@@ -445,7 +451,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
                   saved > 0 ? `${r.label}  (merged — saved ${money(saved)})` : r.label,
                 unit: "",
                 mhsw: "",
-                amount: money(r.total),
+                amount: money(roundUpTo99(r.total)),
               });
               for (const m of r.items) {
                 const merged = m.merged_unit_price != null;
@@ -472,7 +478,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
                 description: it.description,
                 unit: money(Number(it.unit_price)),
                 mhsw: "—",
-                amount: money(Number(it.line_total)),
+                amount: money(roundUpTo99(Number(it.line_total))),
               });
             }
 
@@ -488,7 +494,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
                 description: it.description,
                 unit: money(Number(it.unit_price)),
                 mhsw: Number(it.mhsw_unit) > 0 ? money(Number(it.mhsw_unit)) : "—",
-                amount: money(Number(it.line_total)),
+                amount: money(roundUpTo99(Number(it.line_total))),
                 note: cs ? `(customer supplied — saved ${money(wouldHaveCharged)})` : undefined,
               });
             }

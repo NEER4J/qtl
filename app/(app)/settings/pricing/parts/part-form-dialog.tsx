@@ -589,7 +589,7 @@ export function PartFormDialog({
                     <div className="leading-none">
                       <FormLabel className="cursor-pointer">Bundled in a package</FormLabel>
                       <FormDescription className="text-xs">
-                        When on, the All Filter Sell Price shows <strong>Without Service = $0</strong> for this part (the customer pays for the package). If the same part is added to a sales job a second time, the extra one auto-uses the <strong>Over the Counter</strong> price.
+                        When on, the All Filter Sell Price shows <strong>With Service = $0</strong> for this part (the customer pays for the package). If the same part is added to a sales job a second time, the extra one auto-uses the <strong>Over the Counter</strong> price.
                       </FormDescription>
                     </div>
                   </FormItem>

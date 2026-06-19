@@ -48,7 +48,7 @@ import type {
   Technician,
   Vehicle,
 } from "@/lib/db/types";
-import { todayISO, formatDate } from "@/lib/utils/format";
+import { todayISO, formatDate, roundUpTo99 } from "@/lib/utils/format";
 import { formatPhone } from "@/lib/utils/phone";
 import { CreatableCombobox } from "@/components/pricing/creatable-combobox";
 
@@ -536,7 +536,11 @@ export function SalesJobForm({
           part_id: it.part_id,
           description: it.description,
           quantity: Number(it.quantity) || 0,
-          unit_price: Number(it.unit_price) || 0,
+          // Standalone parts round to .99; package items stay raw (the package
+          // total is rounded for display, not each item).
+          unit_price: it.package_group
+            ? Number(it.unit_price) || 0
+            : roundUpTo99(Number(it.unit_price) || 0),
           mhsw_unit: Number(it.mhsw_unit) || 0,
           is_taxable: it.is_taxable,
           package_label: it.package_label ?? null,

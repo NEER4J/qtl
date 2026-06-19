@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { Boxes, Plus, Trash2 } from "lucide-react";
 
 import {
@@ -28,7 +28,7 @@ import type {
   ServiceCost,
   UnitOfMeasure,
 } from "@/lib/db/types";
-import { formatMoney } from "@/lib/utils/format";
+import { formatMoney, roundUpTo99 } from "@/lib/utils/format";
 import {
   effectiveCatalogPriceForItem,
   effectiveLockedPriceForItem,
@@ -100,7 +100,8 @@ function newGroupId(): string {
     : `grp-${Math.random().toString(36).slice(2)}`;
 }
 
-export function lineItemTotal(item: LineItem): number {
+/** Raw line total (qty × unit), with NO .99 rounding. */
+function rawLineTotal(item: LineItem): number {
   if (item.is_customer_supplied) return 0;
   const q = Number(item.quantity);
   const p = Number(item.unit_price);
@@ -108,19 +109,62 @@ export function lineItemTotal(item: LineItem): number {
   return Math.round(q * p * 100) / 100;
 }
 
-export function lineItemsSubTotal(items: LineItem[]): number {
-  let total = 0;
-  for (const it of items) total += lineItemTotal(it);
-  return Math.round(total * 100) / 100;
+/**
+ * Display / charge total for ONE line. A STANDALONE single part rounds UP to
+ * .99; an item INSIDE a package stays raw — only the package TOTAL is rounded
+ * (see `packageDisplayTotal` / `lineItemsSubTotal`). ≤0 lines are left as-is.
+ */
+export function lineItemTotal(item: LineItem): number {
+  const raw = rawLineTotal(item);
+  return item.package_group ? raw : roundUpTo99(raw);
 }
 
-/** Sum of line totals where is_taxable === true — the HST base. */
-export function lineItemsTaxableSubTotal(items: LineItem[]): number {
+/** A package's total = its raw item sum, rounded UP to .99. */
+export function packageDisplayTotal(rawSum: number): number {
+  return roundUpTo99(rawSum);
+}
+
+/**
+ * Sub total = each standalone line rounded to .99, plus each package's total
+ * rounded to .99 (NOT each package item). Package items are grouped by
+ * `package_group`.
+ */
+export function lineItemsSubTotal(items: LineItem[]): number {
+  const pkg = new Map<string, number>();
   let total = 0;
   for (const it of items) {
-    if (it.is_taxable) total += lineItemTotal(it);
+    const gk = it.package_group;
+    if (gk) pkg.set(gk, (pkg.get(gk) ?? 0) + rawLineTotal(it));
+    else total += roundUpTo99(rawLineTotal(it));
   }
-  return Math.round(total * 100) / 100;
+  for (const sum of pkg.values()) total += roundUpTo99(sum);
+  // The grand Items Sub Total is itself rounded UP to .99.
+  return roundUpTo99(Math.round(total * 100) / 100);
+}
+
+/** HST base — same package-aware rounding, taxable lines only (mixed-taxability
+ *  packages apportion the rounded package total by taxable share). The grand
+ *  taxable base is rounded to .99 so HST tracks the rounded Sub Total. */
+export function lineItemsTaxableSubTotal(items: LineItem[]): number {
+  const pkgAll = new Map<string, number>();
+  const pkgTax = new Map<string, number>();
+  let total = 0;
+  for (const it of items) {
+    const gk = it.package_group;
+    const raw = rawLineTotal(it);
+    if (gk) {
+      pkgAll.set(gk, (pkgAll.get(gk) ?? 0) + raw);
+      if (it.is_taxable) pkgTax.set(gk, (pkgTax.get(gk) ?? 0) + raw);
+    } else if (it.is_taxable) {
+      total += roundUpTo99(raw);
+    }
+  }
+  for (const [gk, all] of pkgAll) {
+    if (all <= 0) continue;
+    const tax = pkgTax.get(gk) ?? 0;
+    total += Math.round(roundUpTo99(all) * (tax / all) * 100) / 100;
+  }
+  return roundUpTo99(Math.round(total * 100) / 100);
 }
 
 /**
@@ -168,6 +212,10 @@ export function SalesLineItems({
   oilTypes?: OilType[];
 }) {
   const [pending, setPending] = useState<PendingAdd | null>(null);
+  // Re-entry guard: a fast double-click on a dialog's confirm button could fire
+  // its handler twice before the dialog closes, adding the item(s) twice. The
+  // guard is set on confirm and reset only when a new dialog is opened.
+  const addingRef = useRef(false);
 
   const update = (key: string, patch: Partial<LineItem>) => {
     onChange(items.map((it) => (it.key === key ? { ...it, ...patch } : it)));
@@ -176,6 +224,33 @@ export function SalesLineItems({
   /** Remove every line belonging to one collapsed package instance. */
   const removeGroup = (groupKey: string) =>
     onChange(items.filter((it) => packageGroupKey(it) !== groupKey));
+
+  /**
+   * Remove a single item from a package WITHOUT dropping the package total — the
+   * removed item's value is absorbed into the first remaining item of the same
+   * package, so the bundle price stays the same (a package is a fixed-price
+   * deal). If it was the last item, the whole package goes.
+   */
+  const removeFromPackageKeepingTotal = (item: LineItem) => {
+    const groupKey = packageGroupKey(item);
+    const removedTotal = lineItemTotal(item);
+    const rest = items.filter((it) => it.key !== item.key);
+    const siblings = rest.filter((it) => packageGroupKey(it) === groupKey);
+    if (siblings.length === 0) {
+      onChange(rest);
+      return;
+    }
+    const anchorKey = siblings[0]!.key;
+    onChange(
+      rest.map((it) => {
+        if (it.key !== anchorKey) return it;
+        const qty = Number(it.quantity) || 1;
+        const newUnit =
+          Math.round((Number(it.unit_price) + removedTotal / qty) * 100) / 100;
+        return { ...it, unit_price: newUnit };
+      }),
+    );
+  };
   const addCustom = () => onChange([...items, newLineItem()]);
 
   /** Add a free-form labour line (taxable, user fills the amount). */
@@ -190,7 +265,7 @@ export function SalesLineItems({
         part_id: null,
         description: sc.name,
         quantity: 1,
-        unit_price: Number(sc.cost) || 0,
+        unit_price: roundUpTo99(Number(sc.cost) || 0),
         is_taxable: true,
       }),
     ]);
@@ -208,7 +283,7 @@ export function SalesLineItems({
         part_id: null,
         description: `${excelOilLabel(oil.code, oil.name)} (${container})`,
         quantity: 1,
-        unit_price: Number.isFinite(rate) ? Math.round(rate * 100) / 100 : 0,
+        unit_price: roundUpTo99(Number.isFinite(rate) ? rate : 0),
         is_taxable: oil.is_taxable,
         unit_of_measure: "ltr",
         oil_type_id: oil.id,
@@ -221,7 +296,7 @@ export function SalesLineItems({
       part_id: p.id,
       description: `${p.brand} ${p.part_number}${p.description ? ` — ${p.description}` : ""}`,
       quantity: 1,
-      unit_price: unitPriceOverride ?? (Number(p.list_price) || 0),
+      unit_price: roundUpTo99(unitPriceOverride ?? (Number(p.list_price) || 0)),
       mhsw_unit: Number(p.mhsw_fee) || 0,
       is_taxable: p.is_taxable,
       unit_of_measure: p.unit_of_measure,
@@ -241,7 +316,7 @@ export function SalesLineItems({
       part_id: null,
       description: `Upgrade: ${part.brand} ${part.part_number}`,
       quantity: 1,
-      unit_price: Math.round(delta * 100) / 100,
+      unit_price: roundUpTo99(Math.round(delta * 100) / 100),
       is_taxable: part.is_taxable ?? true,
       unit_of_measure: null,
     });
@@ -255,6 +330,7 @@ export function SalesLineItems({
       items.find(
         (it) => it.part_category_id != null && it.part_category_id === p.category_id,
       ) ?? null;
+    addingRef.current = false;
     setPending({
       kind: "tier",
       part: p,
@@ -404,6 +480,7 @@ export function SalesLineItems({
   const addPackage = (pkg: PartPackageWithItems) => {
     const overlaps = findPackageOverlaps(pkg);
     if (overlaps.length > 0) {
+      addingRef.current = false;
       setPending({ kind: "package", pkg, overlaps });
       return;
     }
@@ -426,6 +503,8 @@ export function SalesLineItems({
    */
   const confirmPending = () => {
     if (!pending || pending.kind !== "package") return;
+    if (addingRef.current) return;
+    addingRef.current = true;
     const mergeIds = new Set<string>(pending.overlaps.map((o) => o.pkgItemId));
     onChange([...items, ...buildPackageRows(pending.pkg, mergeIds)]);
     setPending(null);
@@ -436,6 +515,8 @@ export function SalesLineItems({
    */
   const declinePending = () => {
     if (!pending || pending.kind !== "package") return;
+    if (addingRef.current) return;
+    addingRef.current = true;
     onChange([...items, ...buildPackageRows(pending.pkg, new Set())]);
     setPending(null);
   };
@@ -443,6 +524,8 @@ export function SalesLineItems({
   /** Tier dialog: add the picked part as a line at the chosen price tier. */
   const addPartAtPrice = (price: number) => {
     if (!pending || pending.kind !== "tier") return;
+    if (addingRef.current) return;
+    addingRef.current = true;
     onChange([...items, lineFromPart(pending.part, price)]);
     setPending(null);
   };
@@ -455,6 +538,8 @@ export function SalesLineItems({
    */
   const chargeUpgrade = () => {
     if (!pending || pending.kind !== "tier" || pending.delta === 0) return;
+    if (addingRef.current) return;
+    addingRef.current = true;
     if (pending.delta > 0) {
       onChange([...items, upgradeLine(pending.part, pending.delta)]);
     } else if (pending.existing) {
@@ -521,6 +606,7 @@ export function SalesLineItems({
             step="0.01"
             value={String(it.unit_price)}
             onChange={(e) => update(it.key, { unit_price: Number(e.target.value) || 0 })}
+            onBlur={() => update(it.key, { unit_price: roundUpTo99(Number(it.unit_price) || 0) })}
             className={`text-right ${cs ? "opacity-60" : ""}`}
           />
         </td>
@@ -631,7 +717,7 @@ export function SalesLineItems({
                       </td>
                       <td className="py-2 px-2 text-center text-muted-foreground">—</td>
                       <td className="py-2 px-2 text-right tabular-nums font-medium">
-                        {formatMoney(row.total)}
+                        {formatMoney(packageDisplayTotal(row.total))}
                       </td>
                       <td className="py-2 pl-2 text-right">
                         <Button
@@ -646,8 +732,9 @@ export function SalesLineItems({
                         </Button>
                       </td>
                     </tr>
-                    {/* Included items — shown for transparency, no per-item price.
-                        Merged duplicates show their waived price struck through. */}
+                    {/* Included items — name only; no per-item price/qty (the
+                        package TOTAL is what's charged). Remove still keeps the
+                        package total via removeFromPackageKeepingTotal. */}
                     {row.items.map((it, i) => {
                       const isMerged = it.merged_unit_price != null;
                       return (
@@ -659,71 +746,31 @@ export function SalesLineItems({
                         >
                           <td className="py-1.5 pr-2 pl-9">
                             <span className="text-muted-foreground">{it.description}</span>
+                            {it.unit_of_measure && (
+                              <span className="ml-1 text-[10px] uppercase text-muted-foreground">
+                                {Number(it.quantity)} {it.unit_of_measure}
+                              </span>
+                            )}
                             {isMerged && (
                               <span className="ml-1 text-[10px] text-amber-700 dark:text-amber-500">
                                 · merged (already on the job)
                               </span>
                             )}
                           </td>
-                          <td className="py-1.5 px-2 text-right">
-                            {isMerged ? (
-                              <span className="text-muted-foreground tabular-nums">
-                                {Number(it.quantity)}
-                                {it.unit_of_measure && (
-                                  <span className="text-[10px] uppercase ml-1">{it.unit_of_measure}</span>
-                                )}
-                              </span>
-                            ) : (
-                              <div className="flex items-center justify-end gap-1">
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  min="0.01"
-                                  value={String(it.quantity)}
-                                  onChange={(e) =>
-                                    update(it.key, { quantity: Number(e.target.value) || 0 })
-                                  }
-                                  className="h-8 text-right"
-                                  aria-label="Item quantity"
-                                />
-                                {it.unit_of_measure && (
-                                  <span className="text-[10px] uppercase text-muted-foreground w-8 text-left">
-                                    {it.unit_of_measure}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-1.5 px-2 text-right">
-                            {isMerged ? (
-                              <span className="text-[10px] uppercase text-muted-foreground line-through">
-                                {formatMoney(Number(it.merged_unit_price))}
-                              </span>
-                            ) : (
-                              <Input
-                                type="number"
-                                step="0.01"
-                                value={String(it.unit_price)}
-                                onChange={(e) =>
-                                  update(it.key, { unit_price: Number(e.target.value) || 0 })
-                                }
-                                className="h-8 text-right"
-                                aria-label="Item price"
-                              />
-                            )}
+                          <td className="py-1.5 px-2" />
+                          <td className="py-1.5 px-2 text-center text-[10px] uppercase text-muted-foreground">
+                            {isMerged ? "" : "Included"}
                           </td>
                           <td className="py-1.5 px-2" />
                           <td className="py-1.5 px-2" />
-                          <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">
-                            {isMerged ? formatMoney(0) : formatMoney(lineItemTotal(it))}
-                          </td>
+                          <td className="py-1.5 px-2" />
                           <td className="py-1.5 pl-2 text-right">
                             <Button
                               type="button"
                               variant="ghost"
                               size="icon"
                               className="size-7 text-muted-foreground hover:text-destructive"
-                              onClick={() => remove(it.key)}
+                              onClick={() => removeFromPackageKeepingTotal(it)}
                               aria-label="Remove item from package"
                             >
                               <Trash2 className="size-3.5" />
@@ -838,8 +885,8 @@ function CategoryDuplicateDialog({
 
 /**
  * Tier picker shown on every single-part add — With Service / Without Service /
- * Over Counter. Prices come from the part's computed sell tiers; a tier with no
- * usable price (e.g. Without Service for a bundled part) is disabled. When the
+ * Over Counter. Prices come from the part's computed sell tiers; a bundled part
+ * has With Service = $0 (the package covers it). When the
  * job already has a same-category line and the part has an extra_price, an
  * upgrade/credit shortcut is also offered.
  */
@@ -856,13 +903,13 @@ function TierDialogBody({
 }) {
   const p = pending.part;
   const tiers: { key: string; label: string; price: number | null; hint?: string }[] = [
-    { key: "with", label: "With Service", price: p.with_service },
     {
-      key: "without",
-      label: "Without Service",
-      price: p.without_service,
+      key: "with",
+      label: "With Service",
+      price: p.with_service,
       hint: p.in_package ? "bundled in a package" : undefined,
     },
+    { key: "without", label: "Without Service", price: p.without_service },
     { key: "over", label: "Over the Counter", price: p.over_counter },
   ];
   // A tier with a computed price (incl. $0, e.g. a discounted With Service) is

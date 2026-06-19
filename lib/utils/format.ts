@@ -15,6 +15,18 @@ export function formatMoney(value: number | string | null | undefined): string {
   return money.format(n);
 }
 
+/**
+ * Round a price UP to the next value ending in .99 (12.34 → 12.99, 13.00 →
+ * 13.99, 12.99 → 12.99). Values ≤ 0 (e.g. $0 free lines, negative discount /
+ * credit lines) are returned unchanged. Used to standardise job line prices.
+ */
+export function roundUpTo99(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return value;
+  const cents = Math.round(value * 100);
+  const dollars = Math.max(0, Math.ceil((cents - 99) / 100));
+  return dollars + 0.99;
+}
+
 // Unit costs can carry sub-cent precision (e.g. per-litre buying prices like
 // 1.3712). Show at least 2 decimals, up to 6, trimming trailing zeros so a
 // plain $1.37 still reads cleanly but 1.3712 isn't silently rounded.

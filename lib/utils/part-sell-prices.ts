@@ -20,9 +20,9 @@ import type { Part } from "@/lib/db/types";
 // ============================================================================
 
 export type PartSellTiers = {
-  /** Total cost + Service charge, or the per-part override. */
+  /** Total cost + Service charge; 0 for bundled (in_package) parts; or the per-part override. */
   with_service: number | null;
-  /** Linked labour + List price; 0 for bundled (in_package) parts. */
+  /** Linked labour + List price, or the per-part override. */
   without_service: number | null;
   /** List price (= Over the Counter), or the per-part override. */
   over_counter: number | null;
@@ -84,20 +84,20 @@ export function computePartSellTiers(
       ? Number(part.over_counter_price)
       : round2(listPrice);
 
-  // With Service = Total cost + Service charge. The Service charge may be
-  // negative (a discount), so floor the billable price at 0 and ALWAYS return a
-  // number — never null it out (which used to hide the tier when the charge was
-  // a large negative). A per-part override still wins.
-  const withSvc =
-    part.with_service_price != null
+  // With Service = Total cost + Service charge. Bundled parts have no standalone
+  // installed price (the customer pays for the package) → force 0. Otherwise the
+  // Service charge may be negative (a discount), so floor at 0 and ALWAYS return
+  // a number (never null it out, which used to hide the tier on a big negative).
+  // A per-part override still wins.
+  const withSvc = part.in_package
+    ? 0
+    : part.with_service_price != null
       ? Number(part.with_service_price)
       : Math.max(0, Math.round((totalCost + serviceCharge) * 100) / 100);
 
-  // Without Service = Linked labour charge + List price. Bundled parts have no
-  // standalone counter price (the customer pays for the package) → force 0.
-  const withoutSvc = part.in_package
-    ? 0
-    : part.without_service_price != null
+  // Without Service = Linked labour charge + List price.
+  const withoutSvc =
+    part.without_service_price != null
       ? Number(part.without_service_price)
       : round2(serviceCost + listPrice);
 

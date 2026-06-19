@@ -1013,8 +1013,7 @@ export function CustomerForm({
               </div>
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
+                className="font-semibold"
                 onClick={() =>
                   setVehicleDialog(
                     customer ? { mode: "create" } : { mode: "create-staged" },
