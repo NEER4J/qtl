@@ -1,85 +1,92 @@
 Category,Task,What We Did,Status,Completed Date
-Customer & Vehicle,Salutation removed,"Removed the title/salutation field (Mr/Mrs) from the customer form to keep it simple.",Completed,2026-05-26
-Customer & Vehicle,Last name / Company name field,"Replaced the old name fields with one 'Last name / Company name' field that works for both people and businesses.",Completed,2026-05-26
-Customer & Vehicle,Customer type: Fleet or Single,"Added a dropdown to mark a customer as a Fleet account or a Single customer.",Completed,2026-05-26
-Customer & Vehicle,Card details moved into Billing,"Moved credit-card details into the Billing section as one tidy block and removed the old separate card fields.",Completed,2026-05-26
-Customer & Vehicle,Mailing address + 'same as billing',"Added a mailing address with a 'same as billing' checkbox so you don't have to retype it.",Completed,2026-05-26
-Customer & Vehicle,Default province = Ontario,"New customers default to Ontario, the usual province, to save typing.",Completed,2026-05-26
-Customer & Vehicle,Generic placeholders,"Replaced real-sounding example names in the form with neutral placeholders.",Completed,2026-05-26
-Customer & Vehicle,Cell / Business / Home phones,"Split phone numbers into clear Cell, Business and Home fields.",Completed,2026-05-26
-Customer & Vehicle,Submit button says 'Save',"The customer and vehicle forms now use a clear 'Save' button.",Completed,2026-05-26
-Packages,Package shows as one total on the invoice,"On the customer's invoice a package appears as a single bundled total, listing the items but not their individual prices.",Completed,2026-05-30
-Packages,Add multiple packages to a job,"A single job can now include more than one package.",Completed,2026-05-30
-Packages,Trans & Diff services inside packages,"Transmission and differential services can be included inside packages on jobs.",Completed,2026-05-30
-Roles & Permissions,Supervisor & Technician roles,"Added two new staff roles — Supervisor and Technician — for more precise job assignment and access.",Completed,2026-06-01
-Roles & Permissions,Username login,"Staff can sign in with a simple username instead of an email address.",Completed,2026-06-01
-Roles & Permissions,Permissions screen rebuilt,"Rebuilt the screen where an Admin turns each page on or off for a user, so access is easier to manage.",Completed,2026-06-01
-Inventory,Per-location stock counts,"Inventory now tracks how many of each part are on hand at each shop; only senior roles can change the counts.",Completed,2026-06-01
-Sales & Jobs,Start & end time on jobs,"Added an easy start/end-time picker (hour, minute, AM/PM) to record when a job started and finished.",Completed,2026-06-01
-Customer & Vehicle,Email field on customer form,"Added an email field to the customer record.",Completed,2026-06-01
-Vendors & Expenses,Sub-cent cost precision,"Expense costs can be entered with extra decimal places for accurate part costing.",Completed,2026-06-01
-UI & Navigation,Personal profile page,"Each user has a profile page to update their name and change their password.",Completed,2026-06-01
-Parts & Pricing,Per-part labour & counter fees,"The 'customer-supplies labour' fee and counter premium can be set on each individual part, not just one global value.",Completed,2026-06-05
-Parts & Pricing,Vacation pay moved to Payroll,"Moved the vacation-pay setting out of Pricing and into Payroll, where it belongs.",Completed,2026-06-05
-Parts & Pricing,Buy MHSW & Sell MHSW split,"Split the MHSW environmental fee into what you pay (Buy) and what you charge the customer (Sell).",Completed,2026-06-05
-Sales & Jobs,Separate Labour line on jobs,"Jobs have a dedicated Labour line so labour is recorded separately from parts.",Completed,2026-06-05
-Sales & Jobs,Pick service/labour items on a job,"You can choose predefined service/labour charges from a list when building a job.",Completed,2026-06-05
-Sales & Jobs,Choose price tier when adding a part,"When adding a part to a job you pick which price to charge: With Service, Without Service, or Over the Counter.",Completed,2026-06-05
-Sales & Jobs,Advisor list filtered by location,"The Advisor dropdown shows only people who work at that job's location.",Completed,2026-06-05
-Packages,Package quantity updates the total,"Changing an item's quantity inside a package updates that line's total automatically.",Completed,2026-06-05
-Roles & Permissions,New Admin account (full access),"Created an 'Admin' account type with access to everything, including Settings.",Completed,2026-06-06
-Roles & Permissions,Owner no longer has Settings,"The Owner runs the business but no longer sees Settings — that is now the Admin's job.",Completed,2026-06-06
-Roles & Permissions,Manager sees all locations,"Managers can view customers and data across every location, not just their own.",Completed,2026-06-06
-Roles & Permissions,Supervisor sees all locations,"Supervisors also get all-location access by default.",Completed,2026-06-06
-UI & Navigation,Login page cleanup,"Tidied up the login page layout.",Completed,2026-06-06
-Parts & Pricing,MHSW folded into the cost,"The MHSW fee is now built into a part's cost and shown consistently everywhere.",Completed,2026-06-09
-Parts & Pricing,Correct pricing order,"Fixed the math so Sell MHSW is added to the cost first, then the margin is applied, then the list price is worked out.",Completed,2026-06-09
-Parts & Pricing,Part fields reordered,"Reordered the part fields to Buy MHSW, Sell MHSW, then Cost for a clearer entry flow.",Completed,2026-06-09
-Parts & Pricing,'Over the Counter' = List price,"Defined the Over the Counter price as the part's list price.",Completed,2026-06-09
-Parts & Pricing,'With Service' price defined,"Defined the With Service price as total cost plus the service charge.",Completed,2026-06-09
-Parts & Pricing,'Without Service' price defined,"Defined the Without Service price as linked labour plus the list price.",Completed,2026-06-09
-Parts & Pricing,Renamed 'Counter premium' to 'Service charge',"Renamed the confusing 'Counter premium' field to the clearer 'Service charge'.",Completed,2026-06-09
-Parts & Pricing,'Over the Counter' wording applied,"Updated labels across the app to read 'Over the Counter'.",Completed,2026-06-09
-Parts & Pricing,Service charge can be negative,"The service charge can be set to a negative number so it can act as a discount.",Completed,2026-06-09
-Parts & Pricing,MHSW shown on jobs & invoices,"The MHSW amount now appears as its own column on jobs and printed invoices.",Completed,2026-06-09
-Parts & Pricing,Parts page made fast,"Sped up the parts catalogue so it loads and scrolls smoothly even with thousands of parts.",Completed,2026-06-09
-Sales & Jobs,Staff can create/edit sales,"Staff can create and edit sales jobs at their own location.",Completed,2026-06-09
-Sales & Jobs,Free-grease job not 'outstanding',"A free-grease-only job is no longer shown as an unpaid invoice; the free grease is recorded as a $0 line.",Completed,2026-06-09
-Vendors & Expenses,Per-location vendor accounts,"You can record different details and multiple account numbers for a vendor at each location.",Completed,2026-06-09
-Vendors & Expenses,Account selector on expenses,"On a new expense, after choosing a vendor and location you pick which of that vendor's accounts to use.",Completed,2026-06-09
-Invoices,Per-location invoice header,"Invoices pull the correct shop name, address, phone, fax and HST number from the job's location.",Completed,2026-06-09
-Invoices,One combined items table,"Merged the separate 'Description of Work' and 'Parts' sections into a single clear table on the invoice.",Completed,2026-06-09
-Invoices,Invoice details verified,"Double-checked that invoices show the correct location, HST number and date.",Completed,2026-06-09
-Oil Grid & Pricing,Grid shows engine oils only,"The oil-change price grid now lists only engine oils, hiding coolants and transmission fluids.",Completed,2026-06-09
-UI & Navigation,Sidebar reorganised,"Reorganised the left menu into clear groups: day-to-day operations, then pricing, then finance.",Completed,2026-06-09
-UI & Navigation,Search spinners,"Added loading spinners so it's obvious when a search is running.",Completed,2026-06-09
-Inventory,Active/Inactive status on parts,"Each part shows whether it is Active or Inactive, with a button to switch.",Completed,2026-06-15
-Parts & Pricing,Double-click a part to edit,"You can double-click a part row to open it for editing.",Completed,2026-06-15
-Sales & Jobs,Better customer search on new job,"Improved customer search on a new job — find people by licence plate, name, or any phone number, with clearer labels.",Completed,2026-06-15
-Roles & Permissions,Activity (audit) log,"The activity log shows who changed what and when — including parts and pricing — and was fixed so entries actually show up.",Completed,2026-06-16
-Inventory,Frozen table headers,"Long tables now keep their header row visible while you scroll.",Completed,2026-06-16
-Inventory,Active/Inactive filter tabs,"Added All / Active / Inactive tabs to filter the parts list.",Completed,2026-06-16
-Inventory,Warn before deactivating a stocked part,"If you deactivate a part that still has stock on hand, the system warns you first.",Completed,2026-06-16
-Parts & Pricing,Duplicate part-number warning,"While typing a part number, the system warns you if it already exists.",Completed,2026-06-16
-Parts & Pricing,Bundled-part pricing rule,"A part marked 'bundled in a package' shows $0 on its own; if added to the same job again it uses the Over the Counter price.",Completed,2026-06-16
-Parts & Pricing,Removed number spinner arrows,"Removed the tiny up/down arrows on number boxes so they aren't clicked by mistake.",Completed,2026-06-16
-Sales & Jobs,Edit package item qty & price,"In the job editor you can see and edit each package item's quantity and price, and the bundle total updates.",Completed,2026-06-16
-Sales & Jobs,Remove an item from a package,"You can remove an individual item from a package on a job; the package total adjusts to match.",Completed,2026-06-16
-Sales & Jobs,Add oil as a job line,"You can add an oil grade directly as a job line — choose bulk or gallon, set litres and price.",Completed,2026-06-16
-Sales & Jobs,Multiple payments per job,"A job can record several payments (e.g. part cash, part card).",Completed,2026-06-16
-Sales & Jobs,Free offer once per 30 days,"The free-grease offer can only be used once, within the customer's first 30 days.",Completed,2026-06-16
-Sales & Jobs,Staff same-day edit + last-edit info,"Staff can only edit a job on the day it was created, and every job shows when it was last edited and by whom.",Completed,2026-06-16
-Sales & Jobs,Negative (discount) price lines,"You can enter a negative price on a job line to apply a discount or credit.",Completed,2026-06-16
-Sales & Jobs,Enter key no longer auto-saves,"Pressing Enter in a field no longer saves the form by accident — you save with the Save button.",Completed,2026-06-16
-Sales & Jobs,Upper/Lower tech by location,"The Upper and Lower technician dropdowns show only people at the job's location.",Completed,2026-06-16
-Sales & Jobs,With-Service price with negative charge,"Fixed the With Service price so it still calculates correctly when the service charge is negative.",Completed,2026-06-16
-Sales & Jobs,Engine list filtered by vehicle make,"The engine list for oil-change auto-pricing is filtered to the vehicle's make (and shows all if none match).",Completed,2026-06-16
-Packages,Clearer upgrade/credit popup,"Reworded the package upgrade/credit popup in plain language so it's clear what it does.",Completed,2026-06-16
-Customer & Vehicle,'Save and add new job' button,"A 'Save and add new job' button takes you straight from creating a customer into a new job.",Completed,2026-06-16
-Customer & Vehicle,Vehicle carried into the new job,"When you use 'Save and add new job', the vehicle is saved and pre-selected on the new job.",Completed,2026-06-16
-Customer & Vehicle,Prominent 'Add vehicle' button,"Made 'Add vehicle' a clear button that opens an add-vehicle window right on the job and then selects the new vehicle.",Completed,2026-06-16
-Customer & Vehicle,Block duplicate plate / VIN,"The system blocks saving a vehicle whose licence plate or VIN already exists.",Completed,2026-06-16
-Customer & Vehicle,Duplicate customer-name warning,"While typing a customer name, the system warns you if a similar customer already exists.",Completed,2026-06-16
-Vendors & Expenses,Add catalogue parts to expenses,"On an expense you can pull parts from the catalogue and see each part's last buying price.",Completed,2026-06-16
-Vendors & Expenses,Search expense parts,"You can search those expense parts by number, brand or description.",Completed,2026-06-16
-Oil Grid & Pricing,Oils sorted A to Z,"Oil grades are listed alphabetically by name; the manual sort-order field was removed.",Completed,2026-06-16
+Customer & Vehicle,Salutation removed,"Removed the title/salutation field (Mr/Mrs) from the customer form to keep it simple.",Completed,2026-05-30
+Customer & Vehicle,Last name / Company name field,"Replaced the old name fields with one 'Last name / Company name' field that works for both people and businesses.",Completed,2026-05-30
+Customer & Vehicle,Customer type: Fleet or Single,"Added a dropdown to mark a customer as a Fleet account or a Single customer.",Completed,2026-05-30
+Customer & Vehicle,Card details moved into Billing,"Moved credit-card details into the Billing section as one tidy block and removed the old separate card fields.",Completed,2026-05-30
+Customer & Vehicle,Mailing address + 'same as billing',"Added a mailing address with a 'same as billing' checkbox so you don't have to retype it.",Completed,2026-05-30
+Customer & Vehicle,Default province = Ontario,"New customers default to Ontario, the usual province, to save typing.",Completed,2026-05-30
+Customer & Vehicle,Generic placeholders,"Replaced real-sounding example names in the form with neutral placeholders.",Completed,2026-05-30
+Customer & Vehicle,Cell / Business / Home phones,"Split phone numbers into clear Cell, Business and Home fields.",Completed,2026-05-30
+Customer & Vehicle,Submit button says 'Save',"The customer and vehicle forms now use a clear 'Save' button.",Completed,2026-05-30
+Packages,Package shows as one total on the invoice,"On the customer's invoice a package appears as a single bundled total, listing the items but not their individual prices.",Completed,2026-06-03
+Packages,Add multiple packages to a job,"A single job can now include more than one package.",Completed,2026-06-03
+Packages,Trans & Diff services inside packages,"Transmission and differential services can be included inside packages on jobs.",Completed,2026-06-03
+Roles & Permissions,Supervisor & Technician roles,"Added two new staff roles — Supervisor and Technician — for more precise job assignment and access.",Completed,2026-06-05
+Roles & Permissions,Username login,"Staff can sign in with a simple username instead of an email address.",Completed,2026-06-05
+Roles & Permissions,Permissions screen rebuilt,"Rebuilt the screen where an Admin turns each page on or off for a user, so access is easier to manage.",Completed,2026-06-05
+Inventory,Per-location stock counts,"Inventory now tracks how many of each part are on hand at each shop; only senior roles can change the counts.",Completed,2026-06-05
+Sales & Jobs,Start & end time on jobs,"Added an easy start/end-time picker (hour, minute, AM/PM) to record when a job started and finished.",Completed,2026-06-05
+Customer & Vehicle,Email field on customer form,"Added an email field to the customer record.",Completed,2026-06-05
+Vendors & Expenses,Sub-cent cost precision,"Expense costs can be entered with extra decimal places for accurate part costing.",Completed,2026-06-05
+UI & Navigation,Personal profile page,"Each user has a profile page to update their name and change their password.",Completed,2026-06-05
+Parts & Pricing,Per-part labour & counter fees,"The 'customer-supplies labour' fee and counter premium can be set on each individual part, not just one global value.",Completed,2026-06-09
+Parts & Pricing,Vacation pay moved to Payroll,"Moved the vacation-pay setting out of Pricing and into Payroll, where it belongs.",Completed,2026-06-09
+Parts & Pricing,Buy MHSW & Sell MHSW split,"Split the MHSW environmental fee into what you pay (Buy) and what you charge the customer (Sell).",Completed,2026-06-09
+Sales & Jobs,Separate Labour line on jobs,"Jobs have a dedicated Labour line so labour is recorded separately from parts.",Completed,2026-06-09
+Sales & Jobs,Pick service/labour items on a job,"You can choose predefined service/labour charges from a list when building a job.",Completed,2026-06-09
+Sales & Jobs,Choose price tier when adding a part,"When adding a part to a job you pick which price to charge: With Service, Without Service, or Over the Counter.",Completed,2026-06-09
+Sales & Jobs,Advisor list filtered by location,"The Advisor dropdown shows only people who work at that job's location.",Completed,2026-06-09
+Packages,Package quantity updates the total,"Changing an item's quantity inside a package updates that line's total automatically.",Completed,2026-06-09
+Roles & Permissions,New Admin account (full access),"Created an 'Admin' account type with access to everything, including Settings.",Completed,2026-06-10
+Roles & Permissions,Owner no longer has Settings,"The Owner runs the business but no longer sees Settings — that is now the Admin's job.",Completed,2026-06-10
+Roles & Permissions,Manager sees all locations,"Managers can view customers and data across every location, not just their own.",Completed,2026-06-10
+Roles & Permissions,Supervisor sees all locations,"Supervisors also get all-location access by default.",Completed,2026-06-10
+UI & Navigation,Login page cleanup,"Tidied up the login page layout.",Completed,2026-06-10
+Parts & Pricing,MHSW folded into the cost,"The MHSW fee is now built into a part's cost and shown consistently everywhere.",Completed,2026-06-13
+Parts & Pricing,Correct pricing order,"Fixed the math so Sell MHSW is added to the cost first, then the margin is applied, then the list price is worked out.",Completed,2026-06-13
+Parts & Pricing,Part fields reordered,"Reordered the part fields to Buy MHSW, Sell MHSW, then Cost for a clearer entry flow.",Completed,2026-06-13
+Parts & Pricing,'Over the Counter' = List price,"Defined the Over the Counter price as the part's list price.",Completed,2026-06-13
+Parts & Pricing,'With Service' price defined,"Defined the With Service price as total cost plus the service charge.",Completed,2026-06-13
+Parts & Pricing,'Without Service' price defined,"Defined the Without Service price as linked labour plus the list price.",Completed,2026-06-13
+Parts & Pricing,Renamed 'Counter premium' to 'Service charge',"Renamed the confusing 'Counter premium' field to the clearer 'Service charge'.",Completed,2026-06-13
+Parts & Pricing,'Over the Counter' wording applied,"Updated labels across the app to read 'Over the Counter'.",Completed,2026-06-13
+Parts & Pricing,Service charge can be negative,"The service charge can be set to a negative number so it can act as a discount.",Completed,2026-06-13
+Parts & Pricing,MHSW shown on jobs & invoices,"The MHSW amount now appears as its own column on jobs and printed invoices.",Completed,2026-06-13
+Parts & Pricing,Parts page made fast,"Sped up the parts catalogue so it loads and scrolls smoothly even with thousands of parts.",Completed,2026-06-13
+Sales & Jobs,Staff can create/edit sales,"Staff can create and edit sales jobs at their own location.",Completed,2026-06-13
+Sales & Jobs,Free-grease job not 'outstanding',"A free-grease-only job is no longer shown as an unpaid invoice; the free grease is recorded as a $0 line.",Completed,2026-06-13
+Vendors & Expenses,Per-location vendor accounts,"You can record different details and multiple account numbers for a vendor at each location.",Completed,2026-06-13
+Vendors & Expenses,Account selector on expenses,"On a new expense, after choosing a vendor and location you pick which of that vendor's accounts to use.",Completed,2026-06-13
+Invoices,Per-location invoice header,"Invoices pull the correct shop name, address, phone, fax and HST number from the job's location.",Completed,2026-06-13
+Invoices,One combined items table,"Merged the separate 'Description of Work' and 'Parts' sections into a single clear table on the invoice.",Completed,2026-06-13
+Invoices,Invoice details verified,"Double-checked that invoices show the correct location, HST number and date.",Completed,2026-06-13
+Oil Grid & Pricing,Grid shows engine oils only,"The oil-change price grid now lists only engine oils, hiding coolants and transmission fluids.",Completed,2026-06-13
+UI & Navigation,Sidebar reorganised,"Reorganised the left menu into clear groups: day-to-day operations, then pricing, then finance.",Completed,2026-06-13
+UI & Navigation,Search spinners,"Added loading spinners so it's obvious when a search is running.",Completed,2026-06-13
+Inventory,Active/Inactive status on parts,"Each part shows whether it is Active or Inactive, with a button to switch.",Completed,2026-06-19
+Parts & Pricing,Double-click a part to edit,"You can double-click a part row to open it for editing.",Completed,2026-06-19
+Sales & Jobs,Better customer search on new job,"Improved customer search on a new job — find people by licence plate, name, or any phone number, with clearer labels.",Completed,2026-06-19
+Roles & Permissions,Activity (audit) log,"The activity log shows who changed what and when — including parts and pricing — and was fixed so entries actually show up.",Completed,2026-06-20
+Inventory,Frozen table headers,"Long tables now keep their header row visible while you scroll.",Completed,2026-06-20
+Inventory,Active/Inactive filter tabs,"Added All / Active / Inactive tabs to filter the parts list.",Completed,2026-06-20
+Inventory,Warn before deactivating a stocked part,"If you deactivate a part that still has stock on hand, the system warns you first.",Completed,2026-06-20
+Parts & Pricing,Duplicate part-number warning,"While typing a part number, the system warns you if it already exists.",Completed,2026-06-20
+Parts & Pricing,Bundled-part pricing rule,"A part marked 'bundled in a package' shows $0 on its own; if added to the same job again it uses the Over the Counter price.",Completed,2026-06-20
+Parts & Pricing,Removed number spinner arrows,"Removed the tiny up/down arrows on number boxes so they aren't clicked by mistake.",Completed,2026-06-20
+Sales & Jobs,Edit package item qty & price,"In the job editor you can see and edit each package item's quantity and price, and the bundle total updates.",Completed,2026-06-20
+Sales & Jobs,Remove an item from a package,"You can remove an individual item from a package on a job; the package total adjusts to match.",Completed,2026-06-20
+Sales & Jobs,Add oil as a job line,"You can add an oil grade directly as a job line — choose bulk or gallon, set litres and price.",Completed,2026-06-20
+Sales & Jobs,Multiple payments per job,"A job can record several payments (e.g. part cash, part card).",Completed,2026-06-20
+Sales & Jobs,Free offer once per 30 days,"The free-grease offer can only be used once, within the customer's first 30 days.",Completed,2026-06-20
+Sales & Jobs,Staff same-day edit + last-edit info,"Staff can only edit a job on the day it was created, and every job shows when it was last edited and by whom.",Completed,2026-06-20
+Sales & Jobs,Negative (discount) price lines,"You can enter a negative price on a job line to apply a discount or credit.",Completed,2026-06-20
+Sales & Jobs,Enter key no longer auto-saves,"Pressing Enter in a field no longer saves the form by accident — you save with the Save button.",Completed,2026-06-20
+Sales & Jobs,Upper/Lower tech by location,"The Upper and Lower technician dropdowns show only people at the job's location.",Completed,2026-06-20
+Sales & Jobs,With-Service price with negative charge,"Fixed the With Service price so it still calculates correctly when the service charge is negative.",Completed,2026-06-20
+Sales & Jobs,Engine list filtered by vehicle make,"The engine list for oil-change auto-pricing is filtered to the vehicle's make (and shows all if none match).",Completed,2026-06-20
+Packages,Clearer upgrade/credit popup,"Reworded the package upgrade/credit popup in plain language so it's clear what it does.",Completed,2026-06-20
+Customer & Vehicle,'Save and add new job' button,"A 'Save and add new job' button takes you straight from creating a customer into a new job.",Completed,2026-06-20
+Customer & Vehicle,Vehicle carried into the new job,"When you use 'Save and add new job', the vehicle is saved and pre-selected on the new job.",Completed,2026-06-20
+Customer & Vehicle,Prominent 'Add vehicle' button,"Made 'Add vehicle' a clear button that opens an add-vehicle window right on the job and then selects the new vehicle.",Completed,2026-06-20
+Customer & Vehicle,Block duplicate plate / VIN,"The system blocks saving a vehicle whose licence plate or VIN already exists.",Completed,2026-06-20
+Customer & Vehicle,Duplicate customer-name warning,"While typing a customer name, the system warns you if a similar customer already exists.",Completed,2026-06-20
+Vendors & Expenses,Add catalogue parts to expenses,"On an expense you can pull parts from the catalogue and see each part's last buying price.",Completed,2026-06-20
+Vendors & Expenses,Search expense parts,"You can search those expense parts by number, brand or description.",Completed,2026-06-20
+Oil Grid & Pricing,Oils sorted A to Z,"Oil grades are listed alphabetically by name; the manual sort-order field was removed.",Completed,2026-06-20
+Sales & Jobs,Remove a package item keeps the package total,"Removing an item from a package on a job no longer lowers the price — the item's value stays in the package (a package is a fixed-price deal).",Completed,2026-06-20
+Sales & Jobs,Bundled part = With Service $0,"A part marked 'bundled in a package' now shows $0 as its With Service price (was Without Service), since the package covers it.",Completed,2026-06-20
+Sales & Jobs,Time picker to the minute,"The start/end time picker now lets you pick any minute (00–59), not just 15-minute steps.",Completed,2026-06-20
+Sales & Jobs,Prices rounded up to .99 on jobs,"When building a job, each single part, each package total, and the sub total round up to end in .99 (e.g. 12.34 becomes 12.99). Sales only.",Completed,2026-06-20
+Sales & Jobs,Fixed line items duplicating on new jobs,"Fixed a bug where double-clicking an add-item button could add the same item twice when creating a job.",Completed,2026-06-20
+Packages,Package items shown without individual prices,"On a job a package lists its items by name only (no per-item price); only the package total is charged.",Completed,2026-06-20
+Customer & Vehicle,Highlighted Vehicles section on new-customer form,"The new-customer form's Vehicles area is now a highlighted block with a bold Add vehicle button so it isn't missed.",Completed,2026-06-20

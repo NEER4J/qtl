@@ -1001,7 +1001,7 @@ export function CustomerForm({
           </section>
 
           {/* ------------------------------------------------------ Vehicles */}
-          <section className="space-y-4">
+          <section className="space-y-4 rounded-lg border-2 border-primary/50 bg-primary/5 p-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold">Vehicles</h3>
