@@ -20,7 +20,7 @@ import { StatusBadge } from "@/components/sales/status-badge";
 import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { getSalesJob } from "@/lib/actions/sales";
-import { formatDate, formatMoney, roundUpTo99 } from "@/lib/utils/format";
+import { formatDate, formatMoney } from "@/lib/utils/format";
 import { buildDisplayRows } from "@/lib/utils/sales-display";
 
 export const dynamic = "force-dynamic";
@@ -197,10 +197,7 @@ export default async function SalesJobDetailPage({
               <TableBody>
                 {buildDisplayRows(
                   job.items,
-                  (it) =>
-                    it.package_group
-                      ? Number(it.line_total ?? 0)
-                      : roundUpTo99(Number(it.line_total ?? 0)),
+                  (it) => Number(it.line_total ?? 0),
                   (it) => it.is_taxable === true,
                   (it) => it.package_label ?? "Package",
                 ).map((row) => {
@@ -235,7 +232,7 @@ export default async function SalesJobDetailPage({
                             —
                           </TableCell>
                           <TableCell className="text-right tabular-nums font-medium">
-                            {formatMoney(roundUpTo99(row.total))}
+                            {formatMoney(row.total)}
                           </TableCell>
                         </TableRow>
                         {row.items.map((m) => {
@@ -299,7 +296,7 @@ export default async function SalesJobDetailPage({
                         {Number(it.mhsw_unit) > 0 ? formatMoney(Number(it.mhsw_unit)) : "—"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums font-medium">
-                        {formatMoney(roundUpTo99(Number(it.line_total)))}
+                        {formatMoney(Number(it.line_total))}
                       </TableCell>
                     </TableRow>
                   );

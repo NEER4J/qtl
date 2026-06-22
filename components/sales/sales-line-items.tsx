@@ -28,7 +28,7 @@ import type {
   ServiceCost,
   UnitOfMeasure,
 } from "@/lib/db/types";
-import { formatMoney, roundUpTo99 } from "@/lib/utils/format";
+import { formatMoney } from "@/lib/utils/format";
 import {
   effectiveCatalogPriceForItem,
   effectiveLockedPriceForItem,
@@ -109,62 +109,26 @@ function rawLineTotal(item: LineItem): number {
   return Math.round(q * p * 100) / 100;
 }
 
-/**
- * Display / charge total for ONE line. A STANDALONE single part rounds UP to
- * .99; an item INSIDE a package stays raw — only the package TOTAL is rounded
- * (see `packageDisplayTotal` / `lineItemsSubTotal`). ≤0 lines are left as-is.
- */
+/** Display / charge total for ONE line = qty × unit price (no rounding). */
 export function lineItemTotal(item: LineItem): number {
-  const raw = rawLineTotal(item);
-  return item.package_group ? raw : roundUpTo99(raw);
+  return rawLineTotal(item);
 }
 
-/** A package's total = its raw item sum, rounded UP to .99. */
+/** A package's total = the raw sum of its item line totals. */
 export function packageDisplayTotal(rawSum: number): number {
-  return roundUpTo99(rawSum);
+  return rawSum;
 }
 
-/**
- * Sub total = each standalone line rounded to .99, plus each package's total
- * rounded to .99 (NOT each package item). Package items are grouped by
- * `package_group`.
- */
+/** Sub total = the sum of every line's raw total. */
 export function lineItemsSubTotal(items: LineItem[]): number {
-  const pkg = new Map<string, number>();
-  let total = 0;
-  for (const it of items) {
-    const gk = it.package_group;
-    if (gk) pkg.set(gk, (pkg.get(gk) ?? 0) + rawLineTotal(it));
-    else total += roundUpTo99(rawLineTotal(it));
-  }
-  for (const sum of pkg.values()) total += roundUpTo99(sum);
-  // The grand Items Sub Total is itself rounded UP to .99.
-  return roundUpTo99(Math.round(total * 100) / 100);
+  const total = items.reduce((s, it) => s + rawLineTotal(it), 0);
+  return Math.round(total * 100) / 100;
 }
 
-/** HST base — same package-aware rounding, taxable lines only (mixed-taxability
- *  packages apportion the rounded package total by taxable share). The grand
- *  taxable base is rounded to .99 so HST tracks the rounded Sub Total. */
+/** HST base — the sum of the taxable lines' raw totals. */
 export function lineItemsTaxableSubTotal(items: LineItem[]): number {
-  const pkgAll = new Map<string, number>();
-  const pkgTax = new Map<string, number>();
-  let total = 0;
-  for (const it of items) {
-    const gk = it.package_group;
-    const raw = rawLineTotal(it);
-    if (gk) {
-      pkgAll.set(gk, (pkgAll.get(gk) ?? 0) + raw);
-      if (it.is_taxable) pkgTax.set(gk, (pkgTax.get(gk) ?? 0) + raw);
-    } else if (it.is_taxable) {
-      total += roundUpTo99(raw);
-    }
-  }
-  for (const [gk, all] of pkgAll) {
-    if (all <= 0) continue;
-    const tax = pkgTax.get(gk) ?? 0;
-    total += Math.round(roundUpTo99(all) * (tax / all) * 100) / 100;
-  }
-  return roundUpTo99(Math.round(total * 100) / 100);
+  const total = items.reduce((s, it) => (it.is_taxable ? s + rawLineTotal(it) : s), 0);
+  return Math.round(total * 100) / 100;
 }
 
 /**
@@ -265,7 +229,7 @@ export function SalesLineItems({
         part_id: null,
         description: sc.name,
         quantity: 1,
-        unit_price: roundUpTo99(Number(sc.cost) || 0),
+        unit_price: Number(sc.cost) || 0,
         is_taxable: true,
       }),
     ]);
@@ -283,7 +247,7 @@ export function SalesLineItems({
         part_id: null,
         description: `${excelOilLabel(oil.code, oil.name)} (${container})`,
         quantity: 1,
-        unit_price: roundUpTo99(Number.isFinite(rate) ? rate : 0),
+        unit_price: Number.isFinite(rate) ? rate : 0,
         is_taxable: oil.is_taxable,
         unit_of_measure: "ltr",
         oil_type_id: oil.id,
@@ -296,7 +260,7 @@ export function SalesLineItems({
       part_id: p.id,
       description: `${p.brand} ${p.part_number}${p.description ? ` — ${p.description}` : ""}`,
       quantity: 1,
-      unit_price: roundUpTo99(unitPriceOverride ?? (Number(p.list_price) || 0)),
+      unit_price: unitPriceOverride ?? (Number(p.list_price) || 0),
       mhsw_unit: Number(p.mhsw_fee) || 0,
       is_taxable: p.is_taxable,
       unit_of_measure: p.unit_of_measure,
@@ -316,7 +280,7 @@ export function SalesLineItems({
       part_id: null,
       description: `Upgrade: ${part.brand} ${part.part_number}`,
       quantity: 1,
-      unit_price: roundUpTo99(Math.round(delta * 100) / 100),
+      unit_price: Math.round(delta * 100) / 100,
       is_taxable: part.is_taxable ?? true,
       unit_of_measure: null,
     });
@@ -606,7 +570,6 @@ export function SalesLineItems({
             step="0.01"
             value={String(it.unit_price)}
             onChange={(e) => update(it.key, { unit_price: Number(e.target.value) || 0 })}
-            onBlur={() => update(it.key, { unit_price: roundUpTo99(Number(it.unit_price) || 0) })}
             className={`text-right ${cs ? "opacity-60" : ""}`}
           />
         </td>
