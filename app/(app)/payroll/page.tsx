@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Calendar, ChevronRight } from "lucide-react";
+import { Plus, Calendar, ChevronRight, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,11 @@ export default async function PayrollPage() {
 
   const weeks = await listPayrollWeeks(locationId);
 
-  const canCreate = (profile.role === "owner" || profile.role === "co_owner") || profile.role === "manager";
+  const canCreate =
+    profile.role === "owner"
+    || profile.role === "co_owner"
+    || profile.role === "manager"
+    || profile.role === "accountant";
   // Vacation / WSIB rate editing is owner / co_owner only (matches the action).
   const canEditSettings = profile.role === "owner" || profile.role === "co_owner";
   const settings = canEditSettings ? await getAppSettings() : null;
@@ -67,13 +71,20 @@ export default async function PayrollPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Payroll</h1>
           <p className="text-sm text-muted-foreground">Weekly pay cycles across all locations</p>
         </div>
-        {canCreate && (
-          <NewWeekDialog>
-            <Button size="sm">
-              <Plus className="size-4" /> New week
-            </Button>
-          </NewWeekDialog>
-        )}
+        <div className="flex items-center gap-2">
+          <Button asChild size="sm" variant="outline">
+            <Link href="/payroll/employees">
+              <Users className="size-4" /> Employees
+            </Link>
+          </Button>
+          {canCreate && (
+            <NewWeekDialog>
+              <Button size="sm">
+                <Plus className="size-4" /> New week
+              </Button>
+            </NewWeekDialog>
+          )}
+        </div>
       </div>
 
       <PageHelp id="payroll-list">

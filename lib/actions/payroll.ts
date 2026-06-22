@@ -68,6 +68,131 @@ export async function listEmployees(locationId?: string): Promise<Employee[]> {
   return (data ?? []) as Employee[];
 }
 
+export interface EmployeeWithLinks extends Employee {
+  location_name: string | null;
+  /** Display name of the linked login user (profiles.full_name), if any. */
+  linked_user_name: string | null;
+}
+
+/** All employees (active + inactive) for the management table. */
+export async function listAllEmployees(): Promise<EmployeeWithLinks[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("employees")
+    .select("*, locations:location_id(name), profiles:profile_id(full_name, username)")
+    .order("active", { ascending: false })
+    .order("full_name");
+  if (error) throw error;
+  return ((data ?? []) as unknown[]).map((r) => {
+    const row = r as Record<string, unknown>;
+    const loc = row.locations as { name: string | null } | null;
+    const prof = row.profiles as { full_name: string | null; username: string | null } | null;
+    const rest = { ...row };
+    delete rest.locations;
+    delete rest.profiles;
+    return {
+      ...(rest as unknown as Employee),
+      location_name: loc?.name ?? null,
+      linked_user_name: prof?.full_name ?? prof?.username ?? null,
+    };
+  });
+}
+
+/** Login users an employee can be linked to (for the "My Pay" view). RLS scopes
+ *  the visible set: managers see their own location, owner/co_owner/accountant
+ *  see everyone. Portal customers are never linkable. */
+export interface LinkableProfile {
+  id: string;
+  full_name: string;
+  username: string | null;
+  role: string;
+}
+
+export async function listLinkableProfiles(): Promise<LinkableProfile[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, username, role")
+    .eq("active", true)
+    .neq("role", "portal_customer")
+    .order("full_name");
+  if (error) throw error;
+  return (data ?? []) as LinkableProfile[];
+}
+
+const ToggleEmployeeActive = z.object({
+  id: z.string().uuid(),
+  active: z.coerce.boolean(),
+});
+
+export const toggleEmployeeActive = wrapAction({
+  schema: ToggleEmployeeActive,
+  roles: ["owner", "co_owner", "manager", "accountant"],
+  handler: async (input, profile): Promise<Employee> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("employees")
+      .update({ active: input.active, updated_by: profile.id })
+      .eq("id", input.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePath("/payroll/employees");
+    return data as Employee;
+  },
+});
+
+// ============================================================================
+// My Pay — staff-facing read of their OWN pay. Backed by the SECURITY DEFINER
+// function public.get_my_pay() (migration 0094), which returns only rows for
+// the employee linked to the calling user (employees.profile_id = auth.uid()).
+// ============================================================================
+
+export interface MyPayRow {
+  week_id: string;
+  week_start: string;
+  week_end: string;
+  status: string;
+  location_name: string | null;
+  gross_wages: number;
+  overtime_wages: number;
+  bonus: number;
+  holiday_pay: number;
+  misc_extra: number;
+  ei_employee: number;
+  cpp_employee: number;
+  cpp_employee2: number;
+  income_tax: number;
+  benefit_employee_deduction: number;
+  vacation_pay: number;
+  cash_total: number;
+  net_pay: number;
+  paid: number;
+}
+
+export async function getMyPay(): Promise<MyPayRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_my_pay");
+  if (error) throw error;
+  return ((data ?? []) as MyPayRow[]).map((r) => ({
+    ...r,
+    gross_wages: Number(r.gross_wages),
+    overtime_wages: Number(r.overtime_wages),
+    bonus: Number(r.bonus),
+    holiday_pay: Number(r.holiday_pay),
+    misc_extra: Number(r.misc_extra),
+    ei_employee: Number(r.ei_employee),
+    cpp_employee: Number(r.cpp_employee),
+    cpp_employee2: Number(r.cpp_employee2),
+    income_tax: Number(r.income_tax),
+    benefit_employee_deduction: Number(r.benefit_employee_deduction),
+    vacation_pay: Number(r.vacation_pay),
+    cash_total: Number(r.cash_total),
+    net_pay: Number(r.net_pay),
+    paid: Number(r.paid),
+  }));
+}
+
 export async function getEmployee(id: string): Promise<Employee | null> {
   const supabase = await createClient();
   const { data, error } = await supabase.from("employees").select("*").eq("id", id).single();
@@ -77,7 +202,7 @@ export async function getEmployee(id: string): Promise<Employee | null> {
 
 export const createEmployee = wrapAction({
   schema: EmployeeInput,
-  roles: ["owner", "co_owner", "manager"],
+  roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<Employee> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -89,6 +214,7 @@ export const createEmployee = wrapAction({
         hire_date: input.hire_date || null,
         termination_date: input.termination_date || null,
         location_id: input.location_id ?? profile.location_id,
+        profile_id: input.profile_id || null,
         notes: input.notes || null,
         created_by: profile.id,
         updated_by: profile.id,
@@ -103,14 +229,14 @@ export const createEmployee = wrapAction({
 
 export const updateEmployee = wrapAction({
   schema: UpdateEmployeeInput,
-  roles: ["owner", "co_owner", "manager"],
+  roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<Employee> => {
     const supabase = await createClient();
     const { id, code, ...rest } = input;
     const codeUpdate = code?.trim() ? { code: code.trim() } : {};
     const { data, error } = await supabase
       .from("employees")
-      .update({ ...rest, ...codeUpdate, sin_last4: rest.sin_last4 || null, notes: rest.notes || null, updated_by: profile.id })
+      .update({ ...rest, ...codeUpdate, sin_last4: rest.sin_last4 || null, profile_id: rest.profile_id || null, notes: rest.notes || null, updated_by: profile.id })
       .eq("id", id)
       .select("*")
       .single();
@@ -313,7 +439,7 @@ function snapToMonday(ymd: string): string {
 
 export const createPayrollWeek = wrapAction({
   schema: PayrollWeekInput,
-  roles: ["owner", "co_owner", "manager"],
+  roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<PayrollWeek> => {
     const supabase = await createClient();
     const weekStart = snapToMonday(input.week_start);
@@ -336,7 +462,7 @@ export const createPayrollWeek = wrapAction({
 
 export const updatePayrollWeekStatus = wrapAction({
   schema: UpdatePayrollWeekStatusInput,
-  roles: ["owner", "co_owner", "manager"],
+  roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<PayrollWeek> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -454,7 +580,7 @@ async function buildEntryPayload(
 
 export const upsertPayrollEntry = wrapAction({
   schema: PayrollEntryInput,
-  roles: ["owner", "co_owner", "manager"],
+  roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<PayrollEntry> => {
     const supabase = await createClient();
     const payload = await buildEntryPayload(supabase, input);
@@ -475,7 +601,7 @@ export const upsertPayrollEntry = wrapAction({
 
 export const updatePayrollEntry = wrapAction({
   schema: UpdatePayrollEntryInput,
-  roles: ["owner", "co_owner", "manager"],
+  roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<PayrollEntry> => {
     const supabase = await createClient();
     const { id, ...rest } = input;
@@ -499,7 +625,7 @@ export const updatePayrollEntry = wrapAction({
 
 export const upsertCashDaily = wrapAction({
   schema: PayrollCashDailyInput,
-  roles: ["owner", "co_owner", "manager"],
+  roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<PayrollCashDaily> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -521,7 +647,7 @@ export const upsertCashDaily = wrapAction({
 
 export const addPayrollPayment = wrapAction({
   schema: PayrollPaymentInput,
-  roles: ["owner", "co_owner", "manager"],
+  roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<PayrollPayment> => {
     const supabase = await createClient();
     const { data, error } = await supabase

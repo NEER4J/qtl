@@ -14,6 +14,9 @@ export const EmployeeInput = z.object({
   payroll_type: z.enum(["employee", "management"]).default("employee"),
   default_hourly_rate: moneySchema.default(0),
   location_id: z.string().uuid("Select a location").nullable().optional(),
+  // Optional link to a login user (profiles.id). When set, that user can see
+  // this employee's pay on the staff-facing "My Pay" page.
+  profile_id: z.string().uuid().nullable().optional().or(z.literal("")),
   notes: z.string().trim().max(500).nullable().optional().or(z.literal("")),
 });
 export type EmployeeInput = z.infer<typeof EmployeeInput>;

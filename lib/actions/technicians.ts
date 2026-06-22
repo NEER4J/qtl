@@ -21,7 +21,6 @@ export async function listActiveTechnicians(): Promise<Technician[]> {
     .from("technicians")
     .select("*")
     .eq("active", true)
-    .order("sort_order")
     .order("name");
   if (error) throw error;
   return (data ?? []) as Technician[];
@@ -33,7 +32,6 @@ export async function listAllTechnicians(): Promise<Technician[]> {
     .from("technicians")
     .select("*")
     .order("active", { ascending: false })
-    .order("sort_order")
     .order("name");
   if (error) throw error;
   return (data ?? []) as Technician[];

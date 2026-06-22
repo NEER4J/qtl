@@ -158,6 +158,16 @@ export const sidebarItems: NavGroup[] = [
         url: "/payroll",
         icon: Wallet,
         roles: ["owner", "co_owner", "manager", "accountant"],
+        subItems: [
+          { title: "Pay weeks", url: "/payroll" },
+          { title: "Employees", url: "/payroll/employees" },
+        ],
+      },
+      {
+        title: "My Pay",
+        url: "/my-pay",
+        icon: Wallet,
+        roles: ["manager", "supervisor", "staff", "technician"],
       },
     ],
   },

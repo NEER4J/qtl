@@ -120,7 +120,7 @@ export function PayrollEntryDialog({ weekId, existing, children }: Props) {
                     <EmptyDropdownHint
                       message="No active employees yet. You need to add your staff as employee records before you can put them on payroll."
                       actionLabel="Add employees"
-                      href="/settings/users"
+                      href="/payroll/employees"
                     />
                   ) : (
                     <Select value={field.value} onValueChange={field.onChange} disabled={isEdit}>

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
+import { PrintButton } from "@/components/pricing/print-button";
 import { requireProfile } from "@/lib/auth/require";
 import { getOilChangeDetails } from "@/lib/actions/pricing";
 import { formatMoney } from "@/lib/utils/format";
@@ -23,16 +24,29 @@ export default async function OilChangeDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Oil-change detailed pricing</h1>
-        <p className="text-sm text-muted-foreground">
-          Per-engine breakdown across filter brand options, labour, and grease.{" "}
-          <Link href="/pricing/oil-grid" className="underline text-foreground">
-            Back to summary grid
-          </Link>
-        </p>
+      {/* Wide table — print in landscape with the chrome hidden. */}
+      <style>{"@media print { @page { size: landscape; margin: 0.4in; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }"}</style>
+
+      <div className="flex items-start justify-between gap-4 print:hidden">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Oil-change detailed pricing</h1>
+          <p className="text-sm text-muted-foreground">
+            Per-engine breakdown across filter brand options, labour, and grease.{" "}
+            <Link href="/pricing/oil-grid" className="underline text-foreground">
+              Back to summary grid
+            </Link>
+          </p>
+        </div>
+        <PrintButton />
       </div>
 
+      {/* Print-only header */}
+      <div className="hidden print:block">
+        <h1 className="text-xl font-bold">Oil-change detailed pricing</h1>
+        <p className="text-xs">Per-engine breakdown across filter brand options, labour, and grease</p>
+      </div>
+
+      <div className="print:hidden">
       <PageHelp id="pricing-oil-grid-detail">
         {showCost ? (
           <>
@@ -43,7 +57,7 @@ export default async function OilChangeDetailPage() {
               installing that filter set).
             </p>
             <ul>
-              <li>The <em>Grease</em> column pulls from the active service-cost row whose code matches "grease". Wire one up under <Link href="/settings/pricing/service-costs" className="underline">service costs</Link> if blank.</li>
+              <li>The <em>Grease</em> column pulls from the active service-cost row whose code matches &quot;grease&quot;. Wire one up under <Link href="/settings/pricing/service-costs" className="underline">service costs</Link> if blank.</li>
               <li>Add or change brand options for an engine on its detail page.</li>
             </ul>
           </>
@@ -61,6 +75,7 @@ export default async function OilChangeDetailPage() {
           </>
         )}
       </PageHelp>
+      </div>
 
       {rows.length === 0 ? (
         <Card>
@@ -69,9 +84,9 @@ export default async function OilChangeDetailPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto">
-            <table className="w-full text-sm">
+        <Card className="print:shadow-none print:border-0">
+          <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto print:max-h-none print:overflow-visible">
+            <table className="w-full text-sm print:text-[10px]">
               <thead className="bg-muted/50 sticky top-0 z-10">
                 <tr>
                   <th className="text-left p-2 sticky left-0 bg-muted/50">Engine</th>

@@ -28,7 +28,11 @@ export default async function InvoicesListPage({
     listActiveLocations(),
   ]);
 
-  const showLocationFilter = (profile.role === "owner" || profile.role === "co_owner") || profile.role === "accountant";
+  const showLocationFilter =
+    profile.role === "owner"
+    || profile.role === "co_owner"
+    || profile.role === "accountant"
+    || profile.cross_location; // cross-location managers/staff can sort by location too
 
   return (
     <div className="flex flex-col gap-6">

@@ -39,7 +39,6 @@ type FormValues = {
   name: string;
   role: string;
   location_id: string;
-  sort_order: string;
   active: boolean;
 };
 
@@ -47,7 +46,6 @@ const blank: FormValues = {
   name: "",
   role: "Technician",
   location_id: NO_LOCATION,
-  sort_order: "100",
   active: true,
 };
 
@@ -75,7 +73,6 @@ export function TechnicianFormDialog({
             name: technician.name,
             role: technician.role ?? "",
             location_id: technician.location_id ?? NO_LOCATION,
-            sort_order: String(technician.sort_order),
             active: technician.active,
           }
         : blank,
@@ -88,7 +85,6 @@ export function TechnicianFormDialog({
         name: values.name.trim(),
         role: values.role.trim() === "" ? null : values.role.trim(),
         location_id: values.location_id === NO_LOCATION ? null : values.location_id,
-        sort_order: Number(values.sort_order),
         active: values.active,
       };
       const res =
@@ -164,19 +160,6 @@ export function TechnicianFormDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="sort_order"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Sort order</FormLabel>
-                  <FormControl>
-                    <Input type="number" min="0" step="1" {...field} />
-                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

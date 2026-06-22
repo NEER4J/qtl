@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
+import { PrintButton } from "@/components/pricing/print-button";
 import { requireProfile } from "@/lib/auth/require";
 import { getOilChangeGrid } from "@/lib/actions/pricing";
 import { formatMoney } from "@/lib/utils/format";
@@ -17,16 +18,29 @@ export default async function OilGridPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Oil-change price grid</h1>
-        <p className="text-sm text-muted-foreground">
-          {engines.length} engine{engines.length !== 1 ? "s" : ""} × {oilTypes.length} oil grade{oilTypes.length !== 1 ? "s" : ""}. Bulk / Gallon.{" "}
-          <Link href="/pricing/oil-grid/detail" className="underline text-foreground">
-            See per-brand filter + labour + grease breakdown
-          </Link>
-        </p>
+      {/* Wide grid — print in landscape with the chrome hidden. */}
+      <style>{"@media print { @page { size: landscape; margin: 0.4in; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }"}</style>
+
+      <div className="flex items-start justify-between gap-4 print:hidden">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Oil-change price grid</h1>
+          <p className="text-sm text-muted-foreground">
+            {engines.length} engine{engines.length !== 1 ? "s" : ""} × {oilTypes.length} oil grade{oilTypes.length !== 1 ? "s" : ""}. Bulk / Gallon.{" "}
+            <Link href="/pricing/oil-grid/detail" className="underline text-foreground">
+              See per-brand filter + labour + grease breakdown
+            </Link>
+          </p>
+        </div>
+        <PrintButton />
       </div>
 
+      {/* Print-only header */}
+      <div className="hidden print:block">
+        <h1 className="text-xl font-bold">Oil-change price grid</h1>
+        <p className="text-xs">{engines.length} engines × {oilTypes.length} oil grades · Bulk / Gallon</p>
+      </div>
+
+      <div className="print:hidden">
       <PageHelp id="pricing-oil-grid">
         <p>
           The main pricing lookup. Rows are engines, columns are oil grades. Each cell shows both bulk and gallon prices.
@@ -40,6 +54,7 @@ export default async function OilGridPage() {
           <li>Bulk prices are pre-tax. For oils flagged taxable, the gallon column shows pre-tax and a smaller post-HST ({hstPct}%) figure underneath. Non-taxable gallons show only the pre-tax figure.</li>
         </ul>
       </PageHelp>
+      </div>
 
       {engines.length === 0 || oilTypes.length === 0 ? (
         <Card>
@@ -72,9 +87,9 @@ export default async function OilGridPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto">
-            <table className="w-full text-sm">
+        <Card className="print:shadow-none print:border-0">
+          <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto print:max-h-none print:overflow-visible">
+            <table className="w-full text-sm print:text-[10px]">
               <thead className="bg-muted/50 sticky top-0 z-20">
                 <tr>
                   <th className="text-left p-2 sticky left-0 bg-muted/50 z-10">Engine</th>

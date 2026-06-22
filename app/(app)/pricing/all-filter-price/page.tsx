@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PrintButton } from "@/components/pricing/print-button";
 import { requireProfile } from "@/lib/auth/require";
 import { getAllFilterSellPrices, listPartCategories } from "@/lib/actions/pricing";
 import { formatDate, formatMoney } from "@/lib/utils/format";
@@ -38,13 +39,28 @@ export default async function AllFilterPricePage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">All filter sell price</h1>
-        <p className="text-sm text-muted-foreground">
+      {/* Wide table — print in landscape with the chrome hidden. */}
+      <style>{"@media print { @page { size: landscape; margin: 0.4in; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }"}</style>
+
+      <div className="flex items-start justify-between gap-4 print:hidden">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">All filter sell price</h1>
+          <p className="text-sm text-muted-foreground">
+            {rows.length} filters · {effective_date ? `Effective ${formatDate(effective_date)}` : "Effective date not set"}
+          </p>
+        </div>
+        <PrintButton />
+      </div>
+
+      {/* Print-only header */}
+      <div className="hidden print:block">
+        <h1 className="text-xl font-bold">All filter sell price</h1>
+        <p className="text-xs">
           {rows.length} filters · {effective_date ? `Effective ${formatDate(effective_date)}` : "Effective date not set"}
         </p>
       </div>
 
+      <div className="print:hidden">
       <PageHelp id="pricing-all-filter-price">
         <p>
           One row per filter. Each row shows the four service-mode prices the counter staff need
@@ -62,8 +78,9 @@ export default async function AllFilterPricePage({
           <Link href="/settings/pricing" className="underline">Pricing catalogue admin</Link>.
         </p>
       </PageHelp>
+      </div>
 
-      <form className="flex flex-wrap gap-3 items-center">
+      <form className="flex flex-wrap gap-3 items-center print:hidden">
         <Input name="q" defaultValue={sp.q ?? ""} placeholder="Search part # or description" className="w-[280px]" />
         <Input name="brand" defaultValue={sp.brand ?? ""} placeholder="Brand" className="w-[160px]" />
         <select
@@ -86,8 +103,8 @@ export default async function AllFilterPricePage({
         )}
       </form>
 
-      <Card>
-        <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto">
+      <Card className="print:shadow-none print:border-0">
+        <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto print:max-h-none print:overflow-visible">
           {rows.length === 0 ? (
             <div className="p-8 text-sm text-muted-foreground text-center space-y-3">
               <p className="font-medium text-foreground">

@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PrintButton } from "@/components/pricing/print-button";
 import { requireProfile } from "@/lib/auth/require";
 import { listParts } from "@/lib/actions/pricing";
 import { formatMoney } from "@/lib/utils/format";
@@ -35,27 +36,42 @@ export default async function FilterListPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Filter price list</h1>
-        <p className="text-sm text-muted-foreground">{parts.length} parts</p>
+      {/* Wide table — print in landscape with the chrome hidden. */}
+      <style>{"@media print { @page { size: landscape; margin: 0.4in; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }"}</style>
+
+      <div className="flex items-start justify-between gap-4 print:hidden">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Filter price list</h1>
+          <p className="text-sm text-muted-foreground">{parts.length} parts</p>
+        </div>
+        <PrintButton />
       </div>
 
-      <PageHelp id="pricing-filters">
-        <ul>
-          <li>Search by part number or description. You can also narrow down by category or brand.</li>
-          <li><strong>List price</strong> is what you charge the customer at the counter.</li>
-          <li>The cost column is visible to the owner only. Everyone else sees sell prices.</li>
-        </ul>
-      </PageHelp>
+      {/* Print-only header */}
+      <div className="hidden print:block">
+        <h1 className="text-xl font-bold">Filter price list</h1>
+        <p className="text-xs">{parts.length} parts</p>
+      </div>
 
-      <form className="flex flex-wrap gap-3">
+      <div className="print:hidden">
+        <PageHelp id="pricing-filters">
+          <ul>
+            <li>Click <strong>Print</strong> (top right) for a clean copy or to save as PDF — the search box and help are hidden in print.</li>
+            <li>Search by part number or description. You can also narrow down by category or brand.</li>
+            <li><strong>List price</strong> is what you charge the customer at the counter.</li>
+            <li>The cost column is visible to the owner only. Everyone else sees sell prices.</li>
+          </ul>
+        </PageHelp>
+      </div>
+
+      <form className="flex flex-wrap gap-3 print:hidden">
         <Input name="q" defaultValue={sp.q ?? ""} placeholder="Search by part number or description" className="w-[280px]" />
         <Input name="brand" defaultValue={sp.brand ?? ""} placeholder="Brand" className="w-[160px]" />
         <button type="submit" className="hidden" />
       </form>
 
-      <Card>
-        <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto">
+      <Card className="print:shadow-none print:border-0">
+        <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto print:max-h-none print:overflow-visible">
           {parts.length === 0 ? (
             <div className="p-8 text-sm text-muted-foreground text-center space-y-3">
               <p className="font-medium text-foreground">

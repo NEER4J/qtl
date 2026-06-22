@@ -29,8 +29,10 @@ export default async function DailyReportPage({
   const sp = await searchParams;
   const date = sp.date ?? todayISO();
 
-  // Manager defaults to own location; owner/accountant can pick.
-  const isLocationScoped = profile.role === "manager" || profile.role === "staff";
+  // Manager defaults to own location; owner/accountant — and cross-location
+  // managers/staff — can pick.
+  const isLocationScoped =
+    (profile.role === "manager" || profile.role === "staff") && !profile.cross_location;
   const requestedLoc = sp.location_id ?? null;
   const locationId = isLocationScoped ? profile.location_id : requestedLoc;
 

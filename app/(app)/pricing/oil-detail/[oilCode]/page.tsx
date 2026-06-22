@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { PageHelp } from "@/components/help/page-help";
 import { EditableSellingCell } from "@/components/pricing/editable-selling-cell";
+import { PrintButton } from "@/components/pricing/print-button";
 import { requireProfile } from "@/lib/auth/require";
 import { getOilDetail } from "@/lib/actions/pricing";
 import { formatMoney } from "@/lib/utils/format";
@@ -42,18 +43,32 @@ export default async function OilDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {excelOilLabel(data.oil_type.code, data.oil_type.name)}{" "}
-          <Badge variant="outline" className="ml-2 align-middle">{container}</Badge>
+      {/* Wide table — print in landscape with the chrome hidden. */}
+      <style>{"@media print { @page { size: landscape; margin: 0.4in; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }"}</style>
+
+      <div className="flex items-start justify-between gap-4 print:hidden">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {excelOilLabel(data.oil_type.code, data.oil_type.name)}{" "}
+            <Badge variant="outline" className="ml-2 align-middle">{container}</Badge>
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {data.oil_type.name} · Per-engine breakdown: oil + filter + labour + tier premium → selling price
+          </p>
+        </div>
+        <PrintButton />
+      </div>
+
+      {/* Print-only header */}
+      <div className="hidden print:block">
+        <h1 className="text-xl font-bold">
+          {excelOilLabel(data.oil_type.code, data.oil_type.name)} — {container}
         </h1>
-        <p className="text-sm text-muted-foreground">
-          {data.oil_type.name} · Per-engine breakdown: oil + filter + labour + tier premium → selling price
-        </p>
+        <p className="text-xs">{data.oil_type.name} · per-engine price breakdown</p>
       </div>
 
       {/* Selector strip */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 print:hidden">
         <span className="text-xs text-muted-foreground">Oil type:</span>
         {data.oil_types.map((o) => (
           <Link
@@ -78,6 +93,7 @@ export default async function OilDetailPage({
         ))}
       </div>
 
+      <div className="print:hidden">
       <PageHelp id="pricing-oil-detail">
         <p>
           Rows are engines. Same layout as the Excel{" "}
@@ -99,6 +115,7 @@ export default async function OilDetailPage({
           <li><strong>Cost %</strong> and <strong>Profit %</strong> are shown to owner / accountant only.</li>
         </ul>
       </PageHelp>
+      </div>
 
       {data.rows.length === 0 ? (
         <Card>
@@ -114,9 +131,9 @@ export default async function OilDetailPage({
           </CardContent>
         </Card>
       ) : (
-      <Card>
-        <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto">
-          <Table>
+      <Card className="print:shadow-none print:border-0">
+        <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto print:max-h-none print:overflow-visible">
+          <Table className="print:text-[10px]">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Engine</TableHead>

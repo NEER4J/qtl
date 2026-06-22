@@ -58,7 +58,7 @@ export default async function SalesAnalyticsPage({
 
       <AnalyticsFilters
         locations={locations}
-        canFilterLocation={profile.role !== "manager"}
+        canFilterLocation={profile.role !== "manager" || profile.cross_location}
         exportHref="/api/export/sales-analytics"
       />
 

@@ -308,7 +308,6 @@ export interface Technician {
   location_id: string | null;
   /** Joined location name (filled by the action layer where needed). */
   location_name?: string | null;
-  sort_order: number;
   active: boolean;
   deactivated_at: string | null;
   deactivated_by: string | null;

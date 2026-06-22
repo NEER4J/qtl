@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PrintButton } from "@/components/pricing/print-button";
 import { requireProfile } from "@/lib/auth/require";
 import { listTransmissionServices } from "@/lib/actions/pricing";
 import { formatMoney } from "@/lib/utils/format";
@@ -28,13 +29,25 @@ export default async function TransDiffPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Trans & Diff</h1>
-        <p className="text-sm text-muted-foreground">
-          {totalRows} service{totalRows === 1 ? "" : "s"} · transmission, differential, and coolant flush pricing
-        </p>
+      <style>{"@media print { @page { margin: 0.4in; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }"}</style>
+
+      <div className="flex items-start justify-between gap-4 print:hidden">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Trans & Diff</h1>
+          <p className="text-sm text-muted-foreground">
+            {totalRows} service{totalRows === 1 ? "" : "s"} · transmission, differential, and coolant flush pricing
+          </p>
+        </div>
+        <PrintButton />
       </div>
 
+      {/* Print-only header */}
+      <div className="hidden print:block">
+        <h1 className="text-xl font-bold">Trans &amp; Diff price list</h1>
+        <p className="text-xs">{totalRows} service{totalRows === 1 ? "" : "s"}</p>
+      </div>
+
+      <div className="print:hidden">
       <PageHelp id="pricing-trans-diff">
         <p>
           Flat-priced services from the Excel <span className="font-mono">Trans &amp; Diff</span> tab.
@@ -52,6 +65,7 @@ export default async function TransDiffPage() {
           To change a price, ask the owner — these are admin-only edits and don&apos;t live in the catalogue admin yet.
         </p>
       </PageHelp>
+      </div>
 
       {groups.length === 0 ? (
         <Card>
@@ -67,7 +81,7 @@ export default async function TransDiffPage() {
       ) : (
         <div className="flex flex-col gap-6">
           {groups.map((g) => (
-            <Card key={g.kind}>
+            <Card key={g.kind} className="print:shadow-none print:border print:break-inside-avoid">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">{g.label}</CardTitle>
               </CardHeader>
@@ -122,7 +136,7 @@ export default async function TransDiffPage() {
         </div>
       )}
 
-      <div className="text-xs text-muted-foreground">
+      <div className="text-xs text-muted-foreground print:hidden">
         <Link href="/pricing" className="underline">← Back to pricing</Link>
       </div>
     </div>

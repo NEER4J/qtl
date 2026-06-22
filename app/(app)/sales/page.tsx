@@ -35,7 +35,11 @@ export default async function SalesListPage({
     listActiveServiceTypes(),
   ]);
 
-  const showLocationFilter = (profile.role === "owner" || profile.role === "co_owner") || profile.role === "accountant";
+  const showLocationFilter =
+    profile.role === "owner"
+    || profile.role === "co_owner"
+    || profile.role === "accountant"
+    || profile.cross_location; // cross-location managers/staff can sort by location too
   const canCreate = profile.role !== "accountant";
 
   return (

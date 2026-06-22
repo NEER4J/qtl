@@ -57,7 +57,6 @@ export function TechniciansTable({
               <TableHead>Name</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Location</TableHead>
-              <TableHead className="w-24">Sort</TableHead>
               <TableHead className="w-24">Status</TableHead>
               <TableHead className="w-40 text-right">Actions</TableHead>
             </TableRow>
@@ -65,7 +64,7 @@ export function TechniciansTable({
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                   No technicians yet. Click <strong>New technician</strong> to add one.
                 </TableCell>
               </TableRow>
@@ -77,7 +76,6 @@ export function TechniciansTable({
                   <TableCell className="text-muted-foreground">
                     {t.location_id ? (locationNameById.get(t.location_id) ?? "—") : "All locations"}
                   </TableCell>
-                  <TableCell>{t.sort_order}</TableCell>
                   <TableCell>
                     <Badge variant={t.active ? "default" : "secondary"}>
                       {t.active ? "Active" : "Inactive"}

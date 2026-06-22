@@ -18,7 +18,6 @@ export const CreateTechnicianInput = z.object({
     .nullable()
     .or(z.literal(""))
     .transform((v) => (v == null || v === "" ? null : v)),
-  sort_order: z.coerce.number().int().min(0).default(100),
   active: z.coerce.boolean().default(true),
 });
 export type CreateTechnicianInput = z.infer<typeof CreateTechnicianInput>;

@@ -39,7 +39,11 @@ export default async function ExpensesListPage({
     listActiveExpenseSubcategories(),
   ]);
 
-  const showLocationFilter = (profile.role === "owner" || profile.role === "co_owner") || profile.role === "accountant";
+  const showLocationFilter =
+    profile.role === "owner"
+    || profile.role === "co_owner"
+    || profile.role === "accountant"
+    || profile.cross_location; // cross-location managers/staff can sort by location too
 
   const canCreate =
     (profile.role === "owner" || profile.role === "co_owner") ||
