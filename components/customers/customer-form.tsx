@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { AlertTriangle, Pencil, Plus, Trash2 } from "lucide-react";
@@ -510,7 +511,13 @@ export function CustomerForm({
                         <ul className="mt-0.5 space-y-0.5">
                           {nameMatches.slice(0, 3).map((m) => (
                             <li key={m.id}>
-                              {m.billing_name ?? "—"}
+                              <Link
+                                href={`/customers/${m.id}`}
+                                target="_blank"
+                                className="font-medium underline underline-offset-2 hover:no-underline"
+                              >
+                                {m.billing_name ?? "—"}
+                              </Link>
                               {!m.active && (
                                 <span className="ml-1 text-muted-foreground">(inactive)</span>
                               )}

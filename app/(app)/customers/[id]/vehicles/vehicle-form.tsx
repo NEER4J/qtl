@@ -352,7 +352,7 @@ export function VehicleForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Engine size</FormLabel>
-                <FormControl><Input {...field} /></FormControl>
+                <FormControl><UppercaseInput {...field} /></FormControl>
               </FormItem>
             )}
           />

@@ -44,6 +44,7 @@ export async function listUsers(): Promise<UserListRow[]> {
 
     // Strip the joined relation before returning so the shape matches Profile + location_name.
     const { locations: _locations, ...rest } = row as typeof row & { locations: unknown };
+    void _locations;
     return { ...(rest as Profile), location_name: locationName };
   });
 }
@@ -157,6 +158,7 @@ export const inviteUser = wrapAction({
     if (credErr) throw credErr;
 
     revalidatePath("/settings/users");
+    revalidatePath("/", "layout");
     return { id: userId, identity, existed };
   },
 });
@@ -212,6 +214,7 @@ export const updateUser = wrapAction({
       .single();
     if (error) throw error;
     revalidatePath("/settings/users");
+    revalidatePath("/", "layout");
     return data as Profile;
   },
 });
@@ -235,6 +238,7 @@ export const updateUserPermissions = wrapAction({
       .single();
     if (error) throw error;
     revalidatePath("/settings/users");
+    revalidatePath("/", "layout");
     return data as Profile;
   },
 });
@@ -257,6 +261,7 @@ export const applyDefaultPermissions = wrapAction({
       .select("id");
     if (error) throw error;
     revalidatePath("/settings/users");
+    revalidatePath("/", "layout");
     return { affected: data?.length ?? 0 };
   },
 });
@@ -277,6 +282,7 @@ export const toggleUserActive = wrapAction({
       .single();
     if (error) throw error;
     revalidatePath("/settings/users");
+    revalidatePath("/", "layout");
     return data as Profile;
   },
 });
@@ -349,6 +355,7 @@ export const bulkUserAction = wrapAction({
         .select("id");
       if (error) throw error;
       revalidatePath("/settings/users");
+      revalidatePath("/", "layout");
       return { affected: data?.length ?? 0 };
     }
 
@@ -372,6 +379,7 @@ export const bulkUserAction = wrapAction({
       if (!error) affected += 1;
     }
     revalidatePath("/settings/users");
+    revalidatePath("/", "layout");
     return { affected };
   },
 });

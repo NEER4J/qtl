@@ -750,6 +750,8 @@ export interface Part {
   /** When true the part is bundled in a package — Without Service price is forced to 0
    *  and a second occurrence on the same sales job defaults to over_counter_price. */
   in_package: boolean;
+  /** When true, this part's unit price is rounded up to the next .99 when added to a sales job. */
+  round_off: boolean;
   active: boolean;
   created_at: string;
   updated_at: string;

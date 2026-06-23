@@ -29,6 +29,7 @@ import {
   CreatePartInput,
   CreatePartPackageInput,
   CreateServiceCostInput,
+  CreateTransmissionServiceInput,
   CreateVolumeTierInput,
   DeleteEngineFilterInput,
   DeleteVolumeTierInput,
@@ -43,6 +44,7 @@ import {
   UpdatePartInput,
   UpdatePartPackageInput,
   UpdateServiceCostInput,
+  UpdateTransmissionServiceInput,
   UpdateVolumeTierInput,
   UpsertEngineFilterInput,
 } from "@/lib/schemas/pricing";
@@ -2475,6 +2477,60 @@ export async function listTransmissionServices(): Promise<{
     }));
   return { groups };
 }
+
+// ----------------------------------------------------------------------------
+// transmission_services — create / update / toggle active (owner / co_owner)
+// ----------------------------------------------------------------------------
+function revalidateTransDiff() {
+  revalidatePath("/pricing/trans-diff");
+  revalidatePath("/pricing");
+}
+
+export const createTransmissionService = wrapAction({
+  schema: CreateTransmissionServiceInput,
+  roles: ["owner", "co_owner"],
+  handler: async (input): Promise<{ id: string }> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("transmission_services")
+      .insert(input)
+      .select("id")
+      .single();
+    if (error) throw error;
+    revalidateTransDiff();
+    return { id: (data as { id: string }).id };
+  },
+});
+
+export const updateTransmissionService = wrapAction({
+  schema: UpdateTransmissionServiceInput,
+  roles: ["owner", "co_owner"],
+  handler: async ({ id, ...fields }): Promise<{ id: string }> => {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("transmission_services")
+      .update(fields)
+      .eq("id", id);
+    if (error) throw error;
+    revalidateTransDiff();
+    return { id };
+  },
+});
+
+export const toggleTransmissionServiceActive = wrapAction({
+  schema: ToggleActiveInput,
+  roles: ["owner", "co_owner"],
+  handler: async (input): Promise<{ id: string; active: boolean }> => {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("transmission_services")
+      .update({ active: input.active })
+      .eq("id", input.id);
+    if (error) throw error;
+    revalidateTransDiff();
+    return { id: input.id, active: input.active };
+  },
+});
 
 /**
  * Flat, searchable list of active Trans & Diff services for the package

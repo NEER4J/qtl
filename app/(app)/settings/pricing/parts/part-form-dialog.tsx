@@ -60,6 +60,7 @@ type FormValues = {
   service_cost_id: string | null;
   is_taxable: boolean;
   in_package: boolean;
+  round_off: boolean;
   active: boolean;
   extra_price: string;
 };
@@ -79,6 +80,7 @@ const blank: FormValues = {
   service_cost_id: null,
   is_taxable: true,
   in_package: false,
+  round_off: false,
   active: true,
   extra_price: "0",
 };
@@ -163,6 +165,7 @@ export function PartFormDialog({
             service_cost_id: part.service_cost_id,
             is_taxable: part.is_taxable,
             in_package: part.in_package ?? false,
+            round_off: part.round_off ?? false,
             active: part.active,
             extra_price: String(part.extra_price ?? 0),
           }
@@ -221,6 +224,7 @@ export function PartFormDialog({
         service_cost_id: values.service_cost_id || null,
         is_taxable: values.is_taxable,
         in_package: values.in_package,
+        round_off: values.round_off,
         active: values.active,
         extra_price: extraTrimmed === "" ? 0 : Number(extraTrimmed),
       };
@@ -590,6 +594,27 @@ export function PartFormDialog({
                       <FormLabel className="cursor-pointer">Bundled in a package</FormLabel>
                       <FormDescription className="text-xs">
                         When on, the All Filter Sell Price shows <strong>With Service = $0</strong> for this part (the customer pays for the package). If the same part is added to a sales job a second time, the extra one auto-uses the <strong>Over the Counter</strong> price.
+                      </FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="round_off"
+                render={({ field }) => (
+                  <FormItem className="flex items-start gap-2 space-y-0 rounded-md border p-3">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={(v) => field.onChange(v === true)}
+                      />
+                    </FormControl>
+                    <div className="leading-none">
+                      <FormLabel className="cursor-pointer">Round off to .99</FormLabel>
+                      <FormDescription className="text-xs">
+                        When on, this part&apos;s price is rounded <strong>up to the next .99</strong> as it&apos;s added to a sales job (e.g. $12.34 → $12.99). Leave off to keep the exact price.
                       </FormDescription>
                     </div>
                   </FormItem>

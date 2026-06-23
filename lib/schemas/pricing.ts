@@ -125,6 +125,8 @@ export const CreatePartInput = z.object({
   // Marks the part as bundled in a package — Without Service price is forced
   // to 0 and a second occurrence on the same sales job defaults to over_counter_price.
   in_package: z.coerce.boolean().default(false),
+  // When true, the part's price is rounded up to the next .99 as it's added to a sales job.
+  round_off: z.coerce.boolean().default(false),
   active: z.coerce.boolean().default(true),
 });
 export type CreatePartInput = z.infer<typeof CreatePartInput>;
@@ -218,6 +220,54 @@ export const ToggleActiveInput = z.object({
   id: z.string().uuid(),
   active: z.boolean(),
 });
+
+// ============================================================================
+// transmission_services — Trans & Diff catalogue (create / update / toggle)
+// ============================================================================
+export const TransmissionServiceKindEnum = z.enum([
+  "allison_trans",
+  "trans",
+  "diff",
+  "combined",
+  "specialty_trans",
+  "coolant_flush",
+]);
+
+export const CreateTransmissionServiceInput = z.object({
+  name: z.string().trim().min(1, "Name is required").max(120),
+  service_kind: TransmissionServiceKindEnum,
+  is_synthetic: z.coerce.boolean().default(false),
+  oil_type_id: z
+    .string()
+    .uuid()
+    .optional()
+    .nullable()
+    .or(z.literal(""))
+    .transform((v) => (v == null || v === "" ? null : v)),
+  // Capacity in litres — optional, must be > 0 when present (DB: litres > 0).
+  litres: z
+    .union([z.coerce.number().positive("Must be > 0").max(9999), z.literal("")])
+    .optional()
+    .nullable()
+    .transform((v) => (v == null || v === "" ? null : Number(v))),
+  // Hand-set sell price (DB: sell_price > 0).
+  sell_price: z.coerce.number().positive("Sell price must be greater than 0"),
+  // Fixed labour (e.g. coolant flush) — optional, ≥ 0.
+  labour: z
+    .union([z.coerce.number().min(0, "Must be ≥ 0").max(9999999), z.literal("")])
+    .optional()
+    .nullable()
+    .transform((v) => (v == null || v === "" ? null : Number(v))),
+  notes: trimmedOrNull,
+  sort_order: z.coerce.number().int().min(0).default(100),
+  active: z.coerce.boolean().default(true),
+});
+export type CreateTransmissionServiceInput = z.infer<typeof CreateTransmissionServiceInput>;
+
+export const UpdateTransmissionServiceInput = CreateTransmissionServiceInput.extend({
+  id: z.string().uuid(),
+});
+export type UpdateTransmissionServiceInput = z.infer<typeof UpdateTransmissionServiceInput>;
 
 // ============================================================================
 // part_packages — pre-defined bundles of parts with default qty

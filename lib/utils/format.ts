@@ -55,3 +55,15 @@ export function formatTime(value: string | Date | null | undefined): string {
 export function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+/**
+ * Round a price UP to the next value ending in .99 (smallest k + 0.99 ≥ value,
+ * k a non-negative integer). Values ≤ 0 are returned unchanged so $0 and credit
+ * lines are never bumped. Used per-part for parts flagged `round_off`.
+ */
+export function roundUpTo99(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return value;
+  const cents = Math.round(value * 100);
+  const k = Math.max(0, Math.ceil((cents - 99) / 100));
+  return k + 0.99;
+}

@@ -18,9 +18,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { PartPickerButton } from "@/components/pricing/part-picker";
 import { ServiceCostPickerButton } from "@/components/pricing/service-cost-picker";
+import {
+  TransServicePickerButton,
+  transServiceLabel,
+  transServicePrice,
+} from "@/components/pricing/trans-service-picker";
 import { OilPickerButton, type OilContainer } from "@/components/sales/oil-picker-button";
 import { PackagePickerButton } from "@/components/sales/package-picker-button";
-import type { PartForPicker } from "@/lib/actions/pricing";
+import type { PartForPicker, TransmissionService } from "@/lib/actions/pricing";
 import type {
   OilType,
   Part,
@@ -28,7 +33,7 @@ import type {
   ServiceCost,
   UnitOfMeasure,
 } from "@/lib/db/types";
-import { formatMoney } from "@/lib/utils/format";
+import { formatMoney, roundUpTo99 } from "@/lib/utils/format";
 import {
   effectiveCatalogPriceForItem,
   effectiveLockedPriceForItem,
@@ -63,6 +68,8 @@ export interface LineItem {
   part_category_id?: string | null;
   /** Oil type this line came from (package oil item) — for overlap detection. */
   oil_type_id?: string | null;
+  /** Bulk (litres) vs gallon container for an oil line — drives the "ltr"/"gal" unit label. */
+  oil_container?: "bulk" | "gallon" | null;
   /** Trans & Diff service this line came from — for overlap detection. */
   transmission_service_id?: string | null;
   /** When set, this is a merged duplicate billed at $0; value is the waived unit price. */
@@ -87,6 +94,7 @@ export function newLineItem(partial: Partial<LineItem> = {}): LineItem {
     is_customer_supplied: false,
     part_category_id: null,
     oil_type_id: null,
+    oil_container: null,
     transmission_service_id: null,
     merged_unit_price: null,
     ...partial,
@@ -98,6 +106,12 @@ function newGroupId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `grp-${Math.random().toString(36).slice(2)}`;
+}
+
+/** Unit label for a line — oils show "gal" vs "ltr" based on the chosen container. */
+function displayUnit(it: LineItem): string | null {
+  if (it.oil_container === "gallon") return "gal";
+  return it.unit_of_measure;
 }
 
 /** Raw line total (qty × unit), with NO .99 rounding. */
@@ -251,21 +265,58 @@ export function SalesLineItems({
         is_taxable: oil.is_taxable,
         unit_of_measure: "ltr",
         oil_type_id: oil.id,
+        oil_container: container,
       }),
     ]);
   };
 
-  const lineFromPart = (p: Part, unitPriceOverride?: number): LineItem =>
-    newLineItem({
+  const lineFromPart = (p: Part, unitPriceOverride?: number): LineItem => {
+    const base = unitPriceOverride ?? (Number(p.list_price) || 0);
+    return newLineItem({
       part_id: p.id,
       description: `${p.brand} ${p.part_number}${p.description ? ` — ${p.description}` : ""}`,
       quantity: 1,
-      unit_price: unitPriceOverride ?? (Number(p.list_price) || 0),
+      // Per-part opt-in: parts flagged `round_off` snap up to the next .99.
+      unit_price: p.round_off ? roundUpTo99(base) : base,
       mhsw_unit: Number(p.mhsw_fee) || 0,
       is_taxable: p.is_taxable,
       unit_of_measure: p.unit_of_measure,
       part_category_id: p.category_id,
     });
+  };
+
+  /** Add a Trans & Diff service as a standalone taxable line (sell + labour). */
+  const addTransService = (s: TransmissionService) =>
+    onChange([
+      ...items,
+      newLineItem({
+        part_id: null,
+        description: transServiceLabel(s),
+        quantity: 1,
+        unit_price: transServicePrice(s),
+        is_taxable: true,
+        unit_of_measure: null,
+        transmission_service_id: s.id,
+      }),
+    ]);
+
+  /** Add a returned part as a negative (credit) line on a later invoice. The
+   *  amount defaults to the list price as a credit; the user can edit it. */
+  const addReturn = (p: PartForPicker) =>
+    onChange([
+      ...items,
+      newLineItem({
+        part_id: p.id,
+        description: `${p.brand} ${p.part_number}${
+          p.description ? ` — ${p.description}` : ""
+        } (return)`,
+        quantity: 1,
+        unit_price: -(Number(p.list_price) || 0),
+        is_taxable: p.is_taxable,
+        unit_of_measure: p.unit_of_measure,
+        part_category_id: p.category_id,
+      }),
+    ]);
 
   /**
    * A visible upgrade charge as its own line — e.g. "Upgrade: Cat 1R-0716".
@@ -321,6 +372,7 @@ export function SalesLineItems({
       let unitOfMeasure: LineItem["unit_of_measure"];
       let categoryId: string | null = null;
       let oilTypeId: string | null = null;
+      let oilContainer: "bulk" | "gallon" | null = null;
       let transId: string | null = null;
       if (it.oil_type_id && it.oil_type) {
         price = locked
@@ -333,6 +385,7 @@ export function SalesLineItems({
         isTaxable = it.oil_type.is_taxable;
         unitOfMeasure = "ltr";
         oilTypeId = it.oil_type_id;
+        oilContainer = it.oil_container ?? null;
       } else if (it.transmission_service_id && it.transmission_service) {
         price = locked
           ? effectiveLockedPriceForItem(it)
@@ -374,6 +427,7 @@ export function SalesLineItems({
           package_group: groupId,
           part_category_id: categoryId,
           oil_type_id: oilTypeId,
+          oil_container: oilContainer,
           transmission_service_id: transId,
         }),
       );
@@ -557,9 +611,9 @@ export function SalesLineItems({
               onChange={(e) => update(it.key, { quantity: Number(e.target.value) || 0 })}
               className="text-right"
             />
-            {it.unit_of_measure && (
+            {displayUnit(it) && (
               <span className="text-[10px] uppercase text-muted-foreground w-10 text-left">
-                {it.unit_of_measure}
+                {displayUnit(it)}
               </span>
             )}
           </div>
@@ -709,9 +763,9 @@ export function SalesLineItems({
                         >
                           <td className="py-1.5 pr-2 pl-9">
                             <span className="text-muted-foreground">{it.description}</span>
-                            {it.unit_of_measure && (
+                            {displayUnit(it) && (
                               <span className="ml-1 text-[10px] uppercase text-muted-foreground">
-                                {Number(it.quantity)} {it.unit_of_measure}
+                                {Number(it.quantity)} {displayUnit(it)}
                               </span>
                             )}
                             {isMerged && (
@@ -774,6 +828,7 @@ export function SalesLineItems({
         <PartPickerButton onSelect={addPart} />
         <PackagePickerButton onSelect={addPackage} />
         {oilTypes.length > 0 && <OilPickerButton oilTypes={oilTypes} onSelect={addOil} />}
+        <TransServicePickerButton onSelect={addTransService} />
         {serviceCosts.length > 0 && (
           <ServiceCostPickerButton serviceCosts={serviceCosts} onSelect={addServiceCost} />
         )}
@@ -783,6 +838,7 @@ export function SalesLineItems({
         <Button type="button" variant="outline" size="sm" onClick={addCustom}>
           <Plus className="size-4" /> Add custom item
         </Button>
+        <PartPickerButton onSelect={addReturn} label="Add return / credit" />
       </div>
 
       <CategoryDuplicateDialog

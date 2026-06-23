@@ -133,3 +133,100 @@ export const setPartLocationStock = wrapAction({
     return { qty: input.qty };
   },
 });
+
+// ----------------------------------------------------------------------------
+// Oils inventory — per-location on-hand litres for each oil grade. Mirrors the
+// parts inventory above; qty is fractional (litres). Same view/edit gating.
+// ----------------------------------------------------------------------------
+export interface InventoryOilRow {
+  id: string;
+  code: string;
+  name: string;
+  is_engine_oil: boolean;
+  /** location_id -> on-hand litres (0 when no row exists). */
+  qtyByLocation: Record<string, number>;
+  total: number;
+}
+
+export interface OilInventoryData {
+  locations: InventoryLocation[];
+  oils: InventoryOilRow[];
+}
+
+export async function listOilInventory(): Promise<OilInventoryData> {
+  const supabase = await createClient();
+
+  const [
+    { data: locs, error: locErr },
+    { data: oils, error: oilErr },
+    { data: stock, error: stockErr },
+  ] = await Promise.all([
+    supabase.from("locations").select("id, name").eq("active", true).order("name"),
+    supabase
+      .from("oil_types")
+      .select("id, code, name, is_engine_oil")
+      .eq("active", true)
+      .order("name"),
+    supabase.from("oil_location_stock").select("oil_type_id, location_id, qty"),
+  ]);
+  if (locErr) throw locErr;
+  if (oilErr) throw oilErr;
+  if (stockErr) throw stockErr;
+
+  const stockMap = new Map<string, number>();
+  for (const s of stock ?? []) {
+    stockMap.set(`${s.oil_type_id}|${s.location_id}`, Number(s.qty));
+  }
+
+  const locations: InventoryLocation[] = (locs ?? []).map((l) => ({
+    id: l.id as string,
+    name: l.name as string,
+  }));
+
+  const oilRows: InventoryOilRow[] = (oils ?? []).map((o) => {
+    const qtyByLocation: Record<string, number> = {};
+    let total = 0;
+    for (const loc of locations) {
+      const q = stockMap.get(`${o.id}|${loc.id}`) ?? 0;
+      qtyByLocation[loc.id] = q;
+      total += q;
+    }
+    return {
+      id: o.id as string,
+      code: o.code as string,
+      name: o.name as string,
+      is_engine_oil: (o.is_engine_oil as boolean) ?? false,
+      qtyByLocation,
+      total,
+    };
+  });
+
+  return { locations, oils: oilRows };
+}
+
+const SetOilStockInput = z.object({
+  oil_type_id: uuidSchema,
+  location_id: uuidSchema,
+  // Litres — fractional allowed (e.g. 12.5 L).
+  qty: z.coerce.number().min(0).max(1_000_000),
+});
+
+export const setOilLocationStock = wrapAction({
+  schema: SetOilStockInput,
+  roles: ["owner", "co_owner", "manager"],
+  handler: async (input, profile): Promise<{ qty: number }> => {
+    const supabase = await createClient();
+    const { error } = await supabase.from("oil_location_stock").upsert(
+      {
+        oil_type_id: input.oil_type_id,
+        location_id: input.location_id,
+        qty: input.qty,
+        updated_by: profile.id,
+      },
+      { onConflict: "oil_type_id,location_id" },
+    );
+    if (error) throw error;
+    revalidatePath("/inventory");
+    return { qty: input.qty };
+  },
+});
