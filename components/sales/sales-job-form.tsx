@@ -284,20 +284,22 @@ export function SalesJobForm({
     [technicians, selectedLocationId],
   );
 
-  // Catalog auto-pricing engine list, narrowed by the vehicle Make when it
-  // matches an engine manufacturer; falls back to ALL engines if nothing
-  // matches (engine_types.manufacturer often differs from the truck Make).
-  const vehicleMake = useWatch({ control: form.control, name: "vehicle_make" });
+  // Catalog auto-pricing engine list, narrowed by the vehicle's ENGINE SIZE when
+  // it matches a catalogue engine (by name/model); falls back to ALL engines if
+  // nothing matches. (client 2026-06-28 — was narrowed by vehicle Make.)
+  const vehicleEngineSize = useWatch({ control: form.control, name: "engine_size" });
   const { engineOptions, engineMakeFiltered } = useMemo(() => {
-    const make = (vehicleMake ?? "").trim().toLowerCase();
-    if (!make) return { engineOptions: engineTypes, engineMakeFiltered: false };
-    const matched = engineTypes.filter((e) =>
-      e.manufacturer.toLowerCase().includes(make),
+    const size = (vehicleEngineSize ?? "").trim().toLowerCase();
+    if (!size) return { engineOptions: engineTypes, engineMakeFiltered: false };
+    const matched = engineTypes.filter(
+      (e) =>
+        e.display_name.toLowerCase().includes(size) ||
+        e.model.toLowerCase().includes(size),
     );
     return matched.length > 0
       ? { engineOptions: matched, engineMakeFiltered: true }
       : { engineOptions: engineTypes, engineMakeFiltered: false };
-  }, [engineTypes, vehicleMake]);
+  }, [engineTypes, vehicleEngineSize]);
 
   const isOilChange = serviceTypes.find((s) => s.id === serviceTypeId)?.code === "OC";
 
@@ -582,7 +584,7 @@ export function SalesJobForm({
       const res =
         mode === "create"
           ? await createSalesJob(parsed.data)
-          : await updateSalesJob({ ...parsed.data, id: initial?.id! });
+          : await updateSalesJob({ ...parsed.data, id: initial?.id ?? "" });
       if (!res.ok) {
         toast.error(res.error);
         if (res.fieldErrors) {
@@ -610,8 +612,14 @@ export function SalesJobForm({
           onSubmit={onSubmit}
           className="space-y-6"
           onKeyDown={(e) => {
-            // Save only via the Save button — pressing Enter in a field must not
-            // submit. Comboboxes (cmdk) still use Enter to pick an option.
+            // Keyboard-friendly: ⌘/Ctrl+Enter saves from anywhere in the form.
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              void onSubmit();
+              return;
+            }
+            // Otherwise save only via the Save button — pressing Enter in a field
+            // must not submit. Comboboxes (cmdk) still use Enter to pick an option.
             if (
               e.key === "Enter" &&
               e.target instanceof HTMLElement &&
@@ -1112,7 +1120,7 @@ export function SalesJobForm({
                         </Select>
                         {engineMakeFiltered && (
                           <p className="text-[10px] text-muted-foreground">
-                            Filtered by Make: {vehicleMake}
+                            Filtered by engine size: {vehicleEngineSize}
                           </p>
                         )}
                         <FormMessage />

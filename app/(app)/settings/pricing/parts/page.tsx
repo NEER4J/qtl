@@ -19,8 +19,8 @@ export default async function PartsAdminPage({
 }) {
   await requireRole("owner", "co_owner");
   const sp = await searchParams;
-  const status: "all" | "active" | "inactive" =
-    sp.status === "active" || sp.status === "inactive" ? sp.status : "all";
+  // Only Active / Inactive tabs (no "All"); default to Active.
+  const status: "active" | "inactive" = sp.status === "inactive" ? "inactive" : "active";
 
   const [parts, serviceCosts, categories, brands, settings] = await Promise.all([
     listAllParts({ category_id: sp.category_id, brand: sp.brand, q: sp.q, status }),

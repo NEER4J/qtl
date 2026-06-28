@@ -28,15 +28,15 @@ export type UpdateEmployeeInput = z.infer<typeof UpdateEmployeeInput>;
 // Payroll weeks
 // ----------------------------------------------------------------------------
 
-/** True if the given YYYY-MM-DD string is a Monday in UTC. */
-function isMondayYmd(ymd: string): boolean {
+/** True if the given YYYY-MM-DD string is a Sunday in UTC. */
+function isSundayYmd(ymd: string): boolean {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
   if (!m) return false;
   const [, y, mo, d] = m;
-  // Use UTC so the validation matches Postgres `extract(isodow from week_start)`
+  // Use UTC so the validation matches Postgres `extract(dow from week_start)`
   // — both interpret the date with no timezone offset.
   const dow = new Date(Date.UTC(+y, +mo - 1, +d)).getUTCDay();
-  return dow === 1; // Monday = 1
+  return dow === 0; // Sunday = 0
 }
 
 export const PayrollWeekInput = z.object({
@@ -44,7 +44,9 @@ export const PayrollWeekInput = z.object({
   week_start: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Date is required")
-    .refine(isMondayYmd, "Pay week must start on a Monday"),
+    .refine(isSundayYmd, "Pay week must start on a Sunday"),
+  // 1 = weekly (Sun–Sat), 2 = bi-weekly (two paycheques a month).
+  period_weeks: z.coerce.number().int().min(1).max(2).default(1),
   notes: z.string().trim().max(500).nullable().optional().or(z.literal("")),
 });
 export type PayrollWeekInput = z.infer<typeof PayrollWeekInput>;

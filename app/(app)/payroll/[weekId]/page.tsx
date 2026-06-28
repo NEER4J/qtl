@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/table";
 import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
-import { getPayrollWeek, updatePayrollWeekStatus } from "@/lib/actions/payroll";
+import { getPayrollWeek } from "@/lib/actions/payroll";
 import { formatDate, formatMoney } from "@/lib/utils/format";
 import { hiddenColumnsForPage } from "@/lib/permissions/check";
 import { PayrollEntryDialog } from "@/components/payroll/payroll-entry-dialog";
@@ -60,7 +60,7 @@ export default async function PayrollWeekPage({
     (show("net_pay") ? 1 : 0);
 
   const canEdit =
-    (profile.role === "owner" || profile.role === "co_owner") ||
+    (profile.role === "owner" || profile.role === "co_owner" || profile.role === "accountant") ||
     (profile.role === "manager" && profile.location_id === week.location_id);
   const isDraft = week.status === "draft";
   const canAddEntry = canEdit && isDraft;

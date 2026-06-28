@@ -59,7 +59,7 @@ export function PartsTable({
     q: string;
     category_id: string;
     brand: string;
-    status: "all" | "active" | "inactive";
+    status: "active" | "inactive";
   };
 }) {
   const router = useRouter();
@@ -90,10 +90,9 @@ export function PartsTable({
     startFilterTransition(() => router.push("?"));
   };
 
-  const setStatusFilter = (s: "all" | "active" | "inactive") => {
+  const setStatusFilter = (s: "active" | "inactive") => {
     const params = new URLSearchParams(searchParams.toString());
-    if (s === "all") params.delete("status");
-    else params.set("status", s);
+    params.set("status", s);
     startFilterTransition(() => router.push(`?${params.toString()}`));
   };
 
@@ -186,7 +185,7 @@ export function PartsTable({
       </form>
 
       <div className="flex items-center gap-1">
-        {(["all", "active", "inactive"] as const).map((s) => (
+        {(["active", "inactive"] as const).map((s) => (
           <Button
             key={s}
             type="button"
@@ -195,7 +194,7 @@ export function PartsTable({
             disabled={isFiltering}
             onClick={() => setStatusFilter(s)}
           >
-            {s === "all" ? "All" : s === "active" ? "Active" : "Inactive"}
+            {s === "active" ? "Active" : "Inactive"}
           </Button>
         ))}
       </div>

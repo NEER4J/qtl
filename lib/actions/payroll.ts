@@ -423,17 +423,16 @@ export async function getPayrollWeek(weekId: string): Promise<PayrollWeekDetail 
   };
 }
 
-/** Snap a YYYY-MM-DD to the Monday of its week (UTC). Server-side safety net
- *  for the DB's `payroll_weeks_start_is_monday` constraint — the client form
- *  also snaps but a stale form / API caller could still send a non-Monday. */
-function snapToMonday(ymd: string): string {
+/** Snap a YYYY-MM-DD to the Sunday of its week (UTC). Server-side safety net for
+ *  the DB's `payroll_weeks_start_is_sunday` check — the client form also snaps,
+ *  but a stale form / API caller could still send a non-Sunday. */
+function snapToSunday(ymd: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
   if (!m) return ymd;
   const [, y, mo, d] = m;
   const date = new Date(Date.UTC(+y, +mo - 1, +d));
-  const dow = date.getUTCDay();
-  const delta = dow === 0 ? -6 : 1 - dow;
-  date.setUTCDate(date.getUTCDate() + delta);
+  const dow = date.getUTCDay(); // 0 = Sunday
+  date.setUTCDate(date.getUTCDate() - dow); // shift back to Sunday
   return date.toISOString().slice(0, 10);
 }
 
@@ -442,12 +441,13 @@ export const createPayrollWeek = wrapAction({
   roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<PayrollWeek> => {
     const supabase = await createClient();
-    const weekStart = snapToMonday(input.week_start);
+    const weekStart = snapToSunday(input.week_start);
     const { data, error } = await supabase
       .from("payroll_weeks")
       .insert({
         location_id: input.location_id,
         week_start: weekStart,
+        period_weeks: input.period_weeks,
         notes: input.notes || null,
         created_by: profile.id,
         updated_by: profile.id,

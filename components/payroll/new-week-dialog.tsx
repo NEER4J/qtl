@@ -36,15 +36,24 @@ import { createPayrollWeek } from "@/lib/actions/payroll";
 import { listActiveLocations } from "@/lib/actions/reference";
 import type { Location } from "@/lib/db/types";
 
-/** Snap any YYYY-MM-DD to the Monday of its week (in UTC, no DST surprises). */
-function snapToMonday(ymd: string): string {
+/** Snap any YYYY-MM-DD to the Sunday of its week (in UTC, no DST surprises). */
+function snapToSunday(ymd: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
   if (!m) return ymd;
   const [, y, mo, d] = m;
   const date = new Date(Date.UTC(+y, +mo - 1, +d));
-  const dow = date.getUTCDay(); // 0 = Sunday, 1 = Monday, …
-  const delta = dow === 0 ? -6 : 1 - dow; // shift back to Monday
-  date.setUTCDate(date.getUTCDate() + delta);
+  const dow = date.getUTCDay(); // 0 = Sunday
+  date.setUTCDate(date.getUTCDate() - dow); // shift back to Sunday
+  return date.toISOString().slice(0, 10);
+}
+
+/** Add n days to a YYYY-MM-DD (UTC). */
+function addDays(ymd: string, n: number): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (!m) return ymd;
+  const [, y, mo, d] = m;
+  const date = new Date(Date.UTC(+y, +mo - 1, +d));
+  date.setUTCDate(date.getUTCDate() + n);
   return date.toISOString().slice(0, 10);
 }
 
@@ -72,7 +81,7 @@ export function NewWeekDialog({ children }: { children: React.ReactNode }) {
 
   const form = useForm<PayrollWeekInput>({
     resolver: zodResolver(PayrollWeekInput),
-    defaultValues: { location_id: "", week_start: "", notes: "" },
+    defaultValues: { location_id: "", week_start: "", period_weeks: 1, notes: "" },
   });
 
   async function onSubmit(values: PayrollWeekInput) {
@@ -126,13 +135,37 @@ export function NewWeekDialog({ children }: { children: React.ReactNode }) {
             />
             <FormField
               control={form.control}
+              name="period_weeks"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Period</FormLabel>
+                  <Select
+                    value={String(field.value ?? 1)}
+                    onValueChange={(v) => field.onChange(Number(v))}
+                  >
+                    <FormControl>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="1">Weekly (Sun–Sat)</SelectItem>
+                      <SelectItem value="2">Bi-weekly (2 weeks)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="week_start"
               render={({ field }) => {
-                const snapped = field.value ? snapToMonday(field.value) : "";
+                const snapped = field.value ? snapToSunday(field.value) : "";
                 const didSnap = snapped && snapped !== field.value;
+                const periodWeeks = Number(form.watch("period_weeks") ?? 1);
+                const endDate = snapped ? addDays(snapped, periodWeeks * 7 - 1) : "";
                 return (
                   <FormItem>
-                    <FormLabel>Week start (Monday)</FormLabel>
+                    <FormLabel>Week start (Sunday)</FormLabel>
                     <FormControl>
                       <Input
                         type="date"
@@ -145,17 +178,15 @@ export function NewWeekDialog({ children }: { children: React.ReactNode }) {
                           field.onChange(v);
                         }}
                         onBlur={() => {
-                          if (field.value) field.onChange(snapToMonday(field.value));
+                          if (field.value) field.onChange(snapToSunday(field.value));
                         }}
                       />
                     </FormControl>
                     {field.value && (
                       <p className="text-xs text-muted-foreground">
-                        {didSnap ? (
-                          <>Will snap to <strong>{formatHuman(snapped)}</strong> (Monday of that week)</>
-                        ) : (
-                          <>Pay week: <strong>{formatHuman(snapped)}</strong></>
-                        )}
+                        {didSnap && <>Snaps to the Sunday of that week. </>}
+                        Pay period: <strong>{formatHuman(snapped)}</strong> →{" "}
+                        <strong>{formatHuman(endDate)}</strong>
                       </p>
                     )}
                     <FormMessage />

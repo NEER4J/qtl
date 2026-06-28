@@ -529,6 +529,8 @@ export interface PayrollWeek {
   location_id: string;
   week_start: string;
   week_end: string;
+  /** 1 = weekly (Sun–Sat), 2 = bi-weekly. */
+  period_weeks: number;
   status: PayrollWeekStatus;
   notes: string | null;
   created_at: string;

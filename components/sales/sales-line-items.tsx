@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Boxes, Plus, Trash2 } from "lucide-react";
 
 import {
@@ -106,6 +106,49 @@ function newGroupId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `grp-${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * Price input that tolerates an in-progress "-" or "" so a NEGATIVE price (a
+ * return / credit line) can be typed. A plain controlled number input snapped
+ * the lone "-" back to 0 (Number("-") → NaN → 0), so the minus could never be
+ * entered. This keeps a local text buffer and emits the parsed number.
+ */
+function SignedPriceInput({
+  value,
+  onValueChange,
+  className,
+}: {
+  value: number;
+  onValueChange: (n: number) => void;
+  className?: string;
+}) {
+  const [text, setText] = useState(() => String(value));
+  const lastEmitted = useRef(value);
+  // Re-sync only when the value changes from OUTSIDE this input (e.g. a tier add),
+  // never when it equals what we last emitted — which would wipe an in-progress "-".
+  useEffect(() => {
+    if (value !== lastEmitted.current) {
+      lastEmitted.current = value;
+      setText(String(value));
+    }
+  }, [value]);
+  return (
+    <Input
+      type="number"
+      step="0.01"
+      value={text}
+      onChange={(e) => {
+        const raw = e.target.value;
+        setText(raw);
+        const n = raw === "" || raw === "-" || raw === "-." || raw === "." ? 0 : Number(raw);
+        const next = Number.isFinite(n) ? n : 0;
+        lastEmitted.current = next;
+        onValueChange(next);
+      }}
+      className={className}
+    />
+  );
 }
 
 /** Unit label for a line — oils show "gal" vs "ltr" based on the chosen container. */
@@ -619,11 +662,9 @@ export function SalesLineItems({
           </div>
         </td>
         <td className="py-2 px-2 text-right">
-          <Input
-            type="number"
-            step="0.01"
-            value={String(it.unit_price)}
-            onChange={(e) => update(it.key, { unit_price: Number(e.target.value) || 0 })}
+          <SignedPriceInput
+            value={it.unit_price}
+            onValueChange={(n) => update(it.key, { unit_price: n })}
             className={`text-right ${cs ? "opacity-60" : ""}`}
           />
         </td>
