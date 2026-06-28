@@ -2007,11 +2007,20 @@ async function fetchPackageItems(
 ): Promise<Map<string, PartPackageItemRow[]>> {
   const out = new Map<string, PartPackageItemRow[]>();
   if (packageIds.length === 0) return out;
+  // Global "Service charge" fallback — packages charge each part at the
+  // With Service price (cost + service charge), so we need the app-wide default
+  // for parts whose own counter_premium is null. (client 2026-06-27)
+  const { data: settingsRow } = await supabase
+    .from("app_settings")
+    .select("counter_premium")
+    .eq("id", 1)
+    .single();
+  const globalCounterPremium = Number(settingsRow?.counter_premium ?? 10);
   const { data, error } = await supabase
     .from("part_package_items")
     .select(
       "id, package_id, part_id, quantity, unit_price, locked_unit_price, position, created_at, oil_type_id, litres, oil_container, transmission_service_id, " +
-        "part:parts(id, brand, part_number, description, list_price, extra_price, category_id, cost, mhsw_fee, is_taxable, part_categories:category_id(name, unit_of_measure)), " +
+        "part:parts(id, brand, part_number, description, list_price, extra_price, category_id, cost, mhsw_fee, counter_premium, is_taxable, part_categories:category_id(name, unit_of_measure)), " +
         "oil_type:oil_types(id, code, name, bulk_cost_per_litre, gallon_cost_per_litre, litres_per_gallon, is_taxable), " +
         "transmission_service:transmission_services(id, name, service_kind, is_synthetic, sell_price, labour, litres, oil_types:oil_type_id(code, name))",
     )
@@ -2028,6 +2037,7 @@ async function fetchPackageItems(
     category_id: string;
     cost: number;
     mhsw_fee: number;
+    counter_premium: number | null;
     is_taxable: boolean;
     part_categories: {
       name: string;
@@ -2061,6 +2071,18 @@ async function fetchPackageItems(
   };
   for (const row of (data ?? []) as unknown as RowFromDb[]) {
     const cat = row.part?.part_categories;
+    // With Service price = cost + Service charge (per-part counter_premium, else
+    // the global default). This is the price a package charges for the part.
+    const partServiceCharge =
+      row.part == null
+        ? 0
+        : row.part.counter_premium != null
+          ? Number(row.part.counter_premium)
+          : globalCounterPremium;
+    const partWithService =
+      row.part == null
+        ? 0
+        : Math.max(0, Math.round((Number(row.part.cost) + partServiceCharge) * 100) / 100);
     const merged: PartPackageItemRow = {
       id: row.id,
       package_id: row.package_id,
@@ -2088,6 +2110,7 @@ async function fetchPackageItems(
             is_taxable: row.part.is_taxable,
             category: cat?.name ?? "",
             unit_of_measure: cat?.unit_of_measure ?? "pcs",
+            with_service: partWithService,
           }
         : null,
       oil_type: row.oil_type ?? null,

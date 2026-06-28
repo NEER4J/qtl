@@ -11,8 +11,8 @@ import {
   transServiceLabel,
   transServicePrice,
 } from "@/components/pricing/trans-service-picker";
-import type { TransmissionService } from "@/lib/actions/pricing";
-import type { Part, UnitOfMeasure } from "@/lib/db/types";
+import type { PartForPicker, TransmissionService } from "@/lib/actions/pricing";
+import type { UnitOfMeasure } from "@/lib/db/types";
 import { formatMoney } from "@/lib/utils/format";
 
 export interface PackageItemDraft {
@@ -60,7 +60,7 @@ export function PackageItemsEditor({
     [items],
   );
 
-  const addPart = (p: Part) => {
+  const addPart = (p: PartForPicker) => {
     if (excludePartIds.has(p.id)) return;
     onChange([
       ...items,
@@ -72,7 +72,8 @@ export function PackageItemsEditor({
         unit_price: "",
         label: `${p.brand} ${p.part_number}`,
         subLabel: p.description,
-        catalogPrice: Number(p.list_price) || 0,
+        // Packages charge the With Service price (cost + service charge).
+        catalogPrice: Number(p.with_service ?? p.list_price) || 0,
         unitOfMeasure: (p.unit_of_measure as UnitOfMeasure) ?? "pcs",
       },
     ]);

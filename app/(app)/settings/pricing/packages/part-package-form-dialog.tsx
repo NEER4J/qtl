@@ -101,7 +101,8 @@ export function PartPackageFormDialog({
               unit_price,
               label: `${it.part!.brand} ${it.part!.part_number}`,
               subLabel: it.part!.description,
-              catalogPrice: Number(it.part!.list_price),
+              // Packages charge the With Service price (cost + service charge).
+              catalogPrice: Number(it.part!.with_service ?? it.part!.list_price),
               unitOfMeasure: it.part!.unit_of_measure,
             };
           }),

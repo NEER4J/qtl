@@ -826,7 +826,7 @@ export interface PartPackageItem {
 
 export interface PartPackageItemRow extends PartPackageItem {
   part:
-    | Pick<
+    | (Pick<
         Part,
         | "id"
         | "brand"
@@ -840,7 +840,10 @@ export interface PartPackageItemRow extends PartPackageItem {
         | "category"
         | "unit_of_measure"
         | "is_taxable"
-      >
+      > & {
+        /** Precomputed With Service price (cost + service charge) — what a package charges for the part. */
+        with_service: number;
+      })
     | null;
   oil_type:
     | Pick<OilType, "id" | "code" | "name" | "bulk_cost_per_litre" | "gallon_cost_per_litre" | "litres_per_gallon" | "is_taxable">

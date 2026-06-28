@@ -25,7 +25,10 @@ export function effectiveCatalogPriceForItem(item: PartPackageItemRow): number {
     return Number.isFinite(v) ? v : 0;
   }
 
-  if (item.part) return Number(item.part.list_price) || 0;
+  // Packages charge the part's With Service price (cost + service charge),
+  // precomputed server-side in fetchPackageItems. (client 2026-06-27 — was the
+  // list/Over-the-Counter price.)
+  if (item.part) return Number(item.part.with_service) || 0;
   return 0;
 }
 
