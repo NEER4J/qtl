@@ -2082,7 +2082,12 @@ async function fetchPackageItems(
     const partWithService =
       row.part == null
         ? 0
-        : Math.max(0, Math.round((Number(row.part.cost) + partServiceCharge) * 100) / 100);
+        : Math.max(
+            0,
+            Math.round(
+              (Number(row.part.cost) + Number(row.part.mhsw_fee) + partServiceCharge) * 100,
+            ) / 100,
+          );
     const merged: PartPackageItemRow = {
       id: row.id,
       package_id: row.package_id,

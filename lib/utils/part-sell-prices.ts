@@ -74,7 +74,11 @@ export function computePartSellTiers(
   globalCounterPremium: number,
   globalCustomerSuppliesLabour: number,
 ): PartSellTiers {
-  const totalCost = Number(part.cost); // already includes Buy MHSW
+  // "Cost price" = base cost (incl Buy MHSW) + Sell MHSW — the SAME basis the
+  // list price is built on (cost + Sell MHSW + margin). With Service is computed
+  // off this cost price, so Sell MHSW must be folded in here too. (client
+  // 2026-06-28 — previously used bare part.cost, which dropped the Sell MHSW.)
+  const totalCost = Number(part.cost) + Number(part.mhsw_fee);
   const listPrice = Number(part.list_price);
   const serviceCharge = effectiveCounterPremium(part, globalCounterPremium);
 
