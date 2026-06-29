@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-import { moneySchema, paymentModeSchema, paymentStatusSchema } from "@/lib/schemas/common";
+import {
+  moneySchema,
+  paymentModeSchema,
+  paymentStatusSchema,
+  signedMoneySchema,
+} from "@/lib/schemas/common";
 
 // Item #24 — line items per expense (what parts the vendor billed for).
 // Mirrors the sales_job_items shape. Either part_id or free-text description
@@ -11,7 +16,8 @@ export const ExpenseItemInput = z.object({
   vendor_part_id: z.string().uuid().nullable().optional(),
   description: z.string().trim().min(1, "Description required").max(500),
   quantity: z.coerce.number().min(0.001),
-  unit_cost: moneySchema,
+  // Signed so a promotion / vendor-discount line can carry a negative unit_cost.
+  unit_cost: signedMoneySchema,
   // Snapshot of the part's last buying price at pick time. Persisted so the
   // drift indicator survives reopening the expense for edit.
   last_buying_price_snapshot: z.number().nullable().optional(),

@@ -26,6 +26,11 @@ import {
   listPartsForExpensePicker,
   type ExpensePartPickerRow,
 } from "@/lib/actions/expenses";
+import {
+  PromotionPickerButton,
+  promotionLabel,
+} from "@/components/sales/promotion-picker-button";
+import type { Promotion } from "@/lib/db/types";
 import { formatDate, formatMoney } from "@/lib/utils/format";
 
 export interface ExpenseLineItem {
@@ -187,6 +192,23 @@ export function ExpenseLineItems({
     ]);
   };
 
+  const addPromotion = (promo: Promotion) => {
+    const subtotal = lineItemsSubTotal(items);
+    const raw =
+      promo.discount_type === "percent"
+        ? (subtotal * Number(promo.discount_value)) / 100
+        : Number(promo.discount_value);
+    const amount = Math.round(Math.abs(raw) * 100) / 100;
+    onChange([
+      ...items,
+      newExpenseLineItem({
+        description: `${promo.name} (${promotionLabel(promo)})`,
+        quantity: 1,
+        unit_cost: -amount,
+      }),
+    ]);
+  };
+
   const removeRow = (clientId: string) => {
     onChange(items.filter((x) => x.client_id !== clientId));
   };
@@ -201,6 +223,7 @@ export function ExpenseLineItems({
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-2">
         <PartsCatalogPicker onPick={addPart} />
+        <PromotionPickerButton onSelect={addPromotion} />
         <div className="text-xs text-muted-foreground">
           Pick a part to add a row. Non-itemised expenses (rent, utilities) can
           leave items empty and enter Sub Total directly below.
@@ -256,7 +279,6 @@ export function ExpenseLineItems({
                     <TableCell>
                       <Input
                         type="number"
-                        min="0"
                         step="any"
                         className="text-right"
                         value={row.unit_cost}

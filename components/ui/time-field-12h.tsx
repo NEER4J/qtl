@@ -77,6 +77,39 @@ export function TimeField12h({ value, onChange, onBlur, disabled, id, className 
     onBlur?.();
   }
 
+  // Two-digit typing: Radix Select's built-in type-ahead CYCLES on a repeated
+  // digit (2→20→21…) so "22"/"33"/"44" never land. We intercept digit keys and
+  // accumulate up to two within 1s, setting the value directly. preventDefault()
+  // stops Radix's type-ahead (it uses composeEventHandlers, which respects it).
+  const buf = React.useRef<{ field: "hour" | "minute" | null; s: string; t: number }>({
+    field: null,
+    s: "",
+    t: 0,
+  });
+  function onDigitKey(field: "hour" | "minute", e: React.KeyboardEvent) {
+    if (!/^[0-9]$/.test(e.key)) return; // let Enter/arrows/etc. behave normally
+    e.preventDefault();
+    e.stopPropagation();
+    const now = Date.now();
+    if (buf.current.field !== field || now - buf.current.t > 1000) buf.current.s = "";
+    buf.current.field = field;
+    buf.current.t = now;
+    const max = field === "hour" ? 12 : 59;
+    let s = buf.current.s + e.key;
+    if (Number(s) > max) s = e.key; // overflow → restart the buffer with this digit
+    buf.current.s = s.slice(-2);
+    const n = Number(buf.current.s);
+    if (field === "hour") {
+      const hv = String(Math.min(12, Math.max(1, n)));
+      setHour(hv);
+      emit(hv, minute, period);
+    } else {
+      const mv = String(Math.min(59, n)).padStart(2, "0");
+      setMinute(mv);
+      emit(hour, mv, period);
+    }
+  }
+
   return (
     <div className={cn("flex items-center gap-1", className)}>
       <Select
@@ -87,7 +120,12 @@ export function TimeField12h({ value, onChange, onBlur, disabled, id, className 
         }}
         disabled={disabled}
       >
-        <SelectTrigger id={id} className="w-[4.5rem]" aria-label="Hour">
+        <SelectTrigger
+          id={id}
+          className="w-[4.5rem]"
+          aria-label="Hour"
+          onKeyDown={(e) => onDigitKey("hour", e)}
+        >
           <SelectValue placeholder="Hr" />
         </SelectTrigger>
         <SelectContent>
@@ -107,7 +145,11 @@ export function TimeField12h({ value, onChange, onBlur, disabled, id, className 
         }}
         disabled={disabled}
       >
-        <SelectTrigger className="w-[4.5rem]" aria-label="Minute">
+        <SelectTrigger
+          className="w-[4.5rem]"
+          aria-label="Minute"
+          onKeyDown={(e) => onDigitKey("minute", e)}
+        >
           <SelectValue placeholder="Min" />
         </SelectTrigger>
         <SelectContent>

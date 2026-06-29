@@ -25,11 +25,13 @@ import {
 } from "@/components/pricing/trans-service-picker";
 import { OilPickerButton, type OilContainer } from "@/components/sales/oil-picker-button";
 import { PackagePickerButton } from "@/components/sales/package-picker-button";
+import { PromotionPickerButton, promotionLabel } from "@/components/sales/promotion-picker-button";
 import type { PartForPicker, TransmissionService } from "@/lib/actions/pricing";
 import type {
   OilType,
   Part,
   PartPackageWithItems,
+  Promotion,
   ServiceCost,
   UnitOfMeasure,
 } from "@/lib/db/types";
@@ -360,6 +362,28 @@ export function SalesLineItems({
         part_category_id: p.category_id,
       }),
     ]);
+
+  /** Add a promotion as a negative discount line — a percent of the current
+   *  sub-total, or a fixed amount. Marked taxable so HST recomputes on the net. */
+  const addPromotion = (promo: Promotion) => {
+    const subtotal = lineItemsSubTotal(items);
+    const raw =
+      promo.discount_type === "percent"
+        ? (subtotal * Number(promo.discount_value)) / 100
+        : Number(promo.discount_value);
+    const amount = Math.round(Math.abs(raw) * 100) / 100;
+    onChange([
+      ...items,
+      newLineItem({
+        part_id: null,
+        description: `${promo.name} (${promotionLabel(promo)})`,
+        quantity: 1,
+        unit_price: -amount,
+        is_taxable: true,
+        unit_of_measure: null,
+      }),
+    ]);
+  };
 
   /**
    * A visible upgrade charge as its own line — e.g. "Upgrade: Cat 1R-0716".
@@ -880,6 +904,7 @@ export function SalesLineItems({
           <Plus className="size-4" /> Add custom item
         </Button>
         <PartPickerButton onSelect={addReturn} label="Add return / credit" />
+        <PromotionPickerButton onSelect={addPromotion} />
       </div>
 
       <CategoryDuplicateDialog

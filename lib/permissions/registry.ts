@@ -72,6 +72,7 @@ export const PAGE_REGISTRY: PageDef[] = [
   { key: "settings_services", label: "Service Types", group: "Settings", path: "/settings/services", defaultRoles: ["owner", "co_owner"] },
   { key: "settings_technicians", label: "Technicians", group: "Settings", path: "/settings/technicians", defaultRoles: ["owner", "co_owner"] },
   { key: "settings_pricing", label: "Pricing Catalogue", group: "Settings", path: "/settings/pricing", defaultRoles: ["owner", "co_owner"] },
+  { key: "settings_promotions", label: "Promotions", group: "Settings", path: "/settings/promotions", defaultRoles: ["owner", "co_owner"] },
   { key: "settings_recurring", label: "Recurring Expenses", group: "Settings", path: "/settings/recurring-expenses", defaultRoles: ["owner", "co_owner"] },
   { key: "settings_statutory", label: "Statutory Rates", group: "Settings", path: "/settings/statutory-rates", defaultRoles: ["owner", "co_owner"] },
   { key: "settings_audit_log", label: "Audit Log", group: "Settings", path: "/settings/audit-log", defaultRoles: ["owner", "co_owner"] },

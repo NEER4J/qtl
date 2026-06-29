@@ -7,6 +7,13 @@ export const moneySchema = z
   .transform((v) => (typeof v === "string" ? Number(v) : v))
   .pipe(z.number().finite().nonnegative());
 
+// Like moneySchema but allows negatives — for discount / credit / promotion
+// lines (e.g. an expense line whose unit_cost is a negative vendor discount).
+export const signedMoneySchema = z
+  .union([z.string(), z.number()])
+  .transform((v) => (typeof v === "string" ? Number(v) : v))
+  .pipe(z.number().finite());
+
 export const dateSchema = z
   .union([z.string(), z.date()])
   .transform((v) => (v instanceof Date ? v.toISOString().slice(0, 10) : v))

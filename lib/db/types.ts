@@ -524,6 +524,17 @@ export interface StatutoryRate {
   updated_at: string;
 }
 
+export interface Promotion {
+  id: string;
+  name: string;
+  discount_type: "percent" | "fixed";
+  discount_value: number;
+  active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PayrollWeek {
   id: string;
   location_id: string;
