@@ -72,8 +72,12 @@ export function PackageItemsEditor({
         unit_price: "",
         label: `${p.brand} ${p.part_number}`,
         subLabel: p.description,
-        // Packages charge the With Service price (cost + service charge).
-        catalogPrice: Number(p.with_service ?? p.list_price) || 0,
+        // Packages charge the COST basis (cost + Sell MHSW) — no service/labour
+        // markup; the package's own "Labor charge" line covers labour.
+        catalogPrice:
+          Math.max(0, Math.round((Number(p.cost) + Number(p.mhsw_fee)) * 100) / 100) ||
+          Number(p.list_price) ||
+          0,
         unitOfMeasure: (p.unit_of_measure as UnitOfMeasure) ?? "pcs",
       },
     ]);

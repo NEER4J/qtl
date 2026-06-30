@@ -2007,15 +2007,6 @@ async function fetchPackageItems(
 ): Promise<Map<string, PartPackageItemRow[]>> {
   const out = new Map<string, PartPackageItemRow[]>();
   if (packageIds.length === 0) return out;
-  // Global "Service charge" fallback — packages charge each part at the
-  // With Service price (cost + service charge), so we need the app-wide default
-  // for parts whose own counter_premium is null. (client 2026-06-27)
-  const { data: settingsRow } = await supabase
-    .from("app_settings")
-    .select("counter_premium")
-    .eq("id", 1)
-    .single();
-  const globalCounterPremium = Number(settingsRow?.counter_premium ?? 10);
   const { data, error } = await supabase
     .from("part_package_items")
     .select(
@@ -2071,22 +2062,17 @@ async function fetchPackageItems(
   };
   for (const row of (data ?? []) as unknown as RowFromDb[]) {
     const cat = row.part?.part_categories;
-    // With Service price = cost + Service charge (per-part counter_premium, else
-    // the global default). This is the price a package charges for the part.
-    const partServiceCharge =
-      row.part == null
-        ? 0
-        : row.part.counter_premium != null
-          ? Number(row.part.counter_premium)
-          : globalCounterPremium;
-    const partWithService =
+    // A package charges each part at its COST basis (cost + Sell MHSW) only —
+    // NO service/labour markup. Labour for a package is a single separate line
+    // (the package's own "Labor charge" / labor_selling_price), never folded
+    // per-part. (client 2026-06-30 — previously added the counter_premium
+    // "service charge" here, which doubled up against the package labour.)
+    const partCostBasis =
       row.part == null
         ? 0
         : Math.max(
             0,
-            Math.round(
-              (Number(row.part.cost) + Number(row.part.mhsw_fee) + partServiceCharge) * 100,
-            ) / 100,
+            Math.round((Number(row.part.cost) + Number(row.part.mhsw_fee)) * 100) / 100,
           );
     const merged: PartPackageItemRow = {
       id: row.id,
@@ -2115,7 +2101,7 @@ async function fetchPackageItems(
             is_taxable: row.part.is_taxable,
             category: cat?.name ?? "",
             unit_of_measure: cat?.unit_of_measure ?? "pcs",
-            with_service: partWithService,
+            package_unit_price: partCostBasis,
           }
         : null,
       oil_type: row.oil_type ?? null,

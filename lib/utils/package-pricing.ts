@@ -25,10 +25,11 @@ export function effectiveCatalogPriceForItem(item: PartPackageItemRow): number {
     return Number.isFinite(v) ? v : 0;
   }
 
-  // Packages charge the part's With Service price (cost + service charge),
-  // precomputed server-side in fetchPackageItems. (client 2026-06-27 — was the
-  // list/Over-the-Counter price.)
-  if (item.part) return Number(item.part.with_service) || 0;
+  // A package charges each part at its COST basis (cost + Sell MHSW),
+  // precomputed server-side in fetchPackageItems. NO service/labour markup is
+  // folded in per-part — the package's labour is a single separate line (its
+  // own "Labor charge"). (client 2026-06-30.)
+  if (item.part) return Number(item.part.package_unit_price) || 0;
   return 0;
 }
 

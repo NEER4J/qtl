@@ -854,8 +854,10 @@ export interface PartPackageItemRow extends PartPackageItem {
         | "unit_of_measure"
         | "is_taxable"
       > & {
-        /** Precomputed With Service price (cost + service charge) — what a package charges for the part. */
-        with_service: number;
+        /** Precomputed per-part charge for a package = COST basis only
+         *  (cost + Sell MHSW). NO service/labour markup — a package's labour is
+         *  a single separate line (the package's own "Labor charge"). */
+        package_unit_price: number;
       })
     | null;
   oil_type:
