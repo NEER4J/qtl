@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PageHelp } from "@/components/help/page-help";
@@ -27,7 +28,7 @@ export default async function FilterListPage({
   const sp = await searchParams;
 
   const parts = await listParts({
-    category_id: sp.category_id_id,
+    category_id: sp.category_id,
     brand: sp.brand,
     q: sp.q,
   });
@@ -64,10 +65,15 @@ export default async function FilterListPage({
         </PageHelp>
       </div>
 
-      <form className="flex flex-wrap gap-3 print:hidden">
-        <Input name="q" defaultValue={sp.q ?? ""} placeholder="Search by part number or description" className="w-[280px]" />
+      <form className="flex flex-wrap items-center gap-3 print:hidden">
+        <Input name="q" defaultValue={sp.q ?? ""} placeholder="Search by part #, description or brand" className="w-[280px]" />
         <Input name="brand" defaultValue={sp.brand ?? ""} placeholder="Brand" className="w-[160px]" />
-        <button type="submit" className="hidden" />
+        <Button type="submit" size="sm">Search</Button>
+        {(sp.q || sp.brand || sp.category_id) && (
+          <Button type="button" variant="ghost" size="sm" asChild>
+            <Link href="/pricing/filters">Clear</Link>
+          </Button>
+        )}
       </form>
 
       <Card className="print:shadow-none print:border-0">

@@ -291,12 +291,11 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
           <View style={styles.headerLeft}>
             <Image src={LOGO_PATH} style={styles.logo} />
             <View>
+              {/* Logo carries the brand; show ONE name line (the branch/location),
+                  not a duplicate. (client 2026-06-30 — "name and logo both".) */}
               <Text style={styles.shopName}>
-                {job.location_invoice_name || job.location_name || "Quick Truck Lube"}
+                {job.location_name || job.location_invoice_name || "Quick Truck Lube"}
               </Text>
-              {job.location_invoice_name && job.location_name ? (
-                <Text style={styles.shopLocation}>{job.location_name}</Text>
-              ) : null}
               <Text style={styles.shopMeta}>
                 {job.location_address || "1010 Industrial Road, Ayr, Ontario, N0B 1E0"}
               </Text>

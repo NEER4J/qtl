@@ -32,13 +32,23 @@ export default async function PartsAdminPage({
 
   return (
     <div className="flex flex-col gap-4 max-w-7xl">
-      <div>
+      {/* Wide table — print in landscape with the chrome hidden. */}
+      <style>{"@media print { @page { size: landscape; margin: 0.4in; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }"}</style>
+
+      <div className="print:hidden">
         <h1 className="text-2xl font-semibold tracking-tight">Parts catalogue</h1>
         <p className="text-sm text-muted-foreground">
           {parts.length} part{parts.length === 1 ? "" : "s"} {sp.q || sp.category_id || sp.brand ? "(filtered)" : "total"}
         </p>
       </div>
 
+      {/* Print-only header */}
+      <div className="hidden print:block">
+        <h1 className="text-xl font-bold">Parts price list</h1>
+        <p className="text-xs">{parts.length} parts{sp.q || sp.category_id || sp.brand ? " (filtered)" : ""}</p>
+      </div>
+
+      <div className="print:hidden">
       <PageHelp id="settings-pricing-parts">
         <p>
           The filter catalogue — everything you sell on the counter. Each part has a cost (what you pay),
@@ -52,6 +62,7 @@ export default async function PartsAdminPage({
           <li>Deactivate a part (never delete) — it stays on historical jobs but disappears from the price list.</li>
         </ul>
       </PageHelp>
+      </div>
 
       <PartsTable
         parts={parts}

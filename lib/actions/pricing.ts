@@ -131,10 +131,10 @@ export async function listParts(filter?: {
 
   if (filter?.category_id) q = q.eq("category_id", filter.category_id);
   if (filter?.brand) q = q.eq("brand", filter.brand);
-  if (filter?.q) {
-    const term = `%${filter.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
-    q = q.or(`part_number.ilike.${term},description.ilike.${term}`);
-  }
+  // Shared safe search (delimiter-proof, also covers brand) — mirrors
+  // getAllFilterSellPrices; the old raw `.or()` missed brand and broke on
+  // PostgREST delimiters , . : ( ). (client 2026-06-30 — search "not working".)
+  q = applyPartsSearch(q, filter?.q, ["part_number", "description", "brand"]);
 
   const { data, error } = await q;
   if (error) throw error;

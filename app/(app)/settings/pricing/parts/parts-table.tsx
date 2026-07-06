@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PrintButton } from "@/components/pricing/print-button";
 import { togglePartActive } from "@/lib/actions/pricing";
 import { getPartStockSummary } from "@/lib/actions/inventory";
 import type { AdminPartRow, PartCategoryOption } from "@/lib/actions/pricing";
@@ -127,7 +128,7 @@ export function PartsTable({
 
   return (
     <>
-      <form onSubmit={onFilter} className="flex flex-wrap items-end gap-2">
+      <form onSubmit={onFilter} className="flex flex-wrap items-end gap-2 print:hidden">
         <div className="relative w-[280px]">
           <Input
             placeholder="Search part number or description…"
@@ -184,7 +185,7 @@ export function PartsTable({
         </div>
       </form>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 print:hidden">
         {(["active", "inactive"] as const).map((s) => (
           <Button
             key={s}
@@ -197,9 +198,12 @@ export function PartsTable({
             {s === "active" ? "Active" : "Inactive"}
           </Button>
         ))}
+        <div className="ml-auto">
+          <PrintButton />
+        </div>
       </div>
 
-      <div className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
+      <div className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto print:max-h-none print:overflow-visible print:border-0">
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
@@ -215,7 +219,7 @@ export function PartsTable({
               <TableHead className="w-24 text-right">List</TableHead>
               <TableHead className="w-20">Tax</TableHead>
               <TableHead className="w-20">Status</TableHead>
-              <TableHead className="w-40 text-right">Actions</TableHead>
+              <TableHead className="w-40 text-right print:hidden">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -257,7 +261,7 @@ export function PartsTable({
                   <TableCell>
                     <Badge variant={p.active ? "default" : "secondary"}>{p.active ? "Active" : "Inactive"}</Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right print:hidden">
                     <div className="flex justify-end gap-1">
                       <Button variant="ghost" size="icon" onClick={() => setEditing(p)}>
                         <Pencil className="size-4" />

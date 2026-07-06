@@ -215,7 +215,12 @@ export function VendorFormDialog({
 
       // Persist per-location details + accounts for every location that has any
       // data. Works the same on create (vendor id comes back here) and edit.
+      // Don't STOP on the first location that fails (an RLS reject on one
+      // location used to abort the whole "merge" and hide the success) — try
+      // every location and collect the failures into one summary at the end.
+      // (client 2026-06-30 — "vendor merge not working".)
       const vendorId = res.data.id;
+      const locFailures: string[] = [];
       for (const loc of locations) {
         const row = locRows[loc.id];
         if (!row) continue;
@@ -225,6 +230,7 @@ export function VendorFormDialog({
         const hasContact =
           !!row.contact_no || !!row.email || !!row.sales_rep_name || !!row.notes;
         if (accts.length === 0 && !hasContact) continue;
+        const locLabel = loc.code ?? loc.name;
 
         if (hasContact) {
           const lr = await upsertVendorLocation({
@@ -237,10 +243,7 @@ export function VendorFormDialog({
             sales_rep_name: row.sales_rep_name || null,
             notes: row.notes || null,
           });
-          if (!lr.ok) {
-            toast.error(`${loc.code ?? loc.name}: ${lr.error}`);
-            return;
-          }
+          if (!lr.ok) locFailures.push(`${locLabel}: ${lr.error}`);
         }
 
         const ar = await replaceVendorLocationAccounts({
@@ -253,10 +256,17 @@ export function VendorFormDialog({
             is_default: a.is_default,
           })),
         });
-        if (!ar.ok) {
-          toast.error(`${loc.code ?? loc.name}: ${ar.error}`);
-          return;
-        }
+        if (!ar.ok) locFailures.push(`${locLabel}: ${ar.error}`);
+      }
+
+      if (locFailures.length > 0) {
+        // Core vendor row saved; some locations were rejected (usually RLS —
+        // migration 0097 not applied or the manager lacks cross_location).
+        toast.error(
+          `Vendor saved, but ${locFailures.length} location(s) could not be updated:\n${locFailures.join("\n")}`,
+          { duration: 10000 },
+        );
+        return;
       }
 
       toast.success(mode === "create" ? "Vendor created" : "Vendor updated");
