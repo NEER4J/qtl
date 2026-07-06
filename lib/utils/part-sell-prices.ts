@@ -26,8 +26,10 @@ export type PartSellTiers = {
   without_service: number | null;
   /** List price (= Over the Counter), or the per-part override. */
   over_counter: number | null;
-  /** Flat labour charged when the customer brings their own filter. */
+  /** Flat labour charged when the customer brings their own filter (the primary value). */
   customer_supplies: number;
+  /** Optional LIST of customer-supplies labour options; empty = just the single value above. */
+  customer_supplies_options: number[];
 };
 
 type TierPart = Pick<
@@ -41,6 +43,7 @@ type TierPart = Pick<
   | "over_counter_price"
   | "counter_premium"
   | "customer_supplies_labour"
+  | "customer_supplies_labour_options"
 >;
 
 /** Round to 2 decimals; anything ≤ 0 returns null (so "—" shows). */
@@ -66,6 +69,20 @@ export function effectiveCustomerSuppliesLabour(
   return part.customer_supplies_labour != null
     ? Number(part.customer_supplies_labour)
     : globalCustomerSuppliesLabour;
+}
+
+/** The list of customer-supplies labour options for a part: the per-part list
+ *  when set, otherwise the single primary value. Always ≥ 1 entry. */
+export function effectiveCustomerSuppliesOptions(
+  part: Pick<Part, "customer_supplies_labour" | "customer_supplies_labour_options">,
+  globalCustomerSuppliesLabour: number,
+): number[] {
+  const list = (part.customer_supplies_labour_options ?? [])
+    .map((n) => Number(n))
+    .filter((n) => Number.isFinite(n));
+  return list.length > 0
+    ? list
+    : [effectiveCustomerSuppliesLabour(part, globalCustomerSuppliesLabour)];
 }
 
 export function computePartSellTiers(
@@ -109,6 +126,10 @@ export function computePartSellTiers(
     without_service: withoutSvc,
     over_counter: overCounter,
     customer_supplies: effectiveCustomerSuppliesLabour(
+      part,
+      globalCustomerSuppliesLabour,
+    ),
+    customer_supplies_options: effectiveCustomerSuppliesOptions(
       part,
       globalCustomerSuppliesLabour,
     ),

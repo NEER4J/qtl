@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { CreatableCombobox } from "@/components/pricing/creatable-combobox";
@@ -127,6 +127,10 @@ export function PartFormDialog({
     { id: string; part_number: string; brand: string; active: boolean }[]
   >([]);
 
+  // Extra customer-supplies labour options (beyond the single value above),
+  // managed as a simple string list. Empty entries are dropped on save.
+  const [suppliesOptions, setSuppliesOptions] = useState<string[]>([]);
+
   // Cost and Buy MHSW are independent inputs. The "Total cost" below = base Cost
   // + Buy MHSW; that total is what's saved to the DB cost column and drives the
   // margin / list price.
@@ -172,6 +176,11 @@ export function PartFormDialog({
         : blank,
     );
     setDuplicateMatches([]);
+    setSuppliesOptions(
+      mode === "edit" && part
+        ? (part.customer_supplies_labour_options ?? []).map((n) => String(n))
+        : [],
+    );
   }, [open, mode, part, form]);
 
   // Debounced "this part number already exists" check. Runs as the user types
@@ -219,6 +228,10 @@ export function PartFormDialog({
         mhsw_buy: Number(values.mhsw_buy),
         counter_premium: counterTrimmed === "" ? null : Number(counterTrimmed),
         customer_supplies_labour: suppliesTrimmed === "" ? null : Number(suppliesTrimmed),
+        customer_supplies_labour_options: suppliesOptions
+          .map((s) => s.trim())
+          .filter((s) => s !== "")
+          .map(Number),
         margin_type: values.margin_type,
         margin_value: Number(values.margin_value),
         service_cost_id: values.service_cost_id || null,
@@ -476,6 +489,52 @@ export function PartFormDialog({
                   </FormItem>
                 )}
               />
+              <div className="space-y-2">
+                <FormLabel className="flex items-center gap-1">
+                  Extra customer-supplies options
+                  <InfoTip>
+                    Additional customer-supplies labour prices for this filter. They show as a
+                    list on the All-filter-sell-price page. Leave empty to just use the single
+                    value above.
+                  </InfoTip>
+                </FormLabel>
+                <div className="space-y-2">
+                  {suppliesOptions.map((val, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={val}
+                        placeholder="e.g. 30.00"
+                        onChange={(e) =>
+                          setSuppliesOptions((prev) =>
+                            prev.map((v, j) => (j === i ? e.target.value : v)),
+                          )
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() =>
+                          setSuppliesOptions((prev) => prev.filter((_, j) => j !== i))
+                        }
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSuppliesOptions((prev) => [...prev, ""])}
+                  >
+                    <Plus className="size-4" /> Add option
+                  </Button>
+                </div>
+              </div>
               <FormField
                 control={form.control}
                 name="service_cost_id"

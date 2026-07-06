@@ -758,6 +758,8 @@ export interface Part {
   counter_premium: number | null;
   /** Per-part customer-supplies labour. NULL = fall back to app_settings.customer_supplies_labour. */
   customer_supplies_labour: number | null;
+  /** Optional LIST of customer-supplies labour prices. Empty/NULL = use the single value above. */
+  customer_supplies_labour_options: number[] | null;
   /** Per-part sell-price overrides for the "All Filter Sell Price" view. NULL = fall back to cost-up. */
   without_service_price: number | null;
   with_service_price: number | null;

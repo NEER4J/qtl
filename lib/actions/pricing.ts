@@ -385,6 +385,8 @@ export interface FilterSellPriceRow {
   with_service: number | null;
   over_counter: number | null;
   customer_supplies: number;
+  /** Full list of customer-supplies options (≥1); the All-filter page shows them all. */
+  customer_supplies_options: number[];
 }
 
 export async function getAllFilterSellPrices(filter?: {
@@ -467,6 +469,7 @@ export async function getAllFilterSellPrices(filter?: {
       with_service: withSvc,
       over_counter: overCounter,
       customer_supplies: customerSupplies,
+      customer_supplies_options: tiers.customer_supplies_options,
     };
   });
 

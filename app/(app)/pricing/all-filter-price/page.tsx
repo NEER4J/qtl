@@ -151,7 +151,17 @@ export default async function AllFilterPricePage({
                     <TableCell className="text-right tabular-nums">{r.without_service != null ? formatMoney(r.without_service) : <span className="text-muted-foreground/60">—</span>}</TableCell>
                     <TableCell className="text-right tabular-nums font-medium">{r.with_service != null ? formatMoney(r.with_service) : <span className="text-muted-foreground/60">—</span>}</TableCell>
                     <TableCell className="text-right tabular-nums">{r.over_counter != null ? formatMoney(r.over_counter) : <span className="text-muted-foreground/60">—</span>}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatMoney(r.customer_supplies)}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {r.customer_supplies_options.length > 1 ? (
+                        <div className="flex flex-col items-end">
+                          {r.customer_supplies_options.map((v, i) => (
+                            <span key={i}>{formatMoney(v)}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        formatMoney(r.customer_supplies_options[0] ?? r.customer_supplies)
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

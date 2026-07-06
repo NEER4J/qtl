@@ -106,6 +106,11 @@ export const CreatePartInput = z.object({
     .optional()
     .nullable()
     .transform((v) => (v == null || v === "" ? null : Number(v))),
+  // Optional LIST of customer-supplies labour prices (blank entries dropped).
+  customer_supplies_labour_options: z
+    .array(z.coerce.number().min(0, "Must be ≥ 0").max(9999999))
+    .optional()
+    .default([]),
   margin_type: z.enum(["fixed", "percent"]).default("fixed"),
   margin_value: z.coerce.number().min(0, "Must be ≥ 0").default(0),
   // Signed delta applied to an existing same-category line when this part is added via a package.
