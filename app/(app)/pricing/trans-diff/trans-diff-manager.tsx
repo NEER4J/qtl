@@ -70,7 +70,9 @@ export function TransDiffManager({
               <TableHeader>
                 <TableRow>
                   <TableHead>Service</TableHead>
-                  <TableHead className="text-right">Litres</TableHead>
+                  <TableHead className="text-right">
+                    {g.kind === "coolant_flush" ? "Gallons" : "Litres"}
+                  </TableHead>
                   {showCost && g.kind === "coolant_flush" && (
                     <TableHead className="text-right">Labour</TableHead>
                   )}
@@ -81,11 +83,22 @@ export function TransDiffManager({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {g.rows.map((r) => (
+                {g.rows.map((r) => {
+                  const unit = g.kind === "coolant_flush" ? "gal" : "L";
+                  const hasOil2 = r.oil_type_id_2 != null;
+                  return (
                   <TableRow key={r.id}>
-                    <TableCell className="font-medium">{r.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {r.name}
+                      {r.container && (
+                        <span className="ml-1 text-[10px] uppercase text-muted-foreground">
+                          · {r.container}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right tabular-nums text-xs text-muted-foreground">
-                      {r.litres != null ? `${r.litres.toFixed(1)}L` : "—"}
+                      {r.litres != null ? `${r.litres.toFixed(1)}${unit}` : "—"}
+                      {r.litres_2 != null && ` + ${r.litres_2.toFixed(1)}${unit}`}
                     </TableCell>
                     {showCost && g.kind === "coolant_flush" && (
                       <TableCell className="text-right tabular-nums text-muted-foreground">
@@ -93,10 +106,25 @@ export function TransDiffManager({
                       </TableCell>
                     )}
                     <TableCell className="text-right tabular-nums font-semibold">
-                      {formatMoney(r.sell_price)}
+                      {hasOil2 && r.sell_price_2 != null ? (
+                        <div className="flex flex-col items-end">
+                          <span className={r.default_oil === 1 ? "font-semibold" : "text-muted-foreground font-normal"}>
+                            {formatMoney(r.sell_price)}
+                            {r.default_oil === 1 && <span className="ml-1 text-[10px] text-muted-foreground">default</span>}
+                          </span>
+                          <span className={r.default_oil === 2 ? "font-semibold" : "text-muted-foreground font-normal"}>
+                            {formatMoney(r.sell_price_2)}
+                            {r.default_oil === 2 && <span className="ml-1 text-[10px] text-muted-foreground">default</span>}
+                          </span>
+                        </div>
+                      ) : (
+                        formatMoney(r.sell_price)
+                      )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {r.oil_type_name ?? r.notes ?? "—"}
+                      {[r.oil_type_name, r.oil_type_name_2].filter(Boolean).join(" + ") ||
+                        r.notes ||
+                        "—"}
                     </TableCell>
                     <TableCell className="text-right">
                       {g.kind === "coolant_flush" ? (
@@ -125,7 +153,8 @@ export function TransDiffManager({
                       </TableCell>
                     )}
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>

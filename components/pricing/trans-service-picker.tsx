@@ -20,9 +20,20 @@ import {
 import { formatMoney } from "@/lib/utils/format";
 import { transmissionKindLabel } from "@/lib/utils/transmission";
 
-/** Effective sell price of a service line = sell_price + any fixed labour. */
-export function transServicePrice(s: Pick<TransmissionService, "sell_price" | "labour">): number {
-  return (Number(s.sell_price) || 0) + (Number(s.labour) || 0);
+/** Effective sell price of a service line = the DEFAULT oil's sell price + any
+ *  fixed labour. When a service has a second oil and default_oil = 2, its
+ *  sell_price_2 is used. */
+export function transServicePrice(
+  s: Pick<
+    TransmissionService,
+    "sell_price" | "sell_price_2" | "default_oil" | "labour"
+  >,
+): number {
+  const base =
+    s.default_oil === 2 && s.sell_price_2 != null
+      ? Number(s.sell_price_2)
+      : Number(s.sell_price);
+  return (base || 0) + (Number(s.labour) || 0);
 }
 
 /** Display label for a service: name plus a Reg/Syn tag when meaningful. */
@@ -106,8 +117,11 @@ export function TransServicePickerButton({
                     </div>
                     <div className="text-xs text-muted-foreground truncate">
                       {transmissionKindLabel(s.service_kind)}
-                      {s.oil_type_name ? ` — ${s.oil_type_name}` : ""}
-                      {s.litres ? ` · ${s.litres}L` : ""}
+                      {[s.oil_type_name, s.oil_type_name_2].filter(Boolean).length > 0
+                        ? ` — ${[s.oil_type_name, s.oil_type_name_2].filter(Boolean).join(" + ")}`
+                        : ""}
+                      {s.litres ? ` · ${s.litres}${s.service_kind === "coolant_flush" ? "gal" : "L"}` : ""}
+                      {s.container ? ` · ${s.container}` : ""}
                     </div>
                   </div>
                 </CommandItem>

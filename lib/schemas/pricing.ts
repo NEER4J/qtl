@@ -255,8 +255,35 @@ export const CreateTransmissionServiceInput = z.object({
     .optional()
     .nullable()
     .transform((v) => (v == null || v === "" ? null : Number(v))),
-  // Hand-set sell price (DB: sell_price > 0).
+  // Sell price (DB: sell_price > 0). Form auto-fills it from oil cost × litres.
   sell_price: z.coerce.number().positive("Sell price must be greater than 0"),
+  // --- Optional SECOND oil (services that use two fluids) ---
+  oil_type_id_2: z
+    .string()
+    .uuid()
+    .optional()
+    .nullable()
+    .or(z.literal(""))
+    .transform((v) => (v == null || v === "" ? null : v)),
+  litres_2: z
+    .union([z.coerce.number().positive("Must be > 0").max(9999), z.literal("")])
+    .optional()
+    .nullable()
+    .transform((v) => (v == null || v === "" ? null : Number(v))),
+  sell_price_2: z
+    .union([z.coerce.number().min(0, "Must be ≥ 0").max(9999999), z.literal("")])
+    .optional()
+    .nullable()
+    .transform((v) => (v == null || v === "" ? null : Number(v))),
+  // Which oil's price is used on a job: 1 (default) or 2.
+  default_oil: z.coerce.number().int().min(1).max(2).default(1),
+  // Packaging — bulk / gallon / pail (or none).
+  container: z
+    .enum(["bulk", "gallon", "pail"])
+    .optional()
+    .nullable()
+    .or(z.literal(""))
+    .transform((v) => (v == null || v === "" ? null : v)),
   // Fixed labour (e.g. coolant flush) — optional, ≥ 0.
   labour: z
     .union([z.coerce.number().min(0, "Must be ≥ 0").max(9999999), z.literal("")])

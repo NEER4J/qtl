@@ -2439,28 +2439,33 @@ export interface TransmissionService {
   oil_type_name: string | null;
   litres: number | null;
   sell_price: number;
+  /** Optional second oil (services that use two fluids). */
+  oil_type_id_2: string | null;
+  oil_type_name_2: string | null;
+  litres_2: number | null;
+  sell_price_2: number | null;
+  /** 1 or 2 — which oil's sell price is charged when added to a job. */
+  default_oil: number;
+  /** Packaging: bulk / gallon / pail (or null). */
+  container: "bulk" | "gallon" | "pail" | null;
   labour: number | null;
   notes: string | null;
   sort_order: number;
   active: boolean;
 }
 
-export async function listTransmissionServices(): Promise<{
-  groups: { kind: TransmissionServiceKind; label: string; rows: TransmissionService[] }[];
-}> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("transmission_services")
-    .select("*, oil_types:oil_type_id(code, name)")
-    .eq("active", true)
-    .order("sort_order")
-    .order("name");
-  if (error) throw error;
+// Shared row shape + mapper for the two Trans & Diff list queries (both embed
+// oil 1 and oil 2 by their code/name).
+type TransServiceJoinRow = Omit<
+  TransmissionService,
+  "oil_type_name" | "oil_type_name_2"
+> & {
+  oil_types: { code: string; name: string } | null;
+  oil_types_2: { code: string; name: string } | null;
+};
 
-  type Row = Omit<TransmissionService, "oil_type_name"> & {
-    oil_types: { code: string; name: string } | null;
-  };
-  const rows: TransmissionService[] = (data ?? []).map((r: Row) => ({
+function mapTransServiceRow(r: TransServiceJoinRow): TransmissionService {
+  return {
     id: r.id,
     name: r.name,
     service_kind: r.service_kind,
@@ -2469,11 +2474,34 @@ export async function listTransmissionServices(): Promise<{
     oil_type_name: r.oil_types ? excelOilLabel(r.oil_types.code, r.oil_types.name) : null,
     litres: r.litres,
     sell_price: Number(r.sell_price),
+    oil_type_id_2: r.oil_type_id_2 ?? null,
+    oil_type_name_2: r.oil_types_2 ? excelOilLabel(r.oil_types_2.code, r.oil_types_2.name) : null,
+    litres_2: r.litres_2 ?? null,
+    sell_price_2: r.sell_price_2 == null ? null : Number(r.sell_price_2),
+    default_oil: Number(r.default_oil ?? 1),
+    container: r.container ?? null,
     labour: r.labour == null ? null : Number(r.labour),
     notes: r.notes,
     sort_order: r.sort_order,
     active: r.active,
-  }));
+  };
+}
+
+export async function listTransmissionServices(): Promise<{
+  groups: { kind: TransmissionServiceKind; label: string; rows: TransmissionService[] }[];
+}> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("transmission_services")
+    .select("*, oil_types:oil_type_id(code, name), oil_types_2:oil_type_id_2(code, name)")
+    .eq("active", true)
+    .order("sort_order")
+    .order("name");
+  if (error) throw error;
+
+  const rows: TransmissionService[] = (data ?? []).map((r: TransServiceJoinRow) =>
+    mapTransServiceRow(r),
+  );
 
   // Preserve the kind order from the enum literal above for stable section order.
   const order: TransmissionServiceKind[] = [
@@ -2559,7 +2587,7 @@ export async function listTransServicesForPicker(
   const supabase = await createClient();
   let query = supabase
     .from("transmission_services")
-    .select("*, oil_types:oil_type_id(code, name)")
+    .select("*, oil_types:oil_type_id(code, name), oil_types_2:oil_type_id_2(code, name)")
     .eq("active", true)
     .order("sort_order")
     .order("name")
@@ -2571,21 +2599,5 @@ export async function listTransServicesForPicker(
   const { data, error } = await query;
   if (error) throw error;
 
-  type Row = Omit<TransmissionService, "oil_type_name"> & {
-    oil_types: { code: string; name: string } | null;
-  };
-  return (data ?? []).map((r: Row) => ({
-    id: r.id,
-    name: r.name,
-    service_kind: r.service_kind,
-    is_synthetic: r.is_synthetic,
-    oil_type_id: r.oil_type_id,
-    oil_type_name: r.oil_types ? excelOilLabel(r.oil_types.code, r.oil_types.name) : null,
-    litres: r.litres,
-    sell_price: Number(r.sell_price),
-    labour: r.labour == null ? null : Number(r.labour),
-    notes: r.notes,
-    sort_order: r.sort_order,
-    active: r.active,
-  }));
+  return (data ?? []).map((r: TransServiceJoinRow) => mapTransServiceRow(r));
 }
