@@ -53,6 +53,7 @@ export function PromotionsTable({ promotions }: { promotions: Promotion[] }) {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Discount</TableHead>
+              <TableHead className="w-28">Tax</TableHead>
               <TableHead className="w-24">Status</TableHead>
               <TableHead className="w-40 text-right">Actions</TableHead>
             </TableRow>
@@ -60,7 +61,7 @@ export function PromotionsTable({ promotions }: { promotions: Promotion[] }) {
           <TableBody>
             {promotions.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                   No promotions yet. Click <strong>New promotion</strong> to add one.
                 </TableCell>
               </TableRow>
@@ -69,6 +70,11 @@ export function PromotionsTable({ promotions }: { promotions: Promotion[] }) {
                 <TableRow key={p.id} className={!p.active ? "opacity-60" : undefined}>
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell className="tabular-nums">{fmt(p)}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">
+                      {p.is_taxable ? "Before tax" : "After tax"}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
                     <Badge variant={p.active ? "default" : "secondary"}>
                       {p.active ? "Active" : "Inactive"}

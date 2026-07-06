@@ -364,7 +364,10 @@ export function SalesLineItems({
     ]);
 
   /** Add a promotion as a negative discount line — a percent of the current
-   *  sub-total, or a fixed amount. Marked taxable so HST recomputes on the net. */
+   *  sub-total, or a fixed amount. A promo is NON-taxable by default (client
+   *  2026-06-30): the discount then does NOT lower the taxable sub-total, so HST
+   *  is charged before the discount ("applies after everything"). A promo marked
+   *  taxable keeps the old behaviour (discount before tax). */
   const addPromotion = (promo: Promotion) => {
     const subtotal = lineItemsSubTotal(items);
     const raw =
@@ -379,7 +382,7 @@ export function SalesLineItems({
         description: `${promo.name} (${promotionLabel(promo)})`,
         quantity: 1,
         unit_price: -amount,
-        is_taxable: true,
+        is_taxable: promo.is_taxable,
         unit_of_measure: null,
       }),
     ]);

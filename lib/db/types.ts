@@ -529,6 +529,8 @@ export interface Promotion {
   name: string;
   discount_type: "percent" | "fixed";
   discount_value: number;
+  /** When false (default) the discount line is HST-exempt (applies after tax). */
+  is_taxable: boolean;
   active: boolean;
   sort_order: number;
   created_at: string;

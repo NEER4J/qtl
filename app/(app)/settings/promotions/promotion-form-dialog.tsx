@@ -37,6 +37,7 @@ type FormValues = {
   name: string;
   discount_type: "percent" | "fixed";
   discount_value: string;
+  is_taxable: boolean;
   sort_order: string;
   active: boolean;
 };
@@ -45,6 +46,7 @@ const blank: FormValues = {
   name: "",
   discount_type: "percent",
   discount_value: "0",
+  is_taxable: false,
   sort_order: "100",
   active: true,
 };
@@ -71,6 +73,7 @@ export function PromotionFormDialog({
             name: promotion.name,
             discount_type: promotion.discount_type,
             discount_value: String(promotion.discount_value),
+            is_taxable: promotion.is_taxable,
             sort_order: String(promotion.sort_order),
             active: promotion.active,
           }
@@ -84,6 +87,7 @@ export function PromotionFormDialog({
         name: values.name.trim(),
         discount_type: values.discount_type,
         discount_value: Number(values.discount_value),
+        is_taxable: values.is_taxable,
         sort_order: Number(values.sort_order) || 0,
         active: values.active,
       };
@@ -179,6 +183,28 @@ export function PromotionFormDialog({
                     <Input type="number" min="0" step="1" {...field} />
                   </FormControl>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="is_taxable"
+              render={({ field }) => (
+                <FormItem className="flex items-start gap-2 space-y-0 rounded-md border p-3">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={(v) => field.onChange(v === true)}
+                    />
+                  </FormControl>
+                  <div className="leading-none">
+                    <FormLabel className="cursor-pointer">HST taxable</FormLabel>
+                    <FormDescription className="text-xs">
+                      Leave unchecked (default) so the discount applies after tax — it
+                      won&apos;t lower the HST. Check to discount before tax.
+                    </FormDescription>
+                  </div>
                 </FormItem>
               )}
             />

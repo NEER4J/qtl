@@ -5,6 +5,8 @@ export const CreatePromotionInput = z.object({
   discount_type: z.enum(["percent", "fixed"]),
   // Percent (e.g. 10 = 10%) or a fixed dollar amount. Must be > 0.
   discount_value: z.coerce.number().positive("Must be greater than 0"),
+  // A promo is non-taxable by default (discount applies after tax).
+  is_taxable: z.coerce.boolean().default(false),
   sort_order: z.coerce.number().int().min(0).default(100),
   active: z.coerce.boolean().default(true),
 });
