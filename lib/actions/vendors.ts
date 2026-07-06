@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { wrapAction } from "@/lib/actions/_utils";
 import {
   CreateVendorInput,
+  MergeVendorsInput,
   SearchVendorsInput,
   UpdateVendorInput,
 } from "@/lib/schemas/vendors";
@@ -141,6 +142,29 @@ export const updateVendor = wrapAction({
     if (error) throw error;
     revalidatePath("/vendors");
     return data as Vendor;
+  },
+});
+
+// ----------------------------------------------------------------------------
+// Merge duplicate vendors into one primary (owner / co_owner). Each source is
+// folded into the target by the merge_vendors() SQL function in a single
+// transaction, so all locations / accounts / parts / expenses move over and the
+// duplicate is deleted.
+// ----------------------------------------------------------------------------
+export const mergeVendors = wrapAction({
+  schema: MergeVendorsInput,
+  roles: ["owner", "co_owner"],
+  handler: async ({ target_id, source_ids }): Promise<{ merged: number }> => {
+    const supabase = await createClient();
+    for (const source of source_ids) {
+      const { error } = await supabase.rpc("merge_vendors", {
+        p_target: target_id,
+        p_source: source,
+      });
+      if (error) throw error;
+    }
+    revalidatePath("/vendors");
+    return { merged: source_ids.length };
   },
 });
 

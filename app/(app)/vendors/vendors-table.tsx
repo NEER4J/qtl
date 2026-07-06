@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Pencil, Plus, Search } from "lucide-react";
+import { ChevronRight, GitMerge, Pencil, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -21,23 +21,28 @@ import { toggleVendorActive } from "@/lib/actions/vendors";
 import type { ExpenseCategory, Location, Vendor } from "@/lib/db/types";
 
 import { VendorFormDialog } from "./vendor-form-dialog";
+import { MergeVendorsDialog } from "./merge-vendors-dialog";
 
 export function VendorsTable({
   vendors,
   categories,
   locations = [],
   hiddenColumns,
+  canMerge = false,
 }: {
   vendors: Vendor[];
   categories: ExpenseCategory[];
   locations?: Location[];
   /** Per-viewer hidden column keys from profiles.hidden_columns["vendors"]. */
   hiddenColumns?: string[];
+  /** Owner / co_owner may merge duplicate vendors. */
+  canMerge?: boolean;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Vendor | null>(null);
   const [creating, setCreating] = useState(false);
+  const [merging, setMerging] = useState(false);
   const [isPending, startTransition] = useTransition();
   const hidden = new Set(hiddenColumns ?? []);
   const show = (key: string) => !hidden.has(key);
@@ -81,9 +86,16 @@ export function VendorsTable({
             className="pl-8"
           />
         </div>
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="size-4" /> New vendor
-        </Button>
+        <div className="flex items-center gap-2">
+          {canMerge && (
+            <Button variant="outline" onClick={() => setMerging(true)}>
+              <GitMerge className="size-4" /> Merge vendors
+            </Button>
+          )}
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="size-4" /> New vendor
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
@@ -184,6 +196,9 @@ export function VendorsTable({
         categories={categories}
         locations={locations}
       />
+      {canMerge && (
+        <MergeVendorsDialog open={merging} onOpenChange={setMerging} vendors={vendors} />
+      )}
     </>
   );
 }

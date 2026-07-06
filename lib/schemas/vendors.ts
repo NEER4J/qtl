@@ -28,3 +28,17 @@ export const SearchVendorsInput = z.object({
   category_id: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
+
+// Merge one or more DUPLICATE vendors into a single PRIMARY vendor. Everything
+// (locations, accounts, parts, expenses, invoices) moves to the primary; the
+// duplicates are deleted.
+export const MergeVendorsInput = z
+  .object({
+    target_id: z.string().uuid(),
+    source_ids: z.array(z.string().uuid()).min(1, "Pick at least one duplicate to merge in"),
+  })
+  .refine((v) => !v.source_ids.includes(v.target_id), {
+    message: "The primary vendor can't also be a duplicate",
+    path: ["source_ids"],
+  });
+export type MergeVendorsInput = z.infer<typeof MergeVendorsInput>;

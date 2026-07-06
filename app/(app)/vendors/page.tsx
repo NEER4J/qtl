@@ -41,6 +41,7 @@ export default async function VendorsPage() {
         categories={categories}
         locations={locations.filter((l) => l.active)}
         hiddenColumns={[...hiddenColumnsForPage(profile, "vendors")]}
+        canMerge={profile.role === "owner" || profile.role === "co_owner"}
       />
     </div>
   );
