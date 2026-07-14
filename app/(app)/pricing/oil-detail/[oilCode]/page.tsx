@@ -110,8 +110,9 @@ export default async function OilDetailPage({
           )}
           <li><strong>Filter cost</strong> — sum of (part cost + MHSW) × qty for every filter wired to this engine.</li>
           <li><strong>Oil cost</strong> — per-litre cost × engine oil capacity.</li>
-          <li><strong>Labour</strong> — sum of service costs across the engine&apos;s filters.</li>
           <li><strong>Tier premium</strong> — flat $ based on oil capacity bracket (8–20L, 21–38L, 39–46L, 47+L).</li>
+          <li><strong>Total cost</strong> = filter + oil + tier. Labour is <em>not</em> a cost — it&apos;s the labour charge for the job, shown in its own column and captured as profit.</li>
+          <li><strong>Labour</strong> — the labour charge for this oil change (the package labour), shown separately from the cost.</li>
           <li><strong>Cost %</strong> and <strong>Profit %</strong> are shown to owner / accountant only.</li>
         </ul>
       </PageHelp>

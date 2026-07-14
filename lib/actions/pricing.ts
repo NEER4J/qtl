@@ -629,14 +629,19 @@ export async function getOilDetail(
     const serviceCost = engineServiceCost.get(e.id) ?? 0;
     const tier = tierFor(cap);
     const oilCost = Number.isFinite(perLitre) ? perLitre * cap : 0;
-    const totalCost = filterCost + oilCost + serviceCost + tier;
+    // Cost = filter + oil + tier. Labour is a CHARGE (the package's labour),
+    // shown as its own line, not folded into the cost. (client 2026-06-30.)
+    const totalCost = filterCost + oilCost + tier;
+    // The cost-up selling price still includes labour, so the oil-change PRICE
+    // doesn't move — labour just shifts from "cost" into the profit/margin.
+    const sellBasis = totalCost + serviceCost;
     // Override wins; otherwise fall back to cost-up. round99 returns null when
     // the result isn't positive so we don't render "-$0.01" for empty oils.
     const override = overrideMap.get(`${e.id}|${oilType.id}|${container}`);
     const selling = override
       ? override.price
       : Number.isFinite(perLitre) && perLitre > 0
-        ? round99(totalCost)
+        ? round99(sellBasis)
         : null;
     // When selling is null (no price data), profit/margin are also unknown —
     // return null so the UI shows "—" instead of "0%" or "100%".
