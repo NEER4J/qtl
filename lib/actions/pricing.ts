@@ -534,7 +534,11 @@ export async function getOilDetail(
       supabase
         .from("oil_types")
         .select("*")
+        // Engine oils only — the selector chips must not list trans / diff / gear /
+        // fuel fluids (they have no per-engine oil-change pricing). Matches the
+        // Oil-change grid + Print list. (client 2026-06-30.)
         .eq("active", true)
+        .eq("is_engine_oil", true)
         .order("name"),
       supabase
         .from("engine_filters")
