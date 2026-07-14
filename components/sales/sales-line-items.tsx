@@ -294,12 +294,16 @@ export function SalesLineItems({
     ]);
 
   /** Add an oil grade as a standalone line: qty = litres, price = per-litre rate
-   *  (editable in the row). */
+   *  (editable in the row). The price is taken from the BASE grade (is_base, e.g.
+   *  15W40) so every oil is charged at the base price (client 2026-06-30 — "price
+   *  should be created using base price"); falls back to the picked oil's own
+   *  rate when no base grade is configured. */
   const addOil = (oil: OilType, container: OilContainer) => {
+    const priceOil = oilTypes.find((o) => o.is_base) ?? oil;
     const rate =
       container === "gallon"
-        ? Number(oil.gallon_cost_per_litre)
-        : Number(oil.bulk_cost_per_litre);
+        ? Number(priceOil.gallon_cost_per_litre)
+        : Number(priceOil.bulk_cost_per_litre);
     onChange([
       ...items,
       newLineItem({
