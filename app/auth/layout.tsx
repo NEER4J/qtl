@@ -23,7 +23,7 @@ export default function Layout({ children }: Readonly<{ children: ReactNode }>) 
                   priority
                 />
               </div>
-              <p className="text-primary-foreground/95 text-sm font-medium">{APP_CONFIG.fullName}</p>
+              <p className="text-primary-foreground/95 text-sm font-medium">Quick Truck Lube</p>
             </div>
 
             <div className="absolute bottom-10 flex w-full justify-between px-10">
