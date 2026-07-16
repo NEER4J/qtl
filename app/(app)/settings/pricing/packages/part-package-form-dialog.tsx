@@ -89,7 +89,11 @@ export function PartPackageFormDialog({
                 unit_price,
                 label: `${s.name}${syn}`,
                 subLabel: s.oil_type_name,
-                catalogPrice: (Number(s.sell_price) || 0) + (Number(s.labour) || 0),
+                // Both oils are charged when a service has two, not just one.
+                catalogPrice:
+                  (Number(s.sell_price) || 0) +
+                  (s.sell_price_2 != null ? Number(s.sell_price_2) || 0 : 0) +
+                  (Number(s.labour) || 0),
                 unitOfMeasure: "each",
               };
             }

@@ -108,14 +108,10 @@ export function TransDiffManager({
                     <TableCell className="text-right tabular-nums font-semibold">
                       {hasOil2 && r.sell_price_2 != null ? (
                         <div className="flex flex-col items-end">
-                          <span className={r.default_oil === 1 ? "font-semibold" : "text-muted-foreground font-normal"}>
-                            {formatMoney(r.sell_price)}
-                            {r.default_oil === 1 && <span className="ml-1 text-[10px] text-muted-foreground">default</span>}
+                          <span className="text-xs text-muted-foreground font-normal">
+                            {formatMoney(r.sell_price)} + {formatMoney(r.sell_price_2)}
                           </span>
-                          <span className={r.default_oil === 2 ? "font-semibold" : "text-muted-foreground font-normal"}>
-                            {formatMoney(r.sell_price_2)}
-                            {r.default_oil === 2 && <span className="ml-1 text-[10px] text-muted-foreground">default</span>}
-                          </span>
+                          <span>{formatMoney(r.sell_price + r.sell_price_2)}</span>
                         </div>
                       ) : (
                         formatMoney(r.sell_price)

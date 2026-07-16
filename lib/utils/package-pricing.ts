@@ -10,7 +10,11 @@ export function effectiveCatalogPriceForItem(item: PartPackageItemRow): number {
 
   if (item.transmission_service_id && item.transmission_service) {
     const s = item.transmission_service;
-    const v = (Number(s.sell_price) || 0) + (Number(s.labour) || 0);
+    // Both oils are charged when a service has two (client 2026-07-16): oil 1 +
+    // oil 2 + labour, not just one of them.
+    const oil1 = Number(s.sell_price) || 0;
+    const oil2 = s.sell_price_2 != null ? Number(s.sell_price_2) || 0 : 0;
+    const v = oil1 + oil2 + (Number(s.labour) || 0);
     return Number.isFinite(v) ? v : 0;
   }
 

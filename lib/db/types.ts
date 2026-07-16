@@ -875,6 +875,8 @@ export interface PartPackageItemRow extends PartPackageItem {
         service_kind: string;
         is_synthetic: boolean;
         sell_price: number;
+        /** Second oil's sell price — BOTH oils are charged when both are set. */
+        sell_price_2: number | null;
         labour: number | null;
         litres: number | null;
         oil_type_name: string | null;

@@ -20,20 +20,17 @@ import {
 import { formatMoney } from "@/lib/utils/format";
 import { transmissionKindLabel } from "@/lib/utils/transmission";
 
-/** Effective sell price of a service line = the DEFAULT oil's sell price + any
- *  fixed labour. When a service has a second oil and default_oil = 2, its
- *  sell_price_2 is used. */
+/** Effective sell price of a service line = Oil 1's sell price + Oil 2's sell
+ *  price (when the service has a second oil) + any fixed labour — BOTH oils are
+ *  charged, not just one. (client 2026-07-16: "the second oil, he is not doing
+ *  its addition" — a prior version picked only the `default_oil`'s price instead
+ *  of summing both; fixed.) */
 export function transServicePrice(
-  s: Pick<
-    TransmissionService,
-    "sell_price" | "sell_price_2" | "default_oil" | "labour"
-  >,
+  s: Pick<TransmissionService, "sell_price" | "sell_price_2" | "labour">,
 ): number {
-  const base =
-    s.default_oil === 2 && s.sell_price_2 != null
-      ? Number(s.sell_price_2)
-      : Number(s.sell_price);
-  return (base || 0) + (Number(s.labour) || 0);
+  const oil1 = Number(s.sell_price) || 0;
+  const oil2 = s.sell_price_2 != null ? Number(s.sell_price_2) || 0 : 0;
+  return oil1 + oil2 + (Number(s.labour) || 0);
 }
 
 /** Display label for a service: name plus a Reg/Syn tag when meaningful. */

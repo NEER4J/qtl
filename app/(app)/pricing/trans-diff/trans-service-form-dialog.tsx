@@ -66,7 +66,6 @@ type FormValues = {
   oil_type_id_2: string;
   litres_2: string;
   sell_price_2: string;
-  default_oil_2: boolean;
   labour: string;
   notes: string;
   sort_order: string;
@@ -84,7 +83,6 @@ const blank: FormValues = {
   oil_type_id_2: NO_OIL,
   litres_2: "",
   sell_price_2: "",
-  default_oil_2: false,
   labour: "",
   notes: "",
   sort_order: "100",
@@ -127,7 +125,6 @@ export function TransServiceFormDialog({
             oil_type_id_2: service.oil_type_id_2 ?? NO_OIL,
             litres_2: service.litres_2 == null ? "" : String(service.litres_2),
             sell_price_2: service.sell_price_2 == null ? "" : String(service.sell_price_2),
-            default_oil_2: service.default_oil === 2,
             labour: service.labour == null ? "" : String(service.labour),
             notes: service.notes ?? "",
             sort_order: String(service.sort_order),
@@ -174,7 +171,9 @@ export function TransServiceFormDialog({
         oil_type_id_2: values.oil_type_id_2 === NO_OIL ? null : values.oil_type_id_2,
         litres_2: values.litres_2.trim() === "" ? null : Number(values.litres_2),
         sell_price_2: values.sell_price_2.trim() === "" ? null : Number(values.sell_price_2),
-        default_oil: values.default_oil_2 ? 2 : 1,
+        // Both oils are always charged (oil1 + oil2 + labour) — default_oil no
+        // longer affects pricing, so it's always sent as 1.
+        default_oil: 1,
         labour: values.labour.trim() === "" ? null : Number(values.labour),
         notes: values.notes.trim() === "" ? null : values.notes.trim(),
         sort_order: Number(values.sort_order) || 0,
@@ -367,7 +366,11 @@ export function TransServiceFormDialog({
             {/* ── Oil 2 (optional) ──────────────────────────────────── */}
             <div className="rounded-md border p-3 space-y-3">
               <p className="text-xs font-medium text-muted-foreground">
-                Oil 2 <span className="font-normal">(optional — for services that use two fluids)</span>
+                Oil 2{" "}
+                <span className="font-normal">
+                  (optional — for services that use two fluids. When set, BOTH oils&apos;
+                  sell prices are charged together, plus labour.)
+                </span>
               </p>
               <div className="grid grid-cols-3 gap-3">
                 <FormField
@@ -440,23 +443,6 @@ export function TransServiceFormDialog({
                   )}
                 />
               </div>
-              <FormField
-                control={form.control}
-                name="default_oil_2"
-                render={({ field }) => (
-                  <FormItem className="flex items-center gap-2 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={(v) => field.onChange(v === true)}
-                      />
-                    </FormControl>
-                    <FormLabel className="cursor-pointer text-sm font-normal">
-                      Use Oil 2&apos;s price as the default when this service is added to a job
-                    </FormLabel>
-                  </FormItem>
-                )}
-              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">

@@ -2025,7 +2025,7 @@ async function fetchPackageItems(
       "id, package_id, part_id, quantity, unit_price, locked_unit_price, position, created_at, oil_type_id, litres, oil_container, transmission_service_id, " +
         "part:parts(id, brand, part_number, description, list_price, extra_price, category_id, cost, mhsw_fee, counter_premium, is_taxable, part_categories:category_id(name, unit_of_measure)), " +
         "oil_type:oil_types(id, code, name, bulk_cost_per_litre, gallon_cost_per_litre, litres_per_gallon, is_taxable), " +
-        "transmission_service:transmission_services(id, name, service_kind, is_synthetic, sell_price, labour, litres, oil_types:oil_type_id(code, name))",
+        "transmission_service:transmission_services(id, name, service_kind, is_synthetic, sell_price, sell_price_2, labour, litres, oil_types:oil_type_id(code, name))",
     )
     .in("package_id", packageIds)
     .order("position");
@@ -2062,6 +2062,7 @@ async function fetchPackageItems(
     service_kind: string;
     is_synthetic: boolean;
     sell_price: number;
+    sell_price_2: number | null;
     labour: number | null;
     litres: number | null;
     oil_types: { code: string; name: string } | null;
@@ -2124,6 +2125,10 @@ async function fetchPackageItems(
             service_kind: row.transmission_service.service_kind,
             is_synthetic: row.transmission_service.is_synthetic,
             sell_price: Number(row.transmission_service.sell_price),
+            sell_price_2:
+              row.transmission_service.sell_price_2 == null
+                ? null
+                : Number(row.transmission_service.sell_price_2),
             labour:
               row.transmission_service.labour == null
                 ? null
