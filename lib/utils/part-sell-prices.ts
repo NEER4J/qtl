@@ -107,13 +107,17 @@ export function computePartSellTiers(
       ? Number(part.over_counter_price)
       : round2(listPrice);
 
-  // With Service = Total cost + Service charge, for EVERY part (bundled too —
-  // the package charges this installed price; client 2026-06-27). The Service
-  // charge may be negative (a discount), so floor the billable price at 0 and
-  // ALWAYS return a number (never null it out, which used to hide the tier on a
-  // big negative). A per-part override still wins.
-  const withSvc =
-    part.with_service_price != null
+  // With Service = Total cost + Service charge. BUT a part flagged as bundled
+  // (in_package) is already covered by its package, so when it's added
+  // individually to a job its With Service price is $0. (client 2026-07-16 —
+  // "with service should become zero when the bundle option is on"; this rule
+  // was dropped during the package-pricing rework and is restored here. Without
+  // Service / Over the Counter still charge — only With Service goes to 0.)
+  // The service charge may be negative (a discount), so floor at 0 and ALWAYS
+  // return a number. A per-part override still wins for NON-bundled parts.
+  const withSvc = part.in_package
+    ? 0
+    : part.with_service_price != null
       ? Number(part.with_service_price)
       : Math.max(0, Math.round((totalCost + serviceCharge) * 100) / 100);
 
