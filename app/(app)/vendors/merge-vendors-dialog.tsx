@@ -103,8 +103,9 @@ export function MergeVendorsDialog({
           <DialogDescription>
             Pick the <strong>primary</strong> vendor to keep, then tick the{" "}
             <strong>duplicates</strong> to fold into it. Their locations, accounts,
-            parts, expenses and invoices all move to the primary and the duplicates are
-            deleted. This can&apos;t be undone.
+            parts, expenses and invoices all <strong>move onto the primary</strong> (nothing
+            is deleted), and any contact / account detail the primary is missing is filled in
+            from the duplicate. Only the primary&apos;s name is kept. This can&apos;t be undone.
           </DialogDescription>
         </DialogHeader>
 
