@@ -113,13 +113,16 @@ export function computePartSellTiers(
   // "with service should become zero when the bundle option is on"; this rule
   // was dropped during the package-pricing rework and is restored here. Without
   // Service / Over the Counter still charge — only With Service goes to 0.)
-  // The service charge may be negative (a discount), so floor at 0 and ALWAYS
-  // return a number. A per-part override still wins for NON-bundled parts.
+  // The service charge may be negative enough to make the WHOLE result negative
+  // (e.g. cost $20, service charge -$40 -> -$20) — that is INTENTIONAL (client
+  // 2026-07-16: "if you put a negative number it is not calculating" — a prior
+  // `Math.max(0, …)` floor was silently clamping a legitimately negative result
+  // to $0; removed). A per-part override still wins for NON-bundled parts.
   const withSvc = part.in_package
     ? 0
     : part.with_service_price != null
       ? Number(part.with_service_price)
-      : Math.max(0, Math.round((totalCost + serviceCharge) * 100) / 100);
+      : Math.round((totalCost + serviceCharge) * 100) / 100;
 
   // Without Service = Linked labour charge + List price.
   const withoutSvc =
