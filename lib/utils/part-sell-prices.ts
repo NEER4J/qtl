@@ -1,4 +1,5 @@
 import type { Part } from "@/lib/db/types";
+import { roundUpTo99 } from "@/lib/utils/format";
 
 // ============================================================================
 // Per-part sell-price tiers — the With Service / Without Service / Over the
@@ -44,6 +45,7 @@ type TierPart = Pick<
   | "counter_premium"
   | "customer_supplies_labour"
   | "customer_supplies_labour_options"
+  | "round_off"
 >;
 
 /** Round to 2 decimals; anything ≤ 0 returns null (so "—" shows). */
@@ -121,10 +123,18 @@ export function computePartSellTiers(
       ? Number(part.without_service_price)
       : round2(serviceCost + listPrice);
 
+  // Per-part opt-in: when `round_off` is ticked, snap every sell tier up to the
+  // next .99 — at the SOURCE, so the tier dialog, the All-filter-sell-price
+  // list, and the sales line all show the same rounded price. (client 2026-07-16
+  // — "round off checked but not working in many cases": it only rounded at
+  // line-add before, so the dialog / price lists still showed non-.99.)
+  const snap = (n: number | null): number | null =>
+    n != null && part.round_off ? roundUpTo99(n) : n;
+
   return {
-    with_service: withSvc,
-    without_service: withoutSvc,
-    over_counter: overCounter,
+    with_service: snap(withSvc),
+    without_service: snap(withoutSvc),
+    over_counter: snap(overCounter),
     customer_supplies: effectiveCustomerSuppliesLabour(
       part,
       globalCustomerSuppliesLabour,
