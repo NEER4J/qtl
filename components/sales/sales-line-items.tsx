@@ -17,7 +17,6 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { PartPickerButton } from "@/components/pricing/part-picker";
-import { ServiceCostPickerButton } from "@/components/pricing/service-cost-picker";
 import {
   TransServicePickerButton,
   transServiceLabel,
@@ -32,7 +31,6 @@ import type {
   Part,
   PartPackageWithItems,
   Promotion,
-  ServiceCost,
   UnitOfMeasure,
 } from "@/lib/db/types";
 import { formatMoney, roundUpTo99 } from "@/lib/utils/format";
@@ -224,13 +222,10 @@ type PendingAdd =
 export function SalesLineItems({
   items,
   onChange,
-  serviceCosts = [],
   oilTypes = [],
 }: {
   items: LineItem[];
   onChange: (items: LineItem[]) => void;
-  /** Service (labour) costs catalogue — pickable as job lines. */
-  serviceCosts?: ServiceCost[];
   /** Oil grades — pickable as standalone oil line items. */
   oilTypes?: OilType[];
 }) {
@@ -279,19 +274,6 @@ export function SalesLineItems({
   /** Add a free-form labour line (taxable, user fills the amount). */
   const addLabour = () =>
     onChange([...items, newLineItem({ description: "Labour", is_taxable: true })]);
-
-  /** Drop a Service (labour) cost from the catalogue in as a taxable line at its cost. */
-  const addServiceCost = (sc: ServiceCost) =>
-    onChange([
-      ...items,
-      newLineItem({
-        part_id: null,
-        description: sc.name,
-        quantity: 1,
-        unit_price: Number(sc.cost) || 0,
-        is_taxable: true,
-      }),
-    ]);
 
   /** Add an oil grade as a standalone line: qty = litres, price = per-litre rate
    *  (editable in the row). The price is taken from the BASE grade (is_base, e.g.
@@ -901,9 +883,6 @@ export function SalesLineItems({
         <PackagePickerButton onSelect={addPackage} />
         {oilTypes.length > 0 && <OilPickerButton oilTypes={oilTypes} onSelect={addOil} />}
         <TransServicePickerButton onSelect={addTransService} />
-        {serviceCosts.length > 0 && (
-          <ServiceCostPickerButton serviceCosts={serviceCosts} onSelect={addServiceCost} />
-        )}
         <Button type="button" variant="outline" size="sm" onClick={addLabour}>
           <Plus className="size-4" /> Add labour
         </Button>

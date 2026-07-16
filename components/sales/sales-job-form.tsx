@@ -43,7 +43,6 @@ import type {
   Location,
   OilType,
   PaymentMode,
-  ServiceCost,
   ServiceType,
   Technician,
   Vehicle,
@@ -125,8 +124,6 @@ export interface SalesJobFormProps {
   oilTypes: OilType[];
   /** Active roster used to populate Upper tech / Lower tech / Advisor pickers. */
   technicians: Technician[];
-  /** Service (labour) costs catalogue — pickable as job line items. */
-  serviceCosts?: ServiceCost[];
   hstRate: number;
   /** Force location to this value (staff role). */
   lockedLocationId?: string | null;
@@ -150,7 +147,6 @@ export function SalesJobForm({
   engineTypes,
   oilTypes,
   technicians,
-  serviceCosts = [],
   hstRate,
   lockedLocationId,
   initialItems,
@@ -1289,7 +1285,6 @@ export function SalesJobForm({
             <SalesLineItems
               items={lineItems}
               onChange={setLineItems}
-              serviceCosts={serviceCosts}
               oilTypes={oilTypes}
             />
           </section>
