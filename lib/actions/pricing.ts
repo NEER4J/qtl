@@ -561,9 +561,12 @@ export async function getOilDetail(
   if (packagesRes.error) throw packagesRes.error;
 
   // Map a (normalised) package name → its labour charge.
+  // Normalise names so the match survives case + stray/double spaces (the engine
+  // name is manufacturer + " " + model, which can produce double spaces).
+  const normName = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
   const packageLaborByName = new Map<string, number>();
   for (const p of (packagesRes.data ?? []) as { name: string; labor_selling_price: number }[]) {
-    packageLaborByName.set(p.name.trim().toLowerCase(), Number(p.labor_selling_price) || 0);
+    packageLaborByName.set(normName(p.name), Number(p.labor_selling_price) || 0);
   }
 
   const oilTypes = (oilTypesRes.data ?? []) as OilType[];
@@ -640,7 +643,7 @@ export async function getOilDetail(
     const engineName = `${e.manufacturer} ${e.model}`;
     // Labour = the matching package's "Labor charge" (by name); else the summed
     // part service-costs for this engine.
-    const pkgLabor = packageLaborByName.get(engineName.trim().toLowerCase());
+    const pkgLabor = packageLaborByName.get(normName(engineName));
     const serviceCost = pkgLabor != null ? pkgLabor : engineServiceCost.get(e.id) ?? 0;
     const tier = tierFor(cap);
     const oilCost = Number.isFinite(perLitre) ? perLitre * cap : 0;
