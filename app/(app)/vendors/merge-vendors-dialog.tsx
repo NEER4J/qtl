@@ -15,8 +15,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { mergeVendors } from "@/lib/actions/vendors";
-import type { Vendor } from "@/lib/db/types";
+import { listActiveLocations } from "@/lib/actions/reference";
+import type { Location, Vendor } from "@/lib/db/types";
+
+// Radix Select can't hold an empty value — "no location" uses a sentinel.
+const NO_LOCATION = "__none__";
 
 export function MergeVendorsDialog({
   open,
@@ -31,12 +42,18 @@ export function MergeVendorsDialog({
   const [search, setSearch] = useState("");
   const [primaryId, setPrimaryId] = useState<string | null>(null);
   const [sourceIds, setSourceIds] = useState<Set<string>>(new Set());
+  const [locations, setLocations] = useState<Location[]>([]);
+  // duplicate vendor_id → location_id (its account # becomes that location's account).
+  const [locationMap, setLocationMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      listActiveLocations().then(setLocations).catch(() => {});
+    } else {
       setSearch("");
       setPrimaryId(null);
       setSourceIds(new Set());
+      setLocationMap({});
     }
   }, [open]);
 
@@ -79,10 +96,17 @@ export function MergeVendorsDialog({
 
   const onConfirm = () => {
     if (!canMerge || !primaryId) return;
+    // Only keep location mappings for vendors still ticked as duplicates.
+    const location_map: Record<string, string> = {};
+    for (const id of sourceIds) {
+      const loc = locationMap[id];
+      if (loc && loc !== NO_LOCATION) location_map[id] = loc;
+    }
     startTransition(async () => {
       const res = await mergeVendors({
         target_id: primaryId,
         source_ids: [...sourceIds],
+        location_map: Object.keys(location_map).length ? location_map : undefined,
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -104,8 +128,9 @@ export function MergeVendorsDialog({
             Pick the <strong>primary</strong> vendor to keep, then tick the{" "}
             <strong>duplicates</strong> to fold into it. Their locations, accounts,
             parts, expenses and invoices all <strong>move onto the primary</strong> (nothing
-            is deleted), and any contact / account detail the primary is missing is filled in
-            from the duplicate. Only the primary&apos;s name is kept. This can&apos;t be undone.
+            is deleted). For a per-location duplicate, choose its <strong>location</strong> so its
+            account number becomes the primary&apos;s account for that location (shown on the
+            expense form). Only the primary&apos;s name is kept. This can&apos;t be undone.
           </DialogDescription>
         </DialogHeader>
 
@@ -148,6 +173,24 @@ export function MergeVendorsDialog({
                   >
                     {isPrimary ? "Primary" : "Set primary"}
                   </Button>
+                  {isSource && locations.length > 0 && (
+                    <Select
+                      value={locationMap[v.id] ?? NO_LOCATION}
+                      onValueChange={(val) =>
+                        setLocationMap((m) => ({ ...m, [v.id]: val }))
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-[130px] text-xs">
+                        <SelectValue placeholder="Location…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_LOCATION}>No location</SelectItem>
+                        {locations.map((l) => (
+                          <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <label className="flex items-center gap-1.5 text-xs cursor-pointer">
                     <Checkbox
                       checked={isSource}

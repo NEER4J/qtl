@@ -36,6 +36,9 @@ export const MergeVendorsInput = z
   .object({
     target_id: z.string().uuid(),
     source_ids: z.array(z.string().uuid()).min(1, "Pick at least one duplicate to merge in"),
+    // Optional map of duplicate vendor_id → location_id. When set, that
+    // duplicate's account number becomes the primary's account for that location.
+    location_map: z.record(z.string().uuid()).optional(),
   })
   .refine((v) => !v.source_ids.includes(v.target_id), {
     message: "The primary vendor can't also be a duplicate",

@@ -154,12 +154,13 @@ export const updateVendor = wrapAction({
 export const mergeVendors = wrapAction({
   schema: MergeVendorsInput,
   roles: ["owner", "co_owner"],
-  handler: async ({ target_id, source_ids }): Promise<{ merged: number }> => {
+  handler: async ({ target_id, source_ids, location_map }): Promise<{ merged: number }> => {
     const supabase = await createClient();
     for (const source of source_ids) {
       const { error } = await supabase.rpc("merge_vendors", {
         p_target: target_id,
         p_source: source,
+        p_location: location_map?.[source] ?? null,
       });
       if (error) throw error;
     }
