@@ -56,9 +56,13 @@ export function CustomersTable({
     if (!applied) return true;
     const q = applied.toLowerCase();
     const phoneDigits = digitsOnly(applied);
+    // Search BOTH name fields (like the new-customer duplicate popup), not just
+    // the display name — a customer's last_or_company can differ from billing_name.
     const name = customerDisplayName(c).toLowerCase();
     return (
       name.includes(q) ||
+      (c.billing_name ?? "").toLowerCase().includes(q) ||
+      (c.last_or_company ?? "").toLowerCase().includes(q) ||
       c.email?.toLowerCase().includes(q) ||
       c.license_plates.some((p) => p.toLowerCase().includes(q)) ||
       (phoneDigits.length >= 3 && (c.phone_search ?? "").includes(phoneDigits))

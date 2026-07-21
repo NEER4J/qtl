@@ -109,6 +109,14 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       })(),
     ]);
 
+  // Surface a swallowed query error instead of silently reporting $0 — e.g. the
+  // expense card reading 0 when the expenses query actually errored (RLS/column).
+  if (salesRes.error) throw salesRes.error;
+  if (expensesRes.error) throw expensesRes.error;
+  if (priorSalesRes.error) throw priorSalesRes.error;
+  if (dailyRes.error) throw dailyRes.error;
+  if (categoryRes.error) throw categoryRes.error;
+
   const salesRows = (salesRes.data ?? []) as Array<{ total: number; outstanding: number; location_id: string }>;
   const expenseRows = (expensesRes.data ?? []) as Array<{ total: number; location_id: string }>;
   const priorSalesRows = (priorSalesRes.data ?? []) as Array<{ total: number }>;
