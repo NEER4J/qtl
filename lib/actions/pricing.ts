@@ -561,11 +561,10 @@ export async function getOilDetail(
   if (packagesRes.error) throw packagesRes.error;
 
   // Map a (normalised) package name → its labour charge.
-  // Match on the BASE engine name — drop a trailing " With <X> Filter" and
-  // normalise case/spaces — so the labour still matches whether the engine or
-  // package carries a filter suffix (e.g. after the engine de-dup). (2026-07-22)
-  const normName = (s: string) =>
-    s.replace(/\s+with\s+.*filter\s*$/i, "").trim().replace(/\s+/g, " ").toLowerCase();
+  // Match the FULL engine name to the package name (case + stray/double spaces
+  // normalised — the engine name is manufacturer + " " + model). Each filter
+  // variant matches its own same-named package.
+  const normName = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
   const packageLaborByName = new Map<string, number>();
   for (const p of (packagesRes.data ?? []) as { name: string; labor_selling_price: number }[]) {
     packageLaborByName.set(normName(p.name), Number(p.labor_selling_price) || 0);
