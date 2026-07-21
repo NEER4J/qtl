@@ -716,33 +716,6 @@ export interface PrintListResponse {
   company_name: string;
 }
 
-/** Explicit ordered column list matching the Excel Print List tab exactly.
- *  Each entry is (DB oil_types.code, container, short_label, sublabel,
- *  is_reference). Labels mirror the Excel headers so spot-checking against
- *  the spreadsheet is one-to-one. */
-const PRINT_LIST_COLUMNS: Array<{
-  code: string;
-  container: "bulk" | "gallon";
-  label: string;
-  sublabel: string;
-  is_reference: boolean;
-}> = [
-  { code: "257004",    container: "gallon", label: "15W40",          sublabel: "Gallon",   is_reference: false },
-  { code: "10",        container: "gallon", label: "10W30",          sublabel: "Gallon",   is_reference: false },
-  { code: "500010047", container: "gallon", label: "T5",             sublabel: "Gallon",   is_reference: false },
-  { code: "21",        container: "gallon", label: "Petro 10W30",    sublabel: "Gallon",   is_reference: false },
-  { code: "14",        container: "bulk",   label: "T6",             sublabel: "5W30/5W40 Bulk", is_reference: false },
-  { code: "14",        container: "gallon", label: "T6",             sublabel: "Gallon",   is_reference: false },
-  { code: "11",        container: "bulk",   label: "Delo SYN 5W30",  sublabel: "Bulk",     is_reference: false },
-  { code: "11",        container: "gallon", label: "Delo SYN 5W30",  sublabel: "Gallon",   is_reference: false },
-  { code: "22",        container: "bulk",   label: "Petro SYN 5W30", sublabel: "Bulk",     is_reference: false },
-  { code: "22",        container: "gallon", label: "Petro SYN 5W30", sublabel: "Gallon",   is_reference: false },
-  // 3 reference bulk columns at the end (Excel cols V / X / Y)
-  { code: "257004",    container: "bulk",   label: "15W40",          sublabel: "Bulk ref", is_reference: true  },
-  { code: "10",        container: "bulk",   label: "10W30",          sublabel: "Bulk ref", is_reference: true  },
-  { code: "11",        container: "bulk",   label: "5W30",           sublabel: "Bulk ref", is_reference: true  },
-];
-
 export async function getPrintList(): Promise<PrintListResponse> {
   const supabase = await createClient();
   const [{ engines, oilTypes, cells }, settingsRes] = await Promise.all([
@@ -754,20 +727,28 @@ export async function getPrintList(): Promise<PrintListResponse> {
       .single(),
   ]);
 
-  // Resolve each Excel column to its oil_type_id by code. Skip any column
-  // whose oil isn't in the DB (defensive — shouldn't happen with the seed).
-  const codeToOil = new Map(oilTypes.map((o) => [o.code, o]));
+  // One column per oil (gallon + bulk) for EVERY oil the grid has — the
+  // empty-column pass below drops containers with no configured price, so the
+  // Print List shows the SAME oils as the oil-change grid. (client 2026-07-22 —
+  // was a hardcoded Excel subset that hid some oils.)
   const columns: PrintListColumn[] = [];
-  for (const spec of PRINT_LIST_COLUMNS) {
-    const o = codeToOil.get(spec.code);
-    if (!o) continue;
+  for (const o of oilTypes) {
+    const label = excelOilLabel(o.code, o.name);
     columns.push({
-      key: `${spec.is_reference ? "ref-" : ""}${o.id}-${spec.container}`,
-      label: spec.label,
-      sublabel: spec.sublabel,
+      key: `${o.id}-gallon`,
+      label,
+      sublabel: "Gallon",
       oil_type_id: o.id,
-      container: spec.container,
-      is_reference: spec.is_reference,
+      container: "gallon",
+      is_reference: false,
+    });
+    columns.push({
+      key: `${o.id}-bulk`,
+      label,
+      sublabel: "Bulk",
+      oil_type_id: o.id,
+      container: "bulk",
+      is_reference: false,
     });
   }
 
