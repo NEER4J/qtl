@@ -523,7 +523,7 @@ export async function getOilDetail(
 ): Promise<OilDetailResponse | null> {
   const supabase = await createClient();
 
-  const [enginesRes, oilTypesRes, filtersRes, tiersRes, overridesRes] =
+  const [enginesRes, oilTypesRes, filtersRes, tiersRes, overridesRes, packagesRes] =
     await Promise.all([
       supabase
         .from("engine_types")
@@ -548,12 +548,23 @@ export async function getOilDetail(
         .from("engine_sell_prices")
         .select("id, engine_type_id, oil_type_id, container, sell_price")
         .limit(10000),  // Supabase REST defaults to 1000; we have ~1400+ rows.
+      // Package labour by name: the Labour column shows the matching package's
+      // "Labor charge" (settings/pricing/packages) when the engine name equals a
+      // package name; falls back to the summed part service-costs. (client 2026-06-30)
+      supabase.from("part_packages").select("name, labor_selling_price").eq("active", true),
     ]);
   if (enginesRes.error) throw enginesRes.error;
   if (oilTypesRes.error) throw oilTypesRes.error;
   if (filtersRes.error) throw filtersRes.error;
   if (tiersRes.error) throw tiersRes.error;
   if (overridesRes.error) throw overridesRes.error;
+  if (packagesRes.error) throw packagesRes.error;
+
+  // Map a (normalised) package name → its labour charge.
+  const packageLaborByName = new Map<string, number>();
+  for (const p of (packagesRes.data ?? []) as { name: string; labor_selling_price: number }[]) {
+    packageLaborByName.set(p.name.trim().toLowerCase(), Number(p.labor_selling_price) || 0);
+  }
 
   const oilTypes = (oilTypesRes.data ?? []) as OilType[];
   const oilType = oilTypes.find((o) => o.code === oilCode);
@@ -626,7 +637,11 @@ export async function getOilDetail(
   const rows: OilDetailRow[] = ((enginesRes.data ?? []) as EngineType[]).map((e) => {
     const cap = Number(e.oil_capacity_litres);
     const filterCost = enginePartCost.get(e.id) ?? 0;
-    const serviceCost = engineServiceCost.get(e.id) ?? 0;
+    const engineName = `${e.manufacturer} ${e.model}`;
+    // Labour = the matching package's "Labor charge" (by name); else the summed
+    // part service-costs for this engine.
+    const pkgLabor = packageLaborByName.get(engineName.trim().toLowerCase());
+    const serviceCost = pkgLabor != null ? pkgLabor : engineServiceCost.get(e.id) ?? 0;
     const tier = tierFor(cap);
     const oilCost = Number.isFinite(perLitre) ? perLitre * cap : 0;
     // Cost = filter + oil + tier. Labour is a CHARGE (the package's labour),
