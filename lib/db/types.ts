@@ -477,7 +477,30 @@ export interface AppSettings {
   wsib_rate: number;
   /** Effective date shown on the Print List header. */
   price_list_effective_date: string | null;
+  /** Master switch for the IP lock (Settings → IP Access). */
+  ip_lock_enabled: boolean;
   updated_at: string;
+}
+
+/**
+ * One approved network for the IP lock. `network` is a Postgres `cidr`, so a
+ * single machine is stored as /32 (or /128 for IPv6) and a whole office as
+ * e.g. 203.0.113.0/24.
+ */
+export interface IpAllowlistEntry {
+  id: string;
+  label: string;
+  network: string;
+  location_id: string | null;
+  note: string | null;
+  active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IpAllowlistEntryWithLocation extends IpAllowlistEntry {
+  location: { name: string } | null;
 }
 
 // ============================================================================

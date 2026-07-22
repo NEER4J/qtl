@@ -222,6 +222,7 @@ export const sidebarItems: NavGroup[] = [
           { title: "Promotions", url: "/settings/promotions", roles: ["co_owner"] },
           { title: "Recurring Expenses", url: "/settings/recurring-expenses", roles: ["co_owner"] },
           { title: "Statutory Rates", url: "/settings/statutory-rates", roles: ["co_owner"] },
+          { title: "IP Access", url: "/settings/ip-access", roles: ["co_owner"] },
           { title: "Audit Log", url: "/settings/audit-log", roles: ["co_owner"] },
         ],
       },
