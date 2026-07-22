@@ -31,28 +31,37 @@ update public.engine_types e
 --    Only bare engines that have a "<model> With ... Filter" sibling are touched
 --    (so genuinely-bare engines like "Cummins ISX/X15" are never renamed).
 update public.engine_types k
-   set model = b.newname,
+   set model = (
+         select k.model || ' With ' || p.brand || ' Filter'
+         from public.engine_filters ef
+         join public.parts p on p.id = ef.part_id
+         where ef.engine_type_id = k.id
+           and coalesce(trim(p.brand), '') <> ''
+           and not exists (
+             select 1 from public.engine_types o
+              where o.manufacturer = k.manufacturer
+                and o.model = k.model || ' With ' || p.brand || ' Filter')
+         order by p.brand
+         limit 1
+       ),
        updated_at = now()
-  from lateral (
-    select k.model || ' With ' || p.brand || ' Filter' as newname
-    from public.engine_filters ef
-    join public.parts p on p.id = ef.part_id
-    where ef.engine_type_id = k.id
-      and coalesce(trim(p.brand), '') <> ''
-      and not exists (
-        select 1 from public.engine_types o
-         where o.manufacturer = k.manufacturer
-           and o.model = k.model || ' With ' || p.brand || ' Filter')
-    order by p.brand
-    limit 1
-  ) b
  where k.active
    and k.model !~* 'with .* filter'
    and exists (
      select 1 from public.engine_types s
       where s.manufacturer = k.manufacturer
         and s.id <> k.id
-        and s.model like k.model || ' With % Filter');
+        and s.model like k.model || ' With % Filter')
+   -- guarantees the SET subquery returns a row (never sets model NULL)
+   and exists (
+     select 1 from public.engine_filters ef
+     join public.parts p on p.id = ef.part_id
+     where ef.engine_type_id = k.id
+       and coalesce(trim(p.brand), '') <> ''
+       and not exists (
+         select 1 from public.engine_types o
+          where o.manufacturer = k.manufacturer
+            and o.model = k.model || ' With ' || p.brand || ' Filter'));
 
 -- 3. Un-park the "[old <id>]" bare rows (were inactive before — leave them so).
 update public.engine_types e
