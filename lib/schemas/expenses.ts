@@ -14,6 +14,9 @@ export const ExpenseItemInput = z.object({
   id: z.string().uuid().optional(),
   part_id: z.string().uuid().nullable().optional(),
   vendor_part_id: z.string().uuid().nullable().optional(),
+  // An oil purchase — mutually exclusive with part_id (DB also enforces this).
+  oil_type_id: z.string().uuid().nullable().optional(),
+  oil_container: z.enum(["bulk", "gallon"]).nullable().optional(),
   description: z.string().trim().min(1, "Description required").max(500),
   quantity: z.coerce.number().min(0.001),
   // Signed so a promotion / vendor-discount line can carry a negative unit_cost.
@@ -21,7 +24,11 @@ export const ExpenseItemInput = z.object({
   // Snapshot of the part's last buying price at pick time. Persisted so the
   // drift indicator survives reopening the expense for edit.
   last_buying_price_snapshot: z.number().nullable().optional(),
-});
+})
+  .refine((it) => !(it.part_id && it.oil_type_id), {
+    message: "A line can't be both a catalog part and an oil purchase",
+    path: ["part_id"],
+  });
 export type ExpenseItemInput = z.infer<typeof ExpenseItemInput>;
 
 export const ExpenseInput = z

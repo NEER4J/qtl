@@ -80,6 +80,7 @@ export default async function NewSalesJobPage({
         technicians={technicians}
         hstRate={Number(settings.hst_rate)}
         lockedLocationId={lockedLocationId}
+        currentUserRole={profile.role}
         initial={
           preselectCustomerId
             ? { customer_id: preselectCustomerId, vehicle_id: preselectVehicleId ?? null }

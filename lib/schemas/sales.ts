@@ -24,7 +24,11 @@ export const SalesJobItemInput = z.object({
   merged_unit_price: z.coerce.number().min(0).nullable().optional(),
   // True when the customer brought the part themselves; line_total forced to 0.
   is_customer_supplied: z.coerce.boolean().default(false),
-});
+})
+  .refine((it) => !(it.part_id && it.oil_type_id), {
+    message: "A line can't be both a catalog part and an oil item",
+    path: ["part_id"],
+  });
 export type SalesJobItemInput = z.infer<typeof SalesJobItemInput>;
 
 // HH:mm or HH:mm:ss; empty becomes null.
@@ -118,6 +122,10 @@ export const SalesJobInput = z
     oil_container: z.enum(["bulk", "gallon"]).nullable().optional(),
     auto_priced_at: z.string().nullable().optional(),
     items: z.array(SalesJobItemInput).optional(),
+    // Role-gated escape hatch when a stock-shortfall block needs to be
+    // consciously bypassed (server re-checks the role; a non-privileged
+    // caller sending this is simply ignored, not trusted).
+    override_stock_check: z.coerce.boolean().default(false),
   })
   .superRefine((val, ctx) => {
     if (Math.abs(val.total - (val.sub_total + val.hst)) > 0.02) {

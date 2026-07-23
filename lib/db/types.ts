@@ -445,6 +445,9 @@ export interface ExpenseItem {
   expense_id: string;
   part_id: string | null;
   vendor_part_id: string | null;
+  /** Set when this line is an oil purchase — mutually exclusive with part_id. */
+  oil_type_id: string | null;
+  oil_container: 'bulk' | 'gallon' | null;
   description: string;
   quantity: number;
   unit_cost: number;

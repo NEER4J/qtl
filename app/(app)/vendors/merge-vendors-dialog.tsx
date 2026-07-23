@@ -29,6 +29,24 @@ import type { Location, Vendor } from "@/lib/db/types";
 // Radix Select can't hold an empty value — "no location" uses a sentinel.
 const NO_LOCATION = "__none__";
 
+/**
+ * Vendors created per-shop are conventionally named "<Name> (<location code>)"
+ * (e.g. "Enbride ( AYR )" — see the screenshot that prompted this: a duplicate
+ * whose account # only lived in its own top-level field, not yet in
+ * vendor_location_accounts). Guessing the location from that suffix means the
+ * merge dialog's per-duplicate location picker starts correct instead of
+ * relying on the admin to notice and pick it — the ONE thing that must not be
+ * missed is the account #, and merge_vendors() only carries it over when a
+ * location IS supplied (see 0109). Returns null when the name doesn't match
+ * any active location's code, leaving the picker on "No location" as before.
+ */
+function guessLocationFromName(name: string, locations: Location[]): string | null {
+  const match = name.match(/\(\s*([A-Za-z0-9_-]+)\s*\)\s*$/);
+  if (!match) return null;
+  const code = match[1]!.toLowerCase();
+  return locations.find((l) => l.code.toLowerCase() === code)?.id ?? null;
+}
+
 export function MergeVendorsDialog({
   open,
   onOpenChange,
@@ -45,6 +63,10 @@ export function MergeVendorsDialog({
   const [locations, setLocations] = useState<Location[]>([]);
   // duplicate vendor_id → location_id (its account # becomes that location's account).
   const [locationMap, setLocationMap] = useState<Record<string, string>>({});
+  // Which entries in locationMap came from the auto-guess rather than a
+  // manual pick — shown as a hint so the admin can double-check it, since a
+  // wrong guess here means an account # lands on the wrong location.
+  const [autoGuessedIds, setAutoGuessedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (open) {
@@ -54,8 +76,37 @@ export function MergeVendorsDialog({
       setPrimaryId(null);
       setSourceIds(new Set());
       setLocationMap({});
+      setAutoGuessedIds(new Set());
     }
   }, [open]);
+
+  // Runs whenever a duplicate gets ticked OR `locations` finishes loading
+  // (covers a duplicate ticked before the location list arrived) — fills in
+  // any source that doesn't already have a location mapped, without
+  // overwriting a manual pick (including a deliberate "No location").
+  useEffect(() => {
+    if (locations.length === 0) return;
+    setLocationMap((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      const newlyGuessed = new Set<string>();
+      for (const id of sourceIds) {
+        if (next[id]) continue;
+        const v = vendors.find((x) => x.id === id);
+        const guess = v ? guessLocationFromName(v.name, locations) : null;
+        if (guess) {
+          next[id] = guess;
+          newlyGuessed.add(id);
+          changed = true;
+        }
+      }
+      if (changed) {
+        setAutoGuessedIds((prevGuessed) => new Set([...prevGuessed, ...newlyGuessed]));
+      }
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- vendors is stable per open; re-run only when locations arrive or the ticked set changes.
+  }, [locations, sourceIds]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -128,9 +179,10 @@ export function MergeVendorsDialog({
             Pick the <strong>primary</strong> vendor to keep, then tick the{" "}
             <strong>duplicates</strong> to fold into it. Their locations, accounts,
             parts, expenses and invoices all <strong>move onto the primary</strong> (nothing
-            is deleted). For a per-location duplicate, choose its <strong>location</strong> so its
-            account number becomes the primary&apos;s account for that location (shown on the
-            expense form). Only the primary&apos;s name is kept. This can&apos;t be undone.
+            is deleted). For a per-location duplicate, its <strong>location</strong> is guessed
+            from a name like &quot;Vendor (AYR)&quot; — check the guess — so its account number
+            becomes the primary&apos;s account for that location (shown on the expense form).
+            Only the primary&apos;s name is kept. This can&apos;t be undone.
           </DialogDescription>
         </DialogHeader>
 
@@ -174,22 +226,37 @@ export function MergeVendorsDialog({
                     {isPrimary ? "Primary" : "Set primary"}
                   </Button>
                   {isSource && locations.length > 0 && (
-                    <Select
-                      value={locationMap[v.id] ?? NO_LOCATION}
-                      onValueChange={(val) =>
-                        setLocationMap((m) => ({ ...m, [v.id]: val }))
-                      }
-                    >
-                      <SelectTrigger className="h-8 w-[130px] text-xs">
-                        <SelectValue placeholder="Location…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={NO_LOCATION}>No location</SelectItem>
-                        {locations.map((l) => (
-                          <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex flex-col items-start gap-0.5">
+                      <Select
+                        value={locationMap[v.id] ?? NO_LOCATION}
+                        onValueChange={(val) => {
+                          setLocationMap((m) => ({ ...m, [v.id]: val }));
+                          // A manual change (including picking "No location")
+                          // overrides the guess — stop flagging it as guessed.
+                          setAutoGuessedIds((prev) => {
+                            if (!prev.has(v.id)) return prev;
+                            const next = new Set(prev);
+                            next.delete(v.id);
+                            return next;
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="h-8 w-[130px] text-xs">
+                          <SelectValue placeholder="Location…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={NO_LOCATION}>No location</SelectItem>
+                          {locations.map((l) => (
+                            <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {autoGuessedIds.has(v.id) && (
+                        <span className="text-[10px] text-muted-foreground">
+                          guessed from name — check it
+                        </span>
+                      )}
+                    </div>
                   )}
                   <label className="flex items-center gap-1.5 text-xs cursor-pointer">
                     <Checkbox

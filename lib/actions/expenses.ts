@@ -202,6 +202,8 @@ async function replaceExpenseItems(
   items: Array<{
     part_id?: string | null;
     vendor_part_id?: string | null;
+    oil_type_id?: string | null;
+    oil_container?: "bulk" | "gallon" | null;
     description: string;
     quantity: number;
     unit_cost: number;
@@ -219,6 +221,8 @@ async function replaceExpenseItems(
     expense_id: expenseId,
     part_id: it.part_id ?? null,
     vendor_part_id: it.vendor_part_id ?? null,
+    oil_type_id: it.oil_type_id ?? null,
+    oil_container: it.oil_container ?? null,
     description: it.description,
     quantity: it.quantity,
     unit_cost: it.unit_cost,

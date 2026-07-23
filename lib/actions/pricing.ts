@@ -32,6 +32,7 @@ import {
   CreateTransmissionServiceInput,
   CreateVolumeTierInput,
   DeleteEngineFilterInput,
+  DeleteEngineTypeInput,
   DeleteVolumeTierInput,
   LockPartPackageInput,
   MergePartPackagePricesInput,
@@ -1279,6 +1280,27 @@ export const toggleEngineTypeActive = wrapAction({
     if (error) throw error;
     revalidatePricing("engine-types");
     return data as EngineType;
+  },
+});
+
+export const deleteEngineType = wrapAction({
+  schema: DeleteEngineTypeInput,
+  roles: ["owner", "co_owner"],
+  handler: async (input): Promise<{ id: string }> => {
+    const supabase = await createClient();
+    // engine_filters/engine_sell_prices cascade automatically; sales_jobs.engine_type_id
+    // has no cascade, so a job with real history blocks the delete via FK violation.
+    const { error } = await supabase.from("engine_types").delete().eq("id", input.id);
+    if (error) {
+      if (error.code === "23503") {
+        throw new Error(
+          "This engine has been used on a sales job and can't be deleted — deactivate it instead.",
+        );
+      }
+      throw error;
+    }
+    revalidatePricing("engine-types");
+    return { id: input.id };
   },
 });
 

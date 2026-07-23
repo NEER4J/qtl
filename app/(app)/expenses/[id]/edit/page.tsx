@@ -12,6 +12,7 @@ import {
   listActiveExpenseSubcategories,
   listActiveLocations,
 } from "@/lib/actions/reference";
+import { listOilTypes } from "@/lib/actions/pricing";
 import { formatDate } from "@/lib/utils/format";
 
 export const dynamic = "force-dynamic";
@@ -33,11 +34,12 @@ export default async function EditExpensePage({
   if (!canEdit) redirect(`/expenses/${id}`);
   if (exp.deactivated_at) redirect(`/expenses/${id}`);
 
-  const [locations, categories, subcategories, settings] = await Promise.all([
+  const [locations, categories, subcategories, settings, oilTypes] = await Promise.all([
     listActiveLocations(),
     listActiveExpenseCategories(),
     listActiveExpenseSubcategories(),
     getAppSettings(),
+    listOilTypes(),
   ]);
 
   return (
@@ -63,6 +65,7 @@ export default async function EditExpensePage({
         categories={categories}
         subcategories={subcategories}
         hstRate={Number(settings.hst_rate)}
+        oilTypes={oilTypes}
         initial={{
           id: exp.id,
           location_id: exp.location_id,
@@ -90,6 +93,8 @@ export default async function EditExpensePage({
           id: it.id,
           part_id: it.part_id,
           vendor_part_id: it.vendor_part_id,
+          oil_type_id: it.oil_type_id,
+          oil_container: it.oil_container,
           description: it.description,
           quantity: Number(it.quantity),
           unit_cost: Number(it.unit_cost),

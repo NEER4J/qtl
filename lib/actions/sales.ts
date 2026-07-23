@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
-import { wrapAction } from "@/lib/actions/_utils";
+import { InsufficientStockError, wrapAction } from "@/lib/actions/_utils";
+import {
+  findStockShortfalls,
+  formatStockShortfalls,
+  type StockConsumingLine,
+} from "@/lib/actions/inventory";
 import {
   AddSalesPaymentInput,
   DeactivateSalesJobInput,
@@ -14,10 +19,42 @@ import {
 import type {
   PaymentMode,
   PaymentStatus,
+  Profile,
   SalesJob,
   SalesJobItem,
   UnitOfMeasure,
 } from "@/lib/db/types";
+
+// Owner / co_owner / manager can consciously sell past a stock shortfall
+// (mirrors private.can_edit_inventory() — the same roles who can correct
+// stock directly). Accountant and staff cannot. `supervisor` is a manager
+// clone at the app layer too (RLS aliases it, but role checks in JS see the
+// literal stored value, so it must be listed explicitly — see 0074).
+function canOverrideStock(profile: Profile): boolean {
+  return (
+    profile.role === "owner" ||
+    profile.role === "co_owner" ||
+    profile.role === "manager" ||
+    profile.role === "supervisor"
+  );
+}
+
+// Shared by createSalesJob / updateSalesJob — throws before anything is
+// written if the sale would need more of a part/oil than is on hand, unless
+// the caller is privileged AND explicitly asked to override.
+async function assertStockAvailable(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  profile: Profile,
+  locationId: string,
+  newItems: StockConsumingLine[],
+  oldItems: StockConsumingLine[],
+  override: boolean,
+): Promise<void> {
+  const shortfalls = await findStockShortfalls(supabase, locationId, newItems, oldItems);
+  if (shortfalls.length === 0) return;
+  if (override && canOverrideStock(profile)) return;
+  throw new InsufficientStockError(formatStockShortfalls(shortfalls));
+}
 
 // ----------------------------------------------------------------------------
 // List — with filters + pagination + joined service type + location
@@ -257,6 +294,18 @@ export const createSalesJob = wrapAction({
 
     const supabase = await createClient();
 
+    // Block the sale before anything is written if it needs more of a part or
+    // oil grade than this location has on hand (client 2026-07-23). No old
+    // items to net against on create — every consuming line is a fresh draw.
+    await assertStockAvailable(
+      supabase,
+      profile,
+      locationId,
+      input.items ?? [],
+      [],
+      input.override_stock_check,
+    );
+
     // Reconcile single-shot vs multi-payment input. When the form sends an
     // initial_payments array, that's the source of truth; we derive
     // paid_amount + (legacy) payment_mode from it. The legacy fields stay on
@@ -393,10 +442,32 @@ export const updateSalesJob = wrapAction({
     // rollup trigger only fires on payment changes, not on job edits).
     const { data: existing, error: existingErr } = await supabase
       .from("sales_jobs")
-      .select("paid_amount, created_at")
+      .select("paid_amount, created_at, location_id")
       .eq("id", input.id)
       .single();
     if (existingErr) throw existingErr;
+
+    // Block the edit before anything is written if it needs more of a part or
+    // oil grade than this location has on hand. Net against the job's CURRENT
+    // items first — otherwise re-saving an unchanged job would look like it
+    // needs its own already-reserved stock all over again. If the job is
+    // being moved to a different location, the old items were reserved
+    // against the OLD location's stock, not this one, so there's nothing to
+    // net there — treat it as a fresh draw on the new location.
+    const sameLocation = existing?.location_id === input.location_id;
+    const { data: oldItemRows, error: oldItemsErr } = await supabase
+      .from("sales_job_items")
+      .select("part_id, oil_type_id, quantity, unit_price, is_customer_supplied")
+      .eq("sales_job_id", input.id);
+    if (oldItemsErr) throw oldItemsErr;
+    await assertStockAvailable(
+      supabase,
+      profile,
+      input.location_id,
+      input.items ?? [],
+      sameLocation ? ((oldItemRows ?? []) as StockConsumingLine[]) : [],
+      input.override_stock_check,
+    );
 
     // Staff (and technician) may only edit a job on the SAME calendar day it was
     // created (Toronto time). Owner / co_owner / manager / accountant are

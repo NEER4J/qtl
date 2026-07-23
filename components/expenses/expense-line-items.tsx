@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { ChevronsUpDown, Package, Trash2 } from "lucide-react";
+import { ChevronsUpDown, Droplet, Package, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -30,7 +30,7 @@ import {
   PromotionPickerButton,
   promotionLabel,
 } from "@/components/sales/promotion-picker-button";
-import type { Promotion } from "@/lib/db/types";
+import type { OilType, Promotion } from "@/lib/db/types";
 import { formatDate, formatMoney } from "@/lib/utils/format";
 
 export interface ExpenseLineItem {
@@ -40,6 +40,9 @@ export interface ExpenseLineItem {
   id?: string;
   part_id: string | null;
   vendor_part_id: string | null;
+  // An oil purchase — mutually exclusive with part_id.
+  oil_type_id: string | null;
+  oil_container: "bulk" | "gallon" | null;
   description: string;
   quantity: number;
   unit_cost: number;
@@ -67,12 +70,85 @@ export function newExpenseLineItem(partial: Partial<ExpenseLineItem> = {}): Expe
     client_id: makeClientId(),
     part_id: null,
     vendor_part_id: null,
+    oil_type_id: null,
+    oil_container: null,
     description: "",
     quantity: 1,
     unit_cost: 0,
     last_buying_price: null,
     ...partial,
   };
+}
+
+/** Mirrors components/sales/sales-line-items.tsx excelOilLabel — kept local
+ *  since the expense side doesn't otherwise depend on the sales module. */
+function oilLabel(oil: OilType): string {
+  return `${oil.code} — ${oil.name}`;
+}
+
+function OilPickerButton({
+  oilTypes,
+  onPick,
+}: {
+  oilTypes: OilType[];
+  onPick: (oil: OilType, container: "bulk" | "gallon") => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (oilTypes.length === 0) return null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" size="sm">
+          <Droplet className="size-4" /> Add oil purchase
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[420px]" align="start">
+        <Command>
+          <CommandInput placeholder="Search oil grade…" />
+          <CommandList className="max-h-[360px]">
+            <CommandEmpty>No matching oil grades.</CommandEmpty>
+            <CommandGroup>
+              {oilTypes.map((oil) => (
+                <CommandItem
+                  key={oil.id}
+                  value={`${oil.code} ${oil.name}`}
+                  className="flex items-center justify-between gap-2"
+                >
+                  <span className="min-w-0 truncate">{oilLabel(oil)}</span>
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        onPick(oil, "bulk");
+                        setOpen(false);
+                      }}
+                    >
+                      Bulk
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        onPick(oil, "gallon");
+                        setOpen(false);
+                      }}
+                    >
+                      Gallon
+                    </Button>
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function PartsCatalogPicker({
@@ -173,9 +249,13 @@ function PartsCatalogPicker({
 export function ExpenseLineItems({
   items,
   onChange,
+  oilTypes = [],
 }: {
   items: ExpenseLineItem[];
   onChange: (next: ExpenseLineItem[]) => void;
+  /** Omit (or pass []) to hide the "Add oil purchase" button — used where the
+   *  caller hasn't loaded oil types (e.g. an older embed of this component). */
+  oilTypes?: OilType[];
 }) {
   const addPart = (p: ExpensePartPickerRow) => {
     const unit_cost = p.last_buying_price ?? p.cost ?? 0;
@@ -188,6 +268,19 @@ export function ExpenseLineItems({
         quantity: 1,
         unit_cost,
         last_buying_price: p.last_buying_price,
+      }),
+    ]);
+  };
+
+  const addOil = (oil: OilType, container: "bulk" | "gallon") => {
+    onChange([
+      ...items,
+      newExpenseLineItem({
+        oil_type_id: oil.id,
+        oil_container: container,
+        description: `${oilLabel(oil)} (${container})`,
+        quantity: 1,
+        unit_cost: 0,
       }),
     ]);
   };
@@ -223,10 +316,13 @@ export function ExpenseLineItems({
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-2">
         <PartsCatalogPicker onPick={addPart} />
+        <OilPickerButton oilTypes={oilTypes} onPick={addOil} />
         <PromotionPickerButton onSelect={addPromotion} />
         <div className="text-xs text-muted-foreground">
-          Pick a part to add a row. Non-itemised expenses (rent, utilities) can
-          leave items empty and enter Sub Total directly below.
+          Pick a part or oil to add a row — each one increases that
+          item&apos;s on-hand stock at this location. Non-itemised expenses
+          (rent, utilities) can leave items empty and enter Sub Total directly
+          below.
         </div>
       </div>
 
@@ -263,18 +359,30 @@ export function ExpenseLineItems({
                         onChange={(e) => patchRow(row.client_id, { description: e.target.value })}
                         placeholder="e.g. 5W30 oil — 5L"
                       />
+                      {(row.part_id || row.oil_type_id) && (
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          {row.part_id ? "From catalog" : "Oil purchase — litres, added to stock"}
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        className="text-right"
-                        value={row.quantity}
-                        onChange={(e) =>
-                          patchRow(row.client_id, { quantity: Number(e.target.value) })
-                        }
-                      />
+                      <div className="flex items-center justify-end gap-1">
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="text-right"
+                          value={row.quantity}
+                          onChange={(e) =>
+                            patchRow(row.client_id, { quantity: Number(e.target.value) })
+                          }
+                        />
+                        {row.oil_type_id && (
+                          <span className="text-[10px] uppercase text-muted-foreground w-6 text-left">
+                            L
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Input

@@ -74,6 +74,11 @@ export const UpdateEngineTypeInput = CreateEngineTypeInput.extend({
 });
 export type UpdateEngineTypeInput = z.infer<typeof UpdateEngineTypeInput>;
 
+export const DeleteEngineTypeInput = z.object({
+  id: z.string().uuid(),
+});
+export type DeleteEngineTypeInput = z.infer<typeof DeleteEngineTypeInput>;
+
 // ============================================================================
 // parts
 // ============================================================================

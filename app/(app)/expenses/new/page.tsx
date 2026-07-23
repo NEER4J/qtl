@@ -12,6 +12,7 @@ import {
   listActiveExpenseSubcategories,
   listActiveLocations,
 } from "@/lib/actions/reference";
+import { listOilTypes } from "@/lib/actions/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -24,11 +25,12 @@ export default async function NewExpensePage() {
     (profile.role === "staff" && profile.can_enter_expenses);
   if (!canCreate) redirect("/expenses");
 
-  const [locations, categories, subcategories, settings] = await Promise.all([
+  const [locations, categories, subcategories, settings, oilTypes] = await Promise.all([
     listActiveLocations(),
     listActiveExpenseCategories(),
     listActiveExpenseSubcategories(),
     getAppSettings(),
+    listOilTypes(),
   ]);
 
   const lockedLocationId =
@@ -66,6 +68,7 @@ export default async function NewExpensePage() {
         subcategories={subcategories}
         hstRate={Number(settings.hst_rate)}
         lockedLocationId={lockedLocationId}
+        oilTypes={oilTypes}
       />
     </div>
   );

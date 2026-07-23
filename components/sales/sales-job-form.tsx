@@ -45,6 +45,7 @@ import type {
   PaymentMode,
   ServiceType,
   Technician,
+  UserRole,
   Vehicle,
 } from "@/lib/db/types";
 import { todayISO, formatDate } from "@/lib/utils/format";
@@ -129,7 +130,18 @@ export interface SalesJobFormProps {
   lockedLocationId?: string | null;
   /** Existing line items (edit mode). */
   initialItems?: LineItem[];
+  /** Gates the "sell anyway" stock-shortfall override — owner/co_owner/manager only. */
+  currentUserRole?: UserRole;
 }
+
+// Mirrors canOverrideStock in lib/actions/sales.ts — supervisor is a manager
+// clone (app-layer role checks must list it explicitly, see 0074).
+const STOCK_OVERRIDE_ROLES: ReadonlySet<UserRole> = new Set([
+  "owner",
+  "co_owner",
+  "manager",
+  "supervisor",
+]);
 
 /** Description for the $0 line item that represents the free-grease offer. */
 const FREE_GREASE_LINE_DESC = "Free Grease (offer)";
@@ -150,6 +162,7 @@ export function SalesJobForm({
   hstRate,
   lockedLocationId,
   initialItems,
+  currentUserRole,
 }: SalesJobFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -577,12 +590,33 @@ export function SalesJobForm({
         return;
       }
 
+      await submitJob(parsed.data);
+    });
+  });
+
+  // Pulled out of onSubmit so the "Sell anyway" toast action (fired later, as
+  // its own event — not inside the original transition) can resubmit the same
+  // validated payload with override_stock_check flipped on, without redoing
+  // customer creation / re-validation.
+  const submitJob = (data: SalesJobInput) => {
+    startTransition(async () => {
       const res =
         mode === "create"
-          ? await createSalesJob(parsed.data)
-          : await updateSalesJob({ ...parsed.data, id: initial?.id ?? "" });
+          ? await createSalesJob(data)
+          : await updateSalesJob({ ...data, id: initial?.id ?? "" });
       if (!res.ok) {
-        toast.error(res.error);
+        const canOverride =
+          res.code === "insufficient_stock" &&
+          !!currentUserRole &&
+          STOCK_OVERRIDE_ROLES.has(currentUserRole);
+        toast.error(res.error, {
+          action: canOverride
+            ? {
+                label: "Sell anyway",
+                onClick: () => submitJob({ ...data, override_stock_check: true }),
+              }
+            : undefined,
+        });
         if (res.fieldErrors) {
           for (const [k, v] of Object.entries(res.fieldErrors)) {
             form.setError(k as keyof FormValues, { message: v[0] });
@@ -594,7 +628,7 @@ export function SalesJobForm({
       router.push(`/sales/${res.data.id}`);
       router.refresh();
     });
-  });
+  };
 
   const locationOptions = useMemo(
     () => locations.filter((l) => l.active),

@@ -71,6 +71,7 @@ export default async function EditSalesJobPage({
         oilTypes={oilTypes}
         technicians={technicians}
         hstRate={Number(settings.hst_rate)}
+        currentUserRole={profile.role}
         initialItems={job.items.map((it) => ({
           key: it.id,
           part_id: it.part_id,

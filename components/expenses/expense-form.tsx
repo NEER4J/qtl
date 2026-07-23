@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
@@ -31,6 +31,7 @@ import type {
   ExpenseCategory,
   ExpenseSubcategory,
   Location,
+  OilType,
   PaymentMode,
   Vendor,
   VendorLocationAccount,
@@ -87,6 +88,8 @@ export interface ExpenseFormProps {
   lockedLocationId?: string | null;
   /** Existing line items (edit mode). */
   initialItems?: ExpenseLineItem[];
+  /** Active oil grades — lets an oil purchase be added as a line item. */
+  oilTypes?: OilType[];
 }
 
 export function ExpenseForm({
@@ -98,6 +101,7 @@ export function ExpenseForm({
   hstRate,
   lockedLocationId,
   initialItems,
+  oilTypes = [],
 }: ExpenseFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -162,6 +166,28 @@ export function ExpenseForm({
     form.setValue("account_type", acct.account_type ?? "", { shouldDirty: true });
   };
 
+  // Auto-apply the location's account the moment vendor+location resolve to
+  // one, instead of leaving it as a dropdown the user has to remember to
+  // click. This matters most for a vendor that used to be several separate
+  // per-location vendor records (client 2026-07-23 — merged via
+  // MergeVendorsDialog, one vendor_location_accounts row per shop) where the
+  // vendor's own top-level account_no (applied by applyVendor above) is only
+  // ever right for ONE of its locations. Skipped on the very first render for
+  // a combo that matches the expense's ORIGINAL (vendor, location) — an
+  // edit-mode load must show what was actually saved on this expense, not
+  // silently overwrite it with today's default the instant the page opens.
+  const initialAccountComboRef = useRef(
+    `${initial?.vendor_id ?? ""}|${initial?.location_id ?? ""}`,
+  );
+  useEffect(() => {
+    const combo = `${vendorIdW ?? ""}|${locationIdW ?? ""}`;
+    if (combo === initialAccountComboRef.current) return;
+    if (vendorAccounts.length === 0) return;
+    const preferred = vendorAccounts.find((a) => a.is_default) ?? vendorAccounts[0]!;
+    applyAccount(preferred);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyAccount/form are stable; only react to the fetched list itself.
+  }, [vendorAccounts]);
+
   // When line items exist, they drive the sub-total. Without items the user
   // can still enter sub_total directly (back-compat for expenses without
   // itemised parts).
@@ -213,6 +239,8 @@ export function ExpenseForm({
       .map((it) => ({
         part_id: it.part_id,
         vendor_part_id: it.vendor_part_id,
+        oil_type_id: it.oil_type_id,
+        oil_container: it.oil_container,
         description: it.description.trim() || "Item",
         quantity: Number(it.quantity) || 0,
         unit_cost: Number(it.unit_cost) || 0,
@@ -555,7 +583,7 @@ export function ExpenseForm({
             <h2 className="text-sm font-semibold uppercase text-muted-foreground">
               Items
             </h2>
-            <ExpenseLineItems items={items} onChange={setItems} />
+            <ExpenseLineItems items={items} onChange={setItems} oilTypes={oilTypes} />
           </section>
 
           {/* --------------------------------------------------------------

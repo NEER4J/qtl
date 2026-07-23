@@ -6,6 +6,18 @@ import type { PostgrestError } from "@supabase/supabase-js";
 import { AuthorizationError, requireProfile, requireRole } from "@/lib/auth/require";
 import type { Profile, UserRole } from "@/lib/db/types";
 
+/**
+ * Thrown when a save would consume more of a part/oil than is on hand at the
+ * location. Carries its own error code so the client can offer a role-gated
+ * "sell anyway" override instead of just showing a dead-end error.
+ */
+export class InsufficientStockError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InsufficientStockError";
+  }
+}
+
 export type ActionResult<T> =
   | { ok: true; data: T }
   | {
@@ -99,6 +111,9 @@ export function wrapAction<
 function mapError(err: unknown): { error: string; code?: string; fieldErrors?: Record<string, string[]> } {
   if (err instanceof AuthorizationError) {
     return { error: err.message, code: "forbidden" };
+  }
+  if (err instanceof InsufficientStockError) {
+    return { error: err.message, code: "insufficient_stock" };
   }
   const pgErr = err as PostgrestError | undefined;
   if (pgErr && typeof pgErr === "object" && "code" in pgErr) {
