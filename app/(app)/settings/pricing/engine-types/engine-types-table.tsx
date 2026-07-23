@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -47,9 +48,50 @@ export function EngineTypesTable({ engineTypes }: { engineTypes: EngineType[] })
   const [creating, setCreating] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [, startTransition] = useTransition();
 
   const groups = useMemo(() => groupEngineTypes(engineTypes), [engineTypes]);
+
+  // Ids currently rendered as their own row — the primary of every group,
+  // plus each variant only while its group is expanded. "Select all" only
+  // ever touches what's actually visible, so a collapsed variant can't be
+  // bulk-deleted without the admin expanding and seeing it first.
+  const visibleIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const variants of groups) {
+      const key = `${variants[0]!.manufacturer}|${baseModelName(variants[0]!.model).toLowerCase()}`;
+      const primary = variants.find((v) => v.active) ?? variants[0]!;
+      ids.push(primary.id);
+      if (variants.length > 1 && expanded.has(key)) {
+        for (const v of variants) if (v.id !== primary.id) ids.push(v.id);
+      }
+    }
+    return ids;
+  }, [groups, expanded]);
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (allVisibleSelected) {
+        const next = new Set(prev);
+        for (const id of visibleIds) next.delete(id);
+        return next;
+      }
+      return new Set([...prev, ...visibleIds]);
+    });
+  };
 
   const toggleExpanded = (key: string) => {
     setExpanded((prev) => {
@@ -87,9 +129,67 @@ export function EngineTypesTable({ engineTypes }: { engineTypes: EngineType[] })
     });
   };
 
+  const handleBulkDelete = () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    if (
+      !window.confirm(
+        `Delete ${ids.length} engine type${ids.length === 1 ? "" : "s"}? This can't be undone.`,
+      )
+    ) {
+      return;
+    }
+    setBulkDeleting(true);
+    startTransition(async () => {
+      let deleted = 0;
+      const failedIds = new Set<string>();
+      let firstError: string | null = null;
+      for (const id of ids) {
+        const res = await deleteEngineType({ id });
+        if (res.ok) {
+          deleted += 1;
+        } else {
+          failedIds.add(id);
+          firstError ??= res.error;
+        }
+      }
+      setBulkDeleting(false);
+      setSelectedIds(failedIds);
+      if (deleted > 0) {
+        toast.success(`Deleted ${deleted} engine type${deleted === 1 ? "" : "s"}`);
+      }
+      if (failedIds.size > 0) {
+        toast.error(
+          `${failedIds.size} couldn't be deleted${firstError ? ` — ${firstError}` : ""}`,
+        );
+      }
+    });
+  };
+
   return (
     <>
-      <div className="flex justify-end">
+      <div className="flex justify-between items-center gap-2">
+        <div>
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                {selectedIds.size} selected
+              </span>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={bulkDeleting}
+                onClick={handleBulkDelete}
+              >
+                <Trash2 className="size-4" />
+                {bulkDeleting ? "Deleting…" : `Delete ${selectedIds.size}`}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                Clear
+              </Button>
+            </div>
+          )}
+        </div>
         <Button onClick={() => setCreating(true)}>
           <Plus className="size-4" /> New engine type
         </Button>
@@ -99,6 +199,13 @@ export function EngineTypesTable({ engineTypes }: { engineTypes: EngineType[] })
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={allVisibleSelected}
+                  onCheckedChange={toggleSelectAll}
+                  aria-label="Select all visible engine types"
+                />
+              </TableHead>
               <TableHead>Manufacturer</TableHead>
               <TableHead>Model</TableHead>
               <TableHead className="w-40 text-right">Oil capacity (L)</TableHead>
@@ -110,7 +217,7 @@ export function EngineTypesTable({ engineTypes }: { engineTypes: EngineType[] })
           <TableBody>
             {engineTypes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   No engine types yet. Click <strong>New engine type</strong> to add one.
                 </TableCell>
               </TableRow>
@@ -133,6 +240,8 @@ export function EngineTypesTable({ engineTypes }: { engineTypes: EngineType[] })
                     onEdit={setEditing}
                     onToggleActive={handleToggle}
                     onDelete={handleDelete}
+                    selectedIds={selectedIds}
+                    onToggleSelect={toggleSelected}
                   />
                 );
               })
@@ -162,6 +271,8 @@ function GroupRows({
   onEdit,
   onToggleActive,
   onDelete,
+  selectedIds,
+  onToggleSelect,
 }: {
   primary: EngineType;
   variants: EngineType[];
@@ -172,6 +283,8 @@ function GroupRows({
   onEdit: (e: EngineType) => void;
   onToggleActive: (e: EngineType) => void;
   onDelete: (e: EngineType) => void;
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string) => void;
 }) {
   return (
     <>
@@ -182,6 +295,8 @@ function GroupRows({
         onEdit={onEdit}
         onToggleActive={onToggleActive}
         onDelete={onDelete}
+        selected={selectedIds.has(primary.id)}
+        onToggleSelect={onToggleSelect}
         leading={
           hasVariants ? (
             <button
@@ -217,6 +332,8 @@ function GroupRows({
             onEdit={onEdit}
             onToggleActive={onToggleActive}
             onDelete={onDelete}
+            selected={selectedIds.has(v.id)}
+            onToggleSelect={onToggleSelect}
             indented
           />
         ))}
@@ -231,6 +348,8 @@ function EngineRow({
   onEdit,
   onToggleActive,
   onDelete,
+  selected,
+  onToggleSelect,
   leading,
   trailingBadge,
   indented,
@@ -241,12 +360,21 @@ function EngineRow({
   onEdit: (e: EngineType) => void;
   onToggleActive: (e: EngineType) => void;
   onDelete: (e: EngineType) => void;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
   leading?: ReactNode;
   trailingBadge?: ReactNode;
   indented?: boolean;
 }) {
   return (
     <TableRow className={!e.active ? "opacity-60" : undefined}>
+      <TableCell>
+        <Checkbox
+          checked={selected}
+          onCheckedChange={() => onToggleSelect(e.id)}
+          aria-label={`Select ${e.manufacturer} ${e.model}`}
+        />
+      </TableCell>
       <TableCell className="font-medium">{e.manufacturer}</TableCell>
       <TableCell className={indented ? "pl-8 text-muted-foreground" : undefined}>
         {leading}
