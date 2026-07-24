@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -13,10 +14,12 @@ import {
 
 // A 12-hour time entry (hour / minute / AM-PM) that stores 24-hour "HH:mm".
 //
-// Dropdowns for hour (1-12) and minute (15-min steps) + AM/PM. We deliberately
-// avoid the native <input type="time">: in 12-hour locales (Canada/US) it
-// renders an AM/PM segment the browser leaves blank when only digits are typed,
-// then rejects the value as "incomplete".
+// Hour and minute are typeable inputs with a dropdown of suggestions (native
+// <datalist>): you can type the number directly OR pick it from the list.
+// AM/PM stays a small dropdown. We deliberately avoid the native
+// <input type="time">: in 12-hour locales (Canada/US) it renders an AM/PM
+// segment the browser leaves blank when only digits are typed, then rejects the
+// value as "incomplete".
 type Period = "AM" | "PM";
 
 type Props = {
@@ -28,8 +31,10 @@ type Props = {
   className?: string;
 };
 
+// Dropdown suggestions. Hours are 1-12; minutes are offered in 5-minute steps
+// for quick picking, but any minute 0-59 can be typed.
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1));
-const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
+const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0"));
 
 function parse24(value?: string): { hour: string; minute: string; period: Period } | null {
   const m = /^(\d{1,2}):(\d{2})/.exec(value ?? "");
@@ -51,11 +56,25 @@ function to24(hour: string, minute: string, period: Period): string | null {
   return `${String(h24).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
 }
 
+// Keep only digits, cap at two, and if a two-digit value overflows `max` keep
+// just the last digit typed (so "5" then "3" in the hour box lands on "3" rather
+// than a rejected "53") — mirrors the old two-digit-typeahead behaviour.
+function sanitize(raw: string, max: number): string {
+  let s = raw.replace(/\D/g, "").slice(0, 2);
+  if (s.length === 2 && Number(s) > max) s = s.slice(-1);
+  return s;
+}
+
 export function TimeField12h({ value, onChange, onBlur, disabled, id, className }: Props) {
   const parsed = parse24(value);
   const [hour, setHour] = React.useState(parsed?.hour ?? "");
   const [minute, setMinute] = React.useState(parsed?.minute ?? "");
   const [period, setPeriod] = React.useState<Period>(parsed?.period ?? "AM");
+
+  // Unique ids so multiple TimeFields on one page don't share <datalist>s.
+  const reactId = React.useId();
+  const hourListId = `time-hours-${reactId}`;
+  const minuteListId = `time-minutes-${reactId}`;
 
   // Re-sync local segments when the controlled value changes from outside
   // (form reset, customer/vehicle prefill, etc.).
@@ -66,105 +85,90 @@ export function TimeField12h({ value, onChange, onBlur, disabled, id, className 
     setPeriod(p?.period ?? "AM");
   }, [value]);
 
-  function emit(h: string, m: string, p: Period) {
+  function emit(h: string, m: string, p: Period, blur: boolean) {
     if (h === "" && m === "") {
       onChange("");
-      onBlur?.();
-      return;
+    } else {
+      const next = to24(h, m, p);
+      if (next != null) onChange(next);
     }
-    const next = to24(h, m, p);
-    if (next != null) onChange(next);
-    onBlur?.();
+    if (blur) onBlur?.();
   }
 
-  // Two-digit typing: Radix Select's built-in type-ahead CYCLES on a repeated
-  // digit (2→20→21…) so "22"/"33"/"44" never land. We intercept digit keys and
-  // accumulate up to two within 1s, setting the value directly. preventDefault()
-  // stops Radix's type-ahead (it uses composeEventHandlers, which respects it).
-  const buf = React.useRef<{ field: "hour" | "minute" | null; s: string; t: number }>({
-    field: null,
-    s: "",
-    t: 0,
-  });
-  function onDigitKey(field: "hour" | "minute", e: React.KeyboardEvent) {
-    if (!/^[0-9]$/.test(e.key)) return; // let Enter/arrows/etc. behave normally
-    e.preventDefault();
-    e.stopPropagation();
-    const now = Date.now();
-    if (buf.current.field !== field || now - buf.current.t > 1000) buf.current.s = "";
-    buf.current.field = field;
-    buf.current.t = now;
-    const max = field === "hour" ? 12 : 59;
-    let s = buf.current.s + e.key;
-    if (Number(s) > max) s = e.key; // overflow → restart the buffer with this digit
-    buf.current.s = s.slice(-2);
-    const n = Number(buf.current.s);
-    if (field === "hour") {
-      const hv = String(Math.min(12, Math.max(1, n)));
-      setHour(hv);
-      emit(hv, minute, period);
-    } else {
-      const mv = String(Math.min(59, n)).padStart(2, "0");
-      setMinute(mv);
-      emit(hour, mv, period);
-    }
+  function onHourChange(raw: string) {
+    const s = sanitize(raw, 12);
+    setHour(s);
+    emit(s, minute, period, false);
+  }
+
+  function onMinuteChange(raw: string) {
+    const s = sanitize(raw, 59);
+    setMinute(s);
+    emit(hour, s, period, false);
+  }
+
+  // On blur, normalise: clamp the hour into 1-12 and pad the minute to two
+  // digits, then commit. Mark the field touched for the surrounding form.
+  function onHourBlur() {
+    let s = hour;
+    if (s !== "") s = String(Math.min(12, Math.max(1, Number(s) || 1)));
+    setHour(s);
+    emit(s, minute, period, true);
+  }
+
+  function onMinuteBlur() {
+    let s = minute;
+    if (s !== "") s = String(Math.min(59, Number(s) || 0)).padStart(2, "0");
+    setMinute(s);
+    emit(hour, s, period, true);
   }
 
   return (
     <div className={cn("flex items-center gap-1", className)}>
-      <Select
+      <Input
+        id={id}
+        type="text"
+        inputMode="numeric"
+        list={hourListId}
+        aria-label="Hour"
+        placeholder="Hr"
+        className="w-[4.5rem]"
+        disabled={disabled}
         value={hour}
-        onValueChange={(v) => {
-          setHour(v);
-          emit(v, minute, period);
-        }}
-        disabled={disabled}
-      >
-        <SelectTrigger
-          id={id}
-          className="w-[4.5rem]"
-          aria-label="Hour"
-          onKeyDown={(e) => onDigitKey("hour", e)}
-        >
-          <SelectValue placeholder="Hr" />
-        </SelectTrigger>
-        <SelectContent>
-          {HOUR_OPTIONS.map((h) => (
-            <SelectItem key={h} value={h}>
-              {h}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        onChange={(e) => onHourChange(e.target.value)}
+        onBlur={onHourBlur}
+      />
+      <datalist id={hourListId}>
+        {HOUR_OPTIONS.map((h) => (
+          <option key={h} value={h} />
+        ))}
+      </datalist>
+
       <span className="text-muted-foreground">:</span>
-      <Select
-        value={minute}
-        onValueChange={(v) => {
-          setMinute(v);
-          emit(hour, v, period);
-        }}
+
+      <Input
+        type="text"
+        inputMode="numeric"
+        list={minuteListId}
+        aria-label="Minute"
+        placeholder="Min"
+        className="w-[4.5rem]"
         disabled={disabled}
-      >
-        <SelectTrigger
-          className="w-[4.5rem]"
-          aria-label="Minute"
-          onKeyDown={(e) => onDigitKey("minute", e)}
-        >
-          <SelectValue placeholder="Min" />
-        </SelectTrigger>
-        <SelectContent>
-          {MINUTE_OPTIONS.map((m) => (
-            <SelectItem key={m} value={m}>
-              {m}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        value={minute}
+        onChange={(e) => onMinuteChange(e.target.value)}
+        onBlur={onMinuteBlur}
+      />
+      <datalist id={minuteListId}>
+        {MINUTE_OPTIONS.map((m) => (
+          <option key={m} value={m} />
+        ))}
+      </datalist>
+
       <Select
         value={period}
         onValueChange={(v) => {
           setPeriod(v as Period);
-          emit(hour, minute, v as Period);
+          emit(hour, minute, v as Period, true);
         }}
         disabled={disabled}
       >

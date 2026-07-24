@@ -8,7 +8,7 @@ import {
   findStockShortfalls,
   formatStockShortfalls,
   type StockConsumingLine,
-} from "@/lib/actions/inventory";
+} from "@/lib/actions/stock-shortfalls";
 import {
   AddSalesPaymentInput,
   DeactivateSalesJobInput,
