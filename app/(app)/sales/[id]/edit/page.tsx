@@ -126,6 +126,8 @@ export default async function EditSalesJobPage({
           total: job.total.toString(),
           paid_amount: job.paid_amount.toString(),
           payment_mode: job.payment_mode ?? "",
+          credit_applied: job.credit_applied?.toString() ?? "0",
+          credited_from_job_id: job.credited_from_job_id ?? null,
           engine_type_id: job.engine_type_id ?? "",
           oil_type_id: job.oil_type_id ?? "",
           oil_container: job.oil_container ?? "",

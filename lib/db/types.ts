@@ -357,6 +357,10 @@ export interface SalesJob {
   hst: number;
   total: number;
   paid_amount: number;
+  /** Store credit from the customer account applied to this invoice. */
+  credit_applied: number;
+  /** Optional link to the original invoice when this job includes a return. */
+  credited_from_job_id: string | null;
   outstanding: number;
   payment_mode: PaymentMode | null;
   payment_status: PaymentStatus;
@@ -364,6 +368,8 @@ export interface SalesJob {
   oil_type_id: string | null;
   oil_container: 'bulk' | 'gallon' | null;
   auto_priced_at: string | null;
+  /** True when stock was knowingly sold past on-hand; inventory may go negative. */
+  stock_override: boolean;
   batch_id: string | null;
   deactivated_at: string | null;
   deactivated_by: string | null;
@@ -403,8 +409,6 @@ export interface SalesJobItem {
   merged_unit_price: number | null;
   /** True when the customer brought the part themselves; line_total forced to 0. */
   is_customer_supplied: boolean;
-  /** Inventory units/litres actually drawn from shop stock. NULL = full quantity. */
-  stock_qty: number | null;
   created_at: string;
   created_by: string | null;
 }
@@ -665,6 +669,17 @@ export interface AuditLogRow {
 // ============================================================================
 // Phase 4 — Customer portal
 // ============================================================================
+
+/** Signed store-credit movement — positive = issued, negative = applied. */
+export interface CustomerCreditLedgerEntry {
+  id: string;
+  customer_id: string;
+  sales_job_id: string | null;
+  amount: number;
+  notes: string | null;
+  created_at: string;
+  created_by: string | null;
+}
 
 export interface CustomerPortalAccess {
   id: string;

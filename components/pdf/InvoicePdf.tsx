@@ -593,10 +593,24 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
               <Text style={{ fontFamily: "Helvetica-Bold" }}>{hstLabel}</Text>
               <Text>{money(job.hst)}</Text>
             </View>
+            {(job.credit_applied ?? 0) > 0 && (
+              <View style={styles.totalsRow}>
+                <Text>Store credit applied</Text>
+                <Text>{money(-(job.credit_applied ?? 0))}</Text>
+              </View>
+            )}
             <View style={styles.totalsRowEmphasis}>
               <Text>Total Amount</Text>
               <Text>${money(job.total)}</Text>
             </View>
+            {(job.credit_applied ?? 0) > 0 && (
+              <View style={styles.totalsRow}>
+                <Text style={{ fontFamily: "Helvetica-Bold" }}>Balance due</Text>
+                <Text style={{ fontFamily: "Helvetica-Bold" }}>
+                  ${money(job.total - (job.credit_applied ?? 0) - (job.paid_amount ?? 0))}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </Page>

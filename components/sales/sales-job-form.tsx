@@ -29,7 +29,8 @@ import {
 import { EmptyDropdownHint } from "@/components/help/empty-state";
 import { InfoTip } from "@/components/help/info-tip";
 import { createSalesJob, updateSalesJob } from "@/lib/actions/sales";
-import { createCustomer, getCustomer } from "@/lib/actions/customers";
+import { createCustomer, getCustomer, getCustomerSalesHistory } from "@/lib/actions/customers";
+import { fetchCustomerCreditBalance } from "@/lib/actions/customer-credits";
 import { excelOilLabel } from "@/lib/utils/oil-labels";
 import { getCustomerVehicles } from "@/lib/actions/vehicles";
 import { VehicleFormDialog } from "@/components/customers/vehicle-form-dialog";
@@ -48,7 +49,7 @@ import type {
   UserRole,
   Vehicle,
 } from "@/lib/db/types";
-import { todayISO, formatDate } from "@/lib/utils/format";
+import { todayISO, formatDate, formatMoney } from "@/lib/utils/format";
 import { formatPhone } from "@/lib/utils/phone";
 import { CreatableCombobox } from "@/components/pricing/creatable-combobox";
 
@@ -110,6 +111,8 @@ interface FormValues {
   hst: string;
   total: string;
   paid_amount: string;
+  credit_applied: string;
+  credited_from_job_id: string | null;
   payment_mode: PaymentMode | "";
   engine_type_id: string;
   oil_type_id: string;
@@ -118,7 +121,10 @@ interface FormValues {
 
 export interface SalesJobFormProps {
   mode: "create" | "edit";
-  initial?: Partial<FormValues> & { id?: string; auto_priced_at?: string | null };
+  initial?: Partial<FormValues> & {
+    id?: string;
+    auto_priced_at?: string | null;
+  };
   locations: Location[];
   serviceTypes: ServiceType[];
   engineTypes: EngineType[];
@@ -184,6 +190,10 @@ export function SalesJobForm({
   const [createPayments, setCreatePayments] = useState<
     { id: string; mode: PaymentMode; amount: string }[]
   >([]);
+  const [storeCreditBalance, setStoreCreditBalance] = useState(0);
+  const [customerInvoices, setCustomerInvoices] = useState<
+    Array<{ id: string; invoice_no: string; job_date: string }>
+  >([]);
 
   // Roster lookups for the tech/advisor pickers. The suggestion list itself is
   // location-filtered (see locationTechSuggestions below). The combobox is
@@ -231,6 +241,9 @@ export function SalesJobForm({
     hst: initial?.hst ?? "",
     total: initial?.total ?? "",
     paid_amount: initial?.paid_amount ?? "",
+    credit_applied:
+      initial?.credit_applied != null ? String(initial.credit_applied) : "",
+    credited_from_job_id: initial?.credited_from_job_id ?? null,
     payment_mode: initial?.payment_mode ?? "oc",
     engine_type_id: initial?.engine_type_id ?? "",
     oil_type_id: initial?.oil_type_id ?? "",
@@ -258,10 +271,12 @@ export function SalesJobForm({
   // --------------------------------------------------------------------------
   const subTotalRaw = useWatch({ control: form.control, name: "sub_total" });
   const paidRaw = useWatch({ control: form.control, name: "paid_amount" });
+  const totalRaw = useWatch({ control: form.control, name: "total" });
+  const creditAppliedRaw = useWatch({ control: form.control, name: "credit_applied" });
 
   useEffect(() => {
     const n = Number(subTotalRaw);
-    if (!Number.isFinite(n) || n <= 0) {
+    if (!Number.isFinite(n)) {
       form.setValue("hst", "");
       form.setValue("total", "");
       return;
@@ -340,6 +355,33 @@ export function SalesJobForm({
   // Customer picker sync — billing_name, plate, contact, email auto-fill
   // --------------------------------------------------------------------------
   const customerId = useWatch({ control: form.control, name: "customer_id" });
+
+  useEffect(() => {
+    if (!customerId) {
+      setStoreCreditBalance(0);
+      setCustomerInvoices([]);
+      form.setValue("credit_applied", "");
+      form.setValue("credited_from_job_id", null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const [balance, history] = await Promise.all([
+        fetchCustomerCreditBalance(customerId, initial?.id),
+        getCustomerSalesHistory(customerId, 30),
+      ]);
+      if (cancelled) return;
+      setStoreCreditBalance(balance);
+      setCustomerInvoices(
+        history
+          .filter((j) => j.id !== initial?.id)
+          .map((j) => ({ id: j.id, invoice_no: j.invoice_no, job_date: j.job_date })),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [customerId, form, initial?.id]);
 
   // Hydrate selectedCustomer + vehicles when the form mounts with a
   // customer_id already in `initial` — covers both edit mode AND the
@@ -536,6 +578,8 @@ export function SalesJobForm({
         hst: Number(values.hst || 0),
         total: Number(values.total || 0),
         paid_amount: Number(values.paid_amount || 0),
+        credit_applied: Number(values.credit_applied || 0),
+        credited_from_job_id: values.credited_from_job_id ?? null,
         payment_mode: values.payment_mode === "" ? null : values.payment_mode,
         start_time: values.start_time || null,
         end_time: values.end_time || null,
@@ -618,7 +662,7 @@ export function SalesJobForm({
               }
             : undefined,
           description: canOverride
-            ? "The sale will save; only available stock will be deducted from inventory."
+            ? "The sale will save and inventory will go negative if needed."
             : undefined,
         });
         if (res.fieldErrors) {
@@ -628,12 +672,7 @@ export function SalesJobForm({
         }
         return;
       }
-      toast.success(mode === "create" ? "Job created" : "Job updated", {
-        description:
-          res.data.stock_warnings && res.data.stock_warnings.length > 0
-            ? `Inventory capped — ${res.data.stock_warnings.join("; ")}`
-            : undefined,
-      });
+      toast.success(mode === "create" ? "Job created" : "Job updated");
       router.push(`/sales/${res.data.job.id}`);
       router.refresh();
     });
@@ -1373,7 +1412,7 @@ export function SalesJobForm({
                       </InfoTip>
                     </FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" min="0" readOnly className="bg-muted/50" {...field} />
+                      <Input type="number" step="0.01" readOnly className="bg-muted/50" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1386,7 +1425,7 @@ export function SalesJobForm({
                   <FormItem>
                     <FormLabel>Total</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" min="0" readOnly className="bg-muted/50 font-semibold" {...field} />
+                      <Input type="number" step="0.01" readOnly className="bg-muted/50 font-semibold" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1408,6 +1447,112 @@ export function SalesJobForm({
                 />
               )}
             </div>
+
+            {Number(totalRaw) < -0.005 && !customerId && (
+              <p className="text-sm text-destructive">
+                Select a customer — store credit cannot be issued without one.
+              </p>
+            )}
+
+            {Number(totalRaw) < -0.005 && customerId && (
+              <div className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200">
+                Net credit of{" "}
+                <strong>{formatMoney(Math.abs(Number(totalRaw) || 0))}</strong> will be added to
+                this customer&apos;s store credit when saved.
+              </div>
+            )}
+
+            {customerId &&
+              (storeCreditBalance > 0 || Number(creditAppliedRaw) > 0) &&
+              Number(totalRaw) > 0.005 && (
+              <div className="rounded-md border p-3 space-y-2 max-w-md">
+                <div className="text-sm">
+                  Store credit available:{" "}
+                  <span className="font-semibold tabular-nums">{formatMoney(storeCreditBalance)}</span>
+                </div>
+                <FormField
+                  control={form.control}
+                  name="credit_applied"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Apply store credit</FormLabel>
+                      <div className="flex gap-2">
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max={Math.min(
+                              storeCreditBalance,
+                              Math.max(0, Number(totalRaw) || 0),
+                            )}
+                            placeholder="0.00"
+                            {...field}
+                          />
+                        </FormControl>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const cap = Math.min(
+                              storeCreditBalance,
+                              Math.max(0, Number(totalRaw) || 0),
+                            );
+                            field.onChange(cap > 0 ? cap.toFixed(2) : "");
+                          }}
+                        >
+                          Apply max
+                        </Button>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {Number(creditAppliedRaw) > 0 && (
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    Amount due after credit:{" "}
+                    {formatMoney(
+                      Math.max(0, (Number(totalRaw) || 0) - (Number(creditAppliedRaw) || 0)),
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {customerId && customerInvoices.length > 0 && (
+              <FormField
+                control={form.control}
+                name="credited_from_job_id"
+                render={({ field }) => (
+                  <FormItem className="max-w-md">
+                    <FormLabel className="flex items-center gap-1">
+                      Credit against invoice
+                      <InfoTip>Optional — link this return to an earlier invoice.</InfoTip>
+                    </FormLabel>
+                    <Select
+                      onValueChange={(v) => field.onChange(v === "__none__" ? null : v)}
+                      value={field.value ?? "__none__"}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="(None)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="__none__">(None)</SelectItem>
+                        {customerInvoices.map((inv) => (
+                          <SelectItem key={inv.id} value={inv.id}>
+                            {inv.invoice_no} · {formatDate(inv.job_date)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             {mode === "edit" && (
               <FormField
@@ -1444,7 +1589,7 @@ export function SalesJobForm({
                 sales_payments insert at save time. Leave the list empty to
                 mark the job Outstanding; further payments are recorded later
                 via the Add Payment dialog on the job detail page. */}
-            {mode === "create" && (
+            {mode === "create" && Number(totalRaw) > 0.005 && (
               <div className="space-y-2">
                 <div className="flex items-baseline justify-between">
                   <FormLabel>Payments received</FormLabel>
@@ -1531,9 +1676,13 @@ export function SalesJobForm({
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      const remaining =
-                        Number(form.getValues("total") || 0) -
-                        createPayments.reduce((a, p) => a + (Number(p.amount) || 0), 0);
+                      const total = Number(form.getValues("total") || 0);
+                      const credit = Number(form.getValues("credit_applied") || 0);
+                      const paid = createPayments.reduce(
+                        (a, p) => a + (Number(p.amount) || 0),
+                        0,
+                      );
+                      const amountDue = Math.max(0, total - credit - paid);
                       setCreatePayments((prev) => [
                         ...prev,
                         {
@@ -1542,7 +1691,7 @@ export function SalesJobForm({
                               ? crypto.randomUUID()
                               : `pay-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                           mode: "cash",
-                          amount: remaining > 0 ? remaining.toFixed(2) : "",
+                          amount: amountDue > 0 ? amountDue.toFixed(2) : "",
                         },
                       ]);
                     }}

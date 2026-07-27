@@ -123,8 +123,11 @@ export default async function SalesJobDetailPage({
             <Field label="License plate" value={job.license_plate} mono />
             <Field label="Contact" value={job.contact_no} />
             <Field label="Email" value={job.email} />
-            <Field label="Odometer" value={job.odometer?.toLocaleString() ?? null} />
-            <Field label="Carrier" value={job.carrier_name} />
+          <Field label="Odometer" value={job.odometer?.toLocaleString() ?? null} />
+          <Field label="Carrier" value={job.carrier_name} />
+          {job.credited_from_invoice_no && (
+            <Field label="Credit against" value={job.credited_from_invoice_no} mono />
+          )}
             {job.free_grease_applied && (
               <Field label="Free grease" value="Applied" />
             )}
@@ -143,8 +146,20 @@ export default async function SalesJobDetailPage({
             <Row label="HST" value={formatMoney(job.hst)} />
             <Row label="Total" value={formatMoney(job.total)} bold />
             <div className="border-t my-2" />
+            {(job.credit_applied ?? 0) > 0 && (
+              <Row label="Store credit applied" value={formatMoney(job.credit_applied ?? 0)} />
+            )}
             <Row label="Paid" value={formatMoney(job.paid_amount)} />
-            <Row label="Outstanding" value={formatMoney(job.outstanding)} bold />
+            <Row
+              label="Outstanding"
+              value={formatMoney(job.outstanding)}
+              bold
+            />
+            {job.outstanding < -0.005 && (
+              <p className="text-xs text-emerald-600">
+                Customer has store credit from this invoice.
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

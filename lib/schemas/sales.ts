@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { moneySchema, paymentModeSchema, paymentStatusSchema } from "@/lib/schemas/common";
+import { moneySchema, paymentModeSchema, paymentStatusSchema, signedMoneySchema } from "@/lib/schemas/common";
 
 export const SalesJobItemInput = z.object({
   id: z.string().uuid().optional(),
@@ -24,8 +24,6 @@ export const SalesJobItemInput = z.object({
   merged_unit_price: z.coerce.number().min(0).nullable().optional(),
   // True when the customer brought the part themselves; line_total forced to 0.
   is_customer_supplied: z.coerce.boolean().default(false),
-  // Set server-side on a stock-shortfall override; caps inventory draw.
-  stock_qty: z.coerce.number().min(0).max(99999).nullable().optional(),
 })
   .refine((it) => !(it.part_id && it.oil_type_id), {
     message: "A line can't be both a catalog part and an oil item",
@@ -88,10 +86,14 @@ export const SalesJobInput = z
 
     comments: z.string().trim().max(2000).nullable().optional().or(z.literal("")),
 
-    sub_total: moneySchema,
-    hst: moneySchema,
-    total: moneySchema,
+    sub_total: signedMoneySchema,
+    hst: signedMoneySchema,
+    total: signedMoneySchema,
     paid_amount: moneySchema.default(0),
+    /** Store credit from the customer account applied to reduce amount due. */
+    credit_applied: moneySchema.default(0),
+    /** Optional link to the original invoice when this job includes a return. */
+    credited_from_job_id: z.string().uuid().nullable().optional(),
     payment_mode: paymentModeSchema.nullable().optional(),
     /**
      * Multiple-payment shape used at job creation. When provided and non-empty,
@@ -138,22 +140,53 @@ export const SalesJobInput = z
       });
     }
     // initial_payments takes precedence when present — validate its sum
-    // against total. Otherwise fall back to single-shot paid_amount check.
+    // against amount due (total minus store credit). Negative-total jobs
+    // cannot take cash payments.
     const payments = val.initial_payments ?? [];
-    if (payments.length > 0) {
+    const amountDue = val.total - val.credit_applied;
+    if (val.total < -0.005) {
+      if (payments.length > 0 || val.paid_amount > 0.005) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["paid_amount"],
+          message: "Credit invoices cannot record cash payments",
+        });
+      }
+      if (val.credit_applied > 0.005) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["credit_applied"],
+          message: "Store credit cannot be applied when the invoice total is negative",
+        });
+      }
+    } else if (payments.length > 0) {
       const sum = payments.reduce((a, p) => a + p.amount, 0);
-      if (sum > val.total + 0.01) {
+      if (sum > amountDue + 0.01) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["initial_payments"],
-          message: "Sum of payments cannot exceed Total",
+          message: "Sum of payments cannot exceed amount due",
         });
       }
-    } else if (val.paid_amount > val.total + 0.01) {
+    } else if (val.paid_amount > amountDue + 0.01) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["paid_amount"],
-        message: "Paid amount cannot exceed Total",
+        message: "Paid amount cannot exceed amount due",
+      });
+    }
+    if (val.credit_applied > val.total + 0.01 && val.total > 0.005) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["credit_applied"],
+        message: "Store credit applied cannot exceed the invoice total",
+      });
+    }
+    if (val.total < -0.005 && !val.customer_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["customer_id"],
+        message: "Select a customer — store credit cannot be issued without one",
       });
     }
     // HH:mm:ss strings sort lexicographically, so a plain string compare works.

@@ -20,6 +20,7 @@ import {
   getCustomer,
   getCustomerSalesHistory,
 } from "@/lib/actions/customers";
+import { fetchCustomerCreditBalance } from "@/lib/actions/customer-credits";
 import { getCustomerVehicles } from "@/lib/actions/vehicles";
 import { isFreeGreaseEligible } from "@/lib/utils/free-grease";
 import { isFreeOilChangeEligible } from "@/lib/utils/free-oil-change";
@@ -35,10 +36,11 @@ export default async function CustomerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [customer, jobs, vehicles] = await Promise.all([
+  const [customer, jobs, vehicles, storeCredit] = await Promise.all([
     getCustomer(id),
     getCustomerSalesHistory(id),
     getCustomerVehicles(id),
+    fetchCustomerCreditBalance(id),
   ]);
   if (!customer) notFound();
 
@@ -89,13 +91,18 @@ export default async function CustomerDetailPage({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Stat label="Total jobs" value={String(jobs.length)} />
         <Stat label="Total spent" value={formatMoney(totalSpent)} />
         <Stat
           label="Outstanding"
           value={formatMoney(totalOutstanding)}
           highlight={totalOutstanding > 0}
+        />
+        <Stat
+          label="Store credit"
+          value={formatMoney(storeCredit)}
+          highlight={storeCredit > 0}
         />
         <Stat label="Vehicles" value={String(vehicles.length)} />
       </div>
