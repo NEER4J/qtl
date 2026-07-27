@@ -5,8 +5,11 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { InsufficientStockError, wrapAction } from "@/lib/actions/_utils";
 import {
+  computeStockQtyOverrides,
+  fetchStockByKey,
   findStockShortfalls,
   formatStockShortfalls,
+  labelsFromShortfalls,
   type StockConsumingLine,
 } from "@/lib/actions/stock-shortfalls";
 import {
@@ -25,17 +28,17 @@ import type {
   UnitOfMeasure,
 } from "@/lib/db/types";
 
-// Owner / co_owner / manager can consciously sell past a stock shortfall
-// (mirrors private.can_edit_inventory() — the same roles who can correct
-// stock directly). Accountant and staff cannot. `supervisor` is a manager
-// clone at the app layer too (RLS aliases it, but role checks in JS see the
-// literal stored value, so it must be listed explicitly — see 0074).
+// Owner / co_owner / manager / staff can consciously sell past a stock
+// shortfall. Accountant cannot. `supervisor` is a manager clone at the app
+// layer too (RLS aliases it, but role checks in JS see the literal stored
+// value, so it must be listed explicitly — see 0074).
 function canOverrideStock(profile: Profile): boolean {
   return (
     profile.role === "owner" ||
     profile.role === "co_owner" ||
     profile.role === "manager" ||
-    profile.role === "supervisor"
+    profile.role === "supervisor" ||
+    profile.role === "staff"
   );
 }
 
@@ -59,6 +62,12 @@ async function assertStockAvailable(
 // ----------------------------------------------------------------------------
 // List — with filters + pagination + joined service type + location
 // ----------------------------------------------------------------------------
+export interface SaveSalesJobResult {
+  job: SalesJob;
+  /** Set when a stock-shortfall override capped inventory deductions. */
+  stock_warnings?: string[];
+}
+
 export interface SalesJobRow extends SalesJob {
   location_code: string | null;
   service_type_code: string | null;
@@ -284,7 +293,7 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
 export const createSalesJob = wrapAction({
   schema: SalesJobInput,
   roles: ["owner", "co_owner", "manager", "staff"],
-  handler: async (input, profile): Promise<SalesJob> => {
+  handler: async (input, profile): Promise<SaveSalesJobResult> => {
     // Staff MUST write to their own location. Enforce server-side even though
     // RLS also blocks cross-location writes.
     const locationId =
@@ -305,6 +314,14 @@ export const createSalesJob = wrapAction({
       [],
       input.override_stock_check,
     );
+
+    let itemsToSave = input.items ?? [];
+    let stockWarnings: string[] = [];
+    if (input.override_stock_check && canOverrideStock(profile) && itemsToSave.length > 0) {
+      const capped = await applyStockOverrideCaps(supabase, locationId, itemsToSave, []);
+      itemsToSave = capped.items;
+      stockWarnings = capped.warnings;
+    }
 
     // Reconcile single-shot vs multi-payment input. When the form sends an
     // initial_payments array, that's the source of truth; we derive
@@ -395,7 +412,7 @@ export const createSalesJob = wrapAction({
       if (payErr) throw payErr;
     }
 
-    await replaceJobItems(supabase, data.id, input.items, profile.id);
+    await replaceJobItems(supabase, data.id, itemsToSave, profile.id);
 
     // Free-grease "one-shot" rule: once a customer redeems the offer on a job,
     // clear free_grease_until so the next sales-form lookup treats them as
@@ -415,7 +432,10 @@ export const createSalesJob = wrapAction({
 
     revalidatePath("/sales");
     revalidatePath("/dashboard");
-    return data as SalesJob;
+    return {
+      job: data as SalesJob,
+      ...(stockWarnings.length > 0 ? { stock_warnings: stockWarnings } : {}),
+    };
   },
 });
 
@@ -425,7 +445,7 @@ export const createSalesJob = wrapAction({
 export const updateSalesJob = wrapAction({
   schema: UpdateSalesJobInput,
   roles: ["owner", "co_owner", "manager", "staff"],
-  handler: async (input, profile): Promise<SalesJob> => {
+  handler: async (input, profile): Promise<SaveSalesJobResult> => {
     const supabase = await createClient();
 
     // Don't blank out an existing invoice_no — skip the column if the user
@@ -468,6 +488,20 @@ export const updateSalesJob = wrapAction({
       sameLocation ? ((oldItemRows ?? []) as StockConsumingLine[]) : [],
       input.override_stock_check,
     );
+
+    const oldItems = sameLocation ? ((oldItemRows ?? []) as StockConsumingLine[]) : [];
+    let itemsToSave = input.items ?? [];
+    let stockWarnings: string[] = [];
+    if (input.override_stock_check && canOverrideStock(profile) && itemsToSave.length > 0) {
+      const capped = await applyStockOverrideCaps(
+        supabase,
+        input.location_id,
+        itemsToSave,
+        oldItems,
+      );
+      itemsToSave = capped.items;
+      stockWarnings = capped.warnings;
+    }
 
     // Staff (and technician) may only edit a job on the SAME calendar day it was
     // created (Toronto time). Owner / co_owner / manager / accountant are
@@ -534,7 +568,7 @@ export const updateSalesJob = wrapAction({
       .single();
     if (error) throw error;
 
-    await replaceJobItems(supabase, input.id, input.items, profile.id);
+    await replaceJobItems(supabase, input.id, itemsToSave, profile.id);
 
     // Free-grease "one-shot" rule on edit too: if the job is toggled into
     // free-grease-applied during an edit, retire the offer on the customer.
@@ -551,7 +585,10 @@ export const updateSalesJob = wrapAction({
     revalidatePath("/sales");
     revalidatePath(`/sales/${input.id}`);
     revalidatePath("/dashboard");
-    return data as SalesJob;
+    return {
+      job: data as SalesJob,
+      ...(stockWarnings.length > 0 ? { stock_warnings: stockWarnings } : {}),
+    };
   },
 });
 
@@ -606,6 +643,44 @@ export const deactivateSalesJob = wrapAction({
   },
 });
 
+// When a privileged caller overrides a stock shortfall, cap each line's
+// inventory draw so on-hand never goes negative. Returns items with
+// stock_qty set where needed plus user-facing warnings.
+async function applyStockOverrideCaps(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  locationId: string,
+  items: NonNullable<SalesJobInput["items"]>,
+  oldItems: StockConsumingLine[],
+): Promise<{ items: NonNullable<SalesJobInput["items"]>; warnings: string[] }> {
+  const shortfalls = await findStockShortfalls(supabase, locationId, items, oldItems);
+  if (shortfalls.length === 0) return { items, warnings: [] };
+
+  const allKeys = new Set<string>();
+  for (const line of items) {
+    const key = line.part_id
+      ? `part:${line.part_id}`
+      : line.oil_type_id
+        ? `oil:${line.oil_type_id}`
+        : null;
+    if (key && !line.is_customer_supplied) allKeys.add(key);
+  }
+  const availableByKey = await fetchStockByKey(supabase, locationId, [...allKeys]);
+  const labelsByKey = labelsFromShortfalls(shortfalls);
+  const { overrides, warnings } = computeStockQtyOverrides(
+    items,
+    oldItems,
+    availableByKey,
+    labelsByKey,
+  );
+  if (overrides.length === 0) return { items, warnings: [] };
+
+  const capped = items.map((it, idx) => {
+    const o = overrides.find((x) => x.index === idx);
+    return o ? { ...it, stock_qty: o.stock_qty } : it;
+  });
+  return { items: capped, warnings };
+}
+
 // ----------------------------------------------------------------------------
 // Helpers
 // ----------------------------------------------------------------------------
@@ -619,6 +694,7 @@ async function replaceJobItems(
         description: string;
         quantity: number;
         unit_price: number;
+        stock_qty?: number | null;
         mhsw_unit?: number;
         is_taxable?: boolean;
         package_label?: string | null;
@@ -656,6 +732,7 @@ async function replaceJobItems(
     transmission_service_id: it.transmission_service_id ?? null,
     merged_unit_price: it.merged_unit_price ?? null,
     is_customer_supplied: it.is_customer_supplied ?? false,
+    stock_qty: it.stock_qty ?? null,
     position: idx,
     created_by: userId,
   }));

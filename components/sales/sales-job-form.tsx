@@ -130,7 +130,7 @@ export interface SalesJobFormProps {
   lockedLocationId?: string | null;
   /** Existing line items (edit mode). */
   initialItems?: LineItem[];
-  /** Gates the "sell anyway" stock-shortfall override — owner/co_owner/manager only. */
+  /** Gates the "sell anyway" stock-shortfall override. */
   currentUserRole?: UserRole;
 }
 
@@ -141,6 +141,7 @@ const STOCK_OVERRIDE_ROLES: ReadonlySet<UserRole> = new Set([
   "co_owner",
   "manager",
   "supervisor",
+  "staff",
 ]);
 
 /** Description for the $0 line item that represents the free-grease offer. */
@@ -616,6 +617,9 @@ export function SalesJobForm({
                 onClick: () => submitJob({ ...data, override_stock_check: true }),
               }
             : undefined,
+          description: canOverride
+            ? "The sale will save; only available stock will be deducted from inventory."
+            : undefined,
         });
         if (res.fieldErrors) {
           for (const [k, v] of Object.entries(res.fieldErrors)) {
@@ -624,8 +628,13 @@ export function SalesJobForm({
         }
         return;
       }
-      toast.success(mode === "create" ? "Job created" : "Job updated");
-      router.push(`/sales/${res.data.id}`);
+      toast.success(mode === "create" ? "Job created" : "Job updated", {
+        description:
+          res.data.stock_warnings && res.data.stock_warnings.length > 0
+            ? `Inventory capped — ${res.data.stock_warnings.join("; ")}`
+            : undefined,
+      });
+      router.push(`/sales/${res.data.job.id}`);
       router.refresh();
     });
   };

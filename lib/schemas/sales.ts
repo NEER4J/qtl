@@ -24,6 +24,8 @@ export const SalesJobItemInput = z.object({
   merged_unit_price: z.coerce.number().min(0).nullable().optional(),
   // True when the customer brought the part themselves; line_total forced to 0.
   is_customer_supplied: z.coerce.boolean().default(false),
+  // Set server-side on a stock-shortfall override; caps inventory draw.
+  stock_qty: z.coerce.number().min(0).max(99999).nullable().optional(),
 })
   .refine((it) => !(it.part_id && it.oil_type_id), {
     message: "A line can't be both a catalog part and an oil item",

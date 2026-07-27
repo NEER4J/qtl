@@ -151,3 +151,123 @@ export function formatStockShortfalls(shortfalls: StockShortfall[]): string {
   );
   return `Not enough stock to complete this sale — ${lines.join("; ")}.`;
 }
+
+function lineStockKey(line: StockConsumingLine): string | null {
+  if (line.is_customer_supplied) return null;
+  if (line.part_id) return `part:${line.part_id}`;
+  if (line.oil_type_id) return `oil:${line.oil_type_id}`;
+  return null;
+}
+
+/** Current on-hand qty per part:/oil: key at a location. */
+export async function fetchStockByKey(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  locationId: string,
+  keys: string[],
+): Promise<Map<string, number>> {
+  const partIds = keys.filter((k) => k.startsWith("part:")).map((k) => k.slice(5));
+  const oilIds = keys.filter((k) => k.startsWith("oil:")).map((k) => k.slice(4));
+
+  const [{ data: partStock }, { data: oilStock }] = await Promise.all([
+    partIds.length
+      ? supabase
+          .from("part_location_stock")
+          .select("part_id, qty")
+          .eq("location_id", locationId)
+          .in("part_id", partIds)
+      : Promise.resolve({ data: [] }),
+    oilIds.length
+      ? supabase
+          .from("oil_location_stock")
+          .select("oil_type_id, qty")
+          .eq("location_id", locationId)
+          .in("oil_type_id", oilIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const map = new Map<string, number>();
+  for (const r of partStock ?? []) {
+    map.set(`part:${r.part_id as string}`, Number(r.qty));
+  }
+  for (const r of oilStock ?? []) {
+    map.set(`oil:${r.oil_type_id as string}`, Number(r.qty));
+  }
+  return map;
+}
+
+export interface StockQtyOverride {
+  index: number;
+  stock_qty: number;
+  label: string;
+  sold: number;
+  deducted: number;
+  unit: string;
+}
+
+/**
+ * When a privileged caller overrides a stock shortfall, cap each line's
+ * inventory draw at what's actually on hand. The invoice quantity stays
+ * unchanged; only stock_qty (written to the row) is reduced.
+ *
+ * `oldLines` consumption is added back to working availability because
+ * replaceJobItems deletes old rows (restoring stock) before inserting new.
+ */
+export function computeStockQtyOverrides(
+  newLines: StockConsumingLine[],
+  oldLines: StockConsumingLine[],
+  availableByKey: Map<string, number>,
+  labelsByKey: Map<string, { label: string; unit: string }>,
+): { overrides: StockQtyOverride[]; warnings: string[] } {
+  const working = new Map(availableByKey);
+  for (const [key, qty] of netConsumptionByKey(oldLines)) {
+    if (qty > 0) working.set(key, (working.get(key) ?? 0) + qty);
+  }
+
+  const overrides: StockQtyOverride[] = [];
+  const warnings: string[] = [];
+
+  newLines.forEach((line, index) => {
+    const key = lineStockKey(line);
+    if (!key) return;
+    const qty = Number(line.quantity) || 0;
+    if (qty <= 0) return;
+    // Returns / credits add stock back — always use the full quantity.
+    if (Number(line.unit_price) < 0) return;
+
+    const sold = qty;
+    const available = working.get(key) ?? 0;
+    const deducted = Math.min(sold, Math.max(0, available));
+    working.set(key, Math.max(0, available - deducted));
+
+    if (deducted < sold - 0.0001) {
+      const meta = labelsByKey.get(key) ?? { label: "Unknown item", unit: "" };
+      overrides.push({
+        index,
+        stock_qty: deducted,
+        label: meta.label,
+        sold,
+        deducted,
+        unit: meta.unit,
+      });
+      warnings.push(
+        `${meta.label}: sold ${sold}${meta.unit}, ${deducted}${meta.unit} deducted from inventory`,
+      );
+    }
+  });
+
+  return { overrides, warnings };
+}
+
+/** Build label map from a shortfall list (reuse after findStockShortfalls). */
+export function labelsFromShortfalls(
+  shortfalls: StockShortfall[],
+): Map<string, { label: string; unit: string }> {
+  const map = new Map<string, { label: string; unit: string }>();
+  for (const s of shortfalls) {
+    map.set(`${s.kind === "part" ? "part" : "oil"}:${s.id}`, {
+      label: s.label,
+      unit: s.unit,
+    });
+  }
+  return map;
+}

@@ -403,6 +403,8 @@ export interface SalesJobItem {
   merged_unit_price: number | null;
   /** True when the customer brought the part themselves; line_total forced to 0. */
   is_customer_supplied: boolean;
+  /** Inventory units/litres actually drawn from shop stock. NULL = full quantity. */
+  stock_qty: number | null;
   created_at: string;
   created_by: string | null;
 }
