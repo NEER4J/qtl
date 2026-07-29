@@ -48,7 +48,11 @@ function parse24(value?: string): { hour: string; minute: string; period: Period
 }
 
 function to24(hour: string, minute: string, period: Period): string | null {
-  if (hour === "" || minute === "") return null;
+  // Do not commit a partially typed minute. Committing "0" as "00" causes the
+  // controlled value to immediately re-render as "00", which traps the cursor
+  // and prevents replacing a leading zero with a complete value such as "25".
+  // A single digit is padded and committed by onMinuteBlur instead.
+  if (hour === "" || !/^\d{2}$/.test(minute)) return null;
   const h12 = Number(hour);
   const min = Number(minute);
   if (Number.isNaN(h12) || Number.isNaN(min) || h12 < 1 || h12 > 12 || min > 59) return null;
@@ -91,6 +95,7 @@ export function TimeField12h({ value, onChange, onBlur, disabled, id, className 
     } else {
       const next = to24(h, m, p);
       if (next != null) onChange(next);
+      else if (blur && (h === "" || m === "")) onChange("");
     }
     if (blur) onBlur?.();
   }
