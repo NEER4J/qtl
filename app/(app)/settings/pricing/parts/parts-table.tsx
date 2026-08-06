@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+
+import { useLiveSearchParam } from "@/hooks/use-live-search-param";
 import { Loader2, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -56,10 +58,10 @@ export function PartsTable({
   brands: string[];
   globalCounterPremium: number;
   globalCustomerSuppliesLabour: number;
+  // Only the status tab is still passed in: q / category / brand are read
+  // straight off the URL now that the filter bar drives it live, and keeping
+  // stale copies here invites someone to wire the inputs back to them.
   initialFilters: {
-    q: string;
-    category_id: string;
-    brand: string;
     status: "active" | "inactive";
   };
 }) {
@@ -70,24 +72,22 @@ export function PartsTable({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const [isFiltering, startFilterTransition] = useTransition();
-  const [q, setQ] = useState(initialFilters.q);
-  const [categoryId, setCategoryId] = useState(initialFilters.category_id);
-  const [brand, setBrand] = useState(initialFilters.brand);
+  // Search is live and URL-driven; the selects apply the moment they change.
+  // Nothing here waits for a submit any more.
+  const { value: q, setValue: setQ, searching } = useLiveSearchParam();
+  const categoryId = searchParams.get("category_id") ?? "";
+  const brand = searchParams.get("brand") ?? "";
 
-  const onFilter = (e: React.FormEvent) => {
-    e.preventDefault();
+  const setFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    const set = (k: string, v: string) => (v ? params.set(k, v) : params.delete(k));
-    set("q", q.trim());
-    set("category_id", categoryId);
-    set("brand", brand.trim());
-    startFilterTransition(() => router.push(`?${params.toString()}`));
+    if (value) params.set(key, value);
+    else params.delete(key);
+    params.delete("page");
+    startFilterTransition(() => router.replace(`?${params.toString()}`, { scroll: false }));
   };
 
   const onClear = () => {
     setQ("");
-    setCategoryId("");
-    setBrand("");
     startFilterTransition(() => router.push("?"));
   };
 
@@ -128,7 +128,7 @@ export function PartsTable({
 
   return (
     <>
-      <form onSubmit={onFilter} className="flex flex-wrap items-end gap-2 print:hidden">
+      <div className="flex flex-wrap items-end gap-2 print:hidden">
         <div className="relative w-[280px]">
           <Input
             placeholder="Search part number or description…"
@@ -136,14 +136,14 @@ export function PartsTable({
             onChange={(e) => setQ(e.target.value)}
             className="w-full pr-8"
           />
-          {isFiltering && (
+          {(isFiltering || searching) && (
             <Loader2 className="absolute right-2.5 top-2.5 size-4 animate-spin text-muted-foreground" />
           )}
         </div>
         <div className="w-[220px]">
           <Select
             value={categoryId === "" ? ANY_CATEGORY : categoryId}
-            onValueChange={(v) => setCategoryId(v === ANY_CATEGORY ? "" : v)}
+            onValueChange={(v) => setFilter("category_id", v === ANY_CATEGORY ? "" : v)}
           >
             <SelectTrigger>
               <SelectValue placeholder="Any category" />
@@ -161,7 +161,7 @@ export function PartsTable({
         <div className="w-[180px]">
           <CreatableCombobox
             value={brand}
-            onChange={setBrand}
+            onChange={(v) => setFilter("brand", v)}
             suggestions={brands}
             placeholder="Any brand"
             searchPlaceholder="Filter by brand…"
@@ -170,9 +170,6 @@ export function PartsTable({
             allowClear
           />
         </div>
-        <Button type="submit" variant="outline">
-          Filter
-        </Button>
         {filtersActive && (
           <Button type="button" variant="ghost" onClick={onClear}>
             Clear
@@ -183,7 +180,7 @@ export function PartsTable({
             <Plus className="size-4" /> New part
           </Button>
         </div>
-      </form>
+      </div>
 
       <div className="flex items-center gap-1 print:hidden">
         {(["active", "inactive"] as const).map((s) => (

@@ -71,7 +71,7 @@ export default async function PartsAdminPage({
         brands={brands}
         globalCounterPremium={settings.counter_premium}
         globalCustomerSuppliesLabour={settings.customer_supplies_labour}
-        initialFilters={{ q: sp.q ?? "", category_id: sp.category_id ?? "", brand: sp.brand ?? "", status }}
+        initialFilters={{ status }}
       />
     </div>
   );

@@ -2,7 +2,9 @@
 
 import { useCallback, useMemo, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, X } from "lucide-react";
+
+import { useLiveSearchParam } from "@/hooks/use-live-search-param";
+import { Loader2, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +37,7 @@ export function ExpensesFilters({
   const router = useRouter();
   const params = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const { value: q, setValue: setQ, searching } = useLiveSearchParam();
 
   const push = useCallback(
     (next: URLSearchParams) => {
@@ -52,12 +55,6 @@ export function ExpensesFilters({
     push(next);
   };
 
-  const onSearchSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const q = (new FormData(e.currentTarget).get("q") as string) ?? "";
-    setField("q", q);
-  };
-
   const clearAll = () => startTransition(() => router.push("/expenses"));
   const hasFilters = Array.from(params.keys()).some((k) => k !== "page");
 
@@ -69,20 +66,21 @@ export function ExpensesFilters({
 
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-md border p-4">
-      <form onSubmit={onSearchSubmit} className="flex items-center gap-2">
-        <div className="relative">
+      {/* Live search — updates as you type (debounced), no submit needed. */}
+      <div className="relative">
+        {searching || isPending ? (
+          <Loader2 className="absolute left-2 top-2.5 size-4 animate-spin text-muted-foreground" />
+        ) : (
           <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
-          <Input
-            name="q"
-            defaultValue={initial.q ?? ""}
-            placeholder="Vendor, invoice…"
-            className="h-9 w-56 pl-8"
-          />
-        </div>
-        <Button type="submit" variant="outline" size="sm" disabled={isPending}>
-          Search
-        </Button>
-      </form>
+        )}
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Vendor, invoice…"
+          aria-label="Search"
+          className="h-9 w-56 pl-8"
+        />
+      </div>
 
       <div className="flex flex-col gap-1">
         <label className="text-xs text-muted-foreground">From</label>

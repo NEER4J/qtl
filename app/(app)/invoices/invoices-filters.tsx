@@ -2,7 +2,9 @@
 
 import { useCallback, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, X } from "lucide-react";
+
+import { useLiveSearchParam } from "@/hooks/use-live-search-param";
+import { Loader2, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +29,7 @@ export function InvoicesFilters({
   const router = useRouter();
   const params = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const { value: q, setValue: setQ, searching } = useLiveSearchParam();
 
   const push = useCallback(
     (next: URLSearchParams) => {
@@ -43,13 +46,6 @@ export function InvoicesFilters({
     push(next);
   };
 
-  const onSearchSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const q = (new FormData(form).get("q") as string) ?? "";
-    setField("q", q);
-  };
-
   const clearAll = () => {
     startTransition(() => router.push("/invoices"));
   };
@@ -58,20 +54,21 @@ export function InvoicesFilters({
 
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-md border p-4">
-      <form onSubmit={onSearchSubmit} className="flex items-center gap-2">
-        <div className="relative">
+      {/* Live search — updates as you type (debounced), no submit needed. */}
+      <div className="relative">
+        {searching || isPending ? (
+          <Loader2 className="absolute left-2 top-2.5 size-4 animate-spin text-muted-foreground" />
+        ) : (
           <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
-          <Input
-            name="q"
-            defaultValue={initial.q ?? ""}
-            placeholder="Invoice, customer, plate…"
-            className="h-9 w-64 pl-8"
-          />
-        </div>
-        <Button type="submit" variant="outline" size="sm" disabled={isPending}>
-          Search
-        </Button>
-      </form>
+        )}
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Invoice, customer, plate…"
+          aria-label="Search"
+          className="h-9 w-64 pl-8"
+        />
+      </div>
 
       <div className="flex flex-col gap-1">
         <label className="text-xs text-muted-foreground">From</label>
