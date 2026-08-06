@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useRef, useState } from "react";
 import { Check, ChevronsUpDown, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { searchVendors } from "@/lib/actions/vendors";
 import type { Vendor } from "@/lib/db/types";
 import { cn } from "@/lib/utils";
@@ -34,26 +35,27 @@ export function VendorComboBox({
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<Vendor[]>([]);
-  const [isPending, startTransition] = useTransition();
   const cacheRef = useRef<Map<string, Vendor>>(new Map());
 
   const selected = value ? cacheRef.current.get(value) : null;
 
-  useEffect(() => {
-    if (!open) return;
-    startTransition(async () => {
+  const { results, searching } = useDebouncedSearch<Vendor>({
+    open,
+    query: q,
+    // Changing the expense category re-scopes the vendor list, so it has to
+    // re-trigger the search the same way a keystroke does.
+    deps: [categoryId],
+    fetcher: async (query) => {
       const res = await searchVendors({
-        q,
+        q: query,
         category_id: categoryId ?? undefined,
         limit: 20,
       });
-      if (res.ok) {
-        setResults(res.data);
-        for (const v of res.data) cacheRef.current.set(v.id, v);
-      }
-    });
-  }, [q, open, categoryId]);
+      if (!res.ok) return [];
+      for (const v of res.data) cacheRef.current.set(v.id, v);
+      return res.data;
+    },
+  });
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -80,7 +82,7 @@ export function VendorComboBox({
           />
           <CommandList>
             <CommandEmpty>
-              {isPending ? "Searching…" : "No vendor found."}
+              {searching ? "Searching…" : "No vendor found."}
             </CommandEmpty>
             <CommandGroup heading="Vendors">
               {results.map((v) => (

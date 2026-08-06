@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useRef, useState } from "react";
 import { Check, ChevronsUpDown, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { searchCustomers } from "@/lib/actions/customers";
 import type { Customer } from "@/lib/db/types";
 import { cn } from "@/lib/utils";
@@ -34,22 +35,20 @@ export function CustomerComboBox({
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<Customer[]>([]);
-  const [isPending, startTransition] = useTransition();
   const cacheRef = useRef<Map<string, Customer>>(new Map());
 
   const selected = value ? cacheRef.current.get(value) : null;
 
-  useEffect(() => {
-    if (!open) return;
-    startTransition(async () => {
-      const res = await searchCustomers({ q, limit: 20 });
-      if (res.ok) {
-        setResults(res.data);
-        for (const c of res.data) cacheRef.current.set(c.id, c);
-      }
-    });
-  }, [q, open]);
+  const { results, searching } = useDebouncedSearch<Customer>({
+    open,
+    query: q,
+    fetcher: async (query) => {
+      const res = await searchCustomers({ q: query, limit: 20 });
+      if (!res.ok) return [];
+      for (const c of res.data) cacheRef.current.set(c.id, c);
+      return res.data;
+    },
+  });
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -76,7 +75,7 @@ export function CustomerComboBox({
           />
           <CommandList>
             <CommandEmpty>
-              {isPending ? "Searching…" : "No customer found."}
+              {searching ? "Searching…" : "No customer found."}
             </CommandEmpty>
             {onCreateNew && (
               <CommandGroup>

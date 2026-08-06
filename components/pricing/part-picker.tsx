@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState } from "react";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { listPartsForPicker } from "@/lib/actions/pricing";
 import type { PartForPicker } from "@/lib/actions/pricing";
 import { formatMoney } from "@/lib/utils/format";
@@ -30,16 +31,11 @@ export function PartPickerButton({
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<PartForPicker[]>([]);
-  const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    if (!open) return;
-    startTransition(async () => {
-      const data = await listPartsForPicker(q);
-      setResults(data);
-    });
-  }, [q, open]);
+  const { results, searching } = useDebouncedSearch<PartForPicker>({
+    open,
+    query: q,
+    fetcher: (query) => listPartsForPicker(query),
+  });
 
   const visible = excludeIds ? results.filter((p) => !excludeIds.has(p.id)) : results;
 
@@ -66,7 +62,7 @@ export function PartPickerButton({
             className="max-h-[280px] overflow-y-auto overscroll-contain"
             onWheel={(e) => e.stopPropagation()}
           >
-            <CommandEmpty>{isPending ? "Searching…" : "No matching parts."}</CommandEmpty>
+            <CommandEmpty>{searching ? "Searching…" : "No matching parts."}</CommandEmpty>
             <CommandGroup>
               {visible.map((p) => (
                 <CommandItem

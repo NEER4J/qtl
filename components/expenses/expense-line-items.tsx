@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState } from "react";
 import { ChevronsUpDown, Droplet, Package, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import {
   Table,
   TableBody,
@@ -158,20 +159,11 @@ function PartsCatalogPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<ExpensePartPickerRow[]>([]);
-  const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    if (!open) return;
-    startTransition(async () => {
-      try {
-        const data = await listPartsForExpensePicker(q);
-        setResults(data);
-      } catch {
-        setResults([]);
-      }
-    });
-  }, [q, open]);
+  const { results, searching } = useDebouncedSearch<ExpensePartPickerRow>({
+    open,
+    query: q,
+    fetcher: (query) => listPartsForExpensePicker(query),
+  });
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -195,7 +187,7 @@ function PartsCatalogPicker({
             onValueChange={setQ}
           />
           <CommandList className="max-h-[360px]">
-            <CommandEmpty>{isPending ? "Searching…" : "No matching parts."}</CommandEmpty>
+            <CommandEmpty>{searching ? "Searching…" : "No matching parts."}</CommandEmpty>
             <CommandGroup>
               <div className="px-2 pt-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground grid grid-cols-[1fr_auto] gap-2">
                 <span>Part</span>

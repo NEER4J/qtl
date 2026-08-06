@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState } from "react";
 import { Boxes, ChevronsUpDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { listPackagesForPicker } from "@/lib/actions/pricing";
 import type { PartPackageWithItems } from "@/lib/db/types";
 import { excelOilLabel } from "@/lib/utils/oil-labels";
@@ -24,16 +25,11 @@ export function PackagePickerButton({
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<PartPackageWithItems[]>([]);
-  const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    if (!open) return;
-    startTransition(async () => {
-      const data = await listPackagesForPicker(q);
-      setResults(data);
-    });
-  }, [q, open]);
+  const { results, searching } = useDebouncedSearch<PartPackageWithItems>({
+    open,
+    query: q,
+    fetcher: (query) => listPackagesForPicker(query),
+  });
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -51,7 +47,7 @@ export function PackagePickerButton({
             onValueChange={setQ}
           />
           <CommandList>
-            <CommandEmpty>{isPending ? "Searching…" : "No matching packages."}</CommandEmpty>
+            <CommandEmpty>{searching ? "Searching…" : "No matching packages."}</CommandEmpty>
             <CommandGroup>
               {results.map((pkg) => (
                 <CommandItem
