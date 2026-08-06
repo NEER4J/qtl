@@ -1,6 +1,12 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import {
+  getCachedActiveExpenseCategories,
+  getCachedActiveExpenseSubcategories,
+  getCachedActiveLocations,
+  getCachedActiveServiceTypes,
+  getCachedAppSettings,
+} from "@/lib/cache/reference";
 import type {
   AppSettings,
   ExpenseCategory,
@@ -11,63 +17,31 @@ import type {
 
 /**
  * Reference data — public to any authenticated user. These are small tables
- * (<100 rows each) and are read on every form page, so these helpers are
- * intentionally plain server functions without zod wrapping.
+ * (<100 rows each) and are read on every form page.
+ *
+ * They now resolve out of the cross-request cache in lib/cache/reference.ts
+ * rather than hitting the database on every render; the signatures are
+ * unchanged so callers do not care. Any action that writes one of these tables
+ * must call revalidateReference() with the matching tag, or its edit stays
+ * invisible for up to an hour.
  */
 
 export async function listActiveLocations(): Promise<Location[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("locations")
-    .select("*")
-    .eq("active", true)
-    .order("name");
-  if (error) throw error;
-  return (data ?? []) as Location[];
+  return (await getCachedActiveLocations()) as Location[];
 }
 
 export async function listActiveServiceTypes(): Promise<ServiceType[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("service_types")
-    .select("*")
-    .eq("active", true)
-    .order("sort_order");
-  if (error) throw error;
-  return (data ?? []) as ServiceType[];
+  return (await getCachedActiveServiceTypes()) as ServiceType[];
 }
 
 export async function listActiveExpenseCategories(): Promise<ExpenseCategory[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("expense_categories")
-    .select("*")
-    .eq("active", true)
-    .order("sort_order")
-    .order("name");
-  if (error) throw error;
-  return (data ?? []) as ExpenseCategory[];
+  return (await getCachedActiveExpenseCategories()) as ExpenseCategory[];
 }
 
 export async function listActiveExpenseSubcategories(): Promise<ExpenseSubcategory[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("expense_subcategories")
-    .select("*")
-    .eq("active", true)
-    .order("sort_order")
-    .order("name");
-  if (error) throw error;
-  return (data ?? []) as ExpenseSubcategory[];
+  return (await getCachedActiveExpenseSubcategories()) as ExpenseSubcategory[];
 }
 
 export async function getAppSettings(): Promise<AppSettings> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("app_settings")
-    .select("*")
-    .eq("id", 1)
-    .single();
-  if (error) throw error;
-  return data as AppSettings;
+  return (await getCachedAppSettings()) as AppSettings;
 }

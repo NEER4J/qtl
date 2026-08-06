@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import { wrapAction } from "@/lib/actions/_utils";
+import { REFERENCE_TAGS, revalidateReference } from "@/lib/cache/reference";
 import type { ExpenseCategory, ExpenseSubcategory } from "@/lib/db/types";
 
 // ─── Categories ─────────────────────────────────────────────────────────────
@@ -48,6 +49,7 @@ export const createExpenseCategory = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+    revalidateReference(REFERENCE_TAGS.expenseCategories);
     revalidatePath("/settings/categories");
     return data as ExpenseCategory;
   },
@@ -65,6 +67,7 @@ export const updateExpenseCategory = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+    revalidateReference(REFERENCE_TAGS.expenseCategories);
     revalidatePath("/settings/categories");
     return data as ExpenseCategory;
   },
@@ -82,6 +85,7 @@ export const toggleCategoryActive = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+    revalidateReference(REFERENCE_TAGS.expenseCategories);
     revalidatePath("/settings/categories");
     return data as ExpenseCategory;
   },
@@ -107,6 +111,7 @@ export const createExpenseSubcategory = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+    revalidateReference(REFERENCE_TAGS.expenseCategories);
     revalidatePath("/settings/categories");
     return data as ExpenseSubcategory;
   },
@@ -124,6 +129,7 @@ export const updateExpenseSubcategory = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+    revalidateReference(REFERENCE_TAGS.expenseCategories);
     revalidatePath("/settings/categories");
     return data as ExpenseSubcategory;
   },
@@ -141,6 +147,7 @@ export const toggleSubcategoryActive = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+    revalidateReference(REFERENCE_TAGS.expenseCategories);
     revalidatePath("/settings/categories");
     return data as ExpenseSubcategory;
   },

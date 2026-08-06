@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import { wrapAction } from "@/lib/actions/_utils";
+import { REFERENCE_TAGS, revalidateReference } from "@/lib/cache/reference";
 import type { ServiceType } from "@/lib/db/types";
 
 export async function listAllServiceTypes(): Promise<ServiceType[]> {
@@ -36,6 +37,7 @@ export const createServiceType = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+    revalidateReference(REFERENCE_TAGS.serviceTypes);
     revalidatePath("/settings/services");
     return data as ServiceType;
   },
@@ -53,6 +55,7 @@ export const updateServiceType = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+    revalidateReference(REFERENCE_TAGS.serviceTypes);
     revalidatePath("/settings/services");
     return data as ServiceType;
   },
@@ -70,6 +73,7 @@ export const toggleServiceTypeActive = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+    revalidateReference(REFERENCE_TAGS.serviceTypes);
     revalidatePath("/settings/services");
     return data as ServiceType;
   },

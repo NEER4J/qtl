@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { wrapAction } from "@/lib/actions/_utils";
+import { REFERENCE_TAGS, revalidateReference } from "@/lib/cache/reference";
 import {
   CreateLocationInput,
   ToggleLocationActive,
@@ -42,6 +43,7 @@ export const createLocation = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+    revalidateReference(REFERENCE_TAGS.locations);
     revalidatePath("/settings/locations");
     return data as Location;
   },
@@ -69,6 +71,7 @@ export const updateLocation = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+    revalidateReference(REFERENCE_TAGS.locations);
     revalidatePath("/settings/locations");
     return data as Location;
   },
@@ -86,6 +89,7 @@ export const toggleLocationActive = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+    revalidateReference(REFERENCE_TAGS.locations);
     revalidatePath("/settings/locations");
     return data as Location;
   },

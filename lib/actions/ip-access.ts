@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { wrapAction } from "@/lib/actions/_utils";
+import { REFERENCE_TAGS, revalidateReference } from "@/lib/cache/reference";
 import {
   CreateIpRuleInput,
   DeleteIpRuleInput,
@@ -139,6 +140,7 @@ export const setIpLockEnabled = wrapAction({
       .update({ ip_lock_enabled: input.enabled })
       .eq("id", 1);
     if (error) throw error;
+    revalidateReference(REFERENCE_TAGS.appSettings);
     revalidatePath(PAGE);
     return { enabled: input.enabled };
   },

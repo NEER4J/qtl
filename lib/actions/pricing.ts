@@ -56,6 +56,15 @@ import {
 import { normalizePartPricing } from "@/lib/utils/part-pricing";
 import { computePartSellTiers } from "@/lib/utils/part-sell-prices";
 import { excelOilLabel } from "@/lib/utils/oil-labels";
+import {
+  REFERENCE_TAGS,
+  getCachedActiveEngineTypes,
+  getCachedActiveOilTypes,
+  getCachedActivePartBrands,
+  getCachedActivePartCategories,
+  getCachedServiceCosts,
+  revalidateReference,
+} from "@/lib/cache/reference";
 import { applyPartsSearch } from "@/lib/utils/parts-search";
 import { TRANSMISSION_KIND_LABEL } from "@/lib/utils/transmission";
 
@@ -88,26 +97,11 @@ function mergePartCategory<T extends PartJoinRow>(
 }
 
 export async function listOilTypes(): Promise<OilType[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("oil_types")
-    .select("*")
-    .eq("active", true)
-    .order("name");
-  if (error) throw error;
-  return (data ?? []) as OilType[];
+  return (await getCachedActiveOilTypes()) as OilType[];
 }
 
 export async function listEngineTypes(): Promise<EngineType[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("engine_types")
-    .select("*")
-    .eq("active", true)
-    .order("manufacturer")
-    .order("model");
-  if (error) throw error;
-  return (data ?? []) as EngineType[];
+  return (await getCachedActiveEngineTypes()) as EngineType[];
 }
 
 export interface PriceListRow extends Part {
@@ -962,13 +956,7 @@ export async function listAllEngineTypes(): Promise<EngineType[]> {
 }
 
 export async function listAllServiceCosts(): Promise<ServiceCost[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("service_costs")
-    .select("*")
-    .order("name");
-  if (error) throw error;
-  return (data ?? []) as ServiceCost[];
+  return (await getCachedServiceCosts()) as ServiceCost[];
 }
 
 export interface AdminPartRow extends Part {
@@ -1021,27 +1009,11 @@ export type PartCategoryOption = Pick<
 >;
 
 export async function listPartCategories(): Promise<PartCategoryOption[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("part_categories")
-    .select("id, name, unit_of_measure")
-    .eq("active", true)
-    .order("sort_order")
-    .order("name");
-  if (error) throw error;
-  return (data ?? []) as PartCategoryOption[];
+  return (await getCachedActivePartCategories()) as PartCategoryOption[];
 }
 
 export async function listPartBrands(): Promise<string[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("part_brands")
-    .select("name")
-    .eq("active", true)
-    .order("sort_order")
-    .order("name");
-  if (error) throw error;
-  return ((data ?? []) as { name: string }[]).map((r) => r.name);
+  return await getCachedActivePartBrands();
 }
 
 /**
@@ -1165,6 +1137,12 @@ export async function getEngineTypeDetail(id: string): Promise<EngineTypeDetail 
 // grid, the filter list, the staff catalogue page, and the admin pages.
 // ============================================================================
 function revalidatePricing(entity?: string) {
+  // Every pricing writer funnels through here, so this is the one place that
+  // has to drop the cached oil types / engine types / part categories /
+  // brands / service costs. Clearing the whole pricing tag rather than the
+  // one table that changed keeps this correct as writers get added — pricing
+  // edits are rare and the re-read is a single query.
+  revalidateReference(REFERENCE_TAGS.pricing);
   revalidatePath("/pricing");
   revalidatePath("/pricing/filters");
   revalidatePath("/pricing/oil-grid");
@@ -2001,6 +1979,7 @@ export const updatePricingSettings = wrapAction({
       })
       .eq("id", 1);
     if (error) throw error;
+    revalidateReference(REFERENCE_TAGS.appSettings);
     revalidatePath("/settings/pricing");
     revalidatePath("/pricing/all-filter-price");
     revalidatePath("/pricing/print-list");
@@ -2019,6 +1998,7 @@ export const updateMinMarginAlertPct = wrapAction({
       .update({ min_margin_alert_pct: frac })
       .eq("id", 1);
     if (error) throw error;
+    revalidateReference(REFERENCE_TAGS.appSettings);
     revalidatePath("/settings/pricing");
     revalidatePath("/analytics/products");
     return { pct: input.pct };

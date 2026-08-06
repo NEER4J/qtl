@@ -5,6 +5,11 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { wrapAction } from "@/lib/actions/_utils";
 import {
+  REFERENCE_TAGS,
+  getCachedActiveTechnicians,
+  revalidateReference,
+} from "@/lib/cache/reference";
+import {
   CreateTechnicianInput,
   ToggleTechnicianActiveInput,
   UpdateTechnicianInput,
@@ -16,14 +21,10 @@ import type { Technician } from "@/lib/db/types";
 // listAllTechnicians.
 // ----------------------------------------------------------------------------
 export async function listActiveTechnicians(): Promise<Technician[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("technicians")
-    .select("*")
-    .eq("active", true)
-    .order("name");
-  if (error) throw error;
-  return (data ?? []) as Technician[];
+  // Cached — read on every sales-job form render. listAllTechnicians (the
+  // settings page) stays uncached: it is one page, edited in place, and must
+  // always reflect the write that just happened.
+  return (await getCachedActiveTechnicians()) as Technician[];
 }
 
 export async function listAllTechnicians(): Promise<Technician[]> {
@@ -41,6 +42,7 @@ export async function listAllTechnicians(): Promise<Technician[]> {
 // Writes — owner-only via RLS + wrapAction roles guard.
 // ----------------------------------------------------------------------------
 function revalidateTech() {
+  revalidateReference(REFERENCE_TAGS.technicians);
   revalidatePath("/settings/technicians");
   revalidatePath("/sales/new");
   revalidatePath("/sales");
