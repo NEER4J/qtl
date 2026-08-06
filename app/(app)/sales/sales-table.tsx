@@ -12,7 +12,7 @@ import { StatusBadge } from "@/components/sales/status-badge";
 import type { SalesJobRow } from "@/lib/actions/sales";
 import { formatDate, formatMoney } from "@/lib/utils/format";
 
-import { SalesPagination } from "./sales-pagination";
+import { ListPagination } from "@/components/list-pagination";
 
 export function SalesTable({
   rows,
@@ -115,7 +115,7 @@ export function SalesTable({
         </Table>
       </div>
 
-      {pageCount > 1 && <SalesPagination page={page} pageCount={pageCount} />}
+      {pageCount > 1 && <ListPagination page={page} pageCount={pageCount} total={total} pageSize={pageSize} />}
     </div>
   );
 }

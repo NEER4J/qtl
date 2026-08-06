@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Pencil, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -16,34 +16,38 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ListPagination } from "@/components/list-pagination";
+import { useLiveSearchParam } from "@/hooks/use-live-search-param";
 import { toggleCustomerActive } from "@/lib/actions/customers";
+import type { CustomerListRow } from "@/lib/actions/customers";
 import type { Customer } from "@/lib/db/types";
-import { digitsOnly, formatPhone } from "@/lib/utils/phone";
+import { formatPhone } from "@/lib/utils/phone";
 
 import { CustomerFormDialog } from "./customer-form-dialog";
 
-function customerDisplayName(c: Customer): string {
+function customerDisplayName(c: CustomerListRow): string {
   return c.billing_name ?? c.last_or_company ?? "(no name)";
 }
 
 export function CustomersTable({
-  customers,
+  rows,
+  total,
+  page,
+  pageSize,
   hiddenColumns,
 }: {
-  customers: Customer[];
+  rows: CustomerListRow[];
+  total: number;
+  page: number;
+  pageSize: number;
   /** Per-viewer hidden column keys from profiles.hidden_columns["customers"]. */
   hiddenColumns?: string[];
 }) {
   const router = useRouter();
-  const [search, setSearch] = useState("");
-  // Debounced applied query so the filter settles ~200ms after typing stops; the
-  // gap drives the search spinner.
-  const [applied, setApplied] = useState("");
-  const searching = search !== applied;
-  useEffect(() => {
-    const t = setTimeout(() => setApplied(search), 200);
-    return () => clearTimeout(t);
-  }, [search]);
+  // Search runs on the SERVER now. The list is paginated, so filtering the
+  // rows in the browser would only ever search the page you happen to be on —
+  // and would silently miss everyone past customer 1000.
+  const { value: search, setValue: setSearch, searching } = useLiveSearchParam();
   const [editing, setEditing] = useState<Customer | null>(null);
   const [creating, setCreating] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -51,25 +55,10 @@ export function CustomersTable({
   const show = (key: string) => !hidden.has(key);
   // ALWAYS: Name, Plates, Actions. HIDEABLE: phone, email.
   const visibleCount = 3 + [show("phone"), show("email")].filter(Boolean).length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
-  const filtered = customers.filter((c) => {
-    if (!applied) return true;
-    const q = applied.toLowerCase();
-    const phoneDigits = digitsOnly(applied);
-    // Search BOTH name fields (like the new-customer duplicate popup), not just
-    // the display name — a customer's last_or_company can differ from billing_name.
-    const name = customerDisplayName(c).toLowerCase();
-    return (
-      name.includes(q) ||
-      (c.billing_name ?? "").toLowerCase().includes(q) ||
-      (c.last_or_company ?? "").toLowerCase().includes(q) ||
-      c.email?.toLowerCase().includes(q) ||
-      c.license_plates.some((p) => p.toLowerCase().includes(q)) ||
-      (phoneDigits.length >= 3 && (c.phone_search ?? "").includes(phoneDigits))
-    );
-  });
 
-  const handleToggle = (customer: Customer) => {
+  const handleToggle = (customer: CustomerListRow) => {
     startTransition(async () => {
       const res = await toggleCustomerActive({ id: customer.id, active: !customer.active });
       if (!res.ok) {
@@ -113,7 +102,7 @@ export function CustomersTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.length === 0 ? (
+            {rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={visibleCount} className="text-center text-muted-foreground py-8 px-6">
                   {search ? (
@@ -129,7 +118,7 @@ export function CustomersTable({
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((c) => (
+              rows.map((c) => (
                 <TableRow
                   key={c.id}
                   className={`cursor-pointer ${!c.active ? "opacity-60" : ""}`}
@@ -137,9 +126,9 @@ export function CustomersTable({
                 >
                   <TableCell className="font-medium">{customerDisplayName(c)}</TableCell>
                   <TableCell>
-                    {c.license_plates.length > 0 ? (
+                    {c.plates.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
-                        {c.license_plates.map((p) => (
+                        {c.plates.map((p) => (
                           <Badge key={p} variant="outline" className="font-mono text-xs">
                             {p}
                           </Badge>
@@ -174,6 +163,15 @@ export function CustomersTable({
           </TableBody>
         </Table>
       </div>
+
+      {pageCount > 1 && (
+        <ListPagination
+          page={page}
+          pageCount={pageCount}
+          total={total}
+          pageSize={pageSize}
+        />
+      )}
 
       <CustomerFormDialog
         open={creating}

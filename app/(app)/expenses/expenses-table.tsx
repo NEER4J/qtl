@@ -15,7 +15,7 @@ import { StatusBadge } from "@/components/sales/status-badge";
 import type { ExpenseRow } from "@/lib/actions/expenses";
 import { formatDate, formatMoney } from "@/lib/utils/format";
 
-import { ExpensesPagination } from "./expenses-pagination";
+import { ListPagination } from "@/components/list-pagination";
 
 export function ExpensesTable({
   rows,
@@ -163,7 +163,7 @@ export function ExpensesTable({
         </Table>
       </div>
 
-      {pageCount > 1 && <ExpensesPagination page={page} pageCount={pageCount} />}
+      {pageCount > 1 && <ListPagination page={page} pageCount={pageCount} total={total} pageSize={pageSize} />}
     </div>
   );
 }

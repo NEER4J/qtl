@@ -7,11 +7,13 @@ import { createClient } from "@/lib/supabase/server";
 import { wrapAction } from "@/lib/actions/_utils";
 import {
   CreateCustomerInput,
+  ListCustomersInput,
   SearchCustomersInput,
   UpdateCustomerInput,
 } from "@/lib/schemas/customers";
 import type { Customer, SalesJob } from "@/lib/db/types";
 import { digitsOnly } from "@/lib/utils/phone";
+import { orFilterValue } from "@/lib/utils/parts-search";
 
 // Live "this name already exists" check for the customer form. Matches on
 // billing_name OR last_or_company (contains, case-insensitive).
@@ -109,14 +111,131 @@ export const grantFreeOilChange = wrapAction({
 // ----------------------------------------------------------------------------
 // List — used by /customers page
 // ----------------------------------------------------------------------------
-export async function listCustomers(): Promise<Customer[]> {
+/** A customer plus the plates actually on file for them. */
+export interface CustomerListRow extends Customer {
+  /**
+   * Union of vehicles.license_plate and the legacy customers.license_plates
+   * array. Neither is a superset of the other — see 0121 — so showing either
+   * one alone would hide plates that are genuinely on file.
+   */
+  plates: string[];
+}
+
+export interface ListCustomersResult {
+  rows: CustomerListRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/**
+ * Cap on how many plate matches feed the customer lookup. These ids travel in
+ * the query string, so an unbounded list would eventually produce a URL the
+ * server rejects. 500 is far beyond any real plate search — a partial plate is
+ * a specific thing to type — and the fallback if it were ever hit is that the
+ * least-relevant plate matches are omitted, not that the search breaks.
+ */
+const PLATE_MATCH_CAP = 500;
+
+/**
+ * Paged, server-side-filtered customer list.
+ *
+ * Replaces an unpaginated `select("*")` that shipped the whole table to the
+ * browser and filtered it there. That was slow, and it was also silently
+ * wrong: PostgREST caps a response at 1000 rows, so past customer number 1000
+ * (alphabetically) a customer simply could not be found.
+ *
+ * Search covers the same fields the old in-browser filter did — name, email,
+ * phone, plate — but against the whole table rather than the loaded page.
+ */
+export async function listCustomersPaged(
+  raw: Partial<Record<string, string | number>> = {},
+): Promise<ListCustomersResult> {
+  const input = ListCustomersInput.parse(raw);
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("customers")
-    .select("*")
-    .order("billing_name");
+
+  const from = (input.page - 1) * input.pageSize;
+  const to = from + input.pageSize - 1;
+
+  // Plate search has to go through vehicles: that is where plates added from
+  // the vehicles page live, and they are absent from customers.license_plates.
+  // The other direction is covered by plates_text in the OR below.
+  let plateCustomerIds: string[] = [];
+  if (input.q) {
+    const { data, error } = await supabase
+      .from("vehicles")
+      .select("customer_id")
+      .ilike("license_plate", `%${input.q.replace(/[%_]/g, (m) => `\\${m}`)}%`)
+      .is("deactivated_at", null)
+      .limit(PLATE_MATCH_CAP);
+    if (error) throw error;
+    plateCustomerIds = Array.from(
+      new Set(
+        ((data ?? []) as { customer_id: string | null }[])
+          .map((r) => r.customer_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+  }
+
+  // plates_text is added by migration 0121. Code and migrations deploy
+  // independently, so for the short window where the new build is live and the
+  // migration has not landed yet, fall back to a query without it rather than
+  // 500-ing the whole page. Plate search still works in that window via the
+  // vehicles lookup above; only legacy array-only plates are missed.
+  const buildQuery = (includePlatesText: boolean) => {
+    let query = supabase
+      .from("customers")
+      // Embedding vehicles here rather than issuing a second round trip for
+      // the page's plates — the database is far enough away that the extra hop
+      // is worth avoiding. No `!inner`, so customers with no vehicles are
+      // kept; the deactivated_at filter prunes the embedded rows only.
+      .select("*, vehicles(license_plate)", { count: "exact" })
+      .is("vehicles.deactivated_at", null)
+      .order("billing_name")
+      .range(from, to);
+
+
+    if (input.q) {
+      const term = orFilterValue(input.q);
+      const ors = [
+        `billing_name.ilike.${term}`,
+        `last_or_company.ilike.${term}`,
+        `email.ilike.${term}`,
+      ];
+      if (includePlatesText) ors.push(`plates_text.ilike.${term}`);
+      const phoneDigits = digitsOnly(input.q);
+      if (phoneDigits.length >= 3) ors.push(`phone_search.like.${orFilterValue(phoneDigits)}`);
+      if (plateCustomerIds.length > 0) ors.push(`id.in.(${plateCustomerIds.join(",")})`);
+      query = query.or(ors.join(","));
+    }
+    return query;
+  };
+
+  let { data, error, count } = await buildQuery(true);
+  // 42703 = undefined_column.
+  if (error?.code === "42703") {
+    console.warn("[listCustomersPaged] plates_text missing — has migration 0121 run?");
+    ({ data, error, count } = await buildQuery(false));
+  }
   if (error) throw error;
-  return (data ?? []) as Customer[];
+
+  type JoinedRow = Customer & {
+    vehicles: { license_plate: string | null }[] | null;
+  };
+
+  const rows: CustomerListRow[] = ((data ?? []) as JoinedRow[]).map((r) => {
+    const { vehicles, ...rest } = r;
+    const fromVehicles = (vehicles ?? [])
+      .map((v) => v.license_plate)
+      .filter((p): p is string => Boolean(p));
+    const plates = Array.from(
+      new Set([...fromVehicles, ...(rest.license_plates ?? [])]),
+    ).sort();
+    return { ...(rest as Customer), plates };
+  });
+
+  return { rows, total: count ?? 0, page: input.page, pageSize: input.pageSize };
 }
 
 // ----------------------------------------------------------------------------

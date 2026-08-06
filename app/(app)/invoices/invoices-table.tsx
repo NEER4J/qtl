@@ -14,7 +14,7 @@ import { DownloadInvoiceButton } from "@/components/sales/download-invoice-butto
 import type { SalesJobRow } from "@/lib/actions/sales";
 import { formatDate, formatMoney } from "@/lib/utils/format";
 
-import { SalesPagination } from "../sales/sales-pagination";
+import { ListPagination } from "@/components/list-pagination";
 
 export function InvoicesTable({
   rows,
@@ -95,7 +95,7 @@ export function InvoicesTable({
         </Table>
       </div>
 
-      {pageCount > 1 && <SalesPagination page={page} pageCount={pageCount} basePath="/invoices" />}
+      {pageCount > 1 && <ListPagination page={page} pageCount={pageCount} total={total} pageSize={pageSize} />}
     </div>
   );
 }

@@ -159,3 +159,10 @@ export const SearchCustomersInput = z.object({
   q: z.string().trim().max(100).default(""),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
+
+/** Server-side paging + search for the /customers list. */
+export const ListCustomersInput = z.object({
+  q: z.string().trim().max(100).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(25),
+});

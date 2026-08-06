@@ -22,6 +22,18 @@ function escapeIlikeValue(word: string): string {
   return `%${escaped}%`;
 }
 
+/**
+ * Wrap a value for use inside a PostgREST `.or()` filter.
+ *
+ * `,` `:` `(` `)` `.` are all delimiters in that grammar, so a raw customer
+ * name like "Smith, J. (Ontario)" would silently mis-parse the whole filter.
+ * Quoting keeps the input intact. Exported because every hand-built `.or()`
+ * chain needs it, not just the parts search.
+ */
+export function orFilterValue(word: string): string {
+  return quoteOrValue(escapeIlikeValue(word));
+}
+
 function quoteOrValue(value: string): string {
   // PostgREST's `.or()` parser uses , : ( ) . as delimiters. Wrapping the
   // value in double quotes and escaping embedded quotes/backslashes keeps the
