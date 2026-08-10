@@ -18,7 +18,7 @@ import { format } from "date-fns";
 
 import { DailyRevenueChart } from "./daily-revenue-chart";
 import { ExpenseBreakdownChart } from "./expense-breakdown-chart";
-import { MonthNav } from "./month-nav";
+import { MonthNav, type DashboardRange } from "./month-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -30,12 +30,14 @@ export default async function DashboardPage({
   // Match registry: dashboard.defaultRoles = ["owner", "co_owner", "manager", "accountant"].
   await requireRole("owner", "co_owner", "manager", "accountant");
   const sp = await searchParams;
+  const range: DashboardRange | null =
+    sp.range === "3m" || sp.range === "6m" || sp.range === "12m" ? sp.range : null;
   const month =
     sp.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month)
       ? sp.month
       : format(new Date(), "yyyy-MM");
   const [data, overdueJobs] = await Promise.all([
-    getDashboardOverview(month),
+    getDashboardOverview(range ?? month),
     getOverdueJobs(30),
   ]);
 
@@ -51,12 +53,12 @@ export default async function DashboardPage({
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted-foreground">{data.period_label}</p>
         </div>
-        <MonthNav month={month} />
+        <MonthNav month={month} range={range} />
       </div>
 
       <PageHelp id="dashboard">
         <p>
-          Your <strong>monthly snapshot</strong>. Everything on this page covers one calendar month — the current one by default — and refreshes the moment a new sale or expense is saved. Use the month picker at the top right to look at any past month.
+          Your <strong>business snapshot</strong>. Everything on this page covers one period — the current calendar month by default — and refreshes the moment a new sale or expense is saved. Use the picker at the top right to look at any past month, or the 3M / 6M / 1Y buttons to see the last 3 months, 6 months, or year at once.
         </p>
         <ul>
           <li><strong>Sales revenue</strong> — total billed this month (sub-total plus HST).</li>
@@ -86,11 +88,11 @@ export default async function DashboardPage({
                 ) : (
                   <TrendingDown className="size-3" />
                 )}
-                {Math.abs(salesChange).toFixed(1)}% vs last month
+                {Math.abs(salesChange).toFixed(1)}% vs {data.comparison_label}
               </span>
             ) : (
               <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <Minus className="size-3" /> No prior month data
+                <Minus className="size-3" /> No prior period data
               </span>
             )
           }
@@ -228,7 +230,7 @@ export default async function DashboardPage({
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2">
-          <DailyRevenueChart data={data.daily_trend} />
+          <DailyRevenueChart data={data.daily_trend} granularity={data.granularity} />
         </div>
         <ExpenseBreakdownChart data={data.expense_breakdown} />
       </div>

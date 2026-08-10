@@ -26,6 +26,8 @@ export interface ExpenseBreakdownRow {
 
 export interface DashboardOverview {
   period_label: string;
+  comparison_label: string;
+  granularity: "day" | "month";
   sales_total: number;
   expense_total: number;
   net: number;
@@ -37,145 +39,122 @@ export interface DashboardOverview {
   prior_sales_total: number;
 }
 
-export async function getDashboardOverview(month?: string): Promise<DashboardOverview> {
-  const profile = await requireProfile();
+/** period: "YYYY-MM" for a single month, or "3m" | "6m" | "12m" for a trailing range. */
+export async function getDashboardOverview(period?: string): Promise<DashboardOverview> {
+  await requireProfile();
   const supabase = await createClient();
 
-  const now =
-    month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month)
-      ? new Date(`${month}-01T00:00:00`)
-      : new Date();
-  const from = startOfMonth(now);
-  const to = endOfMonth(now);
-  const priorFrom = startOfMonth(subMonths(now, 1));
-  const priorTo = endOfMonth(subMonths(now, 1));
+  const now = new Date();
+  const rangeMonths =
+    period === "3m" ? 3 : period === "6m" ? 6 : period === "12m" ? 12 : null;
+  const anchor =
+    !rangeMonths && period && /^\d{4}-(0[1-9]|1[0-2])$/.test(period)
+      ? new Date(`${period}-01T00:00:00`)
+      : now;
 
-  const fromStr = format(from, "yyyy-MM-dd");
-  const toStr = format(to, "yyyy-MM-dd");
-  const priorFromStr = format(priorFrom, "yyyy-MM-dd");
-  const priorToStr = format(priorTo, "yyyy-MM-dd");
-
-  // Build location filter if scoped
-  const isScoped = profile.role === "manager" || profile.role === "staff";
-  const locationId = profile.location_id;
-
-  async function salesQuery(f: string, t: string) {
-    let q = supabase
-      .from("sales_jobs")
-      .select("total, outstanding, location_id")
-      .is("deactivated_at", null)
-      .gte("job_date", f)
-      .lte("job_date", t);
-    if (isScoped && locationId) q = q.eq("location_id", locationId);
-    return q;
+  let from: Date, to: Date, priorFrom: Date, priorTo: Date;
+  let period_label: string, comparison_label: string;
+  if (rangeMonths) {
+    from = startOfMonth(subMonths(now, rangeMonths - 1));
+    to = endOfMonth(now);
+    priorFrom = startOfMonth(subMonths(now, rangeMonths * 2 - 1));
+    priorTo = endOfMonth(subMonths(now, rangeMonths));
+    period_label = `${format(from, "MMM yyyy")} – ${format(to, "MMM yyyy")}`;
+    comparison_label = `prior ${rangeMonths} months`;
+  } else {
+    from = startOfMonth(anchor);
+    to = endOfMonth(anchor);
+    priorFrom = startOfMonth(subMonths(anchor, 1));
+    priorTo = endOfMonth(subMonths(anchor, 1));
+    period_label = format(anchor, "MMMM yyyy");
+    comparison_label = "last month";
   }
+  const fmt = (d: Date) => format(d, "yyyy-MM-dd");
 
-  async function expenseQuery(f: string, t: string) {
-    let q = supabase
-      .from("expenses")
-      .select("total, location_id")
-      .is("deactivated_at", null)
-      .gte("expense_date", f)
-      .lte("expense_date", t);
-    if (isScoped && locationId) q = q.eq("location_id", locationId);
-    return q;
-  }
-
-  const [salesRes, expensesRes, priorSalesRes, locationsRes, dailyRes, categoryRes] =
-    await Promise.all([
-      salesQuery(fromStr, toStr),
-      expenseQuery(fromStr, toStr),
-      salesQuery(priorFromStr, priorToStr),
-      // All locations for breakdown
-      supabase.from("locations").select("id, name").eq("active", true),
-      // Daily trend
-      (async () => {
-        let q = supabase
-          .from("sales_jobs")
-          .select("job_date, total")
-          .is("deactivated_at", null)
-          .gte("job_date", fromStr)
-          .lte("job_date", toStr);
-        if (isScoped && locationId) q = q.eq("location_id", locationId);
-        return q;
-      })(),
-      // Expense breakdown by category
-      (async () => {
-        let q = supabase
-          .from("expenses")
-          .select("total, expense_categories(name)")
-          .is("deactivated_at", null)
-          .gte("expense_date", fromStr)
-          .lte("expense_date", toStr);
-        if (isScoped && locationId) q = q.eq("location_id", locationId);
-        return q;
-      })(),
-    ]);
+  // All reads go through the security-definer aggregate functions (0008/0129):
+  // row-level fetches are capped at 1000 rows by PostgREST, which would
+  // silently under-report multi-month ranges.
+  const [locRes, priorRes, trendRes, catRes] = await Promise.all([
+    supabase.rpc("my_dashboard", { p_from: fmt(from), p_to: fmt(to) }),
+    supabase.rpc("my_dashboard", { p_from: fmt(priorFrom), p_to: fmt(priorTo) }),
+    rangeMonths
+      ? supabase.rpc("monthly_sales_trend", { p_from: fmt(from), p_to: fmt(to) })
+      : supabase.rpc("daily_sales_trend", { p_from: fmt(from), p_to: fmt(to) }),
+    supabase.rpc("expense_breakdown_by_category", { p_from: fmt(from), p_to: fmt(to) }),
+  ]);
 
   // Surface a swallowed query error instead of silently reporting $0 — e.g. the
   // expense card reading 0 when the expenses query actually errored (RLS/column).
-  if (salesRes.error) throw salesRes.error;
-  if (expensesRes.error) throw expensesRes.error;
-  if (priorSalesRes.error) throw priorSalesRes.error;
-  if (dailyRes.error) throw dailyRes.error;
-  if (categoryRes.error) throw categoryRes.error;
+  if (locRes.error) throw locRes.error;
+  if (priorRes.error) throw priorRes.error;
+  if (trendRes.error) throw trendRes.error;
+  if (catRes.error) throw catRes.error;
 
-  const salesRows = (salesRes.data ?? []) as Array<{ total: number; outstanding: number; location_id: string }>;
-  const expenseRows = (expensesRes.data ?? []) as Array<{ total: number; location_id: string }>;
-  const priorSalesRows = (priorSalesRes.data ?? []) as Array<{ total: number }>;
-  const allLocations = (locationsRes.data ?? []) as Array<{ id: string; name: string }>;
+  const locations: LocationSummaryRow[] = (
+    (locRes.data ?? []) as Array<{
+      location_id: string;
+      location_name: string;
+      sales_total: number;
+      expense_total: number;
+      outstanding: number;
+      job_count: number;
+    }>
+  ).map((r) => ({
+    location_id: r.location_id,
+    name: r.location_name,
+    sales_total: Number(r.sales_total),
+    expense_total: Number(r.expense_total),
+    outstanding: Number(r.outstanding),
+    job_count: r.job_count,
+  }));
 
-  const sales_total = salesRows.reduce((s, r) => s + Number(r.total), 0);
-  const expense_total = expenseRows.reduce((s, r) => s + Number(r.total), 0);
-  const outstanding = salesRows.reduce((s, r) => s + Number(r.outstanding ?? 0), 0);
-  const prior_sales_total = priorSalesRows.reduce((s, r) => s + Number(r.total), 0);
+  const sales_total = locations.reduce((s, l) => s + l.sales_total, 0);
+  const expense_total = locations.reduce((s, l) => s + l.expense_total, 0);
+  const outstanding = locations.reduce((s, l) => s + l.outstanding, 0);
+  const job_count = locations.reduce((s, l) => s + l.job_count, 0);
+  const prior_sales_total = (
+    (priorRes.data ?? []) as Array<{ sales_total: number }>
+  ).reduce((s, r) => s + Number(r.sales_total), 0);
 
-  // Per-location breakdown (owner/accountant only)
-  const locations: LocationSummaryRow[] = allLocations.map((loc) => {
-    const locSales = salesRows.filter((r) => r.location_id === loc.id);
-    const locExp = expenseRows.filter((r) => r.location_id === loc.id);
-    return {
-      location_id: loc.id,
-      name: loc.name,
-      sales_total: locSales.reduce((s, r) => s + Number(r.total), 0),
-      expense_total: locExp.reduce((s, r) => s + Number(r.total), 0),
-      outstanding: locSales.reduce((s, r) => s + Number(r.outstanding ?? 0), 0),
-      job_count: locSales.length,
-    };
-  });
-
-  // Daily trend — aggregate client-side to avoid needing a SQL function
-  const dailyMap: Record<string, { total: number; count: number }> = {};
-  for (const r of (dailyRes.data ?? []) as Array<{ job_date: string; total: number }>) {
-    if (!dailyMap[r.job_date]) dailyMap[r.job_date] = { total: 0, count: 0 };
-    dailyMap[r.job_date].total += Number(r.total);
-    dailyMap[r.job_date].count += 1;
+  let daily_trend: DailySalesTrendRow[];
+  if (rangeMonths) {
+    daily_trend = (
+      (trendRes.data ?? []) as Array<{ month: string; sales_total: number; job_count: number }>
+    ).map((r) => ({ day: r.month, total: Number(r.sales_total), job_count: r.job_count }));
+  } else {
+    // daily_sales_trend returns one row per day per location — roll up days.
+    const dailyMap: Record<string, { total: number; count: number }> = {};
+    for (const r of (trendRes.data ?? []) as Array<{
+      day: string;
+      sales_total: number;
+      job_count: number;
+    }>) {
+      if (!dailyMap[r.day]) dailyMap[r.day] = { total: 0, count: 0 };
+      dailyMap[r.day].total += Number(r.sales_total);
+      dailyMap[r.day].count += r.job_count;
+    }
+    daily_trend = Object.entries(dailyMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([day, { total, count }]) => ({ day, total, job_count: count }));
   }
-  const daily_trend: DailySalesTrendRow[] = Object.entries(dailyMap)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([day, { total, count }]) => ({ day, total, job_count: count }));
 
-  // Expense breakdown by category
-  const catMap: Record<string, number> = {};
-  for (const r of (categoryRes.data ?? []) as unknown as Array<{
-    total: number;
-    expense_categories: { name: string } | null;
-  }>) {
-    const name = r.expense_categories?.name ?? "Uncategorized";
-    catMap[name] = (catMap[name] ?? 0) + Number(r.total);
-  }
-  const expense_breakdown: ExpenseBreakdownRow[] = Object.entries(catMap)
-    .map(([category_name, total]) => ({ category_name, total }))
+  const expense_breakdown: ExpenseBreakdownRow[] = (
+    (catRes.data ?? []) as Array<{ category_name: string; total: number }>
+  )
+    .map((r) => ({ category_name: r.category_name, total: Number(r.total) }))
+    .filter((r) => r.total !== 0)
     .sort((a, b) => b.total - a.total);
 
   return {
-    period_label: format(now, "MMMM yyyy"),
+    period_label,
+    comparison_label,
+    granularity: rangeMonths ? "month" : "day",
     sales_total,
     expense_total,
     net: sales_total - expense_total,
     outstanding,
-    job_count: salesRows.length,
-    locations: isScoped ? locations.filter((l) => l.location_id === locationId) : locations,
+    job_count,
+    locations,
     daily_trend,
     expense_breakdown,
     prior_sales_total,

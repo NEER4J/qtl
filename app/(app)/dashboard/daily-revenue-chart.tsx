@@ -14,15 +14,22 @@ import { format, parseISO } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { DailySalesTrendRow } from "@/lib/actions/dashboard";
 
-export function DailyRevenueChart({ data }: { data: DailySalesTrendRow[] }) {
+export function DailyRevenueChart({
+  data,
+  granularity = "day",
+}: {
+  data: DailySalesTrendRow[];
+  granularity?: "day" | "month";
+}) {
+  const title = granularity === "month" ? "Monthly revenue" : "Daily revenue";
   if (data.length === 0) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Daily revenue</CardTitle>
+          <CardTitle>{title}</CardTitle>
         </CardHeader>
         <CardContent className="flex items-center justify-center h-48 text-sm text-muted-foreground">
-          No sales recorded this month yet.
+          No sales recorded in this period.
         </CardContent>
       </Card>
     );
@@ -30,13 +37,13 @@ export function DailyRevenueChart({ data }: { data: DailySalesTrendRow[] }) {
 
   const formatted = data.map((d) => ({
     ...d,
-    label: format(parseISO(d.day), "MMM d"),
+    label: format(parseISO(d.day), granularity === "month" ? "MMM yyyy" : "MMM d"),
   }));
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Daily revenue</CardTitle>
+        <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={220}>
