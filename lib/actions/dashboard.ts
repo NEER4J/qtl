@@ -71,15 +71,76 @@ export async function getDashboardOverview(period?: string): Promise<DashboardOv
   }
   const fmt = (d: Date) => format(d, "yyyy-MM-dd");
 
+  // Rolls daily_sales_trend's day×location rows up to one row per day.
+  function rollUpDays(
+    rows: Array<{ day: string; sales_total: number; job_count: number }>,
+  ): DailySalesTrendRow[] {
+    const map: Record<string, { total: number; count: number }> = {};
+    for (const r of rows) {
+      if (!map[r.day]) map[r.day] = { total: 0, count: 0 };
+      map[r.day].total += Number(r.sales_total);
+      map[r.day].count += r.job_count;
+    }
+    return Object.entries(map)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([day, { total, count }]) => ({ day, total, job_count: count }));
+  }
+
+  async function fetchTrend(): Promise<DailySalesTrendRow[]> {
+    if (!rangeMonths) {
+      const res = await supabase.rpc("daily_sales_trend", {
+        p_from: fmt(from),
+        p_to: fmt(to),
+      });
+      if (res.error) throw res.error;
+      return rollUpDays(res.data ?? []);
+    }
+    const res = await supabase.rpc("monthly_sales_trend", {
+      p_from: fmt(from),
+      p_to: fmt(to),
+    });
+    if (!res.error) {
+      return (
+        (res.data ?? []) as Array<{ month: string; sales_total: number; job_count: number }>
+      ).map((r) => ({ day: r.month, total: Number(r.sales_total), job_count: r.job_count }));
+    }
+    // PGRST202 = function missing, i.e. migration 0129 hasn't reached this
+    // database yet. Fall back to one daily_sales_trend call per month (each
+    // safely under PostgREST's 1000-row cap) and bucket here.
+    if (res.error.code !== "PGRST202") throw res.error;
+    const monthly = await Promise.all(
+      Array.from({ length: rangeMonths }, (_, i) => {
+        const m = subMonths(now, rangeMonths - 1 - i);
+        return supabase
+          .rpc("daily_sales_trend", {
+            p_from: fmt(startOfMonth(m)),
+            p_to: fmt(endOfMonth(m)),
+          })
+          .then((r) => {
+            if (r.error) throw r.error;
+            return {
+              day: fmt(startOfMonth(m)),
+              rows: (r.data ?? []) as Array<{ sales_total: number; job_count: number }>,
+            };
+          });
+      }),
+    );
+    return monthly
+      .filter((m) => m.rows.length > 0)
+      .map((m) => ({
+        day: m.day,
+        total: m.rows.reduce((s, r) => s + Number(r.sales_total), 0),
+        job_count: m.rows.reduce((s, r) => s + r.job_count, 0),
+      }));
+  }
+
   // All reads go through the security-definer aggregate functions (0008/0129):
   // row-level fetches are capped at 1000 rows by PostgREST, which would
   // silently under-report multi-month ranges.
-  const [locRes, priorRes, trendRes, catRes] = await Promise.all([
+  const [locRes, priorRes, daily_trend, catRes] = await Promise.all([
     supabase.rpc("my_dashboard", { p_from: fmt(from), p_to: fmt(to) }),
     supabase.rpc("my_dashboard", { p_from: fmt(priorFrom), p_to: fmt(priorTo) }),
-    rangeMonths
-      ? supabase.rpc("monthly_sales_trend", { p_from: fmt(from), p_to: fmt(to) })
-      : supabase.rpc("daily_sales_trend", { p_from: fmt(from), p_to: fmt(to) }),
+    fetchTrend(),
     supabase.rpc("expense_breakdown_by_category", { p_from: fmt(from), p_to: fmt(to) }),
   ]);
 
@@ -87,7 +148,6 @@ export async function getDashboardOverview(period?: string): Promise<DashboardOv
   // expense card reading 0 when the expenses query actually errored (RLS/column).
   if (locRes.error) throw locRes.error;
   if (priorRes.error) throw priorRes.error;
-  if (trendRes.error) throw trendRes.error;
   if (catRes.error) throw catRes.error;
 
   const locations: LocationSummaryRow[] = (
@@ -115,28 +175,6 @@ export async function getDashboardOverview(period?: string): Promise<DashboardOv
   const prior_sales_total = (
     (priorRes.data ?? []) as Array<{ sales_total: number }>
   ).reduce((s, r) => s + Number(r.sales_total), 0);
-
-  let daily_trend: DailySalesTrendRow[];
-  if (rangeMonths) {
-    daily_trend = (
-      (trendRes.data ?? []) as Array<{ month: string; sales_total: number; job_count: number }>
-    ).map((r) => ({ day: r.month, total: Number(r.sales_total), job_count: r.job_count }));
-  } else {
-    // daily_sales_trend returns one row per day per location — roll up days.
-    const dailyMap: Record<string, { total: number; count: number }> = {};
-    for (const r of (trendRes.data ?? []) as Array<{
-      day: string;
-      sales_total: number;
-      job_count: number;
-    }>) {
-      if (!dailyMap[r.day]) dailyMap[r.day] = { total: 0, count: 0 };
-      dailyMap[r.day].total += Number(r.sales_total);
-      dailyMap[r.day].count += r.job_count;
-    }
-    daily_trend = Object.entries(dailyMap)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([day, { total, count }]) => ({ day, total, job_count: count }));
-  }
 
   const expense_breakdown: ExpenseBreakdownRow[] = (
     (catRes.data ?? []) as Array<{ category_name: string; total: number }>
