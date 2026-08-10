@@ -111,6 +111,10 @@ export const SalesJobInput = z
       )
       .optional(),
 
+    // Dump-truck surcharge — the $ snapshot actually baked into sub_total.
+    is_dump_truck: z.coerce.boolean().default(false),
+    dump_truck_surcharge: z.coerce.number().min(0).default(0),
+
     // Free grease (item #15)
     free_grease_applied: z.coerce.boolean().default(false),
     free_grease_override_reason: z
@@ -159,21 +163,22 @@ export const SalesJobInput = z
           message: "Store credit cannot be applied when the invoice total is negative",
         });
       }
-    } else if (payments.length > 0) {
-      const sum = payments.reduce((a, p) => a + p.amount, 0);
-      if (sum > amountDue + 0.01) {
+    } else {
+      // Paying MORE than the amount due is allowed — the excess becomes store
+      // credit on the customer's account — but that needs a customer account
+      // to hold it, so anonymous/new-name jobs still get the hard cap.
+      const sum =
+        payments.length > 0
+          ? payments.reduce((a, p) => a + p.amount, 0)
+          : val.paid_amount;
+      if (sum > amountDue + 0.01 && !val.customer_id) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["initial_payments"],
-          message: "Sum of payments cannot exceed amount due",
+          path: [payments.length > 0 ? "initial_payments" : "paid_amount"],
+          message:
+            "Payment is more than the amount due — pick an existing customer so the extra can be saved as store credit",
         });
       }
-    } else if (val.paid_amount > amountDue + 0.01) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["paid_amount"],
-        message: "Paid amount cannot exceed amount due",
-      });
     }
     if (val.credit_applied > val.total + 0.01 && val.total > 0.005) {
       ctx.addIssue({

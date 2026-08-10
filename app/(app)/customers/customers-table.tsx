@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Pencil, Plus, Search } from "lucide-react";
+import { Download, GitMerge, History, Loader2, Pencil, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ import type { Customer } from "@/lib/db/types";
 import { formatPhone } from "@/lib/utils/phone";
 
 import { CustomerFormDialog } from "./customer-form-dialog";
+import { MergeCustomersDialog } from "./merge-customers-dialog";
 
 function customerDisplayName(c: CustomerListRow): string {
   return c.billing_name ?? c.last_or_company ?? "(no name)";
@@ -35,6 +36,7 @@ export function CustomersTable({
   page,
   pageSize,
   hiddenColumns,
+  canMerge = false,
 }: {
   rows: CustomerListRow[];
   total: number;
@@ -42,6 +44,8 @@ export function CustomersTable({
   pageSize: number;
   /** Per-viewer hidden column keys from profiles.hidden_columns["customers"]. */
   hiddenColumns?: string[];
+  /** Owner / co_owner may merge duplicate customers. */
+  canMerge?: boolean;
 }) {
   const router = useRouter();
   // Search runs on the SERVER now. The list is paginated, so filtering the
@@ -50,6 +54,7 @@ export function CustomersTable({
   const { value: search, setValue: setSearch, searching } = useLiveSearchParam();
   const [editing, setEditing] = useState<Customer | null>(null);
   const [creating, setCreating] = useState(false);
+  const [merging, setMerging] = useState(false);
   const [isPending, startTransition] = useTransition();
   const hidden = new Set(hiddenColumns ?? []);
   const show = (key: string) => !hidden.has(key);
@@ -85,9 +90,30 @@ export function CustomersTable({
             className="pl-8"
           />
         </div>
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="size-4" /> New customer
-        </Button>
+        <div className="flex items-center gap-2">
+          {canMerge && (
+            <Button variant="outline" onClick={() => setMerging(true)}>
+              <GitMerge className="size-4" /> Merge customers
+            </Button>
+          )}
+          <Button asChild variant="outline">
+            {/* Exports every match, not just the page on screen — the route
+                re-runs the search server-side and pages past the 1000-row cap. */}
+            <a
+              href={
+                search
+                  ? `/api/export/customers?q=${encodeURIComponent(search)}`
+                  : "/api/export/customers"
+              }
+              download
+            >
+              <Download className="size-4" /> Export CSV
+            </a>
+          </Button>
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="size-4" /> New customer
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
@@ -144,6 +170,14 @@ export function CustomersTable({
                   {show("email") && <TableCell>{c.email ?? "—"}</TableCell>}
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="History"
+                        onClick={() => router.push(`/customers/${c.id}`)}
+                      >
+                        <History className="size-4" />
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => setEditing(c)}>
                         <Pencil className="size-4" />
                       </Button>
@@ -173,6 +207,7 @@ export function CustomersTable({
         />
       )}
 
+      <MergeCustomersDialog open={merging} onOpenChange={setMerging} />
       <CustomerFormDialog
         open={creating}
         onOpenChange={setCreating}

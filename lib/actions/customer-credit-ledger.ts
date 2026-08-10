@@ -26,8 +26,10 @@ export async function getCustomerCreditBalance(
 }
 
 /**
- * Replace this job's ledger rows with the current credit issue / apply amounts.
- * Called after the sales_jobs row is written.
+ * Replace this job's ledger rows with the current credit issue / apply amounts,
+ * including any overpayment credit (payments tendered beyond the amount due —
+ * see migration 0127). Called after the sales_jobs row AND its sales_payments
+ * are written, since the overpayment is derived from the payments ledger.
  */
 export async function syncJobCreditLedger(
   supabase: Supabase,
@@ -39,6 +41,21 @@ export async function syncJobCreditLedger(
   userId: string,
 ): Promise<void> {
   if (!customerId) return;
+
+  // Overpayment = tendered payments minus what the invoice could absorb.
+  // Derived from sales_payments (the source of truth for tender) so the same
+  // sync works for create, edit, and later add-payment calls.
+  let overpaid = 0;
+  if (total > 0.005) {
+    const { data: payRows, error: payErr } = await supabase
+      .from("sales_payments")
+      .select("amount")
+      .eq("sales_job_id", jobId);
+    if (payErr) throw payErr;
+    const tendered = (payRows ?? []).reduce((s, r) => s + Number(r.amount), 0);
+    const due = Math.max(0, total - creditApplied);
+    overpaid = Math.max(0, Math.round((tendered - due) * 100) / 100);
+  }
 
   const { error: delErr } = await supabase
     .from("customer_credit_ledger")
@@ -70,6 +87,16 @@ export async function syncJobCreditLedger(
       sales_job_id: jobId,
       amount: -Math.round(creditApplied * 100) / 100,
       notes: `Store credit applied — invoice ${invoiceNo}`,
+      created_by: userId,
+    });
+  }
+
+  if (overpaid > 0.005) {
+    rows.push({
+      customer_id: customerId,
+      sales_job_id: jobId,
+      amount: overpaid,
+      notes: `Overpayment credit — invoice ${invoiceNo}`,
       created_by: userId,
     });
   }

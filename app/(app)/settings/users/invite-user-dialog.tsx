@@ -407,6 +407,10 @@ export function InviteUserDialog({
                   </div>
                 ) : (
                   <PermissionsMatrix
+                    // Re-seed when the role changes — the matrix only reads
+                    // its props on mount, so without this the defaults shown
+                    // stay those of the role first selected.
+                    key={role}
                     role={role}
                     allowedPages={form.watch("allowed_pages") ?? null}
                     hiddenColumns={form.watch("hidden_columns") ?? {}}

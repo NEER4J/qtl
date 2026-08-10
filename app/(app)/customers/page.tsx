@@ -49,6 +49,7 @@ export default async function CustomersPage({
         page={result.page}
         pageSize={result.pageSize}
         hiddenColumns={[...hiddenColumnsForPage(profile, "customers")]}
+        canMerge={profile.role === "owner" || profile.role === "co_owner"}
       />
     </div>
   );

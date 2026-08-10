@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, History } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,15 +23,22 @@ export default async function EditVehiclePage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Button variant="ghost" size="sm" asChild className="-ml-3">
-          <Link href={`/customers/${id}`}>
-            <ChevronLeft className="size-4" /> Back to {displayName}
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <Button variant="ghost" size="sm" asChild className="-ml-3">
+            <Link href={`/customers/${id}`}>
+              <ChevronLeft className="size-4" /> Back to {displayName}
+            </Link>
+          </Button>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+            Edit vehicle <span className="font-mono text-base">{vehicle.license_plate}</span>
+          </h1>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/customers/${id}/vehicles/${vid}/history`}>
+            <History className="size-4" /> Service history
           </Link>
         </Button>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-          Edit vehicle <span className="font-mono text-base">{vehicle.license_plate}</span>
-        </h1>
       </div>
       <Card>
         <CardHeader><CardTitle>Vehicle details</CardTitle></CardHeader>

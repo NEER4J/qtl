@@ -13,6 +13,7 @@ interface Props {
   initial: {
     counter_premium: number;
     customer_supplies_labour: number;
+    dump_truck_surcharge: number;
     price_list_effective_date: string | null;
   };
 }
@@ -20,20 +21,28 @@ interface Props {
 export function PricingSettingsCard({ initial }: Props) {
   const [counter, setCounter] = useState(String(initial.counter_premium));
   const [supplies, setSupplies] = useState(String(initial.customer_supplies_labour));
+  const [dumpTruck, setDumpTruck] = useState(String(initial.dump_truck_surcharge));
   const [effective, setEffective] = useState(initial.price_list_effective_date ?? "");
   const [isPending, startTransition] = useTransition();
 
   const save = () => {
     const counterNum = Number(counter);
     const suppliesNum = Number(supplies);
-    if ([counterNum, suppliesNum].some((n) => !Number.isFinite(n) || n < 0)) {
-      toast.error("All numbers must be ≥ 0");
+    const dumpTruckNum = Number(dumpTruck);
+    // Service charge may be negative; the other amounts can't.
+    if (!Number.isFinite(counterNum)) {
+      toast.error("Service charge must be a number");
+      return;
+    }
+    if ([suppliesNum, dumpTruckNum].some((n) => !Number.isFinite(n) || n < 0)) {
+      toast.error("Labour and surcharge amounts must be ≥ 0");
       return;
     }
     startTransition(async () => {
       const res = await updatePricingSettings({
         counter_premium: counterNum,
         customer_supplies_labour: suppliesNum,
+        dump_truck_surcharge: dumpTruckNum,
         price_list_effective_date: effective || null,
       });
       if (!res.ok) {
@@ -67,6 +76,12 @@ export function PricingSettingsCard({ initial }: Props) {
             value={supplies}
             onChange={setSupplies}
             tip="Default flat labour fee when the customer brings their own filter. Per-part overrides win."
+          />
+          <Field
+            label="Dump truck surcharge ($)"
+            value={dumpTruck}
+            onChange={setDumpTruck}
+            tip="Flat amount added to a sales job's sub total when the vehicle is a dump truck. The sales form ticks the box automatically for vehicles marked as dump trucks."
           />
           <div>
             <label className="text-sm font-medium flex items-center gap-1">

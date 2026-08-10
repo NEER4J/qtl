@@ -79,6 +79,7 @@ export default async function NewSalesJobPage({
         oilTypes={oilTypes}
         technicians={technicians}
         hstRate={Number(settings.hst_rate)}
+        dumpTruckSurcharge={Number(settings.dump_truck_surcharge ?? 0)}
         lockedLocationId={lockedLocationId}
         currentUserRole={profile.role}
         initial={

@@ -103,6 +103,7 @@ export default async function PricingAdminHubPage() {
         initial={{
           counter_premium: Number(settings.counter_premium ?? 10),
           customer_supplies_labour: Number(settings.customer_supplies_labour ?? 20),
+          dump_truck_surcharge: Number(settings.dump_truck_surcharge ?? 0),
           price_list_effective_date: settings.price_list_effective_date ?? null,
         }}
       />

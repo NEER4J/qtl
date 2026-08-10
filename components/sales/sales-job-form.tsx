@@ -104,6 +104,7 @@ interface FormValues {
   odometer: string;
   service_type_id: string;
   advisor_name: string;
+  is_dump_truck: boolean;
   free_grease_applied: boolean;
   free_grease_override_reason: string;
   comments: string;
@@ -124,6 +125,8 @@ export interface SalesJobFormProps {
   initial?: Partial<FormValues> & {
     id?: string;
     auto_priced_at?: string | null;
+    /** $ snapshot baked into the saved sub_total (edit mode). */
+    dump_truck_surcharge?: number;
   };
   locations: Location[];
   serviceTypes: ServiceType[];
@@ -132,6 +135,8 @@ export interface SalesJobFormProps {
   /** Active roster used to populate Upper tech / Lower tech / Advisor pickers. */
   technicians: Technician[];
   hstRate: number;
+  /** Flat $ added to sub_total when the vehicle is a dump truck (app setting). */
+  dumpTruckSurcharge: number;
   /** Force location to this value (staff role). */
   lockedLocationId?: string | null;
   /** Existing line items (edit mode). */
@@ -167,6 +172,7 @@ export function SalesJobForm({
   oilTypes,
   technicians,
   hstRate,
+  dumpTruckSurcharge,
   lockedLocationId,
   initialItems,
   currentUserRole,
@@ -234,6 +240,7 @@ export function SalesJobForm({
     odometer: initial?.odometer ?? "",
     service_type_id: initial?.service_type_id ?? serviceTypes[0]?.id ?? "",
     advisor_name: initial?.advisor_name ?? "",
+    is_dump_truck: initial?.is_dump_truck ?? false,
     free_grease_applied: initial?.free_grease_applied ?? false,
     free_grease_override_reason: initial?.free_grease_override_reason ?? "",
     comments: initial?.comments ?? "",
@@ -253,16 +260,44 @@ export function SalesJobForm({
   const form = useForm<FormValues>({ defaultValues: defaults });
 
   // --------------------------------------------------------------------------
+  // Dump-truck surcharge — a flat $ folded INTO sub_total while the box is
+  // ticked. `appliedSurcharge` is the amount currently baked in (0 when off):
+  // on edit it starts from the job's saved snapshot so un-ticking removes
+  // exactly what was charged, even if the setting has changed since.
+  // --------------------------------------------------------------------------
+  const [appliedSurcharge, setAppliedSurcharge] = useState<number>(
+    initial?.is_dump_truck ? Number(initial?.dump_truck_surcharge ?? 0) : 0,
+  );
+
+  // --------------------------------------------------------------------------
   // Line items drive sub_total whenever there is at least one row.
   // --------------------------------------------------------------------------
   const itemsHaveRows = lineItems.length > 0;
   useEffect(() => {
     if (!itemsHaveRows) return;
-    const sum = lineItemsSubTotal(lineItems);
+    const sum = lineItemsSubTotal(lineItems) + appliedSurcharge;
     form.setValue("sub_total", sum.toFixed(2), { shouldDirty: true });
     // Items take over: any prior auto-priced flag no longer applies.
     setLastAutoPrice(null);
-  }, [lineItems, itemsHaveRows, form]);
+  }, [lineItems, itemsHaveRows, appliedSurcharge, form]);
+
+  const setDumpTruck = (checked: boolean) => {
+    if (form.getValues("is_dump_truck") === checked) return;
+    const prevApplied = appliedSurcharge;
+    const nextApplied = checked ? dumpTruckSurcharge : 0;
+    form.setValue("is_dump_truck", checked, { shouldDirty: true });
+    setAppliedSurcharge(nextApplied);
+    // With line items the sub_total effect above recomputes; a manual or
+    // auto-priced sub_total needs the delta applied directly.
+    if (!itemsHaveRows) {
+      const cur = Number(form.getValues("sub_total"));
+      const base = Number.isFinite(cur) ? cur - prevApplied : 0;
+      const next = base + nextApplied;
+      if (next !== 0 || Number.isFinite(cur)) {
+        form.setValue("sub_total", next.toFixed(2), { shouldDirty: true });
+      }
+    }
+  };
 
   // --------------------------------------------------------------------------
   // Live total computation: sub_total → hst + total
@@ -281,12 +316,16 @@ export function SalesJobForm({
       form.setValue("total", "");
       return;
     }
-    const taxableBase = itemsHaveRows ? lineItemsTaxableSubTotal(lineItems) : n;
+    // The dump-truck surcharge is inside sub_total but not in the items list,
+    // so with items present it has to be added to the taxable base explicitly.
+    const taxableBase = itemsHaveRows
+      ? lineItemsTaxableSubTotal(lineItems) + appliedSurcharge
+      : n;
     const hst = Math.round(taxableBase * hstRate * 100) / 100;
     const total = Math.round((n + hst) * 100) / 100;
     form.setValue("hst", hst.toFixed(2));
     form.setValue("total", total.toFixed(2));
-  }, [subTotalRaw, hstRate, form, itemsHaveRows, lineItems]);
+  }, [subTotalRaw, hstRate, form, itemsHaveRows, lineItems, appliedSurcharge]);
 
   // --------------------------------------------------------------------------
   // Oil-change auto-pricing: when service_type is OC and engine + oil + container
@@ -344,12 +383,14 @@ export function SalesJobForm({
         toast.warning("No catalog price found for that engine + oil combo.");
         return;
       }
-      const formatted = res.data.sub_total.toFixed(2);
+      // Catalog price + any active dump-truck surcharge; both tracked in
+      // lastAutoPrice so the auto-priced flag survives the surcharge.
+      const formatted = (res.data.sub_total + appliedSurcharge).toFixed(2);
       form.setValue("sub_total", formatted, { shouldDirty: true });
       setLastAutoPrice(formatted);
     })();
     return () => { cancelled = true; };
-  }, [isOilChange, itemsHaveRows, engineTypeId, oilTypeId, oilContainer, form]);
+  }, [isOilChange, itemsHaveRows, engineTypeId, oilTypeId, oilContainer, appliedSurcharge, form]);
 
   // --------------------------------------------------------------------------
   // Customer picker sync — billing_name, plate, contact, email auto-fill
@@ -434,6 +475,8 @@ export function SalesJobForm({
     form.setValue("engine_size", v?.engine_size ?? "");
     form.setValue("unit_no", v?.unit_number ?? "");
     if (v?.mileage != null) form.setValue("odometer", String(v.mileage));
+    // Dump trucks pre-tick the surcharge box (still un-tickable per job).
+    if (v) setDumpTruck(v.is_dump_truck ?? false);
   };
 
   // After adding a vehicle inline, refresh the picker and select the new one.
@@ -494,6 +537,7 @@ export function SalesJobForm({
     form.setValue("email", "");
     form.setValue("free_grease_applied", false);
     form.setValue("free_grease_override_reason", "");
+    setDumpTruck(false);
   };
 
   const startAddingNewCustomer = (name: string) => {
@@ -587,6 +631,7 @@ export function SalesJobForm({
         oil_type_id: values.oil_type_id || null,
         oil_container: values.oil_container || null,
         auto_priced_at: stillAutoPriced ? new Date().toISOString() : null,
+        dump_truck_surcharge: appliedSurcharge,
         initial_payments: cleanedPayments.length > 0 ? cleanedPayments : undefined,
         items: lineItems.map((it) => ({
           part_id: it.part_id,
@@ -823,6 +868,30 @@ export function SalesJobForm({
                   customerId={selectedCustomer.id}
                   onSaved={handleVehicleSaved}
                 />
+
+                {/* Dump-truck surcharge — pre-ticked when the picked vehicle is
+                    flagged as a dump truck; the amount is set under
+                    Settings → Pricing catalogue. */}
+                <div className="flex items-start gap-3 rounded-md border p-3">
+                  <Checkbox
+                    id="is_dump_truck"
+                    checked={form.watch("is_dump_truck")}
+                    onCheckedChange={(v) => setDumpTruck(v === true)}
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <label htmlFor="is_dump_truck" className="block cursor-pointer text-sm font-medium">
+                      Is this a dump truck?
+                    </label>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {form.watch("is_dump_truck")
+                        ? `Adds ${formatMoney(appliedSurcharge)} to the sub total.`
+                        : dumpTruckSurcharge > 0
+                          ? `Ticking adds ${formatMoney(dumpTruckSurcharge)} to the sub total.`
+                          : "No surcharge amount is configured — set it under Settings → Pricing catalogue."}
+                    </p>
+                  </div>
+                </div>
 
                 {/* Free grease banner — item #15 */}
                 {isFreeGreaseEligible(selectedCustomer) && (
@@ -1699,7 +1768,7 @@ export function SalesJobForm({
                     <Plus className="size-4" /> Add payment
                   </Button>
                   {createPayments.length > 0 && (
-                    <div className="text-xs text-muted-foreground tabular-nums">
+                    <div className="text-right text-xs text-muted-foreground tabular-nums">
                       Total paid:{" "}
                       <span className="font-medium text-foreground">
                         $
@@ -1707,6 +1776,23 @@ export function SalesJobForm({
                           .reduce((a, p) => a + (Number(p.amount) || 0), 0)
                           .toFixed(2)}
                       </span>
+                      {(() => {
+                        const paid = createPayments.reduce(
+                          (a, p) => a + (Number(p.amount) || 0),
+                          0,
+                        );
+                        const due =
+                          Number(totalRaw || 0) - Number(creditAppliedRaw || 0);
+                        const over = Math.round((paid - due) * 100) / 100;
+                        if (over <= 0.01 || due <= 0) return null;
+                        return (
+                          <div className="mt-0.5 text-emerald-600">
+                            {customerId
+                              ? `$${over.toFixed(2)} over the amount due — saved as store credit on the customer's account.`
+                              : `$${over.toFixed(2)} over the amount due — pick an existing customer to keep it as store credit.`}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>

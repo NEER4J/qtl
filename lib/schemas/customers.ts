@@ -160,6 +160,16 @@ export const SearchCustomersInput = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
+export const MergeCustomersInput = z
+  .object({
+    target_id: z.string().uuid(),
+    source_ids: z.array(z.string().uuid()).min(1, "Pick at least one duplicate to merge in"),
+  })
+  .refine((v) => !v.source_ids.includes(v.target_id), {
+    message: "The primary customer can't also be a duplicate",
+  });
+export type MergeCustomersInput = z.infer<typeof MergeCustomersInput>;
+
 /** Server-side paging + search for the /customers list. */
 export const ListCustomersInput = z.object({
   q: z.string().trim().max(100).optional(),

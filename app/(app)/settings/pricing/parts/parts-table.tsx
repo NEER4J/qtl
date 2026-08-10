@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useLiveSearchParam } from "@/hooks/use-live-search-param";
-import { Loader2, Pencil, Plus } from "lucide-react";
+import { Download, Loader2, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -195,7 +195,13 @@ export function PartsTable({
             {s === "active" ? "Active" : "Inactive"}
           </Button>
         ))}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <Button asChild size="sm" variant="outline">
+            {/* Exports what's on screen — same q/category/brand/status filters. */}
+            <a href={`/api/export/parts?${searchParams.toString()}`} download>
+              <Download className="size-4" /> Export CSV
+            </a>
+          </Button>
           <PrintButton />
         </div>
       </div>

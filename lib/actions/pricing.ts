@@ -34,9 +34,11 @@ import {
   DeleteEngineFilterInput,
   DeleteEngineTypeInput,
   DeleteVolumeTierInput,
+  LockOilPricesInput,
   LockPartPackageInput,
   MergePartPackagePricesInput,
   ToggleActiveInput,
+  UnlockOilPricesInput,
   UnlockPartPackageInput,
   UpdateEngineTypeInput,
   UpdateOilTypeInput,
@@ -51,6 +53,7 @@ import {
 } from "@/lib/schemas/pricing";
 import {
   effectiveCatalogPriceForItem,
+  isLockDateLive,
   isPartPackageLocked,
 } from "@/lib/utils/package-pricing";
 import { normalizePartPricing } from "@/lib/utils/part-pricing";
@@ -67,6 +70,16 @@ import {
 } from "@/lib/cache/reference";
 import { applyPartsSearch } from "@/lib/utils/parts-search";
 import { TRANSMISSION_KIND_LABEL } from "@/lib/utils/transmission";
+
+/**
+ * True when a Postgres/PostgREST error just means "that table isn't there yet".
+ *
+ * The oil price-lock tables ship in migration 0122; until it's applied the
+ * pricing pages must still render (minus the lock UI) instead of 500-ing.
+ */
+function isMissingRelation(err: { code?: string } | null): boolean {
+  return err?.code === "PGRST205" || err?.code === "42P01";
+}
 
 // ============================================================================
 // Read-only catalog queries — RLS already allows SELECT to all authenticated.
@@ -197,7 +210,7 @@ export async function getOilChangeGrid(): Promise<{
   // Mirrors public.oil_change_price(): one batched read per table instead of
   // engines×oil_types×containers RPCs (the prior approach overwhelmed the
   // request pipeline and surfaced as RangeError on this page).
-  const [enginesRes, oilTypesRes, filtersRes, tiersRes, overridesRes, settingsRes] =
+  const [enginesRes, oilTypesRes, filtersRes, tiersRes, overridesRes, settingsRes, locksRes] =
     await Promise.all([
       supabase
         .from("engine_types")
@@ -220,6 +233,11 @@ export async function getOilChangeGrid(): Promise<{
         .select("engine_type_id, oil_type_id, container, sell_price")
         .limit(10000),  // Supabase REST defaults to 1000; we have ~1400+ rows.
       supabase.from("app_settings").select("hst_rate").eq("id", 1).single(),
+      // Live price locks (oil-detail page). A locked price beats the override
+      // here exactly as it does in public.oil_change_price().
+      supabase
+        .from("oil_price_locks")
+        .select("oil_type_id, container, lock_until, oil_price_lock_items(engine_type_id, locked_price)"),
     ]);
 
   if (enginesRes.error) throw enginesRes.error;
@@ -227,7 +245,27 @@ export async function getOilChangeGrid(): Promise<{
   if (filtersRes.error) throw filtersRes.error;
   if (tiersRes.error) throw tiersRes.error;
   if (overridesRes.error) throw overridesRes.error;
+  // Migration 0122 not applied yet → no locks exist, so carry on without them.
+  if (locksRes.error && !isMissingRelation(locksRes.error)) throw locksRes.error;
   const hstRate = Number(settingsRes.data?.hst_rate ?? 0.13);
+
+  // "engine|oil|container" -> locked_price, live locks only.
+  type LockGridRow = {
+    oil_type_id: string;
+    container: "bulk" | "gallon";
+    lock_until: string;
+    oil_price_lock_items: { engine_type_id: string; locked_price: number }[] | null;
+  };
+  const lockedMap = new Map<string, number>();
+  for (const l of (locksRes.data ?? []) as unknown as LockGridRow[]) {
+    if (!isLockDateLive(l.lock_until)) continue;
+    for (const li of l.oil_price_lock_items ?? []) {
+      lockedMap.set(
+        `${li.engine_type_id}|${l.oil_type_id}|${l.container}`,
+        Number(li.locked_price),
+      );
+    }
+  }
 
   // Build override lookup: "engine|oil|container" -> sell_price
   type OverrideRow = {
@@ -322,12 +360,18 @@ export async function getOilChangeGrid(): Promise<{
       // "—" shows instead of -$0.01.
       const overrideBulk   = overrideMap.get(`${e.id}|${o.id}|bulk`);
       const overrideGallon = overrideMap.get(`${e.id}|${o.id}|gallon`);
-      const bulk = overrideBulk != null
+      const lockedBulk   = lockedMap.get(`${e.id}|${o.id}|bulk`);
+      const lockedGallon = lockedMap.get(`${e.id}|${o.id}|gallon`);
+      const bulk = lockedBulk != null
+        ? lockedBulk
+        : overrideBulk != null
         ? overrideBulk
         : Number.isFinite(bulkRate) && bulkRate > 0
           ? round99(bulkRate * capacity + filterCost + serviceCost + tier)
           : null;
-      const gallon = overrideGallon != null
+      const gallon = lockedGallon != null
+        ? lockedGallon
+        : overrideGallon != null
         ? overrideGallon
         : Number.isFinite(gallonRate) && gallonRate > 0
           ? round99(gallonRate * capacity + filterCost + serviceCost + tier)
@@ -493,6 +537,15 @@ export interface OilDetailRow {
   is_override: boolean;
   /** ID of the engine_sell_prices row backing the override (null if cost-up). */
   override_id: string | null;
+  /**
+   * PROPOSED selling price = filter cost + oil cost + labour + tier premium,
+   * exactly as entered (no .99 round-up). Shown in its own column next to the
+   * live Selling price so the owner can verify it before we make it the price.
+   * (client 2026-08-07.)
+   */
+  computed_selling: number | null;
+  /** Snapshot from a live price lock; null when this page isn't locked. */
+  locked_price: number | null;
   filter_cost: number;
   oil_cost: number;
   service_cost: number;
@@ -504,12 +557,27 @@ export interface OilDetailRow {
   profit_pct: number | null;   // 0..1
 }
 
+export interface OilPriceLockInfo {
+  id: string;
+  oil_type_id: string;
+  container: "bulk" | "gallon";
+  lock_until: string;
+  /** True while lock_until is today or later. */
+  is_live: boolean;
+  /** How many engine rows the snapshot covers. */
+  item_count: number;
+}
+
 export interface OilDetailResponse {
   oil_type: OilType;
   container: "bulk" | "gallon";
   rows: OilDetailRow[];
   /** All oil types (for the page selector). */
   oil_types: OilType[];
+  /** The price lock for this (oil type, container), live or expired. */
+  lock: OilPriceLockInfo | null;
+  /** False until migration 0122 creates the lock tables — hides the lock UI. */
+  lock_supported: boolean;
 }
 
 export async function getOilDetail(
@@ -518,7 +586,7 @@ export async function getOilDetail(
 ): Promise<OilDetailResponse | null> {
   const supabase = await createClient();
 
-  const [enginesRes, oilTypesRes, filtersRes, tiersRes, overridesRes, packagesRes] =
+  const [enginesRes, oilTypesRes, filtersRes, tiersRes, overridesRes, packagesRes, locksRes] =
     await Promise.all([
       supabase
         .from("engine_types")
@@ -547,6 +615,11 @@ export async function getOilDetail(
       // "Labor charge" (settings/pricing/packages) when the engine name equals a
       // package name; falls back to the summed part service-costs. (client 2026-06-30)
       supabase.from("part_packages").select("name, labor_selling_price").eq("active", true),
+      // Price lock for this page (oil type + container), with its snapshots.
+      supabase
+        .from("oil_price_locks")
+        .select("id, oil_type_id, container, lock_until, oil_price_lock_items(engine_type_id, locked_price)")
+        .eq("container", container),
     ]);
   if (enginesRes.error) throw enginesRes.error;
   if (oilTypesRes.error) throw oilTypesRes.error;
@@ -554,6 +627,10 @@ export async function getOilDetail(
   if (tiersRes.error) throw tiersRes.error;
   if (overridesRes.error) throw overridesRes.error;
   if (packagesRes.error) throw packagesRes.error;
+  // Migration 0122 not applied yet → the page still renders, the lock UI just
+  // reports itself unavailable (lock_supported below).
+  const lockSupported = !locksRes.error;
+  if (locksRes.error && !isMissingRelation(locksRes.error)) throw locksRes.error;
 
   // Map a (normalised) package name → its labour charge.
   // Match the FULL engine name to the package name (case + stray/double spaces
@@ -568,6 +645,33 @@ export async function getOilDetail(
   const oilTypes = (oilTypesRes.data ?? []) as OilType[];
   const oilType = oilTypes.find((o) => o.code === oilCode);
   if (!oilType) return null;
+
+  type LockRow = {
+    id: string;
+    oil_type_id: string;
+    container: "bulk" | "gallon";
+    lock_until: string;
+    oil_price_lock_items: { engine_type_id: string; locked_price: number }[] | null;
+  };
+  const lockRow = ((locksRes.data ?? []) as unknown as LockRow[]).find(
+    (l) => l.oil_type_id === oilType.id,
+  );
+  const lockItems = lockRow?.oil_price_lock_items ?? [];
+  const lockIsLive = isLockDateLive(lockRow?.lock_until);
+  const lockedPriceByEngine = new Map<string, number>();
+  for (const li of lockItems) {
+    lockedPriceByEngine.set(li.engine_type_id, Number(li.locked_price));
+  }
+  const lock: OilPriceLockInfo | null = lockRow
+    ? {
+        id: lockRow.id,
+        oil_type_id: lockRow.oil_type_id,
+        container: lockRow.container,
+        lock_until: lockRow.lock_until,
+        is_live: lockIsLive,
+        item_count: lockItems.length,
+      }
+    : null;
 
   type OverrideRow = {
     id: string;
@@ -649,14 +753,21 @@ export async function getOilDetail(
     // The cost-up selling price still includes labour, so the oil-change PRICE
     // doesn't move — labour just shifts from "cost" into the profit/margin.
     const sellBasis = totalCost + serviceCost;
-    // Override wins; otherwise fall back to cost-up. round99 returns null when
-    // the result isn't positive so we don't render "-$0.01" for empty oils.
+    // A live lock wins over everything (mirrors public.oil_change_price), then
+    // the manual override, then cost-up. round99 returns null when the result
+    // isn't positive so we don't render "-$0.01" for empty oils.
     const override = overrideMap.get(`${e.id}|${oilType.id}|${container}`);
-    const selling = override
+    const lockedPrice = lockIsLive ? lockedPriceByEngine.get(e.id) ?? null : null;
+    const liveSelling = override
       ? override.price
       : Number.isFinite(perLitre) && perLitre > 0
         ? round99(sellBasis)
         : null;
+    const selling = lockedPrice ?? liveSelling;
+    // Proposed formula price: the four components, unrounded. Null when there
+    // is nothing to price against, so the column shows "—" rather than $0.00.
+    const computedSelling =
+      Number.isFinite(sellBasis) && sellBasis > 0 ? Math.round(sellBasis * 100) / 100 : null;
     // When selling is null (no price data), profit/margin are also unknown —
     // return null so the UI shows "—" instead of "0%" or "100%".
     const profit = selling != null ? selling - totalCost : null;
@@ -669,6 +780,8 @@ export async function getOilDetail(
       selling,
       is_override: !!override,
       override_id: override?.id ?? null,
+      computed_selling: computedSelling,
+      locked_price: lockedPrice,
       filter_cost: filterCost,
       oil_cost: oilCost,
       service_cost: serviceCost,
@@ -680,7 +793,14 @@ export async function getOilDetail(
     };
   });
 
-  return { oil_type: oilType, container, rows, oil_types: oilTypes };
+  return {
+    oil_type: oilType,
+    container,
+    rows,
+    oil_types: oilTypes,
+    lock,
+    lock_supported: lockSupported,
+  };
 }
 
 // ============================================================================
@@ -1943,6 +2063,100 @@ export const deleteEngineSellPrice = wrapAction({
 });
 
 // ============================================================================
+// oil_price_locks — freeze the oil-detail page's selling prices for a while.
+// Same model as the part-package lock: snapshot the effective price of every
+// engine row, and while the lock is live that snapshot is what we charge —
+// part costs, oil costs, labour and tier premiums can move underneath it.
+// ============================================================================
+
+export const lockOilPrices = wrapAction({
+  schema: LockOilPricesInput,
+  roles: ["owner", "co_owner"],
+  handler: async (
+    { oil_type_id, container, lock_until },
+    profile,
+  ): Promise<{ lock_until: string; item_count: number }> => {
+    const supabase = await createClient();
+
+    const { data: oilRow, error: oilErr } = await supabase
+      .from("oil_types")
+      .select("code")
+      .eq("id", oil_type_id)
+      .single();
+    if (oilErr) throw oilErr;
+
+    // Snapshot exactly what the page shows — getOilDetail is the one place
+    // that knows the override / package-labour / cost-up precedence.
+    const detail = await getOilDetail((oilRow as { code: string }).code, container);
+    if (!detail) throw new Error("Oil type not found");
+
+    const { data: lockRow, error: lockErr } = await supabase
+      .from("oil_price_locks")
+      .upsert(
+        {
+          oil_type_id,
+          container,
+          lock_until,
+          created_by: profile.id,
+          updated_by: profile.id,
+        },
+        { onConflict: "oil_type_id,container" },
+      )
+      .select("id")
+      .single();
+    if (lockErr) throw lockErr;
+    const lockId = (lockRow as { id: string }).id;
+
+    // Re-locking replaces the old snapshot rather than merging into it.
+    const { error: delErr } = await supabase
+      .from("oil_price_lock_items")
+      .delete()
+      .eq("lock_id", lockId);
+    if (delErr) throw delErr;
+
+    // Rows with no price (oil with no cost configured) can't be locked — the
+    // table requires locked_price > 0, and there is nothing to freeze.
+    const items = detail.rows
+      .filter((r) => r.selling != null && r.selling > 0)
+      .map((r) => ({
+        lock_id: lockId,
+        engine_type_id: r.engine_id,
+        locked_price: r.selling as number,
+        filter_cost: Math.round(r.filter_cost * 100) / 100,
+        oil_cost: Math.round(r.oil_cost * 100) / 100,
+        labour: Math.round(r.service_cost * 100) / 100,
+        tier_premium: Math.round(r.volume_tier_premium * 100) / 100,
+      }));
+    if (items.length > 0) {
+      const { error: insErr } = await supabase
+        .from("oil_price_lock_items")
+        .insert(items);
+      if (insErr) throw insErr;
+    }
+
+    revalidatePricing();
+    return { lock_until, item_count: items.length };
+  },
+});
+
+export const unlockOilPrices = wrapAction({
+  schema: UnlockOilPricesInput,
+  roles: ["owner", "co_owner"],
+  handler: async ({ oil_type_id, container }): Promise<{ ok: true }> => {
+    const supabase = await createClient();
+    // Items cascade with the lock row.
+    const { error } = await supabase
+      .from("oil_price_locks")
+      .delete()
+      .eq("oil_type_id", oil_type_id)
+      .eq("container", container);
+    if (error) throw error;
+    revalidatePricing();
+    return { ok: true };
+  },
+});
+
+// ============================================================================
 // Pricing-related app_settings — counter premium + customer-supplies labour
 // (these are the GLOBAL DEFAULTS; per-part values override them), and the
 // price-list effective date. Owner-only.
@@ -1957,6 +2171,7 @@ const PricingSettingsInput = z.object({
   // Service charge — may be negative (discounts the With Service price).
   counter_premium: z.coerce.number().min(-9999999),
   customer_supplies_labour: z.coerce.number().min(0),
+  dump_truck_surcharge: z.coerce.number().min(0),
   price_list_effective_date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -1975,6 +2190,7 @@ export const updatePricingSettings = wrapAction({
       .update({
         counter_premium: input.counter_premium,
         customer_supplies_labour: input.customer_supplies_labour,
+        dump_truck_surcharge: input.dump_truck_surcharge,
         price_list_effective_date: input.price_list_effective_date || null,
       })
       .eq("id", 1);

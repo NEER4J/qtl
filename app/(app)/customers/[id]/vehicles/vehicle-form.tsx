@@ -7,6 +7,7 @@ import { Phone } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Form,
   FormControl,
@@ -44,6 +45,7 @@ type FormValues = {
   model: string;
   engine_size: string;
   unit_number: string;
+  is_dump_truck: boolean;
   colour: string;
   follow_up_date: string;
   mileage: string;
@@ -61,6 +63,7 @@ const initial: FormValues = {
   model: "",
   engine_size: "",
   unit_number: "",
+  is_dump_truck: false,
   colour: "",
   follow_up_date: "",
   mileage: "",
@@ -127,6 +130,7 @@ export function VehicleForm({
           model: vehicle.model ?? "",
           engine_size: vehicle.engine_size ?? "",
           unit_number: vehicle.unit_number ?? "",
+          is_dump_truck: vehicle.is_dump_truck ?? false,
           colour: vehicle.colour ?? "",
           follow_up_date: vehicle.follow_up_date ?? "",
           mileage: vehicle.mileage?.toString() ?? "",
@@ -144,6 +148,7 @@ export function VehicleForm({
             model: initialStaged.model ?? "",
             engine_size: initialStaged.engine_size ?? "",
             unit_number: initialStaged.unit_number ?? "",
+            is_dump_truck: initialStaged.is_dump_truck ?? false,
             colour: initialStaged.colour ?? "",
             follow_up_date: initialStaged.follow_up_date ?? "",
             mileage:
@@ -167,6 +172,7 @@ export function VehicleForm({
       model: values.model || null,
       engine_size: values.engine_size || null,
       unit_number: values.unit_number || null,
+      is_dump_truck: values.is_dump_truck,
       colour: values.colour || null,
       follow_up_date: values.follow_up_date || null,
       mileage: values.mileage ? Number(values.mileage) : null,
@@ -383,6 +389,23 @@ export function VehicleForm({
               <FormItem>
                 <FormLabel>Mileage</FormLabel>
                 <FormControl><Input type="number" min={0} {...field} /></FormControl>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="is_dump_truck"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center gap-2 space-y-0 pt-6">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={(v) => field.onChange(v === true)}
+                  />
+                </FormControl>
+                <FormLabel className="cursor-pointer font-normal">
+                  This is a dump truck
+                </FormLabel>
               </FormItem>
             )}
           />

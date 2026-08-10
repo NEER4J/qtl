@@ -10,7 +10,7 @@ import {
   UpdateVehicleInput,
 } from "@/lib/schemas/vehicles";
 import { createClient } from "@/lib/supabase/server";
-import type { Vehicle } from "@/lib/db/types";
+import type { SalesJob, Vehicle } from "@/lib/db/types";
 
 // Map a 23505 (unique violation) coming back from the vehicles table into
 // the right field error so the form highlights the offending column.
@@ -180,6 +180,38 @@ export const markVehicleContacted = wrapAction({
 // Vehicle stats — last visit, # visits, total cost, avg km/day, cost per km/month
 // (matches CARS Vehicle screen top-right panel)
 // ----------------------------------------------------------------------------
+/**
+ * Every sales job done on this vehicle, newest first. Jobs recorded since
+ * migration 0037 carry vehicle_id, but older jobs only snapshot the plate —
+ * matching both (scoped to the vehicle's customer) keeps pre-link history
+ * visible instead of starting the truck's file at 0037.
+ */
+export async function getVehicleSalesHistory(
+  vehicle: Vehicle,
+  limit = 100,
+): Promise<SalesJob[]> {
+  const supabase = await createClient();
+
+  // Plates are plain alphanumerics; strip anything that would break the
+  // PostgREST or() syntax rather than trying to escape it.
+  const plate = (vehicle.license_plate ?? "").replace(/[,()%_\\]/g, "").trim();
+  const ors = [`vehicle_id.eq.${vehicle.id}`];
+  if (plate && vehicle.customer_id) {
+    // ilike with no wildcard = case-insensitive exact match.
+    ors.push(`and(customer_id.eq.${vehicle.customer_id},license_plate.ilike.${plate})`);
+  }
+
+  const { data, error } = await supabase
+    .from("sales_jobs")
+    .select("*")
+    .or(ors.join(","))
+    .is("deactivated_at", null)
+    .order("job_date", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as SalesJob[];
+}
+
 export interface VehicleStats {
   visit_count: number;
   last_visit_date: string | null;

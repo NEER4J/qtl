@@ -71,6 +71,7 @@ export default async function EditSalesJobPage({
         oilTypes={oilTypes}
         technicians={technicians}
         hstRate={Number(settings.hst_rate)}
+        dumpTruckSurcharge={Number(settings.dump_truck_surcharge ?? 0)}
         currentUserRole={profile.role}
         initialItems={job.items.map((it) => ({
           key: it.id,
@@ -118,6 +119,8 @@ export default async function EditSalesJobPage({
           advisor_name: job.advisor_name ?? "",
           start_time: job.start_time?.slice(0, 5) ?? "",
           end_time: job.end_time?.slice(0, 5) ?? "",
+          is_dump_truck: job.is_dump_truck ?? false,
+          dump_truck_surcharge: Number(job.dump_truck_surcharge ?? 0),
           free_grease_applied: job.free_grease_applied ?? false,
           free_grease_override_reason: job.free_grease_override_reason ?? "",
           comments: job.comments ?? "",

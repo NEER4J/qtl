@@ -174,6 +174,8 @@ export interface Vehicle {
   engine_size: string | null;
   engine_serial: string | null;
   unit_number: string | null;
+  /** Dump trucks get a flat surcharge on sales jobs (app_settings.dump_truck_surcharge). */
+  is_dump_truck: boolean;
   cab_card_number: string | null;
   drive_clean_date: string | null;
   colour: string | null;
@@ -352,6 +354,10 @@ export interface SalesJob {
   advisor_name: string | null;
   free_grease_applied: boolean;
   free_grease_override_reason: string | null;
+  /** Dump-truck surcharge was applied; the $ amount is baked into sub_total. */
+  is_dump_truck: boolean;
+  /** Snapshot of the surcharge baked into sub_total (0 when not applied). */
+  dump_truck_surcharge: number;
   comments: string | null;
   sub_total: number;
   hst: number;
@@ -486,6 +492,8 @@ export interface AppSettings {
   wsib_rate: number;
   /** Effective date shown on the Print List header. */
   price_list_effective_date: string | null;
+  /** Flat $ added to a sales job's sub total when the vehicle is a dump truck. */
+  dump_truck_surcharge: number;
   /** Master switch for the IP lock (Settings → IP Access). */
   ip_lock_enabled: boolean;
   updated_at: string;

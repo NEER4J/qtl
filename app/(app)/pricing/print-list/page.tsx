@@ -72,9 +72,14 @@ export default async function PrintListPage() {
         <Card className="print:shadow-none print:border-0">
           <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto print:max-h-none print:overflow-visible">
             <table className="w-full text-sm border-collapse print:text-[10px]">
-              <thead className="bg-muted/50 print:bg-transparent">
+              {/* Sticky on screen so the column labels stay put while the long
+                  engine list scrolls; static in print, where the browser
+                  repeats thead per page by itself. Solid bg-muted (not /50) —
+                  rows would show through a translucent header as they pass
+                  underneath. */}
+              <thead className="sticky top-0 z-20 bg-muted print:static print:bg-transparent">
                 <tr>
-                  <th className="text-left p-2 sticky left-0 bg-muted/50 print:bg-transparent print:border print:border-foreground/40">
+                  <th className="text-left p-2 sticky left-0 z-10 bg-muted print:bg-transparent print:border print:border-foreground/40">
                     Engine
                   </th>
                   <th className="text-right p-2 text-xs text-muted-foreground print:border print:border-foreground/40">

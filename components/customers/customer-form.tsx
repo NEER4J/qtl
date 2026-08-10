@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { AlertTriangle, Pencil, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, History, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -1061,6 +1061,17 @@ export function CustomerForm({
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              title="Service history"
+                              asChild
+                            >
+                              <Link href={`/customers/${customer.id}/vehicles/${v.id}/history`}>
+                                <History className="size-4" />
+                              </Link>
+                            </Button>
                             <Button
                               type="button"
                               variant="ghost"

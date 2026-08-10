@@ -8,6 +8,7 @@ import { wrapAction } from "@/lib/actions/_utils";
 import {
   CreateCustomerInput,
   ListCustomersInput,
+  MergeCustomersInput,
   SearchCustomersInput,
   UpdateCustomerInput,
 } from "@/lib/schemas/customers";
@@ -137,6 +138,82 @@ export interface ListCustomersResult {
  */
 const PLATE_MATCH_CAP = 500;
 
+type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
+
+type JoinedRow = Customer & {
+  vehicles: { license_plate: string | null }[] | null;
+};
+
+// Plate search has to go through vehicles: that is where plates added from
+// the vehicles page live, and they are absent from customers.license_plates.
+// The other direction is covered by plates_text in the customer-query OR.
+async function plateMatchIds(supabase: SupabaseServer, q: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("vehicles")
+    .select("customer_id")
+    .ilike("license_plate", `%${q.replace(/[%_]/g, (m) => `\\${m}`)}%`)
+    .is("deactivated_at", null)
+    .limit(PLATE_MATCH_CAP);
+  if (error) throw error;
+  return Array.from(
+    new Set(
+      ((data ?? []) as { customer_id: string | null }[])
+        .map((r) => r.customer_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+}
+
+function buildCustomersQuery(
+  supabase: SupabaseServer,
+  opts: {
+    q?: string;
+    plateCustomerIds: string[];
+    includePlatesText: boolean;
+    from: number;
+    to: number;
+  },
+) {
+  let query = supabase
+    .from("customers")
+    // Embedding vehicles here rather than issuing a second round trip for
+    // the page's plates — the database is far enough away that the extra hop
+    // is worth avoiding. No `!inner`, so customers with no vehicles are
+    // kept; the deactivated_at filter prunes the embedded rows only.
+    .select("*, vehicles(license_plate)", { count: "exact" })
+    .is("vehicles.deactivated_at", null)
+    .order("billing_name")
+    .range(opts.from, opts.to);
+
+  if (opts.q) {
+    const term = orFilterValue(opts.q);
+    const ors = [
+      `billing_name.ilike.${term}`,
+      `last_or_company.ilike.${term}`,
+      `email.ilike.${term}`,
+    ];
+    if (opts.includePlatesText) ors.push(`plates_text.ilike.${term}`);
+    const phoneDigits = digitsOnly(opts.q);
+    if (phoneDigits.length >= 3) ors.push(`phone_search.like.${orFilterValue(phoneDigits)}`);
+    if (opts.plateCustomerIds.length > 0) ors.push(`id.in.(${opts.plateCustomerIds.join(",")})`);
+    query = query.or(ors.join(","));
+  }
+  return query;
+}
+
+function mergePlates(data: unknown): CustomerListRow[] {
+  return ((data ?? []) as JoinedRow[]).map((r) => {
+    const { vehicles, ...rest } = r;
+    const fromVehicles = (vehicles ?? [])
+      .map((v) => v.license_plate)
+      .filter((p): p is string => Boolean(p));
+    const plates = Array.from(
+      new Set([...fromVehicles, ...(rest.license_plates ?? [])]),
+    ).sort();
+    return { ...(rest as Customer), plates };
+  });
+}
+
 /**
  * Paged, server-side-filtered customer list.
  *
@@ -157,86 +234,78 @@ export async function listCustomersPaged(
   const from = (input.page - 1) * input.pageSize;
   const to = from + input.pageSize - 1;
 
-  // Plate search has to go through vehicles: that is where plates added from
-  // the vehicles page live, and they are absent from customers.license_plates.
-  // The other direction is covered by plates_text in the OR below.
-  let plateCustomerIds: string[] = [];
-  if (input.q) {
-    const { data, error } = await supabase
-      .from("vehicles")
-      .select("customer_id")
-      .ilike("license_plate", `%${input.q.replace(/[%_]/g, (m) => `\\${m}`)}%`)
-      .is("deactivated_at", null)
-      .limit(PLATE_MATCH_CAP);
-    if (error) throw error;
-    plateCustomerIds = Array.from(
-      new Set(
-        ((data ?? []) as { customer_id: string | null }[])
-          .map((r) => r.customer_id)
-          .filter((id): id is string => Boolean(id)),
-      ),
-    );
-  }
+  const plateCustomerIds = input.q ? await plateMatchIds(supabase, input.q) : [];
 
   // plates_text is added by migration 0121. Code and migrations deploy
   // independently, so for the short window where the new build is live and the
   // migration has not landed yet, fall back to a query without it rather than
   // 500-ing the whole page. Plate search still works in that window via the
   // vehicles lookup above; only legacy array-only plates are missed.
-  const buildQuery = (includePlatesText: boolean) => {
-    let query = supabase
-      .from("customers")
-      // Embedding vehicles here rather than issuing a second round trip for
-      // the page's plates — the database is far enough away that the extra hop
-      // is worth avoiding. No `!inner`, so customers with no vehicles are
-      // kept; the deactivated_at filter prunes the embedded rows only.
-      .select("*, vehicles(license_plate)", { count: "exact" })
-      .is("vehicles.deactivated_at", null)
-      .order("billing_name")
-      .range(from, to);
-
-
-    if (input.q) {
-      const term = orFilterValue(input.q);
-      const ors = [
-        `billing_name.ilike.${term}`,
-        `last_or_company.ilike.${term}`,
-        `email.ilike.${term}`,
-      ];
-      if (includePlatesText) ors.push(`plates_text.ilike.${term}`);
-      const phoneDigits = digitsOnly(input.q);
-      if (phoneDigits.length >= 3) ors.push(`phone_search.like.${orFilterValue(phoneDigits)}`);
-      if (plateCustomerIds.length > 0) ors.push(`id.in.(${plateCustomerIds.join(",")})`);
-      query = query.or(ors.join(","));
-    }
-    return query;
-  };
-
-  let { data, error, count } = await buildQuery(true);
+  let { data, error, count } = await buildCustomersQuery(supabase, {
+    q: input.q, plateCustomerIds, includePlatesText: true, from, to,
+  });
   // 42703 = undefined_column.
   if (error?.code === "42703") {
     console.warn("[listCustomersPaged] plates_text missing — has migration 0121 run?");
-    ({ data, error, count } = await buildQuery(false));
+    ({ data, error, count } = await buildCustomersQuery(supabase, {
+      q: input.q, plateCustomerIds, includePlatesText: false, from, to,
+    }));
   }
   if (error) throw error;
 
-  type JoinedRow = Customer & {
-    vehicles: { license_plate: string | null }[] | null;
-  };
-
-  const rows: CustomerListRow[] = ((data ?? []) as JoinedRow[]).map((r) => {
-    const { vehicles, ...rest } = r;
-    const fromVehicles = (vehicles ?? [])
-      .map((v) => v.license_plate)
-      .filter((p): p is string => Boolean(p));
-    const plates = Array.from(
-      new Set([...fromVehicles, ...(rest.license_plates ?? [])]),
-    ).sort();
-    return { ...(rest as Customer), plates };
-  });
-
-  return { rows, total: count ?? 0, page: input.page, pageSize: input.pageSize };
+  return { rows: mergePlates(data), total: count ?? 0, page: input.page, pageSize: input.pageSize };
 }
+
+/**
+ * Every customer matching the (optional) search, for CSV export. PostgREST
+ * caps a single response at 1000 rows, so this pages through the table in
+ * chunks — a plain select("*") would silently truncate the export.
+ */
+export async function listCustomersForExport(rawQ?: string): Promise<CustomerListRow[]> {
+  const { q } = ListCustomersInput.parse({ q: rawQ || undefined });
+  const supabase = await createClient();
+
+  const plateCustomerIds = q ? await plateMatchIds(supabase, q) : [];
+
+  const CHUNK = 1000;
+  const all: CustomerListRow[] = [];
+  let includePlatesText = true;
+  for (let from = 0; ; from += CHUNK) {
+    const opts = { q, plateCustomerIds, from, to: from + CHUNK - 1 };
+    let { data, error } = await buildCustomersQuery(supabase, { ...opts, includePlatesText });
+    if (error?.code === "42703") {
+      console.warn("[listCustomersForExport] plates_text missing — has migration 0121 run?");
+      includePlatesText = false;
+      ({ data, error } = await buildCustomersQuery(supabase, { ...opts, includePlatesText }));
+    }
+    if (error) throw error;
+
+    const rows = mergePlates(data);
+    all.push(...rows);
+    if (rows.length < CHUNK) break;
+  }
+  return all;
+}
+
+// ----------------------------------------------------------------------------
+// Merge duplicates — see migration 0123 for exactly what moves vs is dropped.
+// ----------------------------------------------------------------------------
+export const mergeCustomers = wrapAction({
+  schema: MergeCustomersInput,
+  roles: ["owner", "co_owner"],
+  handler: async ({ target_id, source_ids }): Promise<{ merged: number }> => {
+    const supabase = await createClient();
+    for (const source of source_ids) {
+      const { error } = await supabase.rpc("merge_customers", {
+        p_target: target_id,
+        p_source: source,
+      });
+      if (error) throw error;
+    }
+    revalidatePath("/customers");
+    return { merged: source_ids.length };
+  },
+});
 
 // ----------------------------------------------------------------------------
 // Deactivate / Reactivate

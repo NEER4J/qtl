@@ -400,6 +400,36 @@ export type LockPartPackageInput = z.infer<typeof LockPartPackageInput>;
 export const UnlockPartPackageInput = z.object({ id: z.string().uuid() });
 export type UnlockPartPackageInput = z.infer<typeof UnlockPartPackageInput>;
 
+// ============================================================================
+// oil_price_locks — price lock for one oil-detail page (oil type + container).
+// Same shape as the package lock above.
+// ============================================================================
+const LockUntilDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date")
+  .refine(
+    (s) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const d = new Date(`${s}T00:00:00`);
+      return !Number.isNaN(d.getTime()) && d.getTime() >= today.getTime();
+    },
+    { message: "Lock date must be today or later" },
+  );
+
+export const LockOilPricesInput = z.object({
+  oil_type_id: z.string().uuid(),
+  container: z.enum(["bulk", "gallon"]),
+  lock_until: LockUntilDate,
+});
+export type LockOilPricesInput = z.infer<typeof LockOilPricesInput>;
+
+export const UnlockOilPricesInput = z.object({
+  oil_type_id: z.string().uuid(),
+  container: z.enum(["bulk", "gallon"]),
+});
+export type UnlockOilPricesInput = z.infer<typeof UnlockOilPricesInput>;
+
 export const MergePartPackagePricesInput = z.object({
   id: z.string().uuid(),
   labor_selling_price: z.coerce.number().min(0, "Must be ≥ 0"),

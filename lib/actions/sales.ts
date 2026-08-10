@@ -331,13 +331,20 @@ export const createSalesJob = wrapAction({
     // that only reads sales_jobs.payment_mode.
     const initialPayments = input.initial_payments ?? [];
     const usingMulti = initialPayments.length > 0;
-    const effectivePaidAmount = usingMulti
+    const tendered = usingMulti
       ? Math.round(initialPayments.reduce((a, p) => a + p.amount, 0) * 100) / 100
       : input.paid_amount;
     const effectivePaymentMode = usingMulti
       ? initialPayments[0]!.mode
       : input.payment_mode ?? null;
     const creditApplied = Math.round((input.credit_applied ?? 0) * 100) / 100;
+    // The job settles at no more than its amount due (sales_paid_chk); tender
+    // beyond that is recorded in full in sales_payments and becomes store
+    // credit via syncJobCreditLedger below (see 0127). The schema only lets an
+    // overpayment through when a customer account exists to hold it.
+    const amountDue = Math.max(0, Math.round((input.total - creditApplied) * 100) / 100);
+    const effectivePaidAmount =
+      input.total > 0.005 ? Math.min(tendered, amountDue) : tendered;
     assertNetCreditCustomer(input.customer_id, input.total);
     await assertCreditedFromJobValid(
       supabase,
@@ -394,6 +401,8 @@ export const createSalesJob = wrapAction({
         payment_status: status,
         free_grease_applied: input.free_grease_applied,
         free_grease_override_reason: input.free_grease_override_reason || null,
+        is_dump_truck: input.is_dump_truck,
+        dump_truck_surcharge: input.is_dump_truck ? input.dump_truck_surcharge : 0,
         engine_type_id: input.engine_type_id ?? null,
         oil_type_id: input.oil_type_id ?? null,
         oil_container: input.oil_container ?? null,
@@ -591,6 +600,8 @@ export const updateSalesJob = wrapAction({
         payment_status: status,
         free_grease_applied: input.free_grease_applied,
         free_grease_override_reason: input.free_grease_override_reason || null,
+        is_dump_truck: input.is_dump_truck,
+        dump_truck_surcharge: input.is_dump_truck ? input.dump_truck_surcharge : 0,
         engine_type_id: input.engine_type_id ?? null,
         oil_type_id: input.oil_type_id ?? null,
         oil_container: input.oil_container ?? null,
@@ -603,7 +614,13 @@ export const updateSalesJob = wrapAction({
       .single();
     if (error) throw error;
 
-    await replaceJobItems(supabase, input.id, input.items, profile.id);
+    await replaceJobItems(
+      supabase,
+      input.id,
+      input.items,
+      profile.id,
+      (oldItemRows ?? []).length,
+    );
 
     await syncJobCreditLedger(
       supabase,
@@ -657,6 +674,28 @@ export const addSalesPayment = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+
+    // A payment that takes the job past its amount due becomes store credit
+    // (0127). Re-sync the job's ledger rows — no-op when not overpaid.
+    const { data: job, error: jobErr } = await supabase
+      .from("sales_jobs")
+      .select("customer_id, total, credit_applied, invoice_no")
+      .eq("id", input.sales_job_id)
+      .single();
+    if (jobErr) throw jobErr;
+    if (job?.customer_id) {
+      await syncJobCreditLedger(
+        supabase,
+        input.sales_job_id,
+        job.customer_id,
+        Number(job.total),
+        Number(job.credit_applied ?? 0),
+        job.invoice_no as string,
+        profile.id,
+      );
+      revalidatePath(`/customers/${job.customer_id}`);
+    }
+
     revalidatePath(`/sales/${input.sales_job_id}`);
     revalidatePath("/sales");
     revalidatePath("/dashboard");
@@ -719,15 +758,26 @@ async function replaceJobItems(
       }[]
     | undefined,
   userId: string,
+  expectedExisting = 0,
 ): Promise<void> {
   // Replace-all strategy: delete existing rows, insert the new set. Audit log
   // preserves the prior version. The job has very few line items (typically
   // <10) so the row churn is trivial.
-  const { error: delErr } = await supabase
+  const { data: deleted, error: delErr } = await supabase
     .from("sales_job_items")
     .delete()
-    .eq("sales_job_id", salesJobId);
+    .eq("sales_job_id", salesJobId)
+    .select("id");
   if (delErr) throw delErr;
+
+  // RLS filters silently: a role allowed to insert items but not delete them
+  // would "successfully" delete nothing here, and the insert below would then
+  // double every existing line (the invoice-326131 bug). Abort loudly instead.
+  if ((deleted?.length ?? 0) < expectedExisting) {
+    throw new Error(
+      "You don't have permission to replace this job's line items — the line items were left unchanged.",
+    );
+  }
 
   if (!items || items.length === 0) return;
 

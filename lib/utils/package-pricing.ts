@@ -44,14 +44,19 @@ export function effectiveLockedPriceForItem(item: PartPackageItemRow): number {
     : effectiveCatalogPriceForItem(item);
 }
 
-/** True iff the package has a lock_until that is today or in the future. */
-export function isPartPackageLocked(pkg: Pick<PartPackage, "lock_until">): boolean {
-  if (!pkg.lock_until) return false;
+/** True iff a YYYY-MM-DD lock date is today or in the future (local time). */
+export function isLockDateLive(lockUntil: string | null | undefined): boolean {
+  if (!lockUntil) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const d = new Date(`${pkg.lock_until}T00:00:00`);
+  const d = new Date(`${lockUntil}T00:00:00`);
   if (Number.isNaN(d.getTime())) return false;
   return d.getTime() >= today.getTime();
+}
+
+/** True iff the package has a lock_until that is today or in the future. */
+export function isPartPackageLocked(pkg: Pick<PartPackage, "lock_until">): boolean {
+  return isLockDateLive(pkg.lock_until);
 }
 
 /** Quantity-weighted catalog total (parts + oil rows, no labor). */

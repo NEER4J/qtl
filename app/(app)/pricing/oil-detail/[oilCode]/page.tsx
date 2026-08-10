@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { PageHelp } from "@/components/help/page-help";
 import { EditableSellingCell } from "@/components/pricing/editable-selling-cell";
+import { OilPriceLockControls } from "@/components/pricing/oil-price-lock-controls";
 import { PrintButton } from "@/components/pricing/print-button";
 import { requireProfile } from "@/lib/auth/require";
 import { getOilDetail } from "@/lib/actions/pricing";
@@ -38,6 +39,7 @@ export default async function OilDetailPage({
 
   const showCost = (profile.role === "owner" || profile.role === "co_owner") || profile.role === "accountant";
   const canEdit = (profile.role === "owner" || profile.role === "co_owner");
+  const isLocked = data.lock?.is_live ?? false;
 
   const pct = (n: number | null) => n == null ? "—" : `${(n * 100).toFixed(1)}%`;
 
@@ -56,7 +58,22 @@ export default async function OilDetailPage({
             {data.oil_type.name} · Per-engine breakdown: oil + filter + labour + tier premium → selling price
           </p>
         </div>
-        <PrintButton />
+        <div className="flex items-center gap-2">
+          {canEdit && data.lock_supported && (
+            <OilPriceLockControls
+              oilTypeId={data.oil_type.id}
+              container={data.container}
+              lock={data.lock}
+              engineCount={data.rows.length}
+            />
+          )}
+          {canEdit && !data.lock_supported && (
+            <span className="text-xs text-muted-foreground">
+              Price lock needs migration 0122
+            </span>
+          )}
+          <PrintButton />
+        </div>
       </div>
 
       {/* Print-only header */}
@@ -65,6 +82,15 @@ export default async function OilDetailPage({
           {excelOilLabel(data.oil_type.code, data.oil_type.name)} — {container}
         </h1>
         <p className="text-xs">{data.oil_type.name} · per-engine price breakdown</p>
+      </div>
+
+      {/* Under review — the Computed column is a proposal, not the price. Kept
+          on-screen AND in print so a shared copy can't be misread. */}
+      <div className="rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-200 print:border-black print:bg-transparent print:text-black print:text-[10px] print:py-1">
+        <strong>Selling</strong> is the price we charge today. <strong>Computed</strong> is a
+        proposed price — filter cost + oil cost + labour + tier premium, with no round-up —
+        shown for review only. <strong>Δ</strong> is the difference between the two. Nothing
+        changes until the Computed figures are confirmed.
       </div>
 
       {/* Selector strip */}
@@ -108,6 +134,20 @@ export default async function OilDetailPage({
               revert a cell to cost-up.
             </li>
           )}
+          <li>
+            <strong>Computed</strong> — the proposed selling price: filter cost + oil cost +
+            labour + tier premium, exactly as the numbers add up (no .99 round-up). It is
+            shown for checking only; <strong>Selling</strong> is still what the shop charges.
+            <strong> Δ</strong> is Computed minus Selling.
+          </li>
+          {canEdit && data.lock_supported && (
+            <li>
+              <strong>Lock prices</strong> — snapshots today&apos;s Selling price for every
+              engine on this page until the date you pick. While locked, jobs, the price grid
+              and the print list all use the snapshot even if costs move underneath it.
+              Same behaviour as a locked package.
+            </li>
+          )}
           <li><strong>Filter cost</strong> — sum of (part cost + MHSW) × qty for every filter wired to this engine.</li>
           <li><strong>Oil cost</strong> — per-litre cost × engine oil capacity.</li>
           <li><strong>Tier premium</strong> — flat $ based on oil capacity bracket (8–20L, 21–38L, 39–46L, 47+L).</li>
@@ -117,6 +157,14 @@ export default async function OilDetailPage({
         </ul>
       </PageHelp>
       </div>
+
+      {isLocked && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
+          Prices on this page are <strong>locked until {data.lock!.lock_until}</strong> —{" "}
+          {data.lock!.item_count} snapshotted price{data.lock!.item_count === 1 ? "" : "s"} are
+          being charged instead of the live catalogue. Unlock to edit.
+        </div>
+      )}
 
       {data.rows.length === 0 ? (
         <Card>
@@ -140,6 +188,20 @@ export default async function OilDetailPage({
                 <TableHead>Engine</TableHead>
                 <TableHead className="text-right">Litres</TableHead>
                 <TableHead className="text-right">Selling</TableHead>
+                {/* TEMPORARY — proposed formula price, shown for verification
+                    before it replaces Selling. (client 2026-08-07.) */}
+                <TableHead className="text-right">
+                  Computed
+                  <span className="block text-[10px] font-normal text-muted-foreground">
+                    filter+oil+labour+tier
+                  </span>
+                </TableHead>
+                <TableHead className="text-right">
+                  Δ
+                  <span className="block text-[10px] font-normal text-muted-foreground">
+                    vs selling
+                  </span>
+                </TableHead>
                 {showCost && <TableHead className="text-right">Filter cost</TableHead>}
                 {showCost && <TableHead className="text-right">Oil cost</TableHead>}
                 {showCost && <TableHead className="text-right">Labour</TableHead>}
@@ -151,12 +213,26 @@ export default async function OilDetailPage({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.rows.map((r) => (
+              {data.rows.map((r) => {
+                const delta =
+                  r.computed_selling != null && r.selling != null
+                    ? Math.round((r.computed_selling - r.selling) * 100) / 100
+                    : null;
+                return (
                 <TableRow key={r.engine_id}>
                   <TableCell className="font-medium">{r.engine_name}</TableCell>
                   <TableCell className="text-right tabular-nums text-xs text-muted-foreground">{r.oil_capacity_litres.toFixed(1)}L</TableCell>
                   <TableCell className="text-right p-1">
-                    {canEdit ? (
+                    {r.locked_price != null ? (
+                      // Locked: the snapshot is the price, and editing the
+                      // anchor underneath it would be misleading.
+                      <span
+                        className="tabular-nums font-semibold"
+                        title={`Locked until ${data.lock?.lock_until}`}
+                      >
+                        {formatMoney(r.locked_price)}
+                      </span>
+                    ) : canEdit ? (
                       <EditableSellingCell
                         engineId={r.engine_id}
                         oilTypeId={data.oil_type.id}
@@ -168,6 +244,20 @@ export default async function OilDetailPage({
                     ) : (
                       <span className={`tabular-nums ${r.is_override ? "font-semibold" : "text-muted-foreground italic"}`}>
                         {r.selling != null ? formatMoney(r.selling) : "—"}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {r.computed_selling != null ? formatMoney(r.computed_selling) : <span className="text-muted-foreground">—</span>}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-xs">
+                    {delta == null ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : delta === 0 ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <span className={delta > 0 ? "text-emerald-600" : "text-rose-600"}>
+                        {delta > 0 ? "+" : "−"}{formatMoney(Math.abs(delta))}
                       </span>
                     )}
                   </TableCell>
@@ -184,7 +274,8 @@ export default async function OilDetailPage({
                   {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{pct(r.cost_pct)}</TableCell>}
                   {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{pct(r.profit_pct)}</TableCell>}
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>

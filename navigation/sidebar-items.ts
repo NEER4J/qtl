@@ -251,44 +251,56 @@ export function filterSidebarByRole(role: UserRole | undefined): NavGroup[] {
     .filter((group) => group.items.length > 0);
 }
 
-import { pageKeyForPath } from "@/lib/permissions/registry";
+import { pageKeyForRequestPath } from "@/lib/permissions/registry";
+import { effectiveAllowedPageKeys } from "@/lib/permissions/check";
 
 /**
- * Filter the nav using BOTH the role's default allowlist and the user's
- * per-user `allowed_pages` override (if present). Owner bypasses everything.
+ * Filter the nav by the viewer's EFFECTIVE page permissions — the per-user
+ * `allowed_pages` override when one is stored, otherwise the role defaults
+ * from lib/permissions/registry.ts (the same source the permissions matrix
+ * ticks and the (app) layout guard enforces).
  *
- * `allowedPages = null` means "use the role's defaults" (the old behaviour).
- * `allowedPages = string[]` is the explicit allowlist of page keys (from
- *  lib/permissions/registry.ts) — items whose path is registered AND not in
- *  the list get hidden. Unregistered paths (utility/internal) pass through.
+ * This deliberately does NOT intersect with the hard-coded `roles` lists on
+ * each nav entry for registered pages. Doing so was the bug behind "only the
+ * role defaults work": granting a user a page the matrix allows (e.g. giving
+ * a staff member Vendors) still left the item hidden, because the role filter
+ * ran first and stripped it. The registry is now the single source of truth
+ * for anything with a registry key; the per-entry `roles` list only still
+ * gates URLs that aren't registered at all (e.g. /my-pay).
+ *
+ * co_owner (Admin) bypasses everything.
  */
 export function filterSidebar(
   role: UserRole | undefined,
   allowedPages: string[] | null | undefined,
 ): NavGroup[] {
   if (!role) return [];
-  // Owner and co_owner are driven purely by role-based nav (no per-user
-  // override allowlist). co_owner (Admin) sees everything; owner sees
-  // everything its role grants — which now excludes the Settings section.
-  if (role === "owner" || role === "co_owner") return filterSidebarByRole(role);
+  if (role === "co_owner") return filterSidebarByRole(role);
 
-  const overrideSet = allowedPages ? new Set(allowedPages) : null;
+  const allowed = effectiveAllowedPageKeys({
+    role,
+    allowed_pages: allowedPages ?? null,
+    hidden_columns: {},
+  });
 
-  const passesOverride = (url: string): boolean => {
-    if (!overrideSet) return true; // no override -> role default already filtered.
-    const key = pageKeyForPath(url);
-    if (!key) return true; // unregistered path -> let role filter handle it.
-    return overrideSet.has(key);
+  // `pageKeyForRequestPath` (not `pageKeyForPath`) so sub-item URLs resolve to
+  // their parent page: /analytics/sales → analytics, /settings/pricing/parts →
+  // settings_pricing, /payroll/employees → payroll.
+  const passes = (url: string, roles: UserRole[] | undefined): boolean => {
+    const key = pageKeyForRequestPath(url);
+    if (key) return allowed.has(key);
+    return !roles || roles.includes(role); // unregistered path → role gate
   };
 
-  return filterSidebarByRole(role)
+  return sidebarItems
+    .filter((group) => !group.roles || group.roles.includes(role))
     .map((group) => ({
       ...group,
       items: group.items
-        .filter((item) => passesOverride(item.url))
+        .filter((item) => passes(item.url, item.roles))
         .map((item) => ({
           ...item,
-          subItems: item.subItems?.filter((s) => passesOverride(s.url)),
+          subItems: item.subItems?.filter((s) => passes(s.url, s.roles)),
         })),
     }))
     .filter((group) => group.items.length > 0);

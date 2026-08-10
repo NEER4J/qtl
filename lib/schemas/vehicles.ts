@@ -43,6 +43,8 @@ export const CreateVehicleInput = z.object({
   model: upperOptional(60),
   engine_size: textOptional(60),
   unit_number: textOptional(40),
+  // Dump trucks get a flat surcharge on sales jobs (app_settings value).
+  is_dump_truck: z.boolean().default(false),
   colour: textOptional(40),
   follow_up_date: dateNullable,
   mileage: z.coerce.number().int().min(0).max(9999999).nullable().optional(),

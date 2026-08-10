@@ -380,6 +380,14 @@ export function EditUserDialog({
                   </div>
                 ) : (
                   <PermissionsMatrix
+                    // The matrix seeds its internal state once, on mount, and
+                    // never re-reads these props. Without a key it can stay
+                    // frozen on whatever it first saw — the previous user's
+                    // list, or the role defaults if it mounted before
+                    // form.reset() ran — so saving would silently write the
+                    // defaults back over a custom allowlist. Re-key per user
+                    // and per role so it always re-seeds from current values.
+                    key={`${user.id}:${role}`}
                     role={role}
                     allowedPages={form.watch("allowed_pages") ?? null}
                     hiddenColumns={form.watch("hidden_columns") ?? {}}
