@@ -37,11 +37,14 @@ export interface DashboardOverview {
   prior_sales_total: number;
 }
 
-export async function getDashboardOverview(): Promise<DashboardOverview> {
+export async function getDashboardOverview(month?: string): Promise<DashboardOverview> {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const now = new Date();
+  const now =
+    month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month)
+      ? new Date(`${month}-01T00:00:00`)
+      : new Date();
   const from = startOfMonth(now);
   const to = endOfMonth(now);
   const priorFrom = startOfMonth(subMonths(now, 1));

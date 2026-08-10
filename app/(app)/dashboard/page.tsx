@@ -14,16 +14,28 @@ import { requireRole } from "@/lib/auth/require";
 import { getDashboardOverview, getOverdueJobs } from "@/lib/actions/dashboard";
 import { formatMoney } from "@/lib/utils/format";
 
+import { format } from "date-fns";
+
 import { DailyRevenueChart } from "./daily-revenue-chart";
 import { ExpenseBreakdownChart } from "./expense-breakdown-chart";
+import { MonthNav } from "./month-nav";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   // Match registry: dashboard.defaultRoles = ["owner", "co_owner", "manager", "accountant"].
   await requireRole("owner", "co_owner", "manager", "accountant");
+  const sp = await searchParams;
+  const month =
+    sp.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month)
+      ? sp.month
+      : format(new Date(), "yyyy-MM");
   const [data, overdueJobs] = await Promise.all([
-    getDashboardOverview(),
+    getDashboardOverview(month),
     getOverdueJobs(30),
   ]);
 
@@ -34,14 +46,17 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">{data.period_label}</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">{data.period_label}</p>
+        </div>
+        <MonthNav month={month} />
       </div>
 
       <PageHelp id="dashboard">
         <p>
-          Your <strong>month-to-date snapshot</strong>. Everything on this page covers the current calendar month and refreshes the moment a new sale or expense is saved.
+          Your <strong>monthly snapshot</strong>. Everything on this page covers one calendar month — the current one by default — and refreshes the moment a new sale or expense is saved. Use the month picker at the top right to look at any past month.
         </p>
         <ul>
           <li><strong>Sales revenue</strong> — total billed this month (sub-total plus HST).</li>
@@ -84,7 +99,7 @@ export default async function DashboardPage() {
         <SummaryCard
           title="Expenses"
           value={formatMoney(data.expense_total)}
-          sub={<span className="text-xs text-muted-foreground">This month</span>}
+          sub={<span className="text-xs text-muted-foreground">{data.period_label}</span>}
           icon={<ShoppingCart className="size-4 text-muted-foreground" />}
         />
         <SummaryCard
@@ -107,7 +122,7 @@ export default async function DashboardPage() {
           value={formatMoney(data.outstanding)}
           sub={
             <span className="text-xs text-muted-foreground">
-              {data.job_count} job{data.job_count !== 1 ? "s" : ""} this month
+              {data.job_count} job{data.job_count !== 1 ? "s" : ""} in {data.period_label}
             </span>
           }
           icon={<AlertCircle className="size-4 text-muted-foreground" />}
