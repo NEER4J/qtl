@@ -1,3 +1,6 @@
+import { Download } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
 import { PrintButton } from "@/components/pricing/print-button";
@@ -28,14 +31,22 @@ export default async function PrintListPage() {
             {rows.length} engine{rows.length === 1 ? "" : "s"} · {columns.length} price column{columns.length === 1 ? "" : "s"} · {priced.length} priced + {reference.length} reference
           </p>
         </div>
-        <PrintButton />
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <a href="/api/export/print-list" download>
+              <Download className="size-4" /> Export CSV
+            </a>
+          </Button>
+          <PrintButton />
+        </div>
       </div>
 
       <div className="print:hidden">
         <PageHelp id="pricing-print-list">
           <p>
             Click <strong>Print</strong> (top right) to print a clean copy or save as PDF — the page
-            header, sidebar, and help blocks are hidden in print.
+            header, sidebar, and help blocks are hidden in print. <strong>Export CSV</strong> gives
+            you the same table as a spreadsheet file.
           </p>
           <ul>
             <li>Every price ends in .99 and is the active sell price (manual override if set, otherwise cost-up).</li>

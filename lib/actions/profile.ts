@@ -43,31 +43,77 @@ export const updateOwnProfile = wrapAction({
 export const changeOwnPassword = wrapAction({
   schema: ChangeOwnPasswordInput,
   handler: async (input, profile): Promise<{ updated: true }> => {
-    // 1. Verify the current password. Sign in on a throwaway client whose
+    const admin = createAdminClient();
+
+    // 1. Resolve the address the account actually authenticates with. Read it
+    //    off auth.users rather than trusting profiles.email: username roles
+    //    (co_owner/manager/staff/…) sign in with a synthetic address, and a
+    //    drifted profiles.email — an older @team.qtl.local row, or an email
+    //    edited straight in the Supabase dashboard — used to make step 2 fail
+    //    as "Current password is incorrect" no matter what was typed.
+    const { data: authUser, error: lookupErr } =
+      await admin.auth.admin.getUserById(profile.id);
+    if (lookupErr) {
+      console.error("[changeOwnPassword] getUserById failed", {
+        profileId: profile.id,
+        status: lookupErr.status,
+        code: lookupErr.code,
+        message: lookupErr.message,
+      });
+      throw new Error(`Could not load your account: ${lookupErr.message}`);
+    }
+    const loginEmail = authUser?.user?.email ?? profile.email;
+    if (loginEmail.toLowerCase() !== profile.email.toLowerCase()) {
+      console.warn("[changeOwnPassword] profiles.email is out of sync with auth", {
+        profileId: profile.id,
+        profileEmail: profile.email,
+        authEmail: loginEmail,
+      });
+    }
+
+    // 2. Verify the current password. Sign in on a throwaway client whose
     //    cookie handlers are no-ops, so this attempt never mutates the live
-    //    session. profile.email is always the auth-login email (a real email
-    //    for owner/admin/accountant, the synthetic @team address otherwise).
+    //    session.
     const verifier = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
       { cookies: { getAll: () => [], setAll: () => {} } },
     );
     const { error: signInErr } = await verifier.auth.signInWithPassword({
-      email: profile.email,
+      email: loginEmail,
       password: input.current_password,
     });
     if (signInErr) {
-      throw new Error("Current password is incorrect");
+      // Only a genuine credential rejection means "wrong password" — anything
+      // else (rate limit, unconfirmed email, auth outage) has to surface as
+      // itself or the user is left retrying a password that was always right.
+      if (signInErr.code === "invalid_credentials" || signInErr.status === 400) {
+        throw new Error("Current password is incorrect");
+      }
+      console.error("[changeOwnPassword] verification sign-in failed", {
+        profileId: profile.id,
+        status: signInErr.status,
+        code: signInErr.code,
+        message: signInErr.message,
+      });
+      throw new Error(`Could not verify your current password: ${signInErr.message}`);
     }
 
-    // 2. Set the new password via the admin (service-role) client.
-    const admin = createAdminClient();
+    // 3. Set the new password via the admin (service-role) client.
     const { error } = await admin.auth.admin.updateUserById(profile.id, {
       password: input.new_password,
     });
-    if (error) throw error;
+    if (error) {
+      console.error("[changeOwnPassword] updateUserById failed", {
+        profileId: profile.id,
+        status: error.status,
+        code: error.code,
+        message: error.message,
+      });
+      throw error;
+    }
 
-    // 3. Keep the admin-visible stored credential fresh. Non-fatal: the
+    // 4. Keep the admin-visible stored credential fresh. Non-fatal: the
     //    password has already changed, so a sync failure shouldn't surface as
     //    a failed password change.
     const { error: credErr } = await admin

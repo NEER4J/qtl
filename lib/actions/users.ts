@@ -397,14 +397,29 @@ export const setUserPassword = wrapAction({
     const { error } = await admin.auth.admin.updateUserById(input.id, {
       password: input.password,
     });
-    if (error) throw error;
+    if (error) {
+      console.error("[setUserPassword] auth.admin.updateUserById failed", {
+        targetId: input.id,
+        status: error.status,
+        code: error.code,
+        message: error.message,
+      });
+      throw new Error(`Could not set the password: ${error.message}`);
+    }
+
+    // Mirror the plaintext for the users-page Password column. Non-fatal — the
+    // credential has already changed in auth, so a mirror failure must not be
+    // reported as a failed password change or the admin will keep retrying a
+    // password that is in fact live.
     const { error: credErr } = await admin
       .from("profile_credentials")
       .upsert(
         { profile_id: input.id, password_plain: input.password, set_by: profile.id },
         { onConflict: "profile_id" },
       );
-    if (credErr) throw credErr;
+    if (credErr) {
+      console.error("[setUserPassword] credential mirror failed:", credErr.message);
+    }
     revalidatePath("/settings/users");
     return { updated: true };
   },
