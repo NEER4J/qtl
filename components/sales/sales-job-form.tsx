@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -155,6 +156,15 @@ const STOCK_OVERRIDE_ROLES: ReadonlySet<UserRole> = new Set([
   "staff",
 ]);
 
+// Mirrors canEditJobDate in lib/actions/sales.ts — only manager / admin may
+// re-date an invoice that is already on the books.
+const JOB_DATE_EDIT_ROLES: ReadonlySet<UserRole> = new Set([
+  "owner",
+  "co_owner",
+  "manager",
+  "supervisor",
+]);
+
 /** Description for the $0 line item that represents the free-grease offer. */
 const FREE_GREASE_LINE_DESC = "Free Grease (offer)";
 
@@ -200,6 +210,11 @@ export function SalesJobForm({
   const [customerInvoices, setCustomerInvoices] = useState<
     Array<{ id: string; invoice_no: string; job_date: string }>
   >([]);
+
+  // Re-dating a saved invoice is manager/admin only; on a new job everyone
+  // still picks the date. Enforced server-side in updateSalesJob.
+  const canEditJobDate =
+    mode === "create" || (!!currentUserRole && JOB_DATE_EDIT_ROLES.has(currentUserRole));
 
   // Roster lookups for the tech/advisor pickers. The suggestion list itself is
   // location-filtered (see locationTechSuggestions below). The combobox is
@@ -1086,8 +1101,13 @@ export function SalesJobForm({
                   <FormItem>
                     <FormLabel>Date</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input type="date" {...field} disabled={!canEditJobDate} />
                     </FormControl>
+                    {!canEditJobDate && (
+                      <FormDescription>
+                        Only a manager or admin can change the invoice date.
+                      </FormDescription>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

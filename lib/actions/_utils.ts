@@ -138,8 +138,12 @@ function mapError(err: unknown): { error: string; code?: string; fieldErrors?: R
           code: pgErr.code,
         };
       case "23514":
+        // Name the rule that rejected the write — "Value violates a
+        // constraint." on its own is undiagnosable from a support screenshot.
         return {
-          error: "Value violates a constraint.",
+          error: pgErr.message
+            ? `Value violates a constraint: ${pgErr.message}`
+            : "Value violates a constraint.",
           code: pgErr.code,
         };
       case "42501":

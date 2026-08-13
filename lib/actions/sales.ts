@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { InsufficientStockError, wrapAction } from "@/lib/actions/_utils";
+import { AuthorizationError } from "@/lib/auth/require";
 import {
   assertCreditAppliedValid,
   assertCreditedFromJobValid,
@@ -43,6 +44,19 @@ function canOverrideStock(profile: Profile): boolean {
     profile.role === "manager" ||
     profile.role === "supervisor" ||
     profile.role === "staff"
+  );
+}
+
+// Who may move a saved invoice to a different date. Manager + admin only
+// (client 2026-08-13) — a date change re-books the sale into another day /
+// month on the dashboard and the day-book. Mirrored client-side by
+// JOB_DATE_EDIT_ROLES in components/sales/sales-job-form.tsx.
+function canEditJobDate(profile: Profile): boolean {
+  return (
+    profile.role === "owner" ||
+    profile.role === "co_owner" ||
+    profile.role === "manager" ||
+    profile.role === "supervisor"
   );
 }
 
@@ -497,10 +511,20 @@ export const updateSalesJob = wrapAction({
     // rollup trigger only fires on payment changes, not on job edits).
     const { data: existing, error: existingErr } = await supabase
       .from("sales_jobs")
-      .select("paid_amount, created_at, location_id, stock_override")
+      .select("paid_amount, created_at, location_id, stock_override, job_date")
       .eq("id", input.id)
       .single();
     if (existingErr) throw existingErr;
+
+    // Invoice date is a books-level field: moving a completed sale into another
+    // day (or month) shifts the dashboard, the day-book and the invoice-number
+    // month. Only manager / admin may do it — everyone else must keep the
+    // stored date, even though the rest of the job stays editable.
+    if (existing?.job_date && input.job_date !== existing.job_date && !canEditJobDate(profile)) {
+      throw new AuthorizationError(
+        "Only a manager or admin can change the invoice date.",
+      );
+    }
 
     // Block the edit before anything is written if it needs more of a part or
     // oil grade than this location has on hand. Net against the job's CURRENT
@@ -558,13 +582,30 @@ export const updateSalesJob = wrapAction({
       input.id,
     );
 
-    const status = deriveStatus(input.total, existing?.paid_amount ?? 0, creditApplied);
+    // Re-cap the settled amount against the (possibly edited) total, the same
+    // way the payments rollup does on the payment side (0127). Without this a
+    // paid-in-full invoice whose total moves down by even a cent — line-item
+    // rounding drift, a removed line — leaves paid_amount above the new amount
+    // due and the whole UPDATE dies on sales_paid_chk (0118) with a bare
+    // "Value violates a constraint", blocking every edit including a plain
+    // date change. sales_payments still holds the full tender; the excess is
+    // posted as store credit by syncJobCreditLedger below.
+    const paidAmount = await settledPaidAmount(
+      supabase,
+      input.id,
+      existing?.paid_amount ?? 0,
+      input.total,
+      creditApplied,
+    );
+
+    const status = deriveStatus(input.total, paidAmount, creditApplied);
 
     const { data, error } = await supabase
       .from("sales_jobs")
       .update({
         location_id: input.location_id,
         job_date: input.job_date,
+        paid_amount: paidAmount,
         start_time: input.start_time,
         end_time: input.end_time,
         bay_no: input.bay_no ?? null,
@@ -800,6 +841,40 @@ async function replaceJobItems(
   }));
   const { error: insErr } = await supabase.from("sales_job_items").insert(rows);
   if (insErr) throw insErr;
+}
+
+/**
+ * What the JOB should record as paid after an edit moved its total.
+ *
+ * sales_payments is the source of truth for what was tendered; the job itself
+ * settles at most at the amount due, and anything beyond that is store credit
+ * (migration 0127). The rollup trigger only enforces that when a payment row
+ * changes, so an edit that lowers the total has to re-cap here or the write
+ * breaches sales_paid_chk.
+ */
+async function settledPaidAmount(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  jobId: string,
+  currentPaid: number,
+  total: number,
+  creditApplied: number,
+): Promise<number> {
+  const due = Math.max(0, Math.round((total - creditApplied) * 100) / 100);
+
+  const { data: payRows, error } = await supabase
+    .from("sales_payments")
+    .select("amount")
+    .eq("sales_job_id", jobId);
+  if (error) throw error;
+
+  // No payment rows (legacy / imported jobs settle paid_amount directly) —
+  // keep whatever is on the job, capped at the new amount due.
+  const tendered =
+    payRows && payRows.length > 0
+      ? (payRows as { amount: number }[]).reduce((s, r) => s + Number(r.amount), 0)
+      : currentPaid;
+
+  return Math.min(Math.round(tendered * 100) / 100, due);
 }
 
 function deriveStatus(total: number, paid: number, creditApplied = 0): PaymentStatus {
