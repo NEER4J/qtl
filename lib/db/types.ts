@@ -760,6 +760,12 @@ export interface EngineType {
   oil_capacity_litres: number;
   sort_order: number;
   active: boolean;
+  /**
+   * Package whose labor charge is this engine's oil-change labour (the
+   * oil-detail Labour column). Optional because migration 0130 may not be
+   * applied yet — undefined then, null when applied but unlinked.
+   */
+  labour_package_id?: string | null;
   created_at: string;
   updated_at: string;
 }

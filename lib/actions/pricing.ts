@@ -37,6 +37,7 @@ import {
   LockOilPricesInput,
   LockPartPackageInput,
   MergePartPackagePricesInput,
+  SetEngineLabourPackageInput,
   ToggleActiveInput,
   UnlockOilPricesInput,
   UnlockPartPackageInput,
@@ -548,7 +549,13 @@ export interface OilDetailRow {
   locked_price: number | null;
   filter_cost: number;
   oil_cost: number;
+  /** The labour charge for this engine's oil change (the Labour column). */
   service_cost: number;
+  /** Where `service_cost` came from — a linked package, a name match, or the
+   *  summed part service-costs (the last is a fallback, not a package price). */
+  service_cost_source: "package" | "package-name-match" | "parts";
+  /** Name of the package `service_cost` came from; null for the parts fallback. */
+  service_cost_package: string | null;
   volume_tier_premium: number;
   total_cost: number;
   /** null when selling is null (no data to compute against). */
@@ -578,6 +585,10 @@ export interface OilDetailResponse {
   lock: OilPriceLockInfo | null;
   /** False until migration 0122 creates the lock tables — hides the lock UI. */
   lock_supported: boolean;
+  /** False until migration 0130 adds engine_types.labour_package_id. */
+  labour_link_supported: boolean;
+  /** Engines whose Labour is the parts fallback, not a package charge. */
+  unlinked_labour_count: number;
 }
 
 export async function getOilDetail(
@@ -611,10 +622,11 @@ export async function getOilDetail(
         .from("engine_sell_prices")
         .select("id, engine_type_id, oil_type_id, container, sell_price")
         .limit(10000),  // Supabase REST defaults to 1000; we have ~1400+ rows.
-      // Package labour by name: the Labour column shows the matching package's
-      // "Labor charge" (settings/pricing/packages) when the engine name equals a
-      // package name; falls back to the summed part service-costs. (client 2026-06-30)
-      supabase.from("part_packages").select("name, labor_selling_price").eq("active", true),
+      // Package labour. The Labour column shows the "Labor charge" of the package
+      // wired to the engine (engine_types.labour_package_id, set in
+      // settings/pricing/engine-types). Inactive packages are included so a link
+      // to one still resolves instead of silently dropping to the fallback.
+      supabase.from("part_packages").select("id, name, labor_selling_price, active"),
       // Price lock for this page (oil type + container), with its snapshots.
       supabase
         .from("oil_price_locks")
@@ -632,14 +644,20 @@ export async function getOilDetail(
   const lockSupported = !locksRes.error;
   if (locksRes.error && !isMissingRelation(locksRes.error)) throw locksRes.error;
 
-  // Map a (normalised) package name → its labour charge.
-  // Match the FULL engine name to the package name (case + stray/double spaces
-  // normalised — the engine name is manufacturer + " " + model). Each filter
-  // variant matches its own same-named package.
+  // Two lookups into the package list:
+  //   by id   — the explicit engine → package link (migration 0130). Authoritative.
+  //   by name — the legacy fallback for engines nobody has linked yet: exact
+  //             engine-name == package-name (case + stray spaces normalised).
+  // The name match only ever covered ~40% of engines, which is the bug 0130
+  // fixes; it stays as a fallback so an unlinked engine doesn't regress.
   const normName = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
-  const packageLaborByName = new Map<string, number>();
-  for (const p of (packagesRes.data ?? []) as { name: string; labor_selling_price: number }[]) {
-    packageLaborByName.set(normName(p.name), Number(p.labor_selling_price) || 0);
+  type PackageRow = { id: string; name: string; labor_selling_price: number; active: boolean };
+  const packageRows = (packagesRes.data ?? []) as PackageRow[];
+  const packageById = new Map<string, PackageRow>();
+  const packageByName = new Map<string, PackageRow>();
+  for (const p of packageRows) {
+    packageById.set(p.id, p);
+    if (p.active) packageByName.set(normName(p.name), p);
   }
 
   const oilTypes = (oilTypesRes.data ?? []) as OilType[];
@@ -741,10 +759,19 @@ export async function getOilDetail(
     const cap = Number(e.oil_capacity_litres);
     const filterCost = enginePartCost.get(e.id) ?? 0;
     const engineName = `${e.manufacturer} ${e.model}`;
-    // Labour = the matching package's "Labor charge" (by name); else the summed
-    // part service-costs for this engine.
-    const pkgLabor = packageLaborByName.get(normName(engineName));
-    const serviceCost = pkgLabor != null ? pkgLabor : engineServiceCost.get(e.id) ?? 0;
+    // Labour = the linked package's "Labor charge"; else the same-named package's
+    // (legacy); else the summed part service-costs for this engine.
+    const linkedPkg = e.labour_package_id ? packageById.get(e.labour_package_id) ?? null : null;
+    const namedPkg = linkedPkg ? null : packageByName.get(normName(engineName)) ?? null;
+    const labourPkg = linkedPkg ?? namedPkg;
+    const serviceCost = labourPkg
+      ? Number(labourPkg.labor_selling_price) || 0
+      : engineServiceCost.get(e.id) ?? 0;
+    const serviceCostSource: OilDetailRow["service_cost_source"] = linkedPkg
+      ? "package"
+      : namedPkg
+        ? "package-name-match"
+        : "parts";
     const tier = tierFor(cap);
     const oilCost = Number.isFinite(perLitre) ? perLitre * cap : 0;
     // Cost = filter + oil + tier. Labour is a CHARGE (the package's labour),
@@ -785,6 +812,8 @@ export async function getOilDetail(
       filter_cost: filterCost,
       oil_cost: oilCost,
       service_cost: serviceCost,
+      service_cost_source: serviceCostSource,
+      service_cost_package: labourPkg?.name ?? null,
       volume_tier_premium: tier,
       total_cost: totalCost,
       profit,
@@ -793,6 +822,12 @@ export async function getOilDetail(
     };
   });
 
+  // The column only exists once 0130 is applied; before that every row falls
+  // through to the name match and the settings picker hides itself.
+  const labourLinkSupported = ((enginesRes.data ?? []) as EngineType[]).some(
+    (e) => "labour_package_id" in e,
+  );
+
   return {
     oil_type: oilType,
     container,
@@ -800,6 +835,8 @@ export async function getOilDetail(
     oil_types: oilTypes,
     lock,
     lock_supported: lockSupported,
+    labour_link_supported: labourLinkSupported,
+    unlinked_labour_count: rows.filter((r) => r.service_cost_source === "parts").length,
   };
 }
 
@@ -1073,6 +1110,37 @@ export async function listAllEngineTypes(): Promise<EngineType[]> {
     .order("model");
   if (error) throw error;
   return (data ?? []) as EngineType[];
+}
+
+/** Slim package list for the engine → labour-package picker. */
+export interface LabourPackageOption {
+  id: string;
+  name: string;
+  labor_selling_price: number;
+  active: boolean;
+}
+
+export async function listLabourPackageOptions(): Promise<LabourPackageOption[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("part_packages")
+    .select("id, name, labor_selling_price, active")
+    .order("active", { ascending: false })
+    .order("name");
+  if (error) throw error;
+  return (data ?? []).map((p) => ({
+    id: p.id as string,
+    name: p.name as string,
+    labor_selling_price: Number(p.labor_selling_price) || 0,
+    active: Boolean(p.active),
+  }));
+}
+
+/** False until migration 0130 adds engine_types.labour_package_id. */
+export async function engineLabourPackageSupported(): Promise<boolean> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("engine_types").select("labour_package_id").limit(1);
+  return !error;
 }
 
 export async function listAllServiceCosts(): Promise<ServiceCost[]> {
@@ -1376,6 +1444,37 @@ export const toggleEngineTypeActive = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+    revalidatePricing("engine-types");
+    return data as EngineType;
+  },
+});
+
+/**
+ * Wires an engine to the package whose labour charge is its oil-change labour.
+ *
+ * Engine names and package names never lined up reliably (see migration 0130),
+ * so this link is what the oil-detail Labour column reads. Passing null unlinks.
+ */
+export const setEngineLabourPackage = wrapAction({
+  schema: SetEngineLabourPackageInput,
+  roles: ["owner", "co_owner"],
+  handler: async ({ id, labour_package_id }): Promise<EngineType> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("engine_types")
+      .update({ labour_package_id })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) {
+      // 42703 = column doesn't exist → migration 0130 hasn't been applied.
+      if (error.code === "42703" || error.code === "PGRST204") {
+        throw new Error(
+          "Labour packages need migration 0130 — apply it before linking engines.",
+        );
+      }
+      throw error;
+    }
     revalidatePricing("engine-types");
     return data as EngineType;
   },

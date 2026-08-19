@@ -152,7 +152,15 @@ export default async function OilDetailPage({
           <li><strong>Oil cost</strong> — per-litre cost × engine oil capacity.</li>
           <li><strong>Tier premium</strong> — flat $ based on oil capacity bracket (8–20L, 21–38L, 39–46L, 47+L).</li>
           <li><strong>Total cost</strong> = filter + oil + tier. Labour is <em>not</em> a cost — it&apos;s the labour charge for the job, shown in its own column and captured as profit.</li>
-          <li><strong>Labour</strong> — the labour charge for this oil change (the package labour), shown separately from the cost.</li>
+          <li>
+            <strong>Labour</strong> — the <em>Labor charge</em> of the package linked to this
+            engine in{" "}
+            <Link href="/settings/pricing/engine-types" className="underline">
+              engine types
+            </Link>
+            , shown separately from the cost. An engine with no package linked falls back to the
+            summed part labour and is flagged in the column.
+          </li>
           <li><strong>Cost %</strong> and <strong>Profit %</strong> are shown to owner / accountant only.</li>
         </ul>
       </PageHelp>
@@ -163,6 +171,29 @@ export default async function OilDetailPage({
           Prices on this page are <strong>locked until {data.lock!.lock_until}</strong> —{" "}
           {data.lock!.item_count} snapshotted price{data.lock!.item_count === 1 ? "" : "s"} are
           being charged instead of the live catalogue. Unlock to edit.
+        </div>
+      )}
+
+      {canEdit && !data.labour_link_supported && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200 print:hidden">
+          Labour is still matched to packages by name, which misses most engines (the ones marked{" "}
+          <span className="font-semibold">*</span> below). Apply{" "}
+          <span className="font-mono text-xs">migration 0130</span> to link each engine to its
+          package explicitly.
+        </div>
+      )}
+
+      {canEdit && data.labour_link_supported && data.unlinked_labour_count > 0 && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200 print:hidden">
+          <strong>{data.unlinked_labour_count}</strong> engine
+          {data.unlinked_labour_count === 1 ? "" : "s"} below (marked{" "}
+          <span className="font-semibold">*</span>) {data.unlinked_labour_count === 1 ? "has" : "have"}{" "}
+          no labour package linked, so Labour is the summed part labour rather than a package
+          charge.{" "}
+          <Link href="/settings/pricing/engine-types" className="underline font-medium">
+            Link them in engine types
+          </Link>
+          .
         </div>
       )}
 
@@ -204,7 +235,14 @@ export default async function OilDetailPage({
                 </TableHead>
                 {showCost && <TableHead className="text-right">Filter cost</TableHead>}
                 {showCost && <TableHead className="text-right">Oil cost</TableHead>}
-                {showCost && <TableHead className="text-right">Labour</TableHead>}
+                {showCost && (
+                  <TableHead className="text-right">
+                    Labour
+                    <span className="block text-[10px] font-normal text-muted-foreground">
+                      package labor charge
+                    </span>
+                  </TableHead>
+                )}
                 {showCost && <TableHead className="text-right">Tier +</TableHead>}
                 {showCost && <TableHead className="text-right">Total cost</TableHead>}
                 {showCost && <TableHead className="text-right">Profit</TableHead>}
@@ -263,7 +301,21 @@ export default async function OilDetailPage({
                   </TableCell>
                   {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(r.filter_cost)}</TableCell>}
                   {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(r.oil_cost)}</TableCell>}
-                  {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(r.service_cost)}</TableCell>}
+                  {showCost && (
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      <span
+                        className={r.service_cost_source === "parts" ? "text-amber-600 dark:text-amber-500" : undefined}
+                        title={
+                          r.service_cost_package
+                            ? `From package "${r.service_cost_package}"`
+                            : "No labour package linked — this is the summed part labour, not a package charge"
+                        }
+                      >
+                        {formatMoney(r.service_cost)}
+                        {r.service_cost_source === "parts" && " *"}
+                      </span>
+                    </TableCell>
+                  )}
                   {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(r.volume_tier_premium)}</TableCell>}
                   {showCost && <TableCell className="text-right tabular-nums">{formatMoney(r.total_cost)}</TableCell>}
                   {showCost && (

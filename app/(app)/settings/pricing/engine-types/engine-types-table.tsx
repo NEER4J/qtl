@@ -16,10 +16,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { deleteEngineType, toggleEngineTypeActive } from "@/lib/actions/pricing";
+import {
+  deleteEngineType,
+  toggleEngineTypeActive,
+  type LabourPackageOption,
+} from "@/lib/actions/pricing";
 import type { EngineType } from "@/lib/db/types";
 
 import { EngineTypeFormDialog } from "./engine-type-form-dialog";
+import { LabourPackagePicker } from "./labour-package-picker";
 
 // Filter-variant rows (e.g. "4.6L V8" and "4.6L V8 With Bosch Filter") are
 // separate engine_types rows on purpose — each is wired to its own
@@ -43,7 +48,16 @@ function groupEngineTypes(engineTypes: EngineType[]) {
   return [...groups.values()];
 }
 
-export function EngineTypesTable({ engineTypes }: { engineTypes: EngineType[] }) {
+export function EngineTypesTable({
+  engineTypes,
+  labourPackages,
+  labourLinkSupported,
+}: {
+  engineTypes: EngineType[];
+  labourPackages: LabourPackageOption[];
+  /** False until migration 0130 — the Labour package column stays hidden. */
+  labourLinkSupported: boolean;
+}) {
   const [editing, setEditing] = useState<EngineType | null>(null);
   const [creating, setCreating] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -209,6 +223,14 @@ export function EngineTypesTable({ engineTypes }: { engineTypes: EngineType[] })
               <TableHead>Manufacturer</TableHead>
               <TableHead>Model</TableHead>
               <TableHead className="w-40 text-right">Oil capacity (L)</TableHead>
+              {labourLinkSupported && (
+                <TableHead className="w-64">
+                  Labour package
+                  <span className="block text-[10px] font-normal text-muted-foreground">
+                    drives the oil-detail Labour column
+                  </span>
+                </TableHead>
+              )}
               <TableHead className="w-20">Sort</TableHead>
               <TableHead className="w-24">Status</TableHead>
               <TableHead className="w-56 text-right">Actions</TableHead>
@@ -217,7 +239,10 @@ export function EngineTypesTable({ engineTypes }: { engineTypes: EngineType[] })
           <TableBody>
             {engineTypes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell
+                  colSpan={labourLinkSupported ? 8 : 7}
+                  className="text-center text-muted-foreground py-8"
+                >
                   No engine types yet. Click <strong>New engine type</strong> to add one.
                 </TableCell>
               </TableRow>
@@ -242,6 +267,8 @@ export function EngineTypesTable({ engineTypes }: { engineTypes: EngineType[] })
                     onDelete={handleDelete}
                     selectedIds={selectedIds}
                     onToggleSelect={toggleSelected}
+                    labourPackages={labourPackages}
+                    labourLinkSupported={labourLinkSupported}
                   />
                 );
               })
@@ -273,6 +300,8 @@ function GroupRows({
   onDelete,
   selectedIds,
   onToggleSelect,
+  labourPackages,
+  labourLinkSupported,
 }: {
   primary: EngineType;
   variants: EngineType[];
@@ -285,6 +314,8 @@ function GroupRows({
   onDelete: (e: EngineType) => void;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
+  labourPackages: LabourPackageOption[];
+  labourLinkSupported: boolean;
 }) {
   return (
     <>
@@ -297,6 +328,8 @@ function GroupRows({
         onDelete={onDelete}
         selected={selectedIds.has(primary.id)}
         onToggleSelect={onToggleSelect}
+        labourPackages={labourPackages}
+        labourLinkSupported={labourLinkSupported}
         leading={
           hasVariants ? (
             <button
@@ -334,6 +367,8 @@ function GroupRows({
             onDelete={onDelete}
             selected={selectedIds.has(v.id)}
             onToggleSelect={onToggleSelect}
+            labourPackages={labourPackages}
+            labourLinkSupported={labourLinkSupported}
             indented
           />
         ))}
@@ -350,6 +385,8 @@ function EngineRow({
   onDelete,
   selected,
   onToggleSelect,
+  labourPackages,
+  labourLinkSupported,
   leading,
   trailingBadge,
   indented,
@@ -362,6 +399,8 @@ function EngineRow({
   onDelete: (e: EngineType) => void;
   selected: boolean;
   onToggleSelect: (id: string) => void;
+  labourPackages: LabourPackageOption[];
+  labourLinkSupported: boolean;
   leading?: ReactNode;
   trailingBadge?: ReactNode;
   indented?: boolean;
@@ -382,6 +421,16 @@ function EngineRow({
         {trailingBadge}
       </TableCell>
       <TableCell className="text-right tabular-nums">{Number(e.oil_capacity_litres).toFixed(2)}</TableCell>
+      {labourLinkSupported && (
+        <TableCell>
+          <LabourPackagePicker
+            engineId={e.id}
+            engineName={`${e.manufacturer} ${e.model}`}
+            value={e.labour_package_id ?? null}
+            packages={labourPackages}
+          />
+        </TableCell>
+      )}
       <TableCell>{e.sort_order}</TableCell>
       <TableCell>
         <Badge variant={e.active ? "default" : "secondary"}>

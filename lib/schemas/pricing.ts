@@ -74,6 +74,13 @@ export const UpdateEngineTypeInput = CreateEngineTypeInput.extend({
 });
 export type UpdateEngineTypeInput = z.infer<typeof UpdateEngineTypeInput>;
 
+export const SetEngineLabourPackageInput = z.object({
+  id: z.string().uuid(),
+  /** null unlinks — the engine falls back to name match / part service-costs. */
+  labour_package_id: z.string().uuid().nullable(),
+});
+export type SetEngineLabourPackageInput = z.infer<typeof SetEngineLabourPackageInput>;
+
 export const DeleteEngineTypeInput = z.object({
   id: z.string().uuid(),
 });
