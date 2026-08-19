@@ -55,14 +55,20 @@ export function OilTypeFormDialog({
   onOpenChange,
   mode,
   oilType,
+  currentBase,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "create" | "edit";
   oilType?: OilType;
+  /** The oil currently flagged as base grade, if any. Only one may hold it. */
+  currentBase?: OilType;
 }) {
   const [isPending, startTransition] = useTransition();
   const form = useForm<FormValues>({ defaultValues: blank });
+  // The base grade can only be moved, never cleared: unticking it on the
+  // current base would leave the price grid with no grade to compare against.
+  const isCurrentBase = currentBase != null && oilType?.id === currentBase.id;
 
   useEffect(() => {
     if (!open) return;
@@ -209,11 +215,32 @@ export function OilTypeFormDialog({
               render={({ field }) => (
                 <FormItem className="flex items-center gap-2 space-y-0">
                   <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />
+                    <Checkbox
+                      checked={field.value}
+                      disabled={isCurrentBase}
+                      onCheckedChange={(v) => field.onChange(v === true)}
+                    />
                   </FormControl>
                   <div className="leading-none">
-                    <FormLabel className="cursor-pointer">Base grade</FormLabel>
-                    <FormDescription className="text-xs">Typically 15W40. Only mark one oil as base.</FormDescription>
+                    <FormLabel className={isCurrentBase ? undefined : "cursor-pointer"}>
+                      Base grade
+                    </FormLabel>
+                    <FormDescription className="text-xs">
+                      {isCurrentBase ? (
+                        <>
+                          This is the base grade. To move it, tick <strong>Base grade</strong> on
+                          another oil — it can&apos;t be cleared here.
+                        </>
+                      ) : currentBase ? (
+                        <>
+                          Typically 15W40. Only one oil can be base —{" "}
+                          <strong>{currentBase.code}</strong> holds it now and ticking this moves
+                          it here.
+                        </>
+                      ) : (
+                        <>Typically 15W40. Only one oil can be the base grade.</>
+                      )}
+                    </FormDescription>
                   </div>
                 </FormItem>
               )}

@@ -25,6 +25,7 @@ export function OilTypesTable({ oilTypes }: { oilTypes: OilType[] }) {
   const [creating, setCreating] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const currentBase = oilTypes.find((o) => o.is_base);
 
   const handleToggle = (oil: OilType) => {
     setPendingId(oil.id);
@@ -105,12 +106,18 @@ export function OilTypesTable({ oilTypes }: { oilTypes: OilType[] }) {
         </Table>
       </div>
 
-      <OilTypeFormDialog open={creating} onOpenChange={setCreating} mode="create" />
+      <OilTypeFormDialog
+        open={creating}
+        onOpenChange={setCreating}
+        mode="create"
+        currentBase={currentBase}
+      />
       <OilTypeFormDialog
         open={editing !== null}
         onOpenChange={(open) => !open && setEditing(null)}
         mode="edit"
         oilType={editing ?? undefined}
+        currentBase={currentBase}
       />
     </>
   );

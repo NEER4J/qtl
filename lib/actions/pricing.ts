@@ -1345,11 +1345,28 @@ function revalidatePricing(entity?: string) {
 // oil_types — create / update / toggle active
 // ============================================================================
 
+/**
+ * Exactly one oil type may be the base grade (mig 0131 enforces it with a
+ * partial unique index). Every consumer picks the base with `.find(is_base)`,
+ * so a second base row would silently shadow the first. Clearing the old base
+ * before writing the new one turns the tick into a "move the base here".
+ */
+async function demoteOtherBaseOils(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  exceptId?: string,
+) {
+  let q = supabase.from("oil_types").update({ is_base: false }).eq("is_base", true);
+  if (exceptId) q = q.neq("id", exceptId);
+  const { error } = await q;
+  if (error) throw error;
+}
+
 export const createOilType = wrapAction({
   schema: CreateOilTypeInput,
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<OilType> => {
     const supabase = await createClient();
+    if (input.is_base) await demoteOtherBaseOils(supabase);
     const { data, error } = await supabase
       .from("oil_types")
       .insert(input)
@@ -1366,6 +1383,7 @@ export const updateOilType = wrapAction({
   roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<OilType> => {
     const supabase = await createClient();
+    if (fields.is_base) await demoteOtherBaseOils(supabase, id);
     const { data, error } = await supabase
       .from("oil_types")
       .update(fields)
