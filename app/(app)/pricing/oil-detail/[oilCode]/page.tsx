@@ -91,6 +91,13 @@ export default async function OilDetailPage({
         proposed price — filter cost + oil cost + labour + tier premium, with no round-up —
         shown for review only. <strong>Δ</strong> is the difference between the two. Nothing
         changes until the Computed figures are confirmed.
+        {showCost && (
+          <>
+            {" "}
+            <strong>Profit</strong> is Selling − Total cost, i.e. the whole markup over cost —
+            it only equals <strong>Labour</strong> where Selling matches Computed.
+          </>
+        )}
       </div>
 
       {/* Selector strip */}
@@ -160,6 +167,13 @@ export default async function OilDetailPage({
             </Link>
             , shown separately from the cost. An engine with no package linked falls back to the
             summed part labour and is flagged in the column.
+          </li>
+          <li>
+            <strong>Profit</strong> = Selling − Total cost. That is the <em>entire</em> markup
+            over cost, of which the labour charge is only one part — it equals{" "}
+            <strong>Labour</strong> exactly when Selling is Total cost + Labour (the{" "}
+            <strong>Computed</strong> figure). A hand-set Selling price or the .99 round-up pushes
+            it above or below labour; the small line under each Profit says by how much.
           </li>
           <li><strong>Cost %</strong> and <strong>Profit %</strong> are shown to owner / accountant only.</li>
         </ul>
@@ -245,7 +259,14 @@ export default async function OilDetailPage({
                 )}
                 {showCost && <TableHead className="text-right">Tier +</TableHead>}
                 {showCost && <TableHead className="text-right">Total cost</TableHead>}
-                {showCost && <TableHead className="text-right">Profit</TableHead>}
+                {showCost && (
+                  <TableHead className="text-right">
+                    Profit
+                    <span className="block text-[10px] font-normal text-muted-foreground">
+                      selling − total cost
+                    </span>
+                  </TableHead>
+                )}
                 {showCost && <TableHead className="text-right">Cost %</TableHead>}
                 {showCost && <TableHead className="text-right">Profit %</TableHead>}
               </TableRow>
@@ -256,6 +277,9 @@ export default async function OilDetailPage({
                   r.computed_selling != null && r.selling != null
                     ? Math.round((r.computed_selling - r.selling) * 100) / 100
                     : null;
+                // How much of the markup isn't the labour charge.
+                const vsLabour =
+                  r.profit == null ? null : Math.round((r.profit - r.service_cost) * 100) / 100;
                 return (
                 <TableRow key={r.engine_id}>
                   <TableCell className="font-medium">{r.engine_name}</TableCell>
@@ -320,7 +344,21 @@ export default async function OilDetailPage({
                   {showCost && <TableCell className="text-right tabular-nums">{formatMoney(r.total_cost)}</TableCell>}
                   {showCost && (
                     <TableCell className={`text-right tabular-nums font-medium ${r.profit == null ? "" : r.profit < 0 ? "text-destructive" : "text-emerald-600"}`}>
-                      {r.profit == null ? <span className="text-muted-foreground/60">—</span> : formatMoney(r.profit)}
+                      {r.profit == null ? (
+                        <span className="text-muted-foreground/60">—</span>
+                      ) : (
+                        <>
+                          {formatMoney(r.profit)}
+                          {/* Profit is the whole markup; labour is only part of it.
+                              Spelling out the gap stops the two columns reading as
+                              a mismatch. */}
+                          <span className="block text-[10px] font-normal text-muted-foreground">
+                            {vsLabour === 0
+                              ? "= labour"
+                              : `labour ${vsLabour! > 0 ? "+" : "−"}${formatMoney(Math.abs(vsLabour!))}`}
+                          </span>
+                        </>
+                      )}
                     </TableCell>
                   )}
                   {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{pct(r.cost_pct)}</TableCell>}
