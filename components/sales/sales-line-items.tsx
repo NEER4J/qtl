@@ -22,7 +22,11 @@ import {
   transServiceLabel,
   transServicePrice,
 } from "@/components/pricing/trans-service-picker";
-import { OilPickerButton, type OilContainer } from "@/components/sales/oil-picker-button";
+import {
+  OilPickerButton,
+  oilLineRate,
+  type OilContainer,
+} from "@/components/sales/oil-picker-button";
 import { PackagePickerButton } from "@/components/sales/package-picker-button";
 import { PromotionPickerButton, promotionLabel } from "@/components/sales/promotion-picker-button";
 import type { PartForPicker, TransmissionService } from "@/lib/actions/pricing";
@@ -275,24 +279,20 @@ export function SalesLineItems({
   const addLabour = () =>
     onChange([...items, newLineItem({ description: "Labour", is_taxable: true })]);
 
-  /** Add an oil grade as a standalone line: qty = litres, price = per-litre rate
-   *  (editable in the row). The price is taken from the BASE grade (is_base, e.g.
-   *  15W40) so every oil is charged at the base price (client 2026-06-30 — "price
-   *  should be created using base price"); falls back to the picked oil's own
-   *  rate when no base grade is configured. */
-  const addOil = (oil: OilType, container: OilContainer) => {
-    const priceOil = oilTypes.find((o) => o.is_base) ?? oil;
-    const rate =
-      container === "gallon"
-        ? Number(priceOil.gallon_cost_per_litre)
-        : Number(priceOil.bulk_cost_per_litre);
+  /** Add an oil grade as a standalone line: qty is the litres (bulk) or gallons
+   *  (gallon) chosen in the picker, price is the matching per-unit rate — both
+   *  still editable in the row. The rate comes from the BASE grade; see
+   *  oilLineRate for the rule. */
+  const addOil = (oil: OilType, container: OilContainer, quantity: number) => {
+    const rate = oilLineRate(oilTypes, oil, container);
+    const qty = Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
     onChange([
       ...items,
       newLineItem({
         part_id: null,
         description: `${excelOilLabel(oil.code, oil.name)} (${container})`,
-        quantity: 1,
-        unit_price: Number.isFinite(rate) ? rate : 0,
+        quantity: qty,
+        unit_price: rate,
         is_taxable: oil.is_taxable,
         unit_of_measure: "ltr",
         oil_type_id: oil.id,

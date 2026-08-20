@@ -6,12 +6,13 @@
 -- which one wins depends on sort order. This makes that assumption a rule.
 
 -- 1. Demote any extra bases, keeping one winner: 15W40 if it is flagged,
---    otherwise the lowest sort_order / oldest row.
+--    otherwise the oldest row. (No sort_order tiebreak — 0089 dropped that
+--    column from oil_types; the list is ordered by name in the app.)
 with ranked as (
   select
     id,
     row_number() over (
-      order by (code = '15W40') desc, sort_order, created_at, id
+      order by (code = '15W40') desc, created_at, id
     ) as rn
   from public.oil_types
   where is_base

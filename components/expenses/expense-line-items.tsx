@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronsUpDown, Droplet, Package, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -249,6 +249,11 @@ export function ExpenseLineItems({
    *  caller hasn't loaded oil types (e.g. an older embed of this component). */
   oilTypes?: OilType[];
 }) {
+  const oilById = useMemo(
+    () => new Map(oilTypes.map((o) => [o.id, o])),
+    [oilTypes],
+  );
+
   const addPart = (p: ExpensePartPickerRow) => {
     const unit_cost = p.last_buying_price ?? p.cost ?? 0;
     onChange([
@@ -265,6 +270,13 @@ export function ExpenseLineItems({
   };
 
   const addOil = (oil: OilType, container: "bulk" | "gallon") => {
+    // Seed what we last paid. gallon_cost_per_litre is stored per JUG and
+    // bulk_cost_per_litre per litre (see lib/actions/pricing.ts), which is
+    // exactly the unit `quantity` is counted in for each container.
+    const unit_cost =
+      container === "gallon"
+        ? Number(oil.gallon_cost_per_litre) || 0
+        : Number(oil.bulk_cost_per_litre) || 0;
     onChange([
       ...items,
       newExpenseLineItem({
@@ -272,7 +284,7 @@ export function ExpenseLineItems({
         oil_container: container,
         description: `${oilLabel(oil)} (${container})`,
         quantity: 1,
-        unit_cost: 0,
+        unit_cost,
       }),
     ]);
   };
@@ -312,9 +324,10 @@ export function ExpenseLineItems({
         <PromotionPickerButton onSelect={addPromotion} />
         <div className="text-xs text-muted-foreground">
           Pick a part or oil to add a row — each one increases that
-          item&apos;s on-hand stock at this location. Non-itemised expenses
-          (rent, utilities) can leave items empty and enter Sub Total directly
-          below.
+          item&apos;s on-hand stock at this location. Count oil the way the
+          vendor billed it: bulk in litres, gallons in jugs (each jug is
+          converted to litres for stock). Non-itemised expenses (rent,
+          utilities) can leave items empty and enter Sub Total directly below.
         </div>
       </div>
 
@@ -340,6 +353,19 @@ export function ExpenseLineItems({
                 const qty = Number(row.quantity) || 0;
                 const cost = Number(row.unit_cost) || 0;
                 const lineTotal = qty * cost;
+                // Oil stock is kept in litres, so a gallon line has to be
+                // scaled by that oil's own jug size (4.546 / 3.785 / 4.0 all
+                // occur) — mirrors migration 0132's trigger. An oil that's
+                // since been deactivated won't be in the picker list, in which
+                // case we just skip the preview rather than guess.
+                const oil = row.oil_type_id ? oilById.get(row.oil_type_id) : undefined;
+                const isGallon = row.oil_container === "gallon";
+                const lpg = Number(oil?.litres_per_gallon);
+                const litres = !row.oil_type_id
+                  ? null
+                  : isGallon
+                    ? (lpg > 0 ? qty * lpg : null)
+                    : qty;
                 const last = row.last_buying_price;
                 const drift =
                   last != null && last > 0 ? (cost - last) / last : null;
@@ -353,7 +379,11 @@ export function ExpenseLineItems({
                       />
                       {(row.part_id || row.oil_type_id) && (
                         <p className="text-[10px] text-muted-foreground mt-1">
-                          {row.part_id ? "From catalog" : "Oil purchase — litres, added to stock"}
+                          {row.part_id
+                            ? "From catalog"
+                            : litres != null
+                              ? `Oil purchase — adds ${Number(litres.toFixed(2))} L to oil stock here`
+                              : "Oil purchase — added to oil stock here"}
                         </p>
                       )}
                     </TableCell>
@@ -370,8 +400,8 @@ export function ExpenseLineItems({
                           }
                         />
                         {row.oil_type_id && (
-                          <span className="text-[10px] uppercase text-muted-foreground w-6 text-left">
-                            L
+                          <span className="text-[10px] uppercase text-muted-foreground w-7 text-left">
+                            {isGallon ? "gal" : "L"}
                           </span>
                         )}
                       </div>
@@ -386,6 +416,11 @@ export function ExpenseLineItems({
                           patchRow(row.client_id, { unit_cost: Number(e.target.value) })
                         }
                       />
+                      {row.oil_type_id && (
+                        <p className="text-[10px] text-muted-foreground mt-1 text-right">
+                          {isGallon ? "per jug" : "per litre"}
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {last != null ? (
