@@ -524,9 +524,9 @@ export async function getAllFilterSellPrices(filter?: {
 // ============================================================================
 // Per-oil pricing detail (mirrors the "15W40", "10W30", ... tabs).
 //
-// One row per engine, columns: Selling, Cost, Filter Cost, Oil Cost, Profit,
-// Cost%, Profit%. The selling-price column is the same .99-rounded number the
-// Oil-Change grid surfaces; cost columns are admin-only.
+// One row per engine, columns: Selling, Cost, Filter Cost, Oil Cost, Fuel,
+// Grease, Profit, Cost%, Profit%. The selling-price column is the same
+// .99-rounded number the Oil-Change grid surfaces; cost columns are admin-only.
 // ============================================================================
 
 export interface OilDetailRow {
@@ -539,16 +539,22 @@ export interface OilDetailRow {
   /** ID of the engine_sell_prices row backing the override (null if cost-up). */
   override_id: string | null;
   /**
-   * PROPOSED selling price = filter cost + oil cost + labour + tier premium,
-   * exactly as entered (no .99 round-up). Shown in its own column next to the
-   * live Selling price so the owner can verify it before we make it the price.
-   * (client 2026-08-07.)
+   * PROPOSED selling price = total cost (filter + oil + fuel + grease + tier)
+   * + labour, exactly as entered (no .99 round-up). Shown in its own column
+   * next to the live Selling price so the owner can verify it before we make
+   * it the price. (client 2026-08-07.)
    */
   computed_selling: number | null;
   /** Snapshot from a live price lock; null when this page isn't locked. */
   locked_price: number | null;
   filter_cost: number;
   oil_cost: number;
+  /** Diesel/fuel treatment used on the job, from the engine's package. */
+  fuel_cost: number;
+  /** Grease used on the job, from the engine's package. */
+  grease_cost: number;
+  /** False when no package resolved, so fuel/grease are unknown rather than $0. */
+  extras_known: boolean;
   /** The labour charge for this engine's oil change (the Labour column). */
   service_cost: number;
   /** Where `service_cost` came from — a linked package, a name match, or the
@@ -597,7 +603,16 @@ export async function getOilDetail(
 ): Promise<OilDetailResponse | null> {
   const supabase = await createClient();
 
-  const [enginesRes, oilTypesRes, filtersRes, tiersRes, overridesRes, packagesRes, locksRes] =
+  const [
+    enginesRes,
+    oilTypesRes,
+    filtersRes,
+    tiersRes,
+    overridesRes,
+    packagesRes,
+    packageItemsRes,
+    locksRes,
+  ] =
     await Promise.all([
       supabase
         .from("engine_types")
@@ -627,6 +642,14 @@ export async function getOilDetail(
       // settings/pricing/engine-types). Inactive packages are included so a link
       // to one still resolves instead of silently dropping to the fallback.
       supabase.from("part_packages").select("id, name, labor_selling_price, active"),
+      // Fuel + grease consumed on the job. They live only inside the package
+      // (engine_filters holds filters and nothing else), which is why the two
+      // columns were missing here while the Excel tabs have carried a combined
+      // "Fuel / Grease" cost column all along. (client 2026-08-27.)
+      supabase
+        .from("part_package_items")
+        .select("package_id, quantity, parts:part_id(cost, mhsw_fee, part_categories:category_id(name))")
+        .limit(10000),
       // Price lock for this page (oil type + container), with its snapshots.
       supabase
         .from("oil_price_locks")
@@ -639,6 +662,7 @@ export async function getOilDetail(
   if (tiersRes.error) throw tiersRes.error;
   if (overridesRes.error) throw overridesRes.error;
   if (packagesRes.error) throw packagesRes.error;
+  if (packageItemsRes.error) throw packageItemsRes.error;
   // Migration 0122 not applied yet → the page still renders, the lock UI just
   // reports itself unavailable (lock_supported below).
   const lockSupported = !locksRes.error;
@@ -658,6 +682,33 @@ export async function getOilDetail(
   for (const p of packageRows) {
     packageById.set(p.id, p);
     if (p.active) packageByName.set(normName(p.name), p);
+  }
+
+  // Fuel + grease cost per package, from its own items. Matched on the part's
+  // CATEGORY, exactly — "Fuel Filter" and "Fuel Separator" are filters and are
+  // already counted in filter cost, so only the bare "Fuel" (diesel, per litre)
+  // and "Grease" (per kg) categories land here. Same (cost + MHSW) x qty basis
+  // as filter cost.
+  type PackageItemRow = {
+    package_id: string;
+    quantity: number;
+    parts: {
+      cost: number;
+      mhsw_fee: number;
+      part_categories: { name: string } | null;
+    } | null;
+  };
+  const packageExtras = new Map<string, { fuel: number; grease: number }>();
+  for (const it of (packageItemsRes.data ?? []) as unknown as PackageItemRow[]) {
+    if (!it.parts) continue;
+    const cat = normName(it.parts.part_categories?.name ?? "");
+    if (cat !== "fuel" && cat !== "grease") continue;
+    const line =
+      (Number(it.parts.cost) + Number(it.parts.mhsw_fee)) * (Number(it.quantity) || 0);
+    const slot = packageExtras.get(it.package_id) ?? { fuel: 0, grease: 0 };
+    if (cat === "fuel") slot.fuel += line;
+    else slot.grease += line;
+    packageExtras.set(it.package_id, slot);
   }
 
   const oilTypes = (oilTypesRes.data ?? []) as OilType[];
@@ -772,13 +823,22 @@ export async function getOilDetail(
       : namedPkg
         ? "package-name-match"
         : "parts";
+    // Fuel + grease ride along with the labour package: no package resolved
+    // means we don't know what the job consumes, not that it consumes nothing.
+    const extras = labourPkg ? packageExtras.get(labourPkg.id) ?? { fuel: 0, grease: 0 } : null;
+    const fuelCost = extras?.fuel ?? 0;
+    const greaseCost = extras?.grease ?? 0;
     const tier = tierFor(cap);
     const oilCost = Number.isFinite(perLitre) ? perLitre * cap : 0;
-    // Cost = filter + oil + tier. Labour is a CHARGE (the package's labour),
-    // shown as its own line, not folded into the cost. (client 2026-06-30.)
-    const totalCost = filterCost + oilCost + tier;
-    // The cost-up selling price still includes labour, so the oil-change PRICE
-    // doesn't move — labour just shifts from "cost" into the profit/margin.
+    // Cost = filter + oil + fuel + grease + tier, mirroring the Excel tabs where
+    // the combined "Fuel / Grease" column sits inside cost. Labour is a CHARGE
+    // (the package's labour), shown as its own line, not folded into the cost.
+    // (client 2026-06-30, fuel/grease added 2026-08-27.)
+    const totalCost = filterCost + oilCost + fuelCost + greaseCost + tier;
+    // Cost-up price = everything we spend + the labour we charge. Adding fuel
+    // and grease to the cost therefore raises this basis by the same $6-$10 —
+    // that is the point: a proposed price that didn't cover them was short.
+    // Engines with a manual anchor (most of them) are untouched.
     const sellBasis = totalCost + serviceCost;
     // A live lock wins over everything (mirrors public.oil_change_price), then
     // the manual override, then cost-up. round99 returns null when the result
@@ -791,7 +851,7 @@ export async function getOilDetail(
         ? round99(sellBasis)
         : null;
     const selling = lockedPrice ?? liveSelling;
-    // Proposed formula price: the four components, unrounded. Null when there
+    // Proposed formula price: total cost + labour, unrounded. Null when there
     // is nothing to price against, so the column shows "—" rather than $0.00.
     const computedSelling =
       Number.isFinite(sellBasis) && sellBasis > 0 ? Math.round(sellBasis * 100) / 100 : null;
@@ -811,6 +871,9 @@ export async function getOilDetail(
       locked_price: lockedPrice,
       filter_cost: filterCost,
       oil_cost: oilCost,
+      fuel_cost: fuelCost,
+      grease_cost: greaseCost,
+      extras_known: extras != null,
       service_cost: serviceCost,
       service_cost_source: serviceCostSource,
       service_cost_package: labourPkg?.name ?? null,

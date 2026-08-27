@@ -55,7 +55,7 @@ export default async function OilDetailPage({
             <Badge variant="outline" className="ml-2 align-middle">{container}</Badge>
           </h1>
           <p className="text-sm text-muted-foreground">
-            {data.oil_type.name} · Per-engine breakdown: oil + filter + labour + tier premium → selling price
+            {data.oil_type.name} · Per-engine breakdown: oil + filter + fuel + grease + labour + tier premium → selling price
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -88,8 +88,8 @@ export default async function OilDetailPage({
           on-screen AND in print so a shared copy can't be misread. */}
       <div className="rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-200 print:border-black print:bg-transparent print:text-black print:text-[10px] print:py-1">
         <strong>Selling</strong> is the price we charge today. <strong>Computed</strong> is a
-        proposed price — filter cost + oil cost + labour + tier premium, with no round-up —
-        shown for review only. <strong>Δ</strong> is the difference between the two. Nothing
+        proposed price — filter cost + oil cost + fuel + grease + labour + tier premium, with
+        no round-up — shown for review only. <strong>Δ</strong> is the difference between the two. Nothing
         changes until the Computed figures are confirmed.
         {showCost && (
           <>
@@ -143,9 +143,9 @@ export default async function OilDetailPage({
           )}
           <li>
             <strong>Computed</strong> — the proposed selling price: filter cost + oil cost +
-            labour + tier premium, exactly as the numbers add up (no .99 round-up). It is
-            shown for checking only; <strong>Selling</strong> is still what the shop charges.
-            <strong> Δ</strong> is Computed minus Selling.
+            fuel + grease + labour + tier premium, exactly as the numbers add up (no .99
+            round-up). It is shown for checking only; <strong>Selling</strong> is still what
+            the shop charges. <strong> Δ</strong> is Computed minus Selling.
           </li>
           {canEdit && data.lock_supported && (
             <li>
@@ -157,8 +157,16 @@ export default async function OilDetailPage({
           )}
           <li><strong>Filter cost</strong> — sum of (part cost + MHSW) × qty for every filter wired to this engine.</li>
           <li><strong>Oil cost</strong> — per-litre cost × engine oil capacity.</li>
+          <li>
+            <strong>Fuel</strong> and <strong>Grease</strong> — what the job consumes beyond
+            the filters: (cost + MHSW) × qty for the <em>Fuel</em> and <em>Grease</em> items
+            inside the package linked to this engine. They are the Excel &ldquo;Fuel /
+            Grease&rdquo; column, roughly $6–$10 a job, and they were missing from this page
+            until now — so Profit here used to read $6–$10 high. A row with no package linked
+            shows <span className="font-semibold">— *</span>: unknown, not zero.
+          </li>
           <li><strong>Tier premium</strong> — flat $ based on oil capacity bracket (8–20L, 21–38L, 39–46L, 47+L).</li>
-          <li><strong>Total cost</strong> = filter + oil + tier. Labour is <em>not</em> a cost — it&apos;s the labour charge for the job, shown in its own column and captured as profit.</li>
+          <li><strong>Total cost</strong> = filter + oil + fuel + grease + tier. Labour is <em>not</em> a cost — it&apos;s the labour charge for the job, shown in its own column and captured as profit.</li>
           <li>
             <strong>Labour</strong> — the <em>Labor charge</em> of the package linked to this
             engine in{" "}
@@ -190,8 +198,8 @@ export default async function OilDetailPage({
 
       {canEdit && !data.labour_link_supported && (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200 print:hidden">
-          Labour is still matched to packages by name, which misses most engines (the ones marked{" "}
-          <span className="font-semibold">*</span> below). Apply{" "}
+          Labour, Fuel and Grease are still matched to packages by name, which misses most
+          engines (the ones marked <span className="font-semibold">*</span> below). Apply{" "}
           <span className="font-mono text-xs">migration 0130</span> to link each engine to its
           package explicitly.
         </div>
@@ -203,7 +211,7 @@ export default async function OilDetailPage({
           {data.unlinked_labour_count === 1 ? "" : "s"} below (marked{" "}
           <span className="font-semibold">*</span>) {data.unlinked_labour_count === 1 ? "has" : "have"}{" "}
           no labour package linked, so Labour is the summed part labour rather than a package
-          charge.{" "}
+          charge, and Fuel and Grease are unknown — leaving Profit on those rows $6–$10 high.{" "}
           <Link href="/settings/pricing/engine-types" className="underline font-medium">
             Link them in engine types
           </Link>
@@ -249,6 +257,22 @@ export default async function OilDetailPage({
                 </TableHead>
                 {showCost && <TableHead className="text-right">Filter cost</TableHead>}
                 {showCost && <TableHead className="text-right">Oil cost</TableHead>}
+                {showCost && (
+                  <TableHead className="text-right">
+                    Fuel
+                    <span className="block text-[10px] font-normal text-muted-foreground">
+                      from package
+                    </span>
+                  </TableHead>
+                )}
+                {showCost && (
+                  <TableHead className="text-right">
+                    Grease
+                    <span className="block text-[10px] font-normal text-muted-foreground">
+                      from package
+                    </span>
+                  </TableHead>
+                )}
                 {showCost && (
                   <TableHead className="text-right">
                     Labour
@@ -325,6 +349,31 @@ export default async function OilDetailPage({
                   </TableCell>
                   {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(r.filter_cost)}</TableCell>}
                   {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(r.oil_cost)}</TableCell>}
+                  {/* Fuel + grease come from the engine's package. No package
+                      linked means unknown, not zero — show a dash so the row
+                      doesn't read as "this job burns no fuel or grease". */}
+                  {showCost && (
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {r.extras_known ? (
+                        formatMoney(r.fuel_cost)
+                      ) : (
+                        <span className="text-amber-600 dark:text-amber-500" title="No labour package linked — fuel usage unknown">
+                          — *
+                        </span>
+                      )}
+                    </TableCell>
+                  )}
+                  {showCost && (
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {r.extras_known ? (
+                        formatMoney(r.grease_cost)
+                      ) : (
+                        <span className="text-amber-600 dark:text-amber-500" title="No labour package linked — grease usage unknown">
+                          — *
+                        </span>
+                      )}
+                    </TableCell>
+                  )}
                   {showCost && (
                     <TableCell className="text-right tabular-nums text-muted-foreground">
                       <span
