@@ -25,7 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { createOilGroup, setOilGroupMembers, updateOilGroup } from "@/lib/actions/pricing";
 import type { OilGroup, OilType } from "@/lib/db/types";
-import { excelOilLabel } from "@/lib/utils/oil-labels";
+import { formatMoney } from "@/lib/utils/format";
 
 type FormValues = {
   name: string;
@@ -71,6 +71,7 @@ export function OilGroupFormDialog({
   // Membership lives on oil_types, not on the group, so it is its own state
   // and its own write — see setOilGroupMembers.
   const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [oilQuery, setOilQuery] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -89,12 +90,20 @@ export function OilGroupFormDialog({
           }
         : blank,
     );
+    setOilQuery("");
     setMemberIds(
       mode === "edit" && group
         ? oilTypes.filter((o) => o.oil_group_id === group.id).map((o) => o.id)
         : [],
     );
   }, [open, mode, group, form, oilTypes]);
+
+  const q = oilQuery.trim().toLowerCase();
+  const shownOils = q
+    ? oilTypes.filter(
+        (o) => o.name.toLowerCase().includes(q) || o.code.toLowerCase().includes(q),
+      )
+    : oilTypes;
 
   const toggleMember = (id: string) =>
     setMemberIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -221,41 +230,70 @@ export function OilGroupFormDialog({
             {oilTypes.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-baseline justify-between">
-                  <FormLabel>Grades priced by this group</FormLabel>
+                  <FormLabel>Which oils does this group price?</FormLabel>
                   <span className="text-xs text-muted-foreground">
-                    {memberIds.length} selected
+                    {memberIds.length} of {oilTypes.length} oils
                   </span>
                 </div>
+                <Input
+                  value={oilQuery}
+                  onChange={(e) => setOilQuery(e.target.value)}
+                  placeholder="Search oils by name or code…"
+                  className="h-8"
+                />
                 <div className="max-h-56 overflow-auto rounded-md border divide-y">
-                  {oilTypes.map((o) => {
-                    const moving = otherGroupId(o) != null && memberIds.includes(o.id);
-                    return (
-                      <label
-                        key={o.id}
-                        className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50"
-                      >
-                        <Checkbox
-                          checked={memberIds.includes(o.id)}
-                          onCheckedChange={() => toggleMember(o.id)}
-                        />
-                        <span className="flex-1 truncate">
-                          {excelOilLabel(o.code, o.name)}
-                          {!o.active && (
-                            <span className="ml-1 text-xs text-muted-foreground">(inactive)</span>
-                          )}
-                        </span>
-                        {moving && (
-                          <span className="shrink-0 text-[10px] text-amber-600 dark:text-amber-500">
-                            moves from another group
+                  {shownOils.length === 0 ? (
+                    <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+                      No oil matches &ldquo;{oilQuery}&rdquo;.
+                    </p>
+                  ) : (
+                    shownOils.map((o) => {
+                      const moving = otherGroupId(o) != null && memberIds.includes(o.id);
+                      return (
+                        <label
+                          key={o.id}
+                          className="flex cursor-pointer items-start gap-2 px-3 py-2 text-sm hover:bg-muted/50"
+                        >
+                          <Checkbox
+                            className="mt-0.5"
+                            checked={memberIds.includes(o.id)}
+                            onCheckedChange={() => toggleMember(o.id)}
+                          />
+                          <span className="min-w-0 flex-1">
+                            {/* The oil's FULL name, never excelOilLabel: that
+                                renders "Delo 400 XLE SB 15W40" as "15W40",
+                                which is also a group name and reads as though
+                                the list were groups. */}
+                            <span className="block truncate">
+                              {o.name}
+                              {!o.active && (
+                                <span className="ml-1 text-xs text-muted-foreground">
+                                  (inactive)
+                                </span>
+                              )}
+                            </span>
+                            <span className="block text-[11px] text-muted-foreground tabular-nums">
+                              {o.code}
+                              {" · costs "}
+                              {formatMoney(o.bulk_cost_per_litre)}/L
+                              {Number(o.gallon_cost_per_litre) > 0 &&
+                                ` · ${formatMoney(o.gallon_cost_per_litre)}/gal`}
+                            </span>
                           </span>
-                        )}
-                      </label>
-                    );
-                  })}
+                          {moving && (
+                            <span className="mt-0.5 shrink-0 text-[10px] text-amber-600 dark:text-amber-500">
+                              moves from another group
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Unticking a grade returns it to the single base-grade rate. A grade can only be
-                  in one group, so ticking one that belongs elsewhere moves it here.
+                  These are oil grades, not groups. Whichever you tick are charged at this
+                  group&apos;s rate instead of their own cost. Unticking one returns it to the
+                  single base-grade rate, and an oil can only be in one group.
                 </p>
               </div>
             )}

@@ -17,7 +17,6 @@ import {
 import { toggleOilGroupActive } from "@/lib/actions/pricing";
 import type { OilGroup, OilType } from "@/lib/db/types";
 import { formatMoney } from "@/lib/utils/format";
-import { excelOilLabel } from "@/lib/utils/oil-labels";
 
 import { OilGroupFormDialog } from "./oil-group-form-dialog";
 
@@ -101,7 +100,7 @@ export function OilGroupsTable({
                           — no grades yet, pick some
                         </button>
                       ) : (
-                        members.map((o) => excelOilLabel(o.code, o.name)).join(", ")
+                        members.map((o) => o.name).join(", ")
                       )}
                     </TableCell>
                     <TableCell>
@@ -136,7 +135,7 @@ export function OilGroupsTable({
         <p className="text-xs text-muted-foreground">
           <strong>{ungrouped.length}</strong> grade{ungrouped.length === 1 ? "" : "s"} in no
           group — still charged at the single base grade&apos;s rate:{" "}
-          {ungrouped.map((o) => excelOilLabel(o.code, o.name)).join(", ")}. Edit a group above to
+          {ungrouped.map((o) => o.name).join(", ")}. Edit a group above to
           tick the ones it should price.
         </p>
       )}
