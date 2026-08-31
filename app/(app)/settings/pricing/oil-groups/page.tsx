@@ -49,8 +49,15 @@ export default async function OilGroupsPage() {
             for that container. <strong>0</strong> is a real $0 price, not a fallback.
           </li>
           <li>
-            A grade joins a group on the <strong>Oil types</strong> page. A grade in no group is
-            charged at the base grade, exactly as before.
+            <strong>Create a group and tick its grades in the same dialog</strong> — press
+            <strong> New oil group</strong>, name it, set the rate, then tick every grade it
+            should price. You can also set a grade&apos;s group from the{" "}
+            <strong>Oil types</strong> page. A grade in no group is charged at the base grade,
+            exactly as before.
+          </li>
+          <li>
+            A grade belongs to at most one group, so ticking one that another group already
+            prices moves it — the dialog flags that before you save.
           </li>
           <li>
             The price still lands on the line as an editable number — this sets what the line

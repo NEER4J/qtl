@@ -55,6 +55,14 @@ export const UpdateOilGroupInput = CreateOilGroupInput.extend({
 });
 export type UpdateOilGroupInput = z.infer<typeof UpdateOilGroupInput>;
 
+/** The exact set of grades priced by a group. Anything already in the group and
+ *  missing from the list is removed from it. */
+export const SetOilGroupMembersInput = z.object({
+  group_id: z.string().uuid(),
+  oil_type_ids: z.array(z.string().uuid()).default([]),
+});
+export type SetOilGroupMembersInput = z.infer<typeof SetOilGroupMembersInput>;
+
 // ============================================================================
 // oil_types
 // ============================================================================

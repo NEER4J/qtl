@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -23,8 +23,9 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { createOilGroup, updateOilGroup } from "@/lib/actions/pricing";
-import type { OilGroup } from "@/lib/db/types";
+import { createOilGroup, setOilGroupMembers, updateOilGroup } from "@/lib/actions/pricing";
+import type { OilGroup, OilType } from "@/lib/db/types";
+import { excelOilLabel } from "@/lib/utils/oil-labels";
 
 type FormValues = {
   name: string;
@@ -55,14 +56,21 @@ export function OilGroupFormDialog({
   onOpenChange,
   mode,
   group,
+  oilTypes = [],
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "create" | "edit";
   group?: OilGroup;
+  /** Every grade, so the group can pick its members here rather than sending
+   *  the owner to the Oil types page to edit them one at a time. */
+  oilTypes?: OilType[];
 }) {
   const [isPending, startTransition] = useTransition();
   const form = useForm<FormValues>({ defaultValues: blank });
+  // Membership lives on oil_types, not on the group, so it is its own state
+  // and its own write — see setOilGroupMembers.
+  const [memberIds, setMemberIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -81,7 +89,19 @@ export function OilGroupFormDialog({
           }
         : blank,
     );
-  }, [open, mode, group, form]);
+    setMemberIds(
+      mode === "edit" && group
+        ? oilTypes.filter((o) => o.oil_group_id === group.id).map((o) => o.id)
+        : [],
+    );
+  }, [open, mode, group, form, oilTypes]);
+
+  const toggleMember = (id: string) =>
+    setMemberIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  /** Which OTHER group already prices this grade — ticking it moves it here. */
+  const otherGroupId = (o: OilType) =>
+    o.oil_group_id && o.oil_group_id !== group?.id ? o.oil_group_id : null;
 
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
@@ -105,6 +125,19 @@ export function OilGroupFormDialog({
         }
         return;
       }
+
+      // Membership is a second write because it lives on oil_types. The group
+      // itself is already saved by here, so a failure is reported without
+      // pretending the whole save failed.
+      const memberRes = await setOilGroupMembers({
+        group_id: res.data.id,
+        oil_type_ids: memberIds,
+      });
+      if (!memberRes.ok) {
+        toast.error(`Group saved, but the grades could not be set: ${memberRes.error}`);
+        return;
+      }
+
       toast.success(mode === "create" ? "Oil group created" : "Oil group updated");
       onOpenChange(false);
     });
@@ -184,6 +217,48 @@ export function OilGroupFormDialog({
               rate for that container. Entering <strong>0</strong> is a real $0 price, not a
               fallback.
             </p>
+
+            {oilTypes.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-baseline justify-between">
+                  <FormLabel>Grades priced by this group</FormLabel>
+                  <span className="text-xs text-muted-foreground">
+                    {memberIds.length} selected
+                  </span>
+                </div>
+                <div className="max-h-56 overflow-auto rounded-md border divide-y">
+                  {oilTypes.map((o) => {
+                    const moving = otherGroupId(o) != null && memberIds.includes(o.id);
+                    return (
+                      <label
+                        key={o.id}
+                        className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50"
+                      >
+                        <Checkbox
+                          checked={memberIds.includes(o.id)}
+                          onCheckedChange={() => toggleMember(o.id)}
+                        />
+                        <span className="flex-1 truncate">
+                          {excelOilLabel(o.code, o.name)}
+                          {!o.active && (
+                            <span className="ml-1 text-xs text-muted-foreground">(inactive)</span>
+                          )}
+                        </span>
+                        {moving && (
+                          <span className="shrink-0 text-[10px] text-amber-600 dark:text-amber-500">
+                            moves from another group
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Unticking a grade returns it to the single base-grade rate. A grade can only be
+                  in one group, so ticking one that belongs elsewhere moves it here.
+                </p>
+              </div>
+            )}
 
             <FormField
               control={form.control}

@@ -44,6 +44,7 @@ import {
   UnlockOilPricesInput,
   UnlockPartPackageInput,
   UpdateEngineTypeInput,
+  SetOilGroupMembersInput,
   UpdateOilGroupInput,
   UpdateOilTypeInput,
   UpdatePartBrandInput,
@@ -1476,6 +1477,43 @@ export const updateOilGroup = wrapAction({
     if (error) throw error;
     revalidatePricing("oil-groups");
     return data as OilGroup;
+  },
+});
+
+/**
+ * Set exactly which grades a group prices, from the group's own dialog.
+ *
+ * Two writes rather than one: grades ticked join the group, and grades that
+ * were in it but are no longer ticked are released back to the base-grade
+ * fallback (oil_group_id = null). Scoping the clear to THIS group is what stops
+ * it from stealing grades that belong to another one.
+ */
+export const setOilGroupMembers = wrapAction({
+  schema: SetOilGroupMembersInput,
+  roles: ["owner", "co_owner"],
+  handler: async ({ group_id, oil_type_ids }): Promise<{ member_count: number }> => {
+    const supabase = await createClient();
+
+    // Released: in this group, not in the new list.
+    let release = supabase
+      .from("oil_types")
+      .update({ oil_group_id: null })
+      .eq("oil_group_id", group_id);
+    if (oil_type_ids.length > 0) release = release.not("id", "in", `(${oil_type_ids.join(",")})`);
+    const { error: relErr } = await release;
+    if (relErr) throw relErr;
+
+    if (oil_type_ids.length > 0) {
+      const { error: addErr } = await supabase
+        .from("oil_types")
+        .update({ oil_group_id: group_id })
+        .in("id", oil_type_ids);
+      if (addErr) throw addErr;
+    }
+
+    revalidatePricing("oil-groups");
+    revalidatePath("/settings/pricing/oil-types");
+    return { member_count: oil_type_ids.length };
   },
 });
 

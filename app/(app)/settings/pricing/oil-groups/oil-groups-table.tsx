@@ -92,9 +92,17 @@ export function OilGroupsTable({
                       {rate(g.gallon_price_per_container)}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {members.length === 0
-                        ? "— no grades assigned"
-                        : members.map((o) => excelOilLabel(o.code, o.name)).join(", ")}
+                      {members.length === 0 ? (
+                        <button
+                          type="button"
+                          className="underline hover:text-foreground"
+                          onClick={() => setEditing(g)}
+                        >
+                          — no grades yet, pick some
+                        </button>
+                      ) : (
+                        members.map((o) => excelOilLabel(o.code, o.name)).join(", ")
+                      )}
                     </TableCell>
                     <TableCell>
                       {g.active ? (
@@ -128,17 +136,23 @@ export function OilGroupsTable({
         <p className="text-xs text-muted-foreground">
           <strong>{ungrouped.length}</strong> grade{ungrouped.length === 1 ? "" : "s"} in no
           group — still charged at the single base grade&apos;s rate:{" "}
-          {ungrouped.map((o) => excelOilLabel(o.code, o.name)).join(", ")}. Assign one on the{" "}
-          <span className="font-medium">Oil types</span> page.
+          {ungrouped.map((o) => excelOilLabel(o.code, o.name)).join(", ")}. Edit a group above to
+          tick the ones it should price.
         </p>
       )}
 
-      <OilGroupFormDialog open={creating} onOpenChange={setCreating} mode="create" />
+      <OilGroupFormDialog
+        open={creating}
+        onOpenChange={setCreating}
+        mode="create"
+        oilTypes={oilTypes}
+      />
       <OilGroupFormDialog
         open={editing != null}
         onOpenChange={(o) => !o && setEditing(null)}
         mode="edit"
         group={editing ?? undefined}
+        oilTypes={oilTypes}
       />
     </>
   );

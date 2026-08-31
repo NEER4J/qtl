@@ -128,6 +128,7 @@ export const sidebarItems: NavGroup[] = [
           { title: "Part categories", url: "/settings/pricing/categories" },
           { title: "Part brands", url: "/settings/pricing/brands" },
           { title: "Oil types", url: "/settings/pricing/oil-types" },
+          { title: "Oil groups", url: "/settings/pricing/oil-groups" },
           { title: "Engine types", url: "/settings/pricing/engine-types" },
           { title: "Service costs", url: "/settings/pricing/service-costs" },
           { title: "Volume tiers", url: "/settings/pricing/volume-tiers" },
