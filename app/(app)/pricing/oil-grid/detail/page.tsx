@@ -31,7 +31,7 @@ export default async function OilChangeDetailPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Oil-change detailed pricing</h1>
           <p className="text-sm text-muted-foreground">
-            Per-engine breakdown across filter brand options, labour, and grease.{" "}
+            Per-engine breakdown across filter brand options, labour, fuel and grease.{" "}
             <Link href="/pricing/oil-grid" className="underline text-foreground">
               Back to summary grid
             </Link>
@@ -43,7 +43,7 @@ export default async function OilChangeDetailPage() {
       {/* Print-only header */}
       <div className="hidden print:block">
         <h1 className="text-xl font-bold">Oil-change detailed pricing</h1>
-        <p className="text-xs">Per-engine breakdown across filter brand options, labour, and grease</p>
+        <p className="text-xs">Per-engine breakdown across filter brand options, labour, fuel and grease</p>
       </div>
 
       <div className="print:hidden">
@@ -57,7 +57,17 @@ export default async function OilChangeDetailPage() {
               installing that filter set).
             </p>
             <ul>
-              <li>The <em>Grease</em> column pulls from the active service-cost row whose code matches &quot;grease&quot;. Wire one up under <Link href="/settings/pricing/service-costs" className="underline">service costs</Link> if blank.</li>
+              <li>
+                <em>Fuel</em> and <em>Grease</em> are what the job consumes beyond the
+                filters — the diesel treatment and grease items inside the package linked
+                to that engine, at (cost + MHSW) × quantity. They run roughly $6–$10 a job
+                and come straight off profit.
+              </li>
+              <li>
+                An amber <em>—</em> means no package is linked to that engine, so its fuel
+                and grease are <em>unknown</em>, not zero. Link it under{" "}
+                <Link href="/settings/pricing/engine-types" className="underline">engine types</Link>.
+              </li>
               <li>Add or change brand options for an engine on its detail page.</li>
             </ul>
           </>
@@ -96,7 +106,8 @@ export default async function OilChangeDetailPage() {
                       {b}
                     </th>
                   ))}
-                  {showCost && <th className="p-2 text-right min-w-[100px] border-l">Grease</th>}
+                  {showCost && <th className="p-2 text-right min-w-[90px] border-l">Fuel</th>}
+                  {showCost && <th className="p-2 text-right min-w-[90px] border-l">Grease</th>}
                 </tr>
                 {showCost && (
                   <tr className="border-t text-xs text-muted-foreground">
@@ -110,6 +121,7 @@ export default async function OilChangeDetailPage() {
                         </div>
                       </th>
                     ))}
+                    <th className="border-l" />
                     <th className="border-l" />
                   </tr>
                 )}
@@ -146,9 +158,35 @@ export default async function OilChangeDetailPage() {
                           </td>
                         );
                       })}
+                      {/* Fuel + grease come from the engine's package. No package
+                          linked means the usage is UNKNOWN, so show "—", which
+                          must not read as "this job burns no fuel or grease". */}
                       {showCost && (
                         <td className="p-1 border-l text-right tabular-nums text-sm">
-                          {r.grease > 0 ? formatMoney(r.grease) : "—"}
+                          {r.extras_known ? (
+                            formatMoney(r.fuel)
+                          ) : (
+                            <span
+                              className="text-amber-600 dark:text-amber-500"
+                              title="No package linked to this engine — fuel usage unknown"
+                            >
+                              —
+                            </span>
+                          )}
+                        </td>
+                      )}
+                      {showCost && (
+                        <td className="p-1 border-l text-right tabular-nums text-sm">
+                          {r.extras_known ? (
+                            formatMoney(r.grease)
+                          ) : (
+                            <span
+                              className="text-amber-600 dark:text-amber-500"
+                              title="No package linked to this engine — grease usage unknown"
+                            >
+                              —
+                            </span>
+                          )}
                         </td>
                       )}
                     </tr>

@@ -87,6 +87,118 @@ function isMissingRelation(err: { code?: string } | null): boolean {
 }
 
 // ============================================================================
+// Engine → part package, and the fuel + grease that package consumes.
+//
+// Both oil pages need this and used to disagree: /pricing/oil-detail read real
+// per-package fuel and grease, while /pricing/oil-grid/detail showed a single
+// flat service_costs row (code ilike '%grease%') repeated for every engine —
+// and no such row exists, so that column was blank for all 69 engines, with no
+// fuel column at all. One resolver now feeds both. (client 2026-08-31.)
+// ============================================================================
+
+export type LabourPackageRow = {
+  id: string;
+  name: string;
+  labor_selling_price: number;
+  active: boolean;
+};
+
+/** What one job burns beyond the filters, in dollars. */
+export type PackageExtras = { fuel: number; grease: number };
+
+export type EnginePackageMatch = {
+  pkg: LabourPackageRow | null;
+  /** How we got there: the explicit 0130 link, the legacy name match, or nothing. */
+  source: "package" | "package-name-match" | "parts";
+  /** Null when no package resolved — the job's usage is unknown, not zero. */
+  extras: PackageExtras | null;
+};
+
+/** Case- and whitespace-insensitive key, used for both package lookups. */
+const normPackageName = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+
+/**
+ * Loads every package plus the fuel/grease inside it, and returns the lookup
+ * both oil pages use to get from an engine to those numbers.
+ *
+ * Fuel and grease live ONLY in `part_package_items` — `engine_filters` holds
+ * filters and nothing else — which is why they were missing from the pricing
+ * pages while the Excel tabs carried a combined "Fuel / Grease" cost column all
+ * along. They run $6–$10 a job, straight off the profit line.
+ *
+ * Matching is on the part's CATEGORY, exactly: "Fuel Filter" and "Fuel
+ * Separator" are filters, already counted in filter cost, so only the bare
+ * "Fuel" (diesel treatment, per litre) and "Grease" (per kg) categories land
+ * here. Cost basis is (cost + MHSW) × quantity, same as filter cost.
+ *
+ * Engine → package resolves by the explicit `engine_types.labour_package_id`
+ * link (migration 0130) first, then falls back to an exact engine-name ==
+ * package-name match for engines nobody has linked. That name match only ever
+ * covered 27 of 69 engines — the gap 0130 exists to close — so it stays purely
+ * as a fallback and an unlinked engine reports `extras: null`, not $0.
+ */
+async function loadEnginePackages(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<
+  (engine: {
+    manufacturer: string;
+    model: string;
+    labour_package_id?: string | null;
+  }) => EnginePackageMatch
+> {
+  const [packagesRes, itemsRes] = await Promise.all([
+    // Inactive packages are included so an explicit link to one still resolves
+    // instead of silently dropping to the fallback.
+    supabase.from("part_packages").select("id, name, labor_selling_price, active"),
+    supabase
+      .from("part_package_items")
+      .select(
+        "package_id, quantity, parts:part_id(cost, mhsw_fee, part_categories:category_id(name))",
+      )
+      .limit(10000),
+  ]);
+  if (packagesRes.error) throw packagesRes.error;
+  if (itemsRes.error) throw itemsRes.error;
+
+  const byId = new Map<string, LabourPackageRow>();
+  const byName = new Map<string, LabourPackageRow>();
+  for (const p of (packagesRes.data ?? []) as LabourPackageRow[]) {
+    byId.set(p.id, p);
+    if (p.active) byName.set(normPackageName(p.name), p);
+  }
+
+  type PackageItemRow = {
+    package_id: string;
+    quantity: number;
+    parts: { cost: number; mhsw_fee: number; part_categories: { name: string } | null } | null;
+  };
+  const extrasByPackage = new Map<string, PackageExtras>();
+  for (const it of (itemsRes.data ?? []) as unknown as PackageItemRow[]) {
+    if (!it.parts) continue;
+    const cat = normPackageName(it.parts.part_categories?.name ?? "");
+    if (cat !== "fuel" && cat !== "grease") continue;
+    const line = (Number(it.parts.cost) + Number(it.parts.mhsw_fee)) * (Number(it.quantity) || 0);
+    const slot = extrasByPackage.get(it.package_id) ?? { fuel: 0, grease: 0 };
+    if (cat === "fuel") slot.fuel += line;
+    else slot.grease += line;
+    extrasByPackage.set(it.package_id, slot);
+  }
+
+  return (engine) => {
+    const linked = engine.labour_package_id ? byId.get(engine.labour_package_id) ?? null : null;
+    const named = linked
+      ? null
+      : byName.get(normPackageName(`${engine.manufacturer} ${engine.model}`)) ?? null;
+    const pkg = linked ?? named;
+    return {
+      pkg,
+      source: linked ? "package" : named ? "package-name-match" : "parts",
+      extras: pkg ? extrasByPackage.get(pkg.id) ?? { fuel: 0, grease: 0 } : null,
+    };
+  };
+}
+
+// ============================================================================
 // Read-only catalog queries — RLS already allows SELECT to all authenticated.
 // Cost columns are stripped from the response for non-owners.
 // ============================================================================
@@ -613,8 +725,7 @@ export async function getOilDetail(
     filtersRes,
     tiersRes,
     overridesRes,
-    packagesRes,
-    packageItemsRes,
+    matchEnginePackage,
     locksRes,
   ] =
     await Promise.all([
@@ -641,19 +752,10 @@ export async function getOilDetail(
         .from("engine_sell_prices")
         .select("id, engine_type_id, oil_type_id, container, sell_price")
         .limit(10000),  // Supabase REST defaults to 1000; we have ~1400+ rows.
-      // Package labour. The Labour column shows the "Labor charge" of the package
-      // wired to the engine (engine_types.labour_package_id, set in
-      // settings/pricing/engine-types). Inactive packages are included so a link
-      // to one still resolves instead of silently dropping to the fallback.
-      supabase.from("part_packages").select("id, name, labor_selling_price, active"),
-      // Fuel + grease consumed on the job. They live only inside the package
-      // (engine_filters holds filters and nothing else), which is why the two
-      // columns were missing here while the Excel tabs have carried a combined
-      // "Fuel / Grease" cost column all along. (client 2026-08-27.)
-      supabase
-        .from("part_package_items")
-        .select("package_id, quantity, parts:part_id(cost, mhsw_fee, part_categories:category_id(name))")
-        .limit(10000),
+      // Package labour + the fuel/grease that package consumes. The Labour
+      // column shows the "Labor charge" of the package wired to the engine
+      // (engine_types.labour_package_id, set in settings/pricing/engine-types).
+      loadEnginePackages(supabase),
       // Price lock for this page (oil type + container), with its snapshots.
       supabase
         .from("oil_price_locks")
@@ -665,55 +767,10 @@ export async function getOilDetail(
   if (filtersRes.error) throw filtersRes.error;
   if (tiersRes.error) throw tiersRes.error;
   if (overridesRes.error) throw overridesRes.error;
-  if (packagesRes.error) throw packagesRes.error;
-  if (packageItemsRes.error) throw packageItemsRes.error;
   // Migration 0122 not applied yet → the page still renders, the lock UI just
   // reports itself unavailable (lock_supported below).
   const lockSupported = !locksRes.error;
   if (locksRes.error && !isMissingRelation(locksRes.error)) throw locksRes.error;
-
-  // Two lookups into the package list:
-  //   by id   — the explicit engine → package link (migration 0130). Authoritative.
-  //   by name — the legacy fallback for engines nobody has linked yet: exact
-  //             engine-name == package-name (case + stray spaces normalised).
-  // The name match only ever covered ~40% of engines, which is the bug 0130
-  // fixes; it stays as a fallback so an unlinked engine doesn't regress.
-  const normName = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
-  type PackageRow = { id: string; name: string; labor_selling_price: number; active: boolean };
-  const packageRows = (packagesRes.data ?? []) as PackageRow[];
-  const packageById = new Map<string, PackageRow>();
-  const packageByName = new Map<string, PackageRow>();
-  for (const p of packageRows) {
-    packageById.set(p.id, p);
-    if (p.active) packageByName.set(normName(p.name), p);
-  }
-
-  // Fuel + grease cost per package, from its own items. Matched on the part's
-  // CATEGORY, exactly — "Fuel Filter" and "Fuel Separator" are filters and are
-  // already counted in filter cost, so only the bare "Fuel" (diesel, per litre)
-  // and "Grease" (per kg) categories land here. Same (cost + MHSW) x qty basis
-  // as filter cost.
-  type PackageItemRow = {
-    package_id: string;
-    quantity: number;
-    parts: {
-      cost: number;
-      mhsw_fee: number;
-      part_categories: { name: string } | null;
-    } | null;
-  };
-  const packageExtras = new Map<string, { fuel: number; grease: number }>();
-  for (const it of (packageItemsRes.data ?? []) as unknown as PackageItemRow[]) {
-    if (!it.parts) continue;
-    const cat = normName(it.parts.part_categories?.name ?? "");
-    if (cat !== "fuel" && cat !== "grease") continue;
-    const line =
-      (Number(it.parts.cost) + Number(it.parts.mhsw_fee)) * (Number(it.quantity) || 0);
-    const slot = packageExtras.get(it.package_id) ?? { fuel: 0, grease: 0 };
-    if (cat === "fuel") slot.fuel += line;
-    else slot.grease += line;
-    packageExtras.set(it.package_id, slot);
-  }
 
   const oilTypes = (oilTypesRes.data ?? []) as OilType[];
   const oilType = oilTypes.find((o) => o.code === oilCode);
@@ -813,23 +870,17 @@ export async function getOilDetail(
   const rows: OilDetailRow[] = ((enginesRes.data ?? []) as EngineType[]).map((e) => {
     const cap = Number(e.oil_capacity_litres);
     const filterCost = enginePartCost.get(e.id) ?? 0;
-    const engineName = `${e.manufacturer} ${e.model}`;
     // Labour = the linked package's "Labor charge"; else the same-named package's
     // (legacy); else the summed part service-costs for this engine.
-    const linkedPkg = e.labour_package_id ? packageById.get(e.labour_package_id) ?? null : null;
-    const namedPkg = linkedPkg ? null : packageByName.get(normName(engineName)) ?? null;
-    const labourPkg = linkedPkg ?? namedPkg;
+    const match = matchEnginePackage(e);
+    const labourPkg = match.pkg;
     const serviceCost = labourPkg
       ? Number(labourPkg.labor_selling_price) || 0
       : engineServiceCost.get(e.id) ?? 0;
-    const serviceCostSource: OilDetailRow["service_cost_source"] = linkedPkg
-      ? "package"
-      : namedPkg
-        ? "package-name-match"
-        : "parts";
+    const serviceCostSource: OilDetailRow["service_cost_source"] = match.source;
     // Fuel + grease ride along with the labour package: no package resolved
     // means we don't know what the job consumes, not that it consumes nothing.
-    const extras = labourPkg ? packageExtras.get(labourPkg.id) ?? { fuel: 0, grease: 0 } : null;
+    const extras = match.extras;
     const fuelCost = extras?.fuel ?? 0;
     const greaseCost = extras?.grease ?? 0;
     const tier = tierFor(cap);
@@ -1019,10 +1070,10 @@ export async function getPrintList(): Promise<PrintListResponse> {
 // Item #19 — Detailed oil-change pricing breakdown.
 //
 // For each engine we expose every filter brand option separately, plus a
-// labour line (sum of service_costs across the engine's filter rows) and a
-// grease/extras line picked up from any service_cost row whose code matches
-// 'GREASE' (case-insensitive). The shape is intentionally wide so the page can
-// pivot rows = engines × columns = brand variants without re-querying.
+// labour line (sum of service_costs across the engine's filter rows) and the
+// fuel + grease the engine's package consumes. The shape is intentionally wide
+// so the page can pivot rows = engines × columns = brand variants without
+// re-querying.
 // ============================================================================
 
 export interface OilChangeDetailBrand {
@@ -1035,7 +1086,14 @@ export interface OilChangeDetailBrand {
 export interface OilChangeDetailRow {
   engine: EngineType;
   brands: OilChangeDetailBrand[];
+  /** Diesel/fuel treatment used on the job, from the engine's package. */
+  fuel: number;
+  /** Grease used on the job, from the engine's package. */
   grease: number;
+  /** False when no package resolved, so fuel/grease are unknown rather than $0. */
+  extras_known: boolean;
+  /** Name of the package the two came from, for the cell tooltip. */
+  extras_package: string | null;
 }
 
 export async function getOilChangeDetails(): Promise<{
@@ -1044,7 +1102,7 @@ export async function getOilChangeDetails(): Promise<{
 }> {
   const supabase = await createClient();
 
-  const [enginesRes, filtersRes, settingsRes, greaseRes] = await Promise.all([
+  const [enginesRes, filtersRes, settingsRes, matchEnginePackage] = await Promise.all([
     supabase
       .from("engine_types")
       .select("*")
@@ -1057,13 +1115,12 @@ export async function getOilChangeDetails(): Promise<{
         "engine_type_id, quantity, parts:part_id(brand, part_number, cost, mhsw_fee, service_costs:service_cost_id(cost))",
       ),
     supabase.from("app_settings").select("hst_rate").eq("id", 1).single(),
-    supabase.from("service_costs").select("cost").ilike("code", "%grease%").maybeSingle(),
+    loadEnginePackages(supabase),
   ]);
 
   if (enginesRes.error) throw enginesRes.error;
   if (filtersRes.error) throw filtersRes.error;
   const hstRate = Number(settingsRes.data?.hst_rate ?? 0.13);
-  const grease = Number(greaseRes.data?.cost ?? 0);
 
   type FilterJoin = {
     engine_type_id: string;
@@ -1102,13 +1159,21 @@ export async function getOilChangeDetails(): Promise<{
     grouped.set(r.engine_type_id, byEngine);
   }
 
-  const rows: OilChangeDetailRow[] = ((enginesRes.data ?? []) as EngineType[]).map((e) => ({
-    engine: e,
-    brands: Array.from(grouped.get(e.id)?.values() ?? []).sort((a, b) =>
-      a.brand.localeCompare(b.brand),
-    ),
-    grease,
-  }));
+  const rows: OilChangeDetailRow[] = ((enginesRes.data ?? []) as EngineType[]).map((e) => {
+    // Fuel + grease ride along with the engine's package: no package resolved
+    // means we don't know what the job consumes, not that it consumes nothing.
+    const match = matchEnginePackage(e);
+    return {
+      engine: e,
+      brands: Array.from(grouped.get(e.id)?.values() ?? []).sort((a, b) =>
+        a.brand.localeCompare(b.brand),
+      ),
+      fuel: match.extras?.fuel ?? 0,
+      grease: match.extras?.grease ?? 0,
+      extras_known: match.extras != null,
+      extras_package: match.pkg?.name ?? null,
+    };
+  });
 
   return { rows, hstRate };
 }
