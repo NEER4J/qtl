@@ -31,6 +31,7 @@ import { PackagePickerButton } from "@/components/sales/package-picker-button";
 import { PromotionPickerButton, promotionLabel } from "@/components/sales/promotion-picker-button";
 import type { PartForPicker, TransmissionService } from "@/lib/actions/pricing";
 import type {
+  OilGroup,
   OilType,
   Part,
   PartPackageWithItems,
@@ -227,11 +228,13 @@ export function SalesLineItems({
   items,
   onChange,
   oilTypes = [],
+  oilGroups = [],
 }: {
   items: LineItem[];
   onChange: (items: LineItem[]) => void;
   /** Oil grades — pickable as standalone oil line items. */
   oilTypes?: OilType[];
+  oilGroups?: OilGroup[];
 }) {
   const [pending, setPending] = useState<PendingAdd | null>(null);
   // Re-entry guard: a fast double-click on a dialog's confirm button could fire
@@ -284,7 +287,7 @@ export function SalesLineItems({
    *  still editable in the row. The rate comes from the BASE grade; see
    *  oilLineRate for the rule. */
   const addOil = (oil: OilType, container: OilContainer, quantity: number) => {
-    const rate = oilLineRate(oilTypes, oil, container);
+    const rate = oilLineRate(oilTypes, oil, container, oilGroups);
     const qty = Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
     onChange([
       ...items,
@@ -881,7 +884,9 @@ export function SalesLineItems({
       <div className="flex flex-wrap gap-2">
         <PartPickerButton onSelect={addPart} />
         <PackagePickerButton onSelect={addPackage} />
-        {oilTypes.length > 0 && <OilPickerButton oilTypes={oilTypes} onSelect={addOil} />}
+        {oilTypes.length > 0 && (
+          <OilPickerButton oilTypes={oilTypes} oilGroups={oilGroups} onSelect={addOil} />
+        )}
         <TransServicePickerButton onSelect={addTransService} />
         <Button type="button" variant="outline" size="sm" onClick={addLabour}>
           <Plus className="size-4" /> Add labour

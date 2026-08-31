@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Boxes, ChevronRight, Droplet, FolderTree, Gauge, History, Layers, Package, Tag, Wrench } from "lucide-react";
+import { Boxes, ChevronRight, Droplet, Droplets, FolderTree, Gauge, History, Layers, Package, Tag, Wrench } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
@@ -16,6 +16,12 @@ const CARDS = [
     href: "/settings/pricing/oil-types",
     icon: Droplet,
     description: "Grades QTL sells (15W40, T5, T6, etc.) with bulk and gallon cost per litre.",
+  },
+  {
+    title: "Oil groups",
+    href: "/settings/pricing/oil-groups",
+    icon: Droplets,
+    description: "Base prices shared by several grades — what a sales oil line is charged at.",
   },
   {
     title: "Engine types",

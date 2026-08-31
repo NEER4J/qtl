@@ -730,11 +730,34 @@ export interface RecurringExpense {
 // Phase 4 — Product & Pricing
 // ============================================================================
 
+/**
+ * A named base price shared by several oil grades (migration 0133).
+ *
+ * Replaces the single `is_base` grade for the purpose of pricing an oil line:
+ * every oil in a group is charged the group's rate. A NULL rate means "not
+ * set" and falls back to the old single-base behaviour — see oilLineRate.
+ */
+export interface OilGroup {
+  id: string;
+  name: string;
+  /** Charged per LITRE for a bulk line. NULL = not set, fall back. */
+  bulk_price_per_litre: number | null;
+  /** Charged per CONTAINER for a gallon line. NULL = not set, fall back. */
+  gallon_price_per_container: number | null;
+  active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface OilType {
   id: string;
   code: string;
   name: string;
   is_base: boolean;
+  /** Oil group whose base price this grade is charged at on sales lines.
+   *  NULL (or absent, before migration 0133) = fall back to the is_base grade. */
+  oil_group_id: string | null;
   bulk_cost_per_litre: number;
   gallon_cost_per_litre: number;
   /** Litres per gallon container for this specific oil. Imperial = 4.546,

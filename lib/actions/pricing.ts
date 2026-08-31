@@ -9,6 +9,7 @@ import { wrapAction } from "@/lib/actions/_utils";
 import type {
   EngineFilter,
   EngineType,
+  OilGroup,
   OilType,
   Part,
   PartBrand,
@@ -23,6 +24,7 @@ import type {
 } from "@/lib/db/types";
 import {
   CreateEngineTypeInput,
+  CreateOilGroupInput,
   CreateOilTypeInput,
   CreatePartBrandInput,
   CreatePartCategoryInput,
@@ -42,6 +44,7 @@ import {
   UnlockOilPricesInput,
   UnlockPartPackageInput,
   UpdateEngineTypeInput,
+  UpdateOilGroupInput,
   UpdateOilTypeInput,
   UpdatePartBrandInput,
   UpdatePartCategoryInput,
@@ -1403,6 +1406,95 @@ function revalidatePricing(entity?: string) {
   revalidatePath("/settings/pricing");
   if (entity) revalidatePath(`/settings/pricing/${entity}`);
 }
+
+// ============================================================================
+// oil_groups — a named base price shared by several grades (mig 0133)
+//
+// Every read tolerates the table being missing so the app keeps working until
+// the migration is pasted in; an empty list means every oil falls back to the
+// single is_base grade, i.e. exactly today's behaviour.
+// ============================================================================
+
+/** Active groups, for the sales oil picker. [] until migration 0133. */
+export async function listOilGroups(): Promise<OilGroup[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("oil_groups")
+    .select("*")
+    .eq("active", true)
+    .order("sort_order")
+    .order("name");
+  if (error) {
+    if (isMissingRelation(error)) return [];
+    throw error;
+  }
+  return (data ?? []) as OilGroup[];
+}
+
+/** Active AND inactive, for the settings table. [] until migration 0133. */
+export async function listAllOilGroups(): Promise<OilGroup[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("oil_groups")
+    .select("*")
+    .order("sort_order")
+    .order("name");
+  if (error) {
+    if (isMissingRelation(error)) return [];
+    throw error;
+  }
+  return (data ?? []) as OilGroup[];
+}
+
+export const createOilGroup = wrapAction({
+  schema: CreateOilGroupInput,
+  roles: ["owner", "co_owner"],
+  handler: async (input): Promise<OilGroup> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("oil_groups")
+      .insert(input)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("oil-groups");
+    return data as OilGroup;
+  },
+});
+
+export const updateOilGroup = wrapAction({
+  schema: UpdateOilGroupInput,
+  roles: ["owner", "co_owner"],
+  handler: async ({ id, ...fields }): Promise<OilGroup> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("oil_groups")
+      .update(fields)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("oil-groups");
+    return data as OilGroup;
+  },
+});
+
+export const toggleOilGroupActive = wrapAction({
+  schema: ToggleActiveInput,
+  roles: ["owner", "co_owner"],
+  handler: async (input): Promise<OilGroup> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("oil_groups")
+      .update({ active: input.active })
+      .eq("id", input.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePricing("oil-groups");
+    return data as OilGroup;
+  },
+});
 
 // ============================================================================
 // oil_types — create / update / toggle active

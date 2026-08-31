@@ -31,12 +31,42 @@ export const UNIT_OF_MEASURE_OPTIONS: { value: UnitOfMeasureValue; label: string
 ];
 
 // ============================================================================
+// oil_groups — a named base price shared by several grades (mig 0133)
+// ============================================================================
+/** Empty string -> null, so clearing a rate field means "not set, fall back"
+ *  rather than a real $0 price. */
+const optionalRate = z
+  .union([z.literal(""), z.coerce.number().min(0, "Must be ≥ 0")])
+  .transform((v) => (v === "" ? null : v))
+  .nullable()
+  .default(null);
+
+export const CreateOilGroupInput = z.object({
+  name: z.string().trim().min(1, "Name is required").max(80),
+  bulk_price_per_litre: optionalRate,
+  gallon_price_per_container: optionalRate,
+  sort_order: z.coerce.number().int().min(0).default(100),
+  active: z.coerce.boolean().default(true),
+});
+export type CreateOilGroupInput = z.infer<typeof CreateOilGroupInput>;
+
+export const UpdateOilGroupInput = CreateOilGroupInput.extend({
+  id: z.string().uuid(),
+});
+export type UpdateOilGroupInput = z.infer<typeof UpdateOilGroupInput>;
+
+// ============================================================================
 // oil_types
 // ============================================================================
 export const CreateOilTypeInput = z.object({
   code: code(30),
   name: z.string().trim().min(1, "Name is required").max(120),
   is_base: z.coerce.boolean().default(false),
+  oil_group_id: z
+    .union([z.literal(""), z.string().uuid()])
+    .transform((v) => (v === "" ? null : v))
+    .nullable()
+    .default(null),
   bulk_cost_per_litre: z.coerce.number().min(0, "Must be ≥ 0"),
   gallon_cost_per_litre: z.coerce.number().min(0, "Must be ≥ 0"),
   litres_per_gallon: z.coerce

@@ -15,12 +15,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toggleOilTypeActive } from "@/lib/actions/pricing";
-import type { OilType } from "@/lib/db/types";
+import type { OilGroup, OilType } from "@/lib/db/types";
 import { formatMoney } from "@/lib/utils/format";
 
 import { OilTypeFormDialog } from "./oil-type-form-dialog";
 
-export function OilTypesTable({ oilTypes }: { oilTypes: OilType[] }) {
+export function OilTypesTable({
+  oilTypes,
+  oilGroups = [],
+}: {
+  oilTypes: OilType[];
+  oilGroups?: OilGroup[];
+}) {
   const [editing, setEditing] = useState<OilType | null>(null);
   const [creating, setCreating] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -52,6 +58,7 @@ export function OilTypesTable({ oilTypes }: { oilTypes: OilType[] }) {
               <TableHead className="w-32">Code</TableHead>
               <TableHead>Name</TableHead>
               <TableHead className="w-20">Base</TableHead>
+              {oilGroups.length > 0 && <TableHead className="w-40">Oil group</TableHead>}
               <TableHead className="w-28 text-right">Bulk $/L</TableHead>
               <TableHead className="w-28 text-right">$/gal</TableHead>
               <TableHead className="w-20 text-right">L/gal</TableHead>
@@ -62,7 +69,7 @@ export function OilTypesTable({ oilTypes }: { oilTypes: OilType[] }) {
           <TableBody>
             {oilTypes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={oilGroups.length > 0 ? 9 : 8} className="text-center text-muted-foreground py-8">
                   No oil types yet. Click <strong>New oil type</strong> to add one.
                 </TableCell>
               </TableRow>
@@ -74,6 +81,24 @@ export function OilTypesTable({ oilTypes }: { oilTypes: OilType[] }) {
                   <TableCell>
                     {oil.is_base ? <Badge variant="default">Base</Badge> : <span className="text-muted-foreground text-xs">—</span>}
                   </TableCell>
+                  {oilGroups.length > 0 && (
+                    <TableCell className="text-xs">
+                      {(() => {
+                        const g = oilGroups.find((x) => x.id === oil.oil_group_id);
+                        if (!g) return <span className="text-muted-foreground">base grade</span>;
+                        return (
+                          <span>
+                            {g.name}
+                            {g.bulk_price_per_litre != null && (
+                              <span className="block text-[10px] text-muted-foreground tabular-nums">
+                                {formatMoney(g.bulk_price_per_litre)}/L
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })()}
+                    </TableCell>
+                  )}
                   <TableCell className="text-right tabular-nums">{formatMoney(oil.bulk_cost_per_litre)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatMoney(oil.gallon_cost_per_litre)}</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
@@ -111,6 +136,7 @@ export function OilTypesTable({ oilTypes }: { oilTypes: OilType[] }) {
         onOpenChange={setCreating}
         mode="create"
         currentBase={currentBase}
+        oilGroups={oilGroups}
       />
       <OilTypeFormDialog
         open={editing !== null}
@@ -118,6 +144,7 @@ export function OilTypesTable({ oilTypes }: { oilTypes: OilType[] }) {
         mode="edit"
         oilType={editing ?? undefined}
         currentBase={currentBase}
+        oilGroups={oilGroups}
       />
     </>
   );

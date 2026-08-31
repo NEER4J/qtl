@@ -11,7 +11,7 @@ import {
   listActiveLocations,
   listActiveServiceTypes,
 } from "@/lib/actions/reference";
-import { listEngineTypes, listOilTypes } from "@/lib/actions/pricing";
+import { listEngineTypes, listOilGroups, listOilTypes } from "@/lib/actions/pricing";
 import { listActiveTechnicians } from "@/lib/actions/technicians";
 
 export const dynamic = "force-dynamic";
@@ -29,13 +29,14 @@ export default async function NewSalesJobPage({
   const { customer_id: preselectCustomerId, vehicle_id: preselectVehicleId } =
     await searchParams;
 
-  const [locations, serviceTypes, settings, engineTypes, oilTypes, technicians] =
+  const [locations, serviceTypes, settings, engineTypes, oilTypes, oilGroups, technicians] =
     await Promise.all([
       listActiveLocations(),
       listActiveServiceTypes(),
       getAppSettings(),
       listEngineTypes(),
       listOilTypes(),
+      listOilGroups(),
       listActiveTechnicians(),
     ]);
 
@@ -77,6 +78,7 @@ export default async function NewSalesJobPage({
         serviceTypes={serviceTypes}
         engineTypes={engineTypes}
         oilTypes={oilTypes}
+        oilGroups={oilGroups}
         technicians={technicians}
         hstRate={Number(settings.hst_rate)}
         dumpTruckSurcharge={Number(settings.dump_truck_surcharge ?? 0)}

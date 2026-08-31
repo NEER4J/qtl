@@ -43,6 +43,7 @@ import type {
   Customer,
   EngineType,
   Location,
+  OilGroup,
   OilType,
   PaymentMode,
   ServiceType,
@@ -133,6 +134,7 @@ export interface SalesJobFormProps {
   serviceTypes: ServiceType[];
   engineTypes: EngineType[];
   oilTypes: OilType[];
+  oilGroups?: OilGroup[];
   /** Active roster used to populate Upper tech / Lower tech / Advisor pickers. */
   technicians: Technician[];
   hstRate: number;
@@ -180,6 +182,7 @@ export function SalesJobForm({
   serviceTypes,
   engineTypes,
   oilTypes,
+  oilGroups = [],
   technicians,
   hstRate,
   dumpTruckSurcharge,
@@ -1457,6 +1460,7 @@ export function SalesJobForm({
               items={lineItems}
               onChange={setLineItems}
               oilTypes={oilTypes}
+              oilGroups={oilGroups}
             />
           </section>
 

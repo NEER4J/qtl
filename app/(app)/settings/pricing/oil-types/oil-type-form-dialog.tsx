@@ -24,12 +24,13 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { createOilType, updateOilType } from "@/lib/actions/pricing";
-import type { OilType } from "@/lib/db/types";
+import type { OilGroup, OilType } from "@/lib/db/types";
 
 type FormValues = {
   code: string;
   name: string;
   is_base: boolean;
+  oil_group_id: string;
   bulk_cost_per_litre: string;
   gallon_cost_per_litre: string;
   litres_per_gallon: string;
@@ -42,6 +43,7 @@ const blank: FormValues = {
   code: "",
   name: "",
   is_base: false,
+  oil_group_id: "",
   bulk_cost_per_litre: "0",
   gallon_cost_per_litre: "0",
   litres_per_gallon: "4.546",
@@ -56,6 +58,7 @@ export function OilTypeFormDialog({
   mode,
   oilType,
   currentBase,
+  oilGroups = [],
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -63,6 +66,8 @@ export function OilTypeFormDialog({
   oilType?: OilType;
   /** The oil currently flagged as base grade, if any. Only one may hold it. */
   currentBase?: OilType;
+  /** Groups this grade can be priced by. Empty until migration 0133. */
+  oilGroups?: OilGroup[];
 }) {
   const [isPending, startTransition] = useTransition();
   const form = useForm<FormValues>({ defaultValues: blank });
@@ -78,6 +83,7 @@ export function OilTypeFormDialog({
             code: oilType.code,
             name: oilType.name,
             is_base: oilType.is_base,
+            oil_group_id: oilType.oil_group_id ?? "",
             bulk_cost_per_litre: String(oilType.bulk_cost_per_litre),
             gallon_cost_per_litre: String(oilType.gallon_cost_per_litre),
             litres_per_gallon: String(oilType.litres_per_gallon),
@@ -95,6 +101,7 @@ export function OilTypeFormDialog({
         code: values.code.toUpperCase().trim(),
         name: values.name.trim(),
         is_base: values.is_base,
+        oil_group_id: values.oil_group_id || null,
         bulk_cost_per_litre: Number(values.bulk_cost_per_litre),
         gallon_cost_per_litre: Number(values.gallon_cost_per_litre),
         litres_per_gallon: Number(values.litres_per_gallon),
@@ -208,6 +215,40 @@ export function OilTypeFormDialog({
                 </FormItem>
               )}
             />
+
+            {oilGroups.length > 0 && (
+              <FormField
+                control={form.control}
+                name="oil_group_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Oil group</FormLabel>
+                    <FormControl>
+                      <select
+                        className="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs focus-visible:ring-1 focus-visible:outline-none"
+                        value={field.value}
+                        onChange={(e) => field.onChange(e.target.value)}
+                      >
+                        <option value="">No group — use the base grade</option>
+                        {oilGroups.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.name}
+                            {g.bulk_price_per_litre != null
+                              ? ` — $${Number(g.bulk_price_per_litre).toFixed(2)}/L`
+                              : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </FormControl>
+                    <FormDescription className="text-xs">
+                      The base price an oil line of this grade is charged at on a sales job. The
+                      two cost fields above stay the shop&apos;s own cost and are unaffected.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}
