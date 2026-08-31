@@ -13,17 +13,20 @@ export const dynamic = "force-dynamic";
 
 export default async function EngineTypesPage() {
   await requireRole("owner", "co_owner");
-  const [engineTypes, labourPackages, labourLinkSupported] = await Promise.all([
+  // Proposals for the unlinked engines, so the admin can accept them in one
+  // pass instead of hunting 42 rows through a picker. Fetched alongside the
+  // rest rather than after them: it re-reads the engines itself and returns []
+  // once everything is linked, so gating it on `unlinked` bought nothing but a
+  // second serial round-trip to a database in Seoul.
+  const [engineTypes, labourPackages, labourLinkSupported, suggestions] = await Promise.all([
     listAllEngineTypes(),
     listLabourPackageOptions(),
     engineLabourPackageSupported(),
+    suggestEngineLabourPackages(),
   ]);
   const unlinked = labourLinkSupported
     ? engineTypes.filter((e) => e.active && !e.labour_package_id).length
     : 0;
-  // Proposals for the unlinked engines, so the admin can accept them in one
-  // pass instead of hunting 42 rows through a picker.
-  const suggestions = unlinked > 0 ? await suggestEngineLabourPackages() : [];
   const autoLinkable = suggestions.filter((s) => s.suggested_package_id != null).length;
 
   return (

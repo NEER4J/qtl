@@ -289,7 +289,11 @@ export default async function PayrollWeekPage({
                       </TableCell>
                       {show("hours") && <TableCell className="text-right tabular-nums">{entry.hours}</TableCell>}
                       {show("overtime") && <TableCell className="text-right tabular-nums text-muted-foreground">{entry.overtime_hours || "—"}</TableCell>}
-                      {show("gross") && <TableCell className="text-right tabular-nums">{formatMoney(entry.gross_wages + entry.overtime_wages + entry.bonus + entry.misc_extra)}</TableCell>}
+                      {/* Gross carries holiday pay, the same way the Gross stat
+                          box, the printed register, the CSV export and My Pay
+                          all count it. The Holiday column beside it breaks the
+                          same dollars out; it is not a second amount. */}
+                      {show("gross") && <TableCell className="text-right tabular-nums">{formatMoney(entry.gross_wages + entry.overtime_wages + entry.bonus + entry.holiday_pay + entry.misc_extra)}</TableCell>}
                       {show("holiday_vacation") && (
                         <TableCell className="text-right tabular-nums text-muted-foreground">
                           {entry.holiday_pay ? (

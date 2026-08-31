@@ -74,6 +74,13 @@ export function EngineTypesTable({
 
   const groups = useMemo(() => groupEngineTypes(engineTypes), [engineTypes]);
 
+  /** Suggestions the dialog can actually apply, i.e. everything but the rows
+   *  the matcher left to a person. */
+  const autoLinkable = useMemo(
+    () => suggestions.filter((s) => s.suggested_package_id != null).length,
+    [suggestions],
+  );
+
   // Ids currently rendered as their own row — the primary of every group,
   // plus each variant only while its group is expanded. "Select all" only
   // ever touches what's actually visible, so a collapsed variant can't be
@@ -211,12 +218,14 @@ export function EngineTypesTable({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {labourLinkSupported && suggestions.length > 0 && (
+          {/* Count what can actually be applied, not every unlinked engine — the
+              dialog lists the undecidable ones separately, and once only those
+              are left the button would read "Link packages (0)" and open a
+              dialog with nothing to accept. Those rows are set one at a time in
+              the Labour package column, which is what the page banner says. */}
+          {labourLinkSupported && autoLinkable > 0 && (
             <Button variant="outline" onClick={() => setAutoLinking(true)}>
-              {/* Count what can actually be applied, not every unlinked engine —
-                  the dialog lists the undecidable ones separately. */}
-              <Wand2 className="size-4" /> Link packages (
-              {suggestions.filter((s) => s.suggested_package_id != null).length})
+              <Wand2 className="size-4" /> Link packages ({autoLinkable})
             </Button>
           )}
           <Button onClick={() => setCreating(true)}>
