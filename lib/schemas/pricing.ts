@@ -1,12 +1,25 @@
 import { z } from "zod";
 
+/**
+ * A catalogue code (oil types, service costs). Vendor SKUs in this trade carry
+ * dashes — "FF5588-NN", "259118-980" — so the character set allows them.
+ *
+ * Accepts either case and uppercases here rather than trusting each form to do
+ * it: the oil-type dialog uppercases as you type, the service-cost one does
+ * not, and a lowercase code used to be rejected there with a message that
+ * didn't explain why.
+ */
 const code = (max: number) =>
   z
     .string()
     .trim()
     .min(1, "Code is required")
     .max(max, `Code must be ${max} characters or fewer`)
-    .regex(/^[A-Z0-9_]+$/, "Code must be uppercase letters, digits, or underscores");
+    .regex(
+      /^[A-Za-z0-9_-]+$/,
+      "Code can use letters, digits, dashes and underscores — no spaces or punctuation",
+    )
+    .transform((v) => v.toUpperCase());
 
 // ============================================================================
 // unit_of_measure — pg enum, kept in sync with migration 0030.
