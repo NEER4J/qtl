@@ -32,9 +32,9 @@ import {
 } from "@/components/ui/select";
 import { PayrollWeekInput } from "@/lib/schemas/payroll";
 import { EmptyDropdownHint } from "@/components/help/empty-state";
-import { createPayrollWeek } from "@/lib/actions/payroll";
+import { createPayrollWeek, updatePayrollWeek } from "@/lib/actions/payroll";
 import { listActiveLocations } from "@/lib/actions/reference";
-import type { Location } from "@/lib/db/types";
+import type { Location, PayrollWeek } from "@/lib/db/types";
 
 /** Snap any YYYY-MM-DD to the Sunday of its week (in UTC, no DST surprises). */
 function snapToSunday(ymd: string): string {
@@ -70,10 +70,29 @@ function formatHuman(ymd: string): string {
   });
 }
 
-export function NewWeekDialog({ children }: { children: React.ReactNode }) {
+/** Only the editable fields — the caller holds a full week with its entries and
+ *  payments attached, and none of that needs to cross to the client. */
+type EditableWeek = Pick<
+  PayrollWeek,
+  "id" | "location_id" | "week_start" | "period_weeks" | "notes"
+>;
+
+interface Props {
+  /** Omit to create a new week; pass the week to edit an existing one. */
+  week?: EditableWeek;
+  children: React.ReactNode;
+}
+
+/**
+ * Create OR edit a pay week. Editing exists because a week opened on the wrong
+ * Sunday, the wrong shop, or the wrong period length was previously permanent —
+ * the only escape was to abandon it and start another.
+ */
+export function WeekFormDialog({ week, children }: Props) {
   const [open, setOpen] = useState(false);
   const [locations, setLocations] = useState<Location[]>([]);
   const router = useRouter();
+  const isEdit = !!week;
 
   useEffect(() => {
     listActiveLocations().then(setLocations).catch(() => {});
@@ -81,18 +100,27 @@ export function NewWeekDialog({ children }: { children: React.ReactNode }) {
 
   const form = useForm<PayrollWeekInput>({
     resolver: zodResolver(PayrollWeekInput),
-    defaultValues: { location_id: "", week_start: "", period_weeks: 1, notes: "" },
+    defaultValues: week
+      ? {
+          location_id: week.location_id,
+          week_start: week.week_start,
+          period_weeks: week.period_weeks,
+          notes: week.notes ?? "",
+        }
+      : { location_id: "", week_start: "", period_weeks: 1, notes: "" },
   });
 
   async function onSubmit(values: PayrollWeekInput) {
-    const result = await createPayrollWeek(values);
+    const result = week
+      ? await updatePayrollWeek({ ...values, id: week.id })
+      : await createPayrollWeek(values);
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
-    toast.success("Payroll week created");
+    toast.success(isEdit ? "Payroll week updated" : "Payroll week created");
     setOpen(false);
-    form.reset();
+    if (!isEdit) form.reset();
     router.refresh();
   }
 
@@ -101,7 +129,7 @@ export function NewWeekDialog({ children }: { children: React.ReactNode }) {
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>New payroll week</DialogTitle>
+          <DialogTitle>{isEdit ? "Edit payroll week" : "New payroll week"}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -207,10 +235,16 @@ export function NewWeekDialog({ children }: { children: React.ReactNode }) {
                 </FormItem>
               )}
             />
+            {isEdit && (
+              <p className="text-xs text-muted-foreground">
+                Moving the start date or period does not touch the entries already on this
+                week — check the hours still line up with the new dates.
+              </p>
+            )}
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Creating…" : "Create"}
+                {form.formState.isSubmitting ? "Saving…" : isEdit ? "Save" : "Create"}
               </Button>
             </div>
           </form>
@@ -218,4 +252,9 @@ export function NewWeekDialog({ children }: { children: React.ReactNode }) {
       </DialogContent>
     </Dialog>
   );
+}
+
+/** Back-compat alias for the "New week" button on the payroll list page. */
+export function NewWeekDialog({ children }: { children: React.ReactNode }) {
+  return <WeekFormDialog>{children}</WeekFormDialog>;
 }

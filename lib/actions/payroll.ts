@@ -11,9 +11,12 @@ import {
   PayrollCashDailyInput,
   PayrollEntryInput,
   PayrollPaymentInput,
+  PayrollIdInput,
   PayrollWeekInput,
   UpdateEmployeeInput,
   UpdatePayrollEntryInput,
+  UpdatePayrollPaymentInput,
+  UpdatePayrollWeekInput,
   UpdatePayrollWeekStatusInput,
 } from "@/lib/schemas/payroll";
 import type {
@@ -370,12 +373,17 @@ export async function listPayrollWeeks(locationId?: string): Promise<PayrollWeek
 export interface PayrollWeekDetail extends PayrollWeek {
   location_name: string;
   location_code: string;
+  /** Printed-document header fields for this shop (see the print view). */
+  location_address: string | null;
+  location_phone: string | null;
+  location_invoice_name: string | null;
   entries: PayrollEntryWithEmployee[];
   payments: PayrollPayment[];
 }
 
 export interface PayrollEntryWithEmployee extends PayrollEntry {
   employee_name: string;
+  employee_code: string | null;
   employee_payroll_type: string;
   cash_days: PayrollCashDaily[];
 }
@@ -385,14 +393,14 @@ export async function getPayrollWeek(weekId: string): Promise<PayrollWeekDetail 
 
   const { data: week, error: weekErr } = await supabase
     .from("payroll_weeks")
-    .select("*, locations(name, code)")
+    .select("*, locations(name, code, address, phone, invoice_name)")
     .eq("id", weekId)
     .single();
   if (weekErr || !week) return null;
 
   const { data: entries, error: entriesErr } = await supabase
     .from("payroll_entries")
-    .select("*, employees(full_name, payroll_type), payroll_cash_daily(*)")
+    .select("*, employees(full_name, code, payroll_type), payroll_cash_daily(*)")
     .eq("payroll_week_id", weekId)
     .order("created_at");
   if (entriesErr) throw entriesErr;
@@ -404,19 +412,35 @@ export async function getPayrollWeek(weekId: string): Promise<PayrollWeekDetail 
     .order("paid_on");
   if (paymentsErr) throw paymentsErr;
 
-  const loc = (week as unknown as { locations: { name: string; code: string } }).locations;
+  const loc = (week as unknown as {
+    locations: {
+      name: string;
+      code: string;
+      address: string | null;
+      phone: string | null;
+      invoice_name: string | null;
+    };
+  }).locations;
 
   return {
     ...(week as unknown as PayrollWeek),
     location_name: loc?.name ?? "",
     location_code: loc?.code ?? "",
+    location_address: loc?.address ?? null,
+    location_phone: loc?.phone ?? null,
+    location_invoice_name: loc?.invoice_name ?? null,
     entries: ((entries ?? []) as unknown[]).map((e) => {
       const row = e as Record<string, unknown>;
-      const emp = row.employees as { full_name: string; payroll_type: string } | null;
+      const emp = row.employees as {
+        full_name: string;
+        code: string | null;
+        payroll_type: string;
+      } | null;
       const cashDays = (row.payroll_cash_daily as PayrollCashDaily[]) ?? [];
       return {
         ...(row as unknown as PayrollEntry),
         employee_name: emp?.full_name ?? "",
+        employee_code: emp?.code ?? null,
         employee_payroll_type: emp?.payroll_type ?? "employee",
         cash_days: cashDays,
       };
@@ -480,6 +504,66 @@ export const updatePayrollWeekStatus = wrapAction({
   },
 });
 
+/** Roles allowed to run the payroll workflow. Mirrors the RLS rule in 0134 —
+ *  managers are additionally scoped to their own location by the policy. */
+const PAYROLL_ROLES = ["owner", "co_owner", "manager", "accountant"] as const;
+
+export const updatePayrollWeek = wrapAction({
+  schema: UpdatePayrollWeekInput,
+  roles: [...PAYROLL_ROLES],
+  handler: async (input, profile): Promise<PayrollWeek> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("payroll_weeks")
+      .update({
+        location_id: input.location_id,
+        week_start: snapToSunday(input.week_start),
+        period_weeks: input.period_weeks,
+        notes: input.notes || null,
+        updated_by: profile.id,
+      })
+      .eq("id", input.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePath(`/payroll/${input.id}`);
+    revalidatePath("/payroll");
+    return data as PayrollWeek;
+  },
+});
+
+/**
+ * Delete a whole pay week — for weeks opened on the wrong date or the wrong
+ * shop. payroll_entries.payroll_week_id is `on delete restrict`, so the children
+ * come out first, deliberately and in order: payments, then entries (their daily
+ * cash rows cascade off the entry), then the week itself.
+ */
+export const deletePayrollWeek = wrapAction({
+  schema: PayrollIdInput,
+  roles: [...PAYROLL_ROLES],
+  handler: async (input): Promise<{ ok: true }> => {
+    const supabase = await createClient();
+
+    const { error: payErr } = await supabase
+      .from("payroll_payments")
+      .delete()
+      .eq("payroll_week_id", input.id);
+    if (payErr) throw payErr;
+
+    const { error: entryErr } = await supabase
+      .from("payroll_entries")
+      .delete()
+      .eq("payroll_week_id", input.id);
+    if (entryErr) throw entryErr;
+
+    const { error } = await supabase.from("payroll_weeks").delete().eq("id", input.id);
+    if (error) throw error;
+
+    revalidatePath("/payroll");
+    return { ok: true };
+  },
+});
+
 // ============================================================================
 // Payroll entries
 // ============================================================================
@@ -500,6 +584,12 @@ async function buildEntryPayload(
   const overtimeWages = round2(input.overtime_hours * input.overtime_rate);
   const grossWages = round2(regularWages + overtimeWages);
 
+  // Holiday pay is hours × rate (0136), not a typed amount. Hours entered with
+  // no holiday rate fall back to the person's regular rate — stat hours at $0
+  // is never what anyone meant, and the form pre-fills the same way.
+  const holidayRate = input.holiday_rate > 0 ? input.holiday_rate : input.rate;
+  const holidayPay = round2(input.holiday_hours * holidayRate);
+
   // Look up the year + vacation/WSIB rates
   const [{ data: weekRow }, { data: settings }] = await Promise.all([
     supabase
@@ -518,35 +608,42 @@ async function buildEntryPayload(
   const wsibRate = Number(settings?.wsib_rate ?? 0);
 
   // Vacation accrual = % of (gross wages + OT + bonus + holiday pay)
-  const vacationPay = round2(
-    (grossWages + input.bonus + input.holiday_pay) * vacationRate,
-  );
+  const vacationPay = input.apply_vacation
+    ? round2((grossWages + input.bonus + holidayPay) * vacationRate)
+    : 0;
 
   // Insurable earnings drive EI + CPP; holiday pay + bonus + OT are insurable;
   // misc_extra is taxable but NOT insurable (per current convention).
-  const insurable = round2(grossWages + input.bonus + input.holiday_pay);
+  const insurable = round2(grossWages + input.bonus + holidayPay);
 
   const rates = await getStatutoryRatesForYear(year);
-  const {
-    ei,
-    cpp,
-    cpp2,
-    ei_employer,
-    cpp_employer,
-    cpp_employer2,
-  } = _computeStatutoryDeductions(insurable, rates, year);
+  const computed = _computeStatutoryDeductions(insurable, rates, year);
 
-  const wsibEmployer = round2(insurable * wsibRate);
+  // Optional statutory items (0135). A flag that is off zeroes the employee
+  // amount AND the employer side that mirrors it — an EI-exempt employee costs
+  // the shop no employer EI. CPP off takes CPP2 with it: someone exempt from
+  // tier 1 (under 18, over 70, CPT30) is exempt from tier 2 by definition.
+  const applyCpp2 = input.apply_cpp && input.apply_cpp2;
+
+  const ei = input.apply_ei ? computed.ei : 0;
+  const ei_employer = input.apply_ei ? computed.ei_employer : 0;
+  const cpp = input.apply_cpp ? computed.cpp : 0;
+  const cpp_employer = input.apply_cpp ? computed.cpp_employer : 0;
+  const cpp2 = applyCpp2 ? computed.cpp2 : 0;
+  const cpp_employer2 = applyCpp2 ? computed.cpp_employer2 : 0;
+  const incomeTax = input.apply_income_tax ? input.income_tax : 0;
+
+  const wsibEmployer = input.apply_wsib ? round2(insurable * wsibRate) : 0;
 
   const netPay = round2(
     grossWages
       + input.bonus
-      + input.holiday_pay
+      + holidayPay
       + input.misc_extra
       - ei
       - cpp
       - cpp2
-      - input.income_tax
+      - incomeTax
       - input.benefit_employee_deduction,
   );
 
@@ -559,7 +656,9 @@ async function buildEntryPayload(
     overtime_hours: input.overtime_hours,
     overtime_rate: input.overtime_rate,
     overtime_wages: overtimeWages,
-    holiday_pay: input.holiday_pay,
+    holiday_hours: input.holiday_hours,
+    holiday_rate: holidayRate,
+    holiday_pay: holidayPay,
     vacation_pay: vacationPay,
     bonus: input.bonus,
     misc_extra: input.misc_extra,
@@ -567,13 +666,19 @@ async function buildEntryPayload(
     ei_employee: ei,
     cpp_employee: cpp,
     cpp_employee2: cpp2,
-    income_tax: input.income_tax,
+    income_tax: incomeTax,
     ei_employer,
     cpp_employer,
     cpp_employer2,
     wsib_employer: wsibEmployer,
     benefit_employee_deduction: input.benefit_employee_deduction,
     benefit_employer_contribution: input.benefit_employer_contribution,
+    apply_ei: input.apply_ei,
+    apply_cpp: input.apply_cpp,
+    apply_cpp2: applyCpp2,
+    apply_income_tax: input.apply_income_tax,
+    apply_vacation: input.apply_vacation,
+    apply_wsib: input.apply_wsib,
     cheque_amount: input.cheque_amount,
     net_pay: netPay,
     notes: input.notes || null,
@@ -621,6 +726,28 @@ export const updatePayrollEntry = wrapAction({
   },
 });
 
+export const deletePayrollEntry = wrapAction({
+  schema: PayrollIdInput,
+  roles: [...PAYROLL_ROLES],
+  handler: async (input): Promise<{ ok: true }> => {
+    const supabase = await createClient();
+    // Read the parent week first — we need it for revalidation, and a missing
+    // row here means RLS hid it, which is a clearer error than a silent no-op.
+    const { data: entry, error: readErr } = await supabase
+      .from("payroll_entries")
+      .select("payroll_week_id")
+      .eq("id", input.id)
+      .single();
+    if (readErr) throw readErr;
+
+    const { error } = await supabase.from("payroll_entries").delete().eq("id", input.id);
+    if (error) throw error;
+    revalidatePath(`/payroll/${entry.payroll_week_id}`);
+    revalidatePath("/payroll");
+    return { ok: true };
+  },
+});
+
 // ============================================================================
 // Cash daily (management)
 // ============================================================================
@@ -643,6 +770,18 @@ export const upsertCashDaily = wrapAction({
   },
 });
 
+export const deleteCashDaily = wrapAction({
+  schema: PayrollIdInput,
+  roles: [...PAYROLL_ROLES],
+  handler: async (input): Promise<{ ok: true }> => {
+    const supabase = await createClient();
+    const { error } = await supabase.from("payroll_cash_daily").delete().eq("id", input.id);
+    if (error) throw error;
+    // cash_total on the parent entry is re-rolled by trg_cash_daily_rollup.
+    return { ok: true };
+  },
+});
+
 // ============================================================================
 // Payroll payments
 // ============================================================================
@@ -660,5 +799,48 @@ export const addPayrollPayment = wrapAction({
     if (error) throw error;
     revalidatePath(`/payroll/${input.payroll_week_id}`);
     return data as PayrollPayment;
+  },
+});
+
+export const updatePayrollPayment = wrapAction({
+  schema: UpdatePayrollPaymentInput,
+  roles: [...PAYROLL_ROLES],
+  handler: async (input): Promise<PayrollPayment> => {
+    const supabase = await createClient();
+    const { id, ...rest } = input;
+    const { data, error } = await supabase
+      .from("payroll_payments")
+      .update({
+        ...rest,
+        notes: rest.notes || null,
+        transaction_id: rest.transaction_id || null,
+      })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    revalidatePath(`/payroll/${rest.payroll_week_id}`);
+    revalidatePath("/payroll");
+    return data as PayrollPayment;
+  },
+});
+
+export const deletePayrollPayment = wrapAction({
+  schema: PayrollIdInput,
+  roles: [...PAYROLL_ROLES],
+  handler: async (input): Promise<{ ok: true }> => {
+    const supabase = await createClient();
+    const { data: payment, error: readErr } = await supabase
+      .from("payroll_payments")
+      .select("payroll_week_id")
+      .eq("id", input.id)
+      .single();
+    if (readErr) throw readErr;
+
+    const { error } = await supabase.from("payroll_payments").delete().eq("id", input.id);
+    if (error) throw error;
+    revalidatePath(`/payroll/${payment.payroll_week_id}`);
+    revalidatePath("/payroll");
+    return { ok: true };
   },
 });

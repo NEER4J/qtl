@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Calendar, ChevronRight, Users } from "lucide-react";
+import { Plus, Calendar, ChevronRight, Users, Download } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,8 +18,9 @@ import { requireRole } from "@/lib/auth/require";
 import { listPayrollWeeks } from "@/lib/actions/payroll";
 import { getAppSettings } from "@/lib/actions/reference";
 import { formatDate, formatMoney } from "@/lib/utils/format";
-import { NewWeekDialog } from "@/components/payroll/new-week-dialog";
+import { NewWeekDialog } from "@/components/payroll/week-form-dialog";
 import { PayrollSettingsCard } from "@/components/payroll/payroll-settings-card";
+import { PrintButton } from "@/components/pricing/print-button";
 
 export const dynamic = "force-dynamic";
 
@@ -71,12 +72,18 @@ export default async function PayrollPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Payroll</h1>
           <p className="text-sm text-muted-foreground">Weekly pay cycles across all locations</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2 print:hidden">
           <Button asChild size="sm" variant="outline">
             <Link href="/payroll/employees">
               <Users className="size-4" /> Employees
             </Link>
           </Button>
+          <Button asChild size="sm" variant="outline">
+            <a href="/api/export/payroll-weeks" download>
+              <Download className="size-4" /> Export CSV
+            </a>
+          </Button>
+          <PrintButton />
           {canCreate && (
             <NewWeekDialog>
               <Button size="sm">
@@ -87,18 +94,22 @@ export default async function PayrollPage() {
         </div>
       </div>
 
+      <div className="print:hidden">
       <PageHelp id="payroll-list">
         <p>
           Weekly pay cycles. The summary tiles below show rolling 12-month totals across every
           location you can see; the table lists each week with its own roll-up.
         </p>
         <ul>
-          <li><strong>New week</strong> — pick a Monday and a shop. Each week moves through three states: Draft, Approved, Paid.</li>
-          <li><strong>Entries can only be edited while the week is in Draft.</strong> Once approved or paid, the numbers are locked.</li>
+          <li><strong>New week</strong> — pick a Sunday and a shop, weekly or bi-weekly. Each week moves through three states: Draft, Approved, Paid.</li>
+          <li><strong>Everything stays editable.</strong> Entries, cash days, payments, and the week itself can be corrected or deleted at any status, and a week can be moved back to Draft. Changes are recorded in the audit log.</li>
+          <li><strong>Printing</strong> — open a week for the payroll register and per-employee pay stubs. <strong>Print</strong> here gives you this list of weeks; <strong>Export CSV</strong> gives the same as a spreadsheet.</li>
           <li><strong>EI, CPP (tier 1 + 2), employer EI/CPP, and WSIB</strong> are calculated automatically from <Link href="/settings/statutory-rates" className="underline">Settings → Statutory Rates</Link>. The Vacation pay rate (4% default) and WSIB rate are set in the Payroll settings panel below.</li>
+          <li><strong>Each of those is optional per person.</strong> EI, CPP, CPP2, income tax, vacation accrual, and WSIB are switches on every payroll entry, seeded from the employee&apos;s defaults on <Link href="/payroll/employees" className="underline">Employees</Link> — so an EI-exempt family member or a CPP-exempt worker over 70 is handled without hand-zeroing anything.</li>
           <li><strong>Employee vs management</strong> — management pay can include a cheque portion + daily cash; regular employees use just the standard fields.</li>
         </ul>
       </PageHelp>
+      </div>
 
       {/* Rolling 12-month tiles */}
       {weeks.length > 0 && (
@@ -129,7 +140,7 @@ export default async function PayrollPage() {
               }
             />
           ) : (
-            <div className="max-h-[calc(100vh-220px)] overflow-auto">
+            <div className="max-h-[calc(100vh-220px)] overflow-auto print:max-h-none print:overflow-visible">
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
@@ -144,7 +155,7 @@ export default async function PayrollPage() {
                     <TableHead className="text-right">Cash</TableHead>
                     <TableHead className="text-right">Paid</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead />
+                    <TableHead className="print:hidden" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -190,7 +201,7 @@ export default async function PayrollPage() {
                             {w.status}
                           </Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="print:hidden">
                           <Button asChild variant="ghost" size="sm">
                             <Link href={`/payroll/${w.id}`}>
                               {empty ? "Add entries" : "View"}
@@ -209,12 +220,14 @@ export default async function PayrollPage() {
       </Card>
 
       {settings && (
-        <PayrollSettingsCard
-          initial={{
-            vacation_pay_rate: Number(settings.vacation_pay_rate ?? 0.04),
-            wsib_rate: Number(settings.wsib_rate ?? 0),
-          }}
-        />
+        <div className="print:hidden">
+          <PayrollSettingsCard
+            initial={{
+              vacation_pay_rate: Number(settings.vacation_pay_rate ?? 0.04),
+              wsib_rate: Number(settings.wsib_rate ?? 0),
+            }}
+          />
+        </div>
       )}
     </div>
   );

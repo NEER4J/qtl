@@ -21,6 +21,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -47,6 +48,13 @@ type FormValues = {
   hire_date: string;
   termination_date: string;
   notes: string;
+  // Payroll defaults — seed the switches on each new payroll entry (0135).
+  apply_ei: boolean;
+  apply_cpp: boolean;
+  apply_cpp2: boolean;
+  apply_income_tax: boolean;
+  apply_vacation: boolean;
+  apply_wsib: boolean;
 };
 
 const blank: FormValues = {
@@ -60,6 +68,12 @@ const blank: FormValues = {
   hire_date: "",
   termination_date: "",
   notes: "",
+  apply_ei: true,
+  apply_cpp: true,
+  apply_cpp2: true,
+  apply_income_tax: true,
+  apply_vacation: true,
+  apply_wsib: true,
 };
 
 export function EmployeeFormDialog({
@@ -95,6 +109,12 @@ export function EmployeeFormDialog({
             hire_date: employee.hire_date ?? "",
             termination_date: employee.termination_date ?? "",
             notes: employee.notes ?? "",
+            apply_ei: employee.apply_ei ?? true,
+            apply_cpp: employee.apply_cpp ?? true,
+            apply_cpp2: employee.apply_cpp2 ?? true,
+            apply_income_tax: employee.apply_income_tax ?? true,
+            apply_vacation: employee.apply_vacation ?? true,
+            apply_wsib: employee.apply_wsib ?? true,
           }
         : blank,
     );
@@ -113,6 +133,12 @@ export function EmployeeFormDialog({
         hire_date: values.hire_date || null,
         termination_date: values.termination_date || null,
         notes: values.notes.trim() === "" ? null : values.notes.trim(),
+        apply_ei: values.apply_ei,
+        apply_cpp: values.apply_cpp,
+        apply_cpp2: values.apply_cpp2,
+        apply_income_tax: values.apply_income_tax,
+        apply_vacation: values.apply_vacation,
+        apply_wsib: values.apply_wsib,
       };
       const res =
         mode === "create"
@@ -292,6 +318,31 @@ export function EmployeeFormDialog({
               />
             </div>
 
+            <fieldset className="rounded-md border p-3">
+              <legend className="px-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Payroll defaults
+              </legend>
+              <div className="grid grid-cols-2 gap-x-6">
+                <DefaultSwitch name="apply_ei" label="EI" control={form.control} />
+                <DefaultSwitch name="apply_cpp" label="CPP" control={form.control} />
+                <DefaultSwitch
+                  name="apply_cpp2"
+                  label="CPP2"
+                  control={form.control}
+                  disabled={!form.watch("apply_cpp")}
+                />
+                <DefaultSwitch name="apply_income_tax" label="Income tax" control={form.control} />
+                <DefaultSwitch name="apply_vacation" label="Vacation accrual" control={form.control} />
+                <DefaultSwitch name="apply_wsib" label="WSIB" control={form.control} />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Turn off whatever this person is exempt from — family members are usually EI-exempt,
+                anyone under 18 or over 70 is CPP-exempt. These only seed a <strong>new</strong>
+                {" "}payroll entry; entries already saved keep the numbers they were calculated with,
+                and each entry can still be switched on its own.
+              </p>
+            </fieldset>
+
             <FormField
               control={form.control}
               name="notes"
@@ -318,5 +369,38 @@ export function EmployeeFormDialog({
         </Form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** One payroll-default toggle on the employee record. */
+function DefaultSwitch({
+  name,
+  label,
+  control,
+  disabled,
+}: {
+  name: "apply_ei" | "apply_cpp" | "apply_cpp2" | "apply_income_tax" | "apply_vacation" | "apply_wsib";
+  label: string;
+  control: ReturnType<typeof useForm<FormValues>>["control"];
+  disabled?: boolean;
+}) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem className="flex items-center justify-between gap-3 py-1.5">
+          <FormLabel className={disabled ? "text-muted-foreground" : undefined}>{label}</FormLabel>
+          <FormControl>
+            <Switch
+              checked={!!field.value}
+              onCheckedChange={field.onChange}
+              disabled={disabled}
+              aria-label={label}
+            />
+          </FormControl>
+        </FormItem>
+      )}
+    />
   );
 }

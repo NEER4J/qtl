@@ -31,8 +31,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PayrollPaymentInput } from "@/lib/schemas/payroll";
-import { addPayrollPayment } from "@/lib/actions/payroll";
+import { addPayrollPayment, updatePayrollPayment } from "@/lib/actions/payroll";
 import { todayISO } from "@/lib/utils/format";
+import type { PayrollPayment } from "@/lib/db/types";
 
 const PAYMENT_MODES = [
   { value: "cheque", label: "Cheque" },
@@ -46,35 +47,52 @@ const PAYMENT_MODES = [
 interface Props {
   weekId: string;
   employees: { id: string; name: string }[];
+  /** Pass a payment to edit it; omit to record a new one. */
+  existing?: PayrollPayment;
   children: React.ReactNode;
 }
 
-export function PayrollPaymentDialog({ weekId, employees, children }: Props) {
+export function PayrollPaymentDialog({ weekId, employees, existing, children }: Props) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  const isEdit = !!existing;
+
+  const blank: PayrollPaymentInput = {
+    payroll_week_id: weekId,
+    employee_id: "",
+    paid_on: todayISO(),
+    amount: 0,
+    mode: "cheque",
+    transaction_id: "",
+    notes: "",
+  };
 
   const form = useForm<PayrollPaymentInput>({
     resolver: zodResolver(PayrollPaymentInput),
-    defaultValues: {
-      payroll_week_id: weekId,
-      employee_id: "",
-      paid_on: todayISO(),
-      amount: 0,
-      mode: "cheque",
-      transaction_id: "",
-      notes: "",
-    },
+    defaultValues: existing
+      ? {
+          payroll_week_id: weekId,
+          employee_id: existing.employee_id,
+          paid_on: existing.paid_on,
+          amount: existing.amount,
+          mode: existing.mode,
+          transaction_id: existing.transaction_id ?? "",
+          notes: existing.notes ?? "",
+        }
+      : blank,
   });
 
   async function onSubmit(values: PayrollPaymentInput) {
-    const result = await addPayrollPayment(values);
+    const result = existing
+      ? await updatePayrollPayment({ ...values, id: existing.id })
+      : await addPayrollPayment(values);
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
-    toast.success("Payment recorded");
+    toast.success(isEdit ? "Payment updated" : "Payment recorded");
     setOpen(false);
-    form.reset({ payroll_week_id: weekId, employee_id: "", paid_on: todayISO(), amount: 0, mode: "cheque", transaction_id: "", notes: "" });
+    if (!isEdit) form.reset(blank);
     router.refresh();
   }
 
@@ -83,7 +101,7 @@ export function PayrollPaymentDialog({ weekId, employees, children }: Props) {
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Record payroll payment</DialogTitle>
+          <DialogTitle>{isEdit ? "Edit payroll payment" : "Record payroll payment"}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -165,7 +183,7 @@ export function PayrollPaymentDialog({ weekId, employees, children }: Props) {
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Saving…" : "Record"}
+                {form.formState.isSubmitting ? "Saving…" : isEdit ? "Save" : "Record"}
               </Button>
             </div>
           </form>

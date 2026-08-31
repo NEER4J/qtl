@@ -18,6 +18,7 @@ import { toggleEmployeeActive } from "@/lib/actions/payroll";
 import type { EmployeeWithLinks, LinkableProfile } from "@/lib/actions/payroll";
 import type { Location } from "@/lib/db/types";
 import { formatMoney } from "@/lib/utils/format";
+import { deductionExemptions } from "@/lib/utils/payroll-flags";
 
 import { EmployeeFormDialog } from "./employee-form-dialog";
 
@@ -59,6 +60,7 @@ export function EmployeesTable({
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Type</TableHead>
+              <TableHead>Exempt from</TableHead>
               <TableHead className="text-right">Rate</TableHead>
               <TableHead>Location</TableHead>
               <TableHead>Linked login</TableHead>
@@ -69,7 +71,7 @@ export function EmployeesTable({
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                   No employees yet. Click <strong>New employee</strong> to add your staff before
                   putting them on payroll.
                 </TableCell>
@@ -84,6 +86,15 @@ export function EmployeesTable({
                     ) : null}
                   </TableCell>
                   <TableCell className="text-muted-foreground capitalize">{e.payroll_type}</TableCell>
+                  <TableCell className="text-xs">
+                    {deductionExemptions(e).length === 0 ? (
+                      <span className="text-muted-foreground/60">—</span>
+                    ) : (
+                      <span className="text-amber-700 dark:text-amber-500">
+                        {deductionExemptions(e).join(", ")}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {Number(e.default_hourly_rate) > 0 ? formatMoney(e.default_hourly_rate) : "—"}
                   </TableCell>

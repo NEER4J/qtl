@@ -69,4 +69,73 @@
     -moz-appearance: textfield;
     appearance: textfield;
   }
+
+  /* ------------------------------------------------------------------
+   * Print
+   * The app chrome is navigation, not content: the sidebar, its rail, and
+   * the sticky top bar were all landing on printed price lists, inventory
+   * counts, and payroll registers, eating an inch of every page. Hide them
+   * globally so any page in the app prints as just its content, and drop
+   * the inset's padding so the sheet uses the @page margin instead.
+   * ------------------------------------------------------------------ */
+  @media print {
+    [data-slot="sidebar"],
+    [data-slot="sidebar-gap"],
+    [data-slot="sidebar-container"],
+    [data-slot="sidebar-rail"],
+    [data-slot="sidebar-trigger"],
+    [data-sonner-toaster] {
+      display: none !important;
+    }
+
+    [data-slot="sidebar-wrapper"] {
+      display: block !important;
+      min-height: 0 !important;
+    }
+
+    [data-slot="sidebar-inset"] {
+      margin: 0 !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+    }
+
+    [data-slot="sidebar-inset"] > header {
+      display: none !important;
+    }
+
+    [data-slot="sidebar-inset"] > div {
+      padding: 0 !important;
+    }
+
+    /* Ink on paper. A user in dark mode would otherwise print white-on-black
+     * — or, worse, pale grey text the printer drops entirely once it ignores
+     * background colours. Re-declare the LIGHT palette for `.dark` at print
+     * time so every themed utility (text-muted-foreground, bg-card, borders)
+     * resolves to its light value instead of forcing one blanket colour. */
+    .dark {
+      --background: 40 30% 98%;
+      --foreground: 0 0% 9%;
+      --card: 0 0% 100%;
+      --card-foreground: 0 0% 9%;
+      --popover: 0 0% 100%;
+      --popover-foreground: 0 0% 9%;
+      --primary: 0 0% 10%;
+      --primary-foreground: 40 30% 98%;
+      --secondary: 40 20% 94%;
+      --secondary-foreground: 0 0% 12%;
+      --muted: 36 14% 93%;
+      --muted-foreground: 0 0% 40%;
+      --accent: 44 95% 92%;
+      --accent-foreground: 28 80% 22%;
+      --destructive: 351 75% 38%;
+      --destructive-foreground: 0 0% 98%;
+      --border: 36 12% 86%;
+      --input: 36 12% 86%;
+      --ring: 0 0% 25%;
+    }
+
+    body {
+      background: #fff !important;
+    }
+  }
 }

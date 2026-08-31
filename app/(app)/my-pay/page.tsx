@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PrintButton } from "@/components/pricing/print-button";
 import { requireProfile } from "@/lib/auth/require";
 import { getMyPay } from "@/lib/actions/payroll";
 import { formatDate, formatMoney } from "@/lib/utils/format";
@@ -25,7 +26,7 @@ const STATUS_COLORS: Record<string, "default" | "secondary" | "outline"> = {
 };
 
 export default async function MyPayPage() {
-  await requireProfile();
+  const profile = await requireProfile();
   const rows = await getMyPay();
 
   const totals = rows.reduce(
@@ -51,11 +52,22 @@ export default async function MyPayPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">My pay</h1>
-        <p className="text-sm text-muted-foreground">Your weekly pay summary</p>
+      <style>{"@media print { @page { size: landscape; margin: 0.4in; } }"}</style>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">My pay</h1>
+          <p className="text-sm text-muted-foreground">
+            {profile.full_name} · your weekly pay summary
+          </p>
+        </div>
+        {rows.length > 0 && (
+          <div className="print:hidden">
+            <PrintButton />
+          </div>
+        )}
       </div>
 
+      <div className="print:hidden">
       <PageHelp id="my-pay">
         <p>
           Every pay week you appear on, with your gross pay, deductions, net pay, vacation accrued,
@@ -68,6 +80,7 @@ export default async function MyPayPage() {
           <li>If something looks off, talk to your manager — they manage the numbers.</li>
         </ul>
       </PageHelp>
+      </div>
 
       {rows.length === 0 ? (
         <EmptyState
@@ -90,7 +103,7 @@ export default async function MyPayPage() {
               <CardTitle>Pay weeks</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="max-h-[calc(100vh-320px)] overflow-auto">
+              <div className="max-h-[calc(100vh-320px)] overflow-auto print:max-h-none print:overflow-visible">
                 <Table>
                   <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow>

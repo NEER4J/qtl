@@ -544,6 +544,14 @@ export interface Employee {
   location_id: string | null;
   profile_id: string | null;
   notes: string | null;
+  // Payroll defaults (0135) — seed the switches on a NEW payroll entry. Turning
+  // one off here does not change entries already saved.
+  apply_ei: boolean;
+  apply_cpp: boolean;
+  apply_cpp2: boolean;
+  apply_income_tax: boolean;
+  apply_vacation: boolean;
+  apply_wsib: boolean;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -603,7 +611,10 @@ export interface PayrollEntry {
   overtime_hours: number;
   overtime_rate: number;
   overtime_wages: number;
-  // Stat holiday + vacation accrual
+  // Stat holiday + vacation accrual. holiday_pay is DERIVED (0136):
+  // holiday_hours × holiday_rate, computed on save like gross/overtime wages.
+  holiday_hours: number;
+  holiday_rate: number;
   holiday_pay: number;
   vacation_pay: number;
   bonus: number;
@@ -621,6 +632,14 @@ export interface PayrollEntry {
   wsib_employer: number;
   benefit_employee_deduction: number;
   benefit_employer_contribution: number;
+  // Which statutory items apply to THIS pay period (0135). A false flag zeroes
+  // both the employee and the matching employer amount above.
+  apply_ei: boolean;
+  apply_cpp: boolean;
+  apply_cpp2: boolean;
+  apply_income_tax: boolean;
+  apply_vacation: boolean;
+  apply_wsib: boolean;
   cheque_amount: number;
   cash_total: number;
   net_pay: number;
