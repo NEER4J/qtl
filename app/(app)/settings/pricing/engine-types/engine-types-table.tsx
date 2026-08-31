@@ -213,7 +213,10 @@ export function EngineTypesTable({
         <div className="flex items-center gap-2">
           {labourLinkSupported && suggestions.length > 0 && (
             <Button variant="outline" onClick={() => setAutoLinking(true)}>
-              <Wand2 className="size-4" /> Link packages ({suggestions.length})
+              {/* Count what can actually be applied, not every unlinked engine —
+                  the dialog lists the undecidable ones separately. */}
+              <Wand2 className="size-4" /> Link packages (
+              {suggestions.filter((s) => s.suggested_package_id != null).length})
             </Button>
           )}
           <Button onClick={() => setCreating(true)}>
