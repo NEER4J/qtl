@@ -4,6 +4,7 @@ import {
   engineLabourPackageSupported,
   listAllEngineTypes,
   listLabourPackageOptions,
+  suggestEngineLabourPackages,
 } from "@/lib/actions/pricing";
 
 import { EngineTypesTable } from "./engine-types-table";
@@ -20,6 +21,10 @@ export default async function EngineTypesPage() {
   const unlinked = labourLinkSupported
     ? engineTypes.filter((e) => e.active && !e.labour_package_id).length
     : 0;
+  // Proposals for the unlinked engines, so the admin can accept them in one
+  // pass instead of hunting 42 rows through a picker.
+  const suggestions = unlinked > 0 ? await suggestEngineLabourPackages() : [];
+  const autoLinkable = suggestions.filter((s) => s.suggested_package_id != null).length;
 
   return (
     <div className="flex flex-col gap-4">
@@ -53,9 +58,11 @@ export default async function EngineTypesPage() {
       {unlinked > 0 && (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
           <strong>{unlinked}</strong> active engine{unlinked === 1 ? " has" : "s have"} no labour
-          package linked — the oil-detail Labour column falls back to the summed part labour for
-          {unlinked === 1 ? " it" : " them"}. Pick the package in the{" "}
-          <strong>Labour package</strong> column below.
+          package linked — the oil pages fall back to the summed part labour for
+          {unlinked === 1 ? " it" : " them"}, and can&apos;t show fuel or grease at all.{" "}
+          {autoLinkable > 0
+            ? `${autoLinkable} can be matched automatically — use Link packages above.`
+            : "Pick the package in the Labour package column below."}
         </div>
       )}
 
@@ -63,6 +70,7 @@ export default async function EngineTypesPage() {
         engineTypes={engineTypes}
         labourPackages={labourPackages}
         labourLinkSupported={labourLinkSupported}
+        suggestions={suggestions}
       />
     </div>
   );

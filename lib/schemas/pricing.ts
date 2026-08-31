@@ -132,6 +132,19 @@ export const SetEngineLabourPackageInput = z.object({
 });
 export type SetEngineLabourPackageInput = z.infer<typeof SetEngineLabourPackageInput>;
 
+export const ApplyEngineLabourPackagesInput = z.object({
+  links: z
+    .array(
+      z.object({
+        engine_id: z.string().uuid(),
+        package_id: z.string().uuid(),
+      }),
+    )
+    .min(1, "Nothing selected")
+    .max(500),
+});
+export type ApplyEngineLabourPackagesInput = z.infer<typeof ApplyEngineLabourPackagesInput>;
+
 export const DeleteEngineTypeInput = z.object({
   id: z.string().uuid(),
 });
@@ -146,6 +159,13 @@ const trimmedOrNull = z
   .optional()
   .nullable()
   .transform((v) => (v == null || v === "" ? null : v));
+
+/** A money field that is allowed to be absent: blank/undefined -> NULL. */
+const optionalMoney = z
+  .union([z.coerce.number().min(0, "Must be ≥ 0").max(9999999), z.literal("")])
+  .optional()
+  .nullable()
+  .transform((v) => (v == null || v === "" ? null : Number(v)));
 
 export const CreatePartInput = z.object({
   part_number: z.string().trim().min(1, "Part number is required").max(80),
@@ -174,6 +194,16 @@ export const CreatePartInput = z.object({
     .array(z.coerce.number().min(0, "Must be ≥ 0").max(9999999))
     .optional()
     .default([]),
+  // Fixed sell-price overrides, seeded from the May 2026 Excel "All Filter Sell
+  // Price" tab (supabase/seed/may2026_filter_sell_prices.sql). When set, the
+  // value WINS over the cost/margin/service-charge formula — see
+  // computePartSellTiers. Blank = NULL = price is derived from the formula.
+  // These are editable from the part dialog because a stale override otherwise
+  // silently freezes the price: the owner edits cost/margin and nothing moves.
+  // (client 2026-08-31 — "parts price is not updating".)
+  without_service_price: optionalMoney,
+  with_service_price: optionalMoney,
+  over_counter_price: optionalMoney,
   margin_type: z.enum(["fixed", "percent"]).default("fixed"),
   margin_value: z.coerce.number().min(0, "Must be ≥ 0").default(0),
   // Signed delta applied to an existing same-category line when this part is added via a package.

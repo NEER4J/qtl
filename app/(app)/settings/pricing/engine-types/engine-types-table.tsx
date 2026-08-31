@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -19,10 +19,12 @@ import {
 import {
   deleteEngineType,
   toggleEngineTypeActive,
+  type EngineLabourSuggestion,
   type LabourPackageOption,
 } from "@/lib/actions/pricing";
 import type { EngineType } from "@/lib/db/types";
 
+import { AutoLinkDialog } from "./auto-link-dialog";
 import { EngineTypeFormDialog } from "./engine-type-form-dialog";
 import { LabourPackagePicker } from "./labour-package-picker";
 
@@ -52,11 +54,14 @@ export function EngineTypesTable({
   engineTypes,
   labourPackages,
   labourLinkSupported,
+  suggestions,
 }: {
   engineTypes: EngineType[];
   labourPackages: LabourPackageOption[];
   /** False until migration 0130 — the Labour package column stays hidden. */
   labourLinkSupported: boolean;
+  /** Proposed links for the engines that have none, for the bulk dialog. */
+  suggestions: EngineLabourSuggestion[];
 }) {
   const [editing, setEditing] = useState<EngineType | null>(null);
   const [creating, setCreating] = useState(false);
@@ -64,6 +69,7 @@ export function EngineTypesTable({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [autoLinking, setAutoLinking] = useState(false);
   const [, startTransition] = useTransition();
 
   const groups = useMemo(() => groupEngineTypes(engineTypes), [engineTypes]);
@@ -204,9 +210,16 @@ export function EngineTypesTable({
             </div>
           )}
         </div>
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="size-4" /> New engine type
-        </Button>
+        <div className="flex items-center gap-2">
+          {labourLinkSupported && suggestions.length > 0 && (
+            <Button variant="outline" onClick={() => setAutoLinking(true)}>
+              <Wand2 className="size-4" /> Link packages ({suggestions.length})
+            </Button>
+          )}
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="size-4" /> New engine type
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
@@ -276,6 +289,12 @@ export function EngineTypesTable({
           </TableBody>
         </Table>
       </div>
+
+      <AutoLinkDialog
+        open={autoLinking}
+        onOpenChange={setAutoLinking}
+        suggestions={suggestions}
+      />
 
       <EngineTypeFormDialog open={creating} onOpenChange={setCreating} mode="create" />
       <EngineTypeFormDialog

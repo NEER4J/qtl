@@ -43,6 +43,7 @@ import {
 import type { AdminPartRow, PartCategoryOption } from "@/lib/actions/pricing";
 import type { PartMarginType, ServiceCost } from "@/lib/db/types";
 import { calculatePartListPrice } from "@/lib/utils/part-pricing";
+import { computePartSellTiers } from "@/lib/utils/part-sell-prices";
 import { formatMoney } from "@/lib/utils/format";
 
 type FormValues = {
@@ -63,6 +64,10 @@ type FormValues = {
   round_off: boolean;
   active: boolean;
   extra_price: string;
+  // Fixed sell-price overrides. Blank = use the formula.
+  without_service_price: string;
+  with_service_price: string;
+  over_counter_price: string;
 };
 
 const blank: FormValues = {
@@ -83,7 +88,37 @@ const blank: FormValues = {
   round_off: false,
   active: true,
   extra_price: "0",
+  without_service_price: "",
+  with_service_price: "",
+  over_counter_price: "",
 };
+
+/** "" -> null (clear the override); otherwise the number. */
+const blankToNull = (v: string): number | null => {
+  const t = v.trim();
+  return t === "" ? null : Number(t);
+};
+
+const OVERRIDE_FIELDS = [
+  {
+    name: "without_service_price",
+    label: "Without service",
+    tier: "without_service",
+    formula: "Linked labour charge + List price",
+  },
+  {
+    name: "with_service_price",
+    label: "With service",
+    tier: "with_service",
+    formula: "Total cost + Service charge",
+  },
+  {
+    name: "over_counter_price",
+    label: "Over the Counter",
+    tier: "over_counter",
+    formula: "List price",
+  },
+] as const;
 
 export function PartFormDialog({
   open,
@@ -122,6 +157,26 @@ export function PartFormDialog({
     control: form.control,
     name: ["cost", "mhsw_fee", "mhsw_buy", "margin_type", "margin_value", "category_id", "part_number"],
   });
+  const [
+    counterPremiumRaw = "",
+    serviceCostId,
+    inPackage = false,
+    roundOff = false,
+    withoutServiceOverride = "",
+    withServiceOverride = "",
+    overCounterOverride = "",
+  ] = useWatch({
+    control: form.control,
+    name: [
+      "counter_premium",
+      "service_cost_id",
+      "in_package",
+      "round_off",
+      "without_service_price",
+      "with_service_price",
+      "over_counter_price",
+    ],
+  });
 
   const [duplicateMatches, setDuplicateMatches] = useState<
     { id: string; part_number: string; brand: string; active: boolean }[]
@@ -146,6 +201,47 @@ export function PartFormDialog({
   });
 
   const selectedCategory = categories.find((c) => c.id === categoryId);
+
+  // What the three sell tiers WOULD be with no overrides — computed through the
+  // same helper the All-filter-sell-price page and the sales tier dialog use, so
+  // the placeholder is exactly the price that appears once an override is
+  // cleared. The overrides are forced to null here to get the formula baseline.
+  const linkedLabourCost = Number(
+    serviceCosts.find((s) => s.id === serviceCostId)?.cost ?? 0,
+  );
+  const formulaTiers = computePartSellTiers(
+    {
+      cost: totalCost,
+      mhsw_fee: Number(mhswFee) || 0,
+      list_price: calculatedListPrice,
+      in_package: inPackage,
+      with_service_price: null,
+      without_service_price: null,
+      over_counter_price: null,
+      counter_premium: counterPremiumRaw.trim() === "" ? null : Number(counterPremiumRaw),
+      customer_supplies_labour: null,
+      customer_supplies_labour_options: [],
+      round_off: roundOff,
+    },
+    linkedLabourCost,
+    globalCounterPremium,
+    globalCustomerSuppliesLabour,
+  );
+
+  const overrideValues: Record<string, string> = {
+    without_service_price: withoutServiceOverride,
+    with_service_price: withServiceOverride,
+    over_counter_price: overCounterOverride,
+  };
+  const activeOverrides = OVERRIDE_FIELDS.filter(
+    (f) => overrideValues[f.name].trim() !== "",
+  );
+
+  const clearOverrides = () => {
+    for (const f of OVERRIDE_FIELDS) {
+      form.setValue(f.name, "", { shouldDirty: true });
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -172,6 +268,12 @@ export function PartFormDialog({
             round_off: part.round_off ?? false,
             active: part.active,
             extra_price: String(part.extra_price ?? 0),
+            without_service_price:
+              part.without_service_price == null ? "" : String(part.without_service_price),
+            with_service_price:
+              part.with_service_price == null ? "" : String(part.with_service_price),
+            over_counter_price:
+              part.over_counter_price == null ? "" : String(part.over_counter_price),
           }
         : blank,
     );
@@ -240,6 +342,10 @@ export function PartFormDialog({
         round_off: values.round_off,
         active: values.active,
         extra_price: extraTrimmed === "" ? 0 : Number(extraTrimmed),
+        // Blank clears the override, handing the tier back to the formula.
+        without_service_price: blankToNull(values.without_service_price),
+        with_service_price: blankToNull(values.with_service_price),
+        over_counter_price: blankToNull(values.over_counter_price),
       };
       const res =
         mode === "create"
@@ -595,6 +701,78 @@ export function PartFormDialog({
                   <Input value={calculatedListPrice.toFixed(2)} readOnly className="bg-muted/40" />
                 </FormControl>
               </FormItem>
+            </div>
+
+            {/* Fixed sell prices. These columns were seeded from the May 2026
+                Excel price list and take priority over everything above, so
+                without this section an owner edits Cost / Margin / Service
+                charge and the All-filter-sell-price page never moves. */}
+            <div className="space-y-3 rounded-md border p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1 text-sm font-medium">
+                  Fixed sell prices
+                  <InfoTip>
+                    A fixed price <strong>overrides</strong> the calculation above for that
+                    column on the All-filter-sell-price page and on sales jobs. Leave a box
+                    blank to price it from Cost, Margin and Service charge instead.
+                  </InfoTip>
+                </div>
+                {activeOverrides.length > 0 && (
+                  <Button type="button" variant="outline" size="sm" onClick={clearOverrides}>
+                    Clear fixed prices
+                  </Button>
+                )}
+              </div>
+
+              {activeOverrides.length > 0 && (
+                <div className="flex items-start gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                  <div>
+                    <div className="font-medium">
+                      {activeOverrides.map((f) => f.label).join(", ")}{" "}
+                      {activeOverrides.length === 1 ? "is" : "are"} held at a fixed price.
+                    </div>
+                    <div className="mt-0.5">
+                      Changing Cost, Margin or Service charge will not move{" "}
+                      {activeOverrides.length === 1 ? "it" : "them"}. Clear the box to go back
+                      to the calculated price.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {OVERRIDE_FIELDS.map((f) => {
+                  const calculated = formulaTiers[f.tier];
+                  return (
+                    <FormField
+                      key={f.name}
+                      control={form.control}
+                      name={f.name}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{f.label}</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder={
+                                calculated != null ? `Calculated ${formatMoney(calculated)}` : "Calculated"
+                              }
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormDescription className="text-xs">
+                            {field.value.trim() === "" ? f.formula : `Overrides ${f.formula.toLowerCase()}`}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  );
+                })}
+              </div>
             </div>
 
             <FormField

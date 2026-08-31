@@ -18,6 +18,21 @@ import { formatDate, formatMoney } from "@/lib/utils/format";
 
 export const dynamic = "force-dynamic";
 
+/** One sell-tier cell. A tier held at a fixed price (parts.*_price override)
+ *  ignores cost/margin edits, so mark it — otherwise the owner edits a part and
+ *  cannot tell why the price here never moves. (client 2026-08-31.) */
+function TierPrice({ value, fixed }: { value: number | null; fixed: boolean }) {
+  if (value == null) return <span className="text-muted-foreground/60">—</span>;
+  return (
+    <span
+      className={fixed ? "underline decoration-dotted underline-offset-4" : undefined}
+      title={fixed ? "Fixed price — set on the part, ignores cost/margin" : undefined}
+    >
+      {formatMoney(value)}
+    </span>
+  );
+}
+
 export default async function AllFilterPricePage({
   searchParams,
 }: {
@@ -76,6 +91,13 @@ export default async function AllFilterPricePage({
         <p>
           Service charge and customer-supplies labour are set in{" "}
           <Link href="/settings/pricing" className="underline">Pricing catalogue admin</Link>.
+        </p>
+        <p>
+          A price with a <span className="underline decoration-dotted underline-offset-4">dotted underline</span>{" "}
+          is held at a <strong>fixed price</strong> set on the part itself, so it ignores the formulas
+          above — editing the part&apos;s cost or margin will not move it. Clear the fixed price in{" "}
+          <Link href="/settings/pricing/parts" className="underline">Parts catalogue</Link> → edit the
+          part → <strong>Fixed sell prices</strong> to go back to the calculated price.
         </p>
       </PageHelp>
       </div>
@@ -148,9 +170,9 @@ export default async function AllFilterPricePage({
                     {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(r.cost)}</TableCell>}
                     {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(r.mhsw_fee)}</TableCell>}
                     {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(r.service_cost)}</TableCell>}
-                    <TableCell className="text-right tabular-nums">{r.without_service != null ? formatMoney(r.without_service) : <span className="text-muted-foreground/60">—</span>}</TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">{r.with_service != null ? formatMoney(r.with_service) : <span className="text-muted-foreground/60">—</span>}</TableCell>
-                    <TableCell className="text-right tabular-nums">{r.over_counter != null ? formatMoney(r.over_counter) : <span className="text-muted-foreground/60">—</span>}</TableCell>
+                    <TableCell className="text-right tabular-nums"><TierPrice value={r.without_service} fixed={r.fixed_tiers.without_service} /></TableCell>
+                    <TableCell className="text-right tabular-nums font-medium"><TierPrice value={r.with_service} fixed={r.fixed_tiers.with_service} /></TableCell>
+                    <TableCell className="text-right tabular-nums"><TierPrice value={r.over_counter} fixed={r.fixed_tiers.over_counter} /></TableCell>
                     <TableCell className="text-right tabular-nums">
                       {r.customer_supplies_options.length > 1 ? (
                         <div className="flex flex-col items-end">

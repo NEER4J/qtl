@@ -23,6 +23,7 @@ import type {
   VolumeTier,
 } from "@/lib/db/types";
 import {
+  ApplyEngineLabourPackagesInput,
   CreateEngineTypeInput,
   CreateOilGroupInput,
   CreateOilTypeInput,
@@ -64,6 +65,11 @@ import {
 import { normalizePartPricing } from "@/lib/utils/part-pricing";
 import { computePartSellTiers } from "@/lib/utils/part-sell-prices";
 import { excelOilLabel } from "@/lib/utils/oil-labels";
+import {
+  matchEngineToPackage,
+  type MatchConfidence,
+  type MatchablePackage,
+} from "@/lib/utils/engine-package-match";
 import {
   REFERENCE_TAGS,
   getCachedActiveEngineTypes,
@@ -137,15 +143,8 @@ const normPackageName = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase
  * covered 27 of 69 engines — the gap 0130 exists to close — so it stays purely
  * as a fallback and an unlinked engine reports `extras: null`, not $0.
  */
-async function loadEnginePackages(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-): Promise<
-  (engine: {
-    manufacturer: string;
-    model: string;
-    labour_package_id?: string | null;
-  }) => EnginePackageMatch
-> {
+/** Every package with the fuel/grease it consumes, plus the two lookups. */
+async function loadPackagesWithExtras(supabase: Awaited<ReturnType<typeof createClient>>) {
   const [packagesRes, itemsRes] = await Promise.all([
     // Inactive packages are included so an explicit link to one still resolves
     // instead of silently dropping to the fallback.
@@ -160,9 +159,13 @@ async function loadEnginePackages(
   if (packagesRes.error) throw packagesRes.error;
   if (itemsRes.error) throw itemsRes.error;
 
+  const rows = ((packagesRes.data ?? []) as LabourPackageRow[]).map((p) => ({
+    ...p,
+    labor_selling_price: Number(p.labor_selling_price) || 0,
+  }));
   const byId = new Map<string, LabourPackageRow>();
   const byName = new Map<string, LabourPackageRow>();
-  for (const p of (packagesRes.data ?? []) as LabourPackageRow[]) {
+  for (const p of rows) {
     byId.set(p.id, p);
     if (p.active) byName.set(normPackageName(p.name), p);
   }
@@ -183,6 +186,20 @@ async function loadEnginePackages(
     else slot.grease += line;
     extrasByPackage.set(it.package_id, slot);
   }
+
+  return { rows, byId, byName, extrasByPackage };
+}
+
+async function loadEnginePackages(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<
+  (engine: {
+    manufacturer: string;
+    model: string;
+    labour_package_id?: string | null;
+  }) => EnginePackageMatch
+> {
+  const { byId, byName, extrasByPackage } = await loadPackagesWithExtras(supabase);
 
   return (engine) => {
     const linked = engine.labour_package_id ? byId.get(engine.labour_package_id) ?? null : null;
@@ -543,6 +560,9 @@ export interface FilterSellPriceRow {
   customer_supplies: number;
   /** Full list of customer-supplies options (≥1); the All-filter page shows them all. */
   customer_supplies_options: number[];
+  /** Tiers held at a fixed price (parts.*_price override) rather than computed.
+   *  Surfaced so the list shows WHY a price ignores cost/margin edits. */
+  fixed_tiers: { without_service: boolean; with_service: boolean; over_counter: boolean };
 }
 
 export async function getAllFilterSellPrices(filter?: {
@@ -626,6 +646,11 @@ export async function getAllFilterSellPrices(filter?: {
       over_counter: overCounter,
       customer_supplies: customerSupplies,
       customer_supplies_options: tiers.customer_supplies_options,
+      fixed_tiers: {
+        without_service: r.without_service_price != null,
+        with_service: r.with_service_price != null,
+        over_counter: r.over_counter_price != null,
+      },
     };
   });
 
@@ -1268,6 +1293,76 @@ export async function listLabourPackageOptions(): Promise<LabourPackageOption[]>
   }));
 }
 
+/** One engine's proposed link, for the auto-link review dialog. */
+export interface EngineLabourSuggestion {
+  engine_id: string;
+  engine_name: string;
+  oil_capacity_litres: number;
+  suggested_package_id: string | null;
+  suggested_package_name: string | null;
+  suggested_labour: number | null;
+  confidence: MatchConfidence;
+  reason: string;
+  /** Everything that fitted, so an ambiguous row shows the real choice. */
+  candidates: { id: string; name: string; labor_selling_price: number }[];
+}
+
+/**
+ * Proposes a package for every active engine that has no link yet.
+ *
+ * Nothing is written — the caller reviews these and applies the ones it wants.
+ * Engines whose name can't identify a single package (the brand-silent
+ * duplicate rows, mostly) come back with `suggested_package_id: null` and the
+ * candidates listed, because guessing between packages that charge $79.68 and
+ * $149.64 is worse than leaving the row flagged.
+ */
+export async function suggestEngineLabourPackages(): Promise<EngineLabourSuggestion[]> {
+  const supabase = await createClient();
+  const [enginesRes, packages] = await Promise.all([
+    supabase
+      .from("engine_types")
+      .select("*")
+      .eq("active", true)
+      .order("manufacturer")
+      .order("model"),
+    loadPackagesWithExtras(supabase),
+  ]);
+  if (enginesRes.error) throw enginesRes.error;
+
+  const matchable: MatchablePackage[] = packages.rows
+    .filter((p) => p.active)
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      labor_selling_price: p.labor_selling_price,
+      fuel: packages.extrasByPackage.get(p.id)?.fuel ?? 0,
+      grease: packages.extrasByPackage.get(p.id)?.grease ?? 0,
+    }));
+
+  const engines = (enginesRes.data ?? []) as EngineType[];
+  return engines
+    .filter((e) => !e.labour_package_id)
+    .map((e) => {
+      const engineName = `${e.manufacturer} ${e.model}`;
+      const match = matchEngineToPackage(engineName, matchable);
+      return {
+        engine_id: e.id,
+        engine_name: engineName,
+        oil_capacity_litres: Number(e.oil_capacity_litres),
+        suggested_package_id: match.pkg?.id ?? null,
+        suggested_package_name: match.pkg?.name ?? null,
+        suggested_labour: match.pkg ? match.pkg.labor_selling_price : null,
+        confidence: match.confidence,
+        reason: match.reason,
+        candidates: match.candidates.map((c) => ({
+          id: c.id,
+          name: c.name,
+          labor_selling_price: c.labor_selling_price,
+        })),
+      };
+    });
+}
+
 /** False until migration 0130 adds engine_types.labour_package_id. */
 export async function engineLabourPackageSupported(): Promise<boolean> {
   const supabase = await createClient();
@@ -1753,6 +1848,42 @@ export const setEngineLabourPackage = wrapAction({
     }
     revalidatePricing("engine-types");
     return data as EngineType;
+  },
+});
+
+/**
+ * Links several engines to their packages in one go, after a human has looked
+ * at the proposals from `suggestEngineLabourPackages`.
+ *
+ * The updates fire together: the database is in Seoul and the shops are in
+ * Ontario, so 28 sequential round-trips would take half a minute.
+ */
+export const applyEngineLabourPackages = wrapAction({
+  schema: ApplyEngineLabourPackagesInput,
+  roles: ["owner", "co_owner"],
+  handler: async ({ links }): Promise<{ linked: number }> => {
+    const supabase = await createClient();
+    const results = await Promise.all(
+      links.map((l) =>
+        supabase
+          .from("engine_types")
+          .update({ labour_package_id: l.package_id })
+          .eq("id", l.engine_id)
+          .select("id")
+          .single(),
+      ),
+    );
+    const failed = results.find((r) => r.error);
+    if (failed?.error) {
+      if (failed.error.code === "42703" || failed.error.code === "PGRST204") {
+        throw new Error(
+          "Labour packages need migration 0130 — apply it before linking engines.",
+        );
+      }
+      throw failed.error;
+    }
+    revalidatePricing("engine-types");
+    return { linked: results.length };
   },
 });
 
