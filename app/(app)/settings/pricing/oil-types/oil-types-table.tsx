@@ -31,7 +31,31 @@ export function OilTypesTable({
   const [creating, setCreating] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  // Still the fallback for any grade not in a group — the flag lives on, it is
+  // just no longer edited here. See oilLineRate.
   const currentBase = oilTypes.find((o) => o.is_base);
+
+  const groupOf = (oil: OilType) =>
+    oil.oil_group_id ? oilGroups.find((g) => g.id === oil.oil_group_id) ?? null : null;
+
+  /**
+   * What a bulk sales line of this grade is actually charged per litre, and
+   * why. Mirrors oilLineRate's chain exactly: the group's rate, else the base
+   * grade's, else the oil's own.
+   */
+  const chargedRate = (oil: OilType): { rate: number; source: string } => {
+    const g = groupOf(oil);
+    if (g && g.bulk_price_per_litre != null) {
+      return { rate: Number(g.bulk_price_per_litre), source: g.name };
+    }
+    if (currentBase) {
+      return {
+        rate: Number(currentBase.bulk_cost_per_litre),
+        source: g ? "group has no rate" : "base grade",
+      };
+    }
+    return { rate: Number(oil.bulk_cost_per_litre), source: "own cost" };
+  };
 
   const handleToggle = (oil: OilType) => {
     setPendingId(oil.id);
@@ -57,9 +81,19 @@ export function OilTypesTable({
             <TableRow>
               <TableHead className="w-32">Code</TableHead>
               <TableHead>Name</TableHead>
-              <TableHead className="w-20">Base</TableHead>
-              {oilGroups.length > 0 && <TableHead className="w-40">Oil group</TableHead>}
-              <TableHead className="w-28 text-right">Bulk $/L</TableHead>
+              <TableHead className="w-40">Oil group</TableHead>
+              <TableHead className="w-32 text-right">
+                Charged $/L
+                <span className="block text-[10px] font-normal text-muted-foreground">
+                  on a sales line
+                </span>
+              </TableHead>
+              <TableHead className="w-28 text-right">
+                Bulk $/L
+                <span className="block text-[10px] font-normal text-muted-foreground">
+                  our cost
+                </span>
+              </TableHead>
               <TableHead className="w-28 text-right">$/gal</TableHead>
               <TableHead className="w-20 text-right">L/gal</TableHead>
               <TableHead className="w-24">Status</TableHead>
@@ -69,7 +103,7 @@ export function OilTypesTable({
           <TableBody>
             {oilTypes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={oilGroups.length > 0 ? 9 : 8} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                   No oil types yet. Click <strong>New oil type</strong> to add one.
                 </TableCell>
               </TableRow>
@@ -78,28 +112,29 @@ export function OilTypesTable({
                 <TableRow key={oil.id} className={!oil.active ? "opacity-60" : undefined}>
                   <TableCell className="font-mono font-medium">{oil.code}</TableCell>
                   <TableCell>{oil.name}</TableCell>
-                  <TableCell>
-                    {oil.is_base ? <Badge variant="default">Base</Badge> : <span className="text-muted-foreground text-xs">—</span>}
+                  <TableCell className="text-xs">
+                    {groupOf(oil) ? (
+                      <span className="font-medium">{groupOf(oil)!.name}</span>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {oilGroups.length === 0 ? "—" : "no group"}
+                      </span>
+                    )}
                   </TableCell>
-                  {oilGroups.length > 0 && (
-                    <TableCell className="text-xs">
-                      {(() => {
-                        const g = oilGroups.find((x) => x.id === oil.oil_group_id);
-                        if (!g) return <span className="text-muted-foreground">base grade</span>;
-                        return (
-                          <span>
-                            {g.name}
-                            {g.bulk_price_per_litre != null && (
-                              <span className="block text-[10px] text-muted-foreground tabular-nums">
-                                {formatMoney(g.bulk_price_per_litre)}/L
-                              </span>
-                            )}
+                  <TableCell className="text-right tabular-nums text-xs">
+                    {(() => {
+                      const { rate, source } = chargedRate(oil);
+                      return (
+                        <>
+                          <span className="font-medium">{formatMoney(rate)}</span>
+                          <span className="block text-[10px] font-normal text-muted-foreground">
+                            {source}
                           </span>
-                        );
-                      })()}
-                    </TableCell>
-                  )}
-                  <TableCell className="text-right tabular-nums">{formatMoney(oil.bulk_cost_per_litre)}</TableCell>
+                        </>
+                      );
+                    })()}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(oil.bulk_cost_per_litre)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatMoney(oil.gallon_cost_per_litre)}</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
                     {Number(oil.litres_per_gallon).toFixed(3)}
@@ -135,7 +170,6 @@ export function OilTypesTable({
         open={creating}
         onOpenChange={setCreating}
         mode="create"
-        currentBase={currentBase}
         oilGroups={oilGroups}
       />
       <OilTypeFormDialog
@@ -143,7 +177,6 @@ export function OilTypesTable({
         onOpenChange={(open) => !open && setEditing(null)}
         mode="edit"
         oilType={editing ?? undefined}
-        currentBase={currentBase}
         oilGroups={oilGroups}
       />
     </>

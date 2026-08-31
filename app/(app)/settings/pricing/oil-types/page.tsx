@@ -27,10 +27,19 @@ export default async function OilTypesPage() {
         <ul>
           <li><strong>Bulk</strong> cost is what you pay per litre when buying in drum / tote.</li>
           <li><strong>Gallon</strong> cost is what you pay per litre when buying in packaged jugs.</li>
-          <li>Exactly one oil type is the <strong>base</strong> grade (typically 15W40), used for comparisons. Ticking <strong>Base grade</strong> on another oil moves it there.</li>
+          <li>
+            <strong>Charged $/L</strong> is what a sales oil line of this grade actually bills
+            per litre — the grade&apos;s <strong>oil group</strong> rate. It is deliberately not
+            the same number as <strong>Bulk $/L</strong>, which is what the shop pays.
+          </li>
           <li>Deactivating an oil type hides its column from the price grid but keeps history intact.</li>
           <li>Once you&apos;ve added an oil, go to <strong>Volume tiers</strong> to set its per-capacity premiums.</li>
-          <li><strong>Oil group</strong> sets which base price a sales oil line of this grade is charged at. The two cost columns here stay the shop&apos;s own cost — they are not what the customer pays for an oil line.</li>
+          <li>
+            <strong>Oil group</strong> sets which base price a sales oil line of this grade is
+            charged at; the groups themselves live under{" "}
+            <strong>Settings → Pricing → Oil groups</strong>. A grade in no group falls back to
+            the base grade, which is no longer edited here.
+          </li>
         </ul>
       </PageHelp>
 

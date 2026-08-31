@@ -57,23 +57,17 @@ export function OilTypeFormDialog({
   onOpenChange,
   mode,
   oilType,
-  currentBase,
   oilGroups = [],
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "create" | "edit";
   oilType?: OilType;
-  /** The oil currently flagged as base grade, if any. Only one may hold it. */
-  currentBase?: OilType;
   /** Groups this grade can be priced by. Empty until migration 0133. */
   oilGroups?: OilGroup[];
 }) {
   const [isPending, startTransition] = useTransition();
   const form = useForm<FormValues>({ defaultValues: blank });
-  // The base grade can only be moved, never cleared: unticking it on the
-  // current base would leave the price grid with no grade to compare against.
-  const isCurrentBase = currentBase != null && oilType?.id === currentBase.id;
 
   useEffect(() => {
     if (!open) return;
@@ -100,7 +94,11 @@ export function OilTypeFormDialog({
       const payload = {
         code: values.code.toUpperCase().trim(),
         name: values.name.trim(),
-        is_base: values.is_base,
+        // Not edited here any more (oil groups replaced it), but the flag is
+        // still the fallback for grades in no group and UpdateOilTypeInput
+        // defaults it to false — so send the value the oil already has, or
+        // ticking any other field would silently clear the base grade.
+        is_base: mode === "edit" ? (oilType?.is_base ?? false) : false,
         oil_group_id: values.oil_group_id || null,
         bulk_cost_per_litre: Number(values.bulk_cost_per_litre),
         gallon_cost_per_litre: Number(values.gallon_cost_per_litre),
@@ -216,7 +214,13 @@ export function OilTypeFormDialog({
               )}
             />
 
-            {oilGroups.length > 0 && (
+            {oilGroups.length === 0 ? (
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Oil group</span> — no groups exist
+                yet, so this grade is charged at the single base grade&apos;s rate on a sales
+                line. Create one under Settings → Pricing → Oil groups.
+              </div>
+            ) : (
               <FormField
                 control={form.control}
                 name="oil_group_id"
@@ -249,43 +253,6 @@ export function OilTypeFormDialog({
                 )}
               />
             )}
-
-            <FormField
-              control={form.control}
-              name="is_base"
-              render={({ field }) => (
-                <FormItem className="flex items-center gap-2 space-y-0">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      disabled={isCurrentBase}
-                      onCheckedChange={(v) => field.onChange(v === true)}
-                    />
-                  </FormControl>
-                  <div className="leading-none">
-                    <FormLabel className={isCurrentBase ? undefined : "cursor-pointer"}>
-                      Base grade
-                    </FormLabel>
-                    <FormDescription className="text-xs">
-                      {isCurrentBase ? (
-                        <>
-                          This is the base grade. To move it, tick <strong>Base grade</strong> on
-                          another oil — it can&apos;t be cleared here.
-                        </>
-                      ) : currentBase ? (
-                        <>
-                          Typically 15W40. Only one oil can be base —{" "}
-                          <strong>{currentBase.code}</strong> holds it now and ticking this moves
-                          it here.
-                        </>
-                      ) : (
-                        <>Typically 15W40. Only one oil can be the base grade.</>
-                      )}
-                    </FormDescription>
-                  </div>
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}
