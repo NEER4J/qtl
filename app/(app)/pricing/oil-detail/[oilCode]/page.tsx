@@ -18,7 +18,7 @@ import { PrintButton } from "@/components/pricing/print-button";
 import { requireProfile } from "@/lib/auth/require";
 import { getOilDetail } from "@/lib/actions/pricing";
 import { formatMoney } from "@/lib/utils/format";
-import { excelOilLabel } from "@/lib/utils/oil-labels";
+import { oilLabel } from "@/lib/utils/oil-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -51,11 +51,11 @@ export default async function OilDetailPage({
       <div className="flex items-start justify-between gap-4 print:hidden">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            {excelOilLabel(data.oil_type.code, data.oil_type.name)}{" "}
+            {oilLabel(data.oil_type)}{" "}
             <Badge variant="outline" className="ml-2 align-middle">{container}</Badge>
           </h1>
           <p className="text-sm text-muted-foreground">
-            {data.oil_type.name} · Per-engine breakdown: oil + filter + fuel + grease + labour + tier premium → selling price
+            {data.oil_type.code} · Per-engine breakdown: oil + filter + fuel + grease + labour + tier premium → selling price
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -79,9 +79,9 @@ export default async function OilDetailPage({
       {/* Print-only header */}
       <div className="hidden print:block">
         <h1 className="text-xl font-bold">
-          {excelOilLabel(data.oil_type.code, data.oil_type.name)} — {container}
+          {oilLabel(data.oil_type)} — {container}
         </h1>
-        <p className="text-xs">{data.oil_type.name} · per-engine price breakdown</p>
+        <p className="text-xs">{data.oil_type.code} · per-engine price breakdown</p>
       </div>
 
       {/* Under review — the Computed column is a proposal, not the price. Kept
@@ -110,7 +110,7 @@ export default async function OilDetailPage({
             className={`px-2 py-1 rounded-md text-xs border ${o.code === data.oil_type.code ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"}`}
             title={o.name}
           >
-            {excelOilLabel(o.code, o.name)}
+            {oilLabel(o)}
           </Link>
         ))}
         <span className="mx-2 text-muted-foreground">·</span>

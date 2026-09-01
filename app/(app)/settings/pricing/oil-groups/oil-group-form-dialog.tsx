@@ -260,10 +260,10 @@ export function OilGroupFormDialog({
                             onCheckedChange={() => toggleMember(o.id)}
                           />
                           <span className="min-w-0 flex-1">
-                            {/* The oil's FULL name, never excelOilLabel: that
-                                renders "Delo 400 XLE SB 15W40" as "15W40",
-                                which is also a group name and reads as though
-                                the list were groups. */}
+                            {/* The oil's own name — these are the grades that
+                                make up the group, and a short grade label like
+                                "15W40" is also a group name, so it would read
+                                as though the list were groups. */}
                             <span className="block truncate">
                               {o.name}
                               {!o.active && (

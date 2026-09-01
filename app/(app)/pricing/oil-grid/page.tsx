@@ -6,7 +6,7 @@ import { PrintButton } from "@/components/pricing/print-button";
 import { requireProfile } from "@/lib/auth/require";
 import { getOilChangeGrid } from "@/lib/actions/pricing";
 import { formatMoney } from "@/lib/utils/format";
-import { excelOilLabel } from "@/lib/utils/oil-labels";
+import { oilLabel } from "@/lib/utils/oil-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -96,7 +96,7 @@ export default async function OilGridPage() {
                   <th className="text-right p-2 text-xs text-muted-foreground">Capacity</th>
                   {oilTypes.map((o) => (
                     <th key={o.id} className="p-2 text-center min-w-[110px] border-l" colSpan={2} title={o.name}>
-                      <div className="font-medium">{excelOilLabel(o.code, o.name)}</div>
+                      <div className="font-medium">{oilLabel(o)}</div>
                       <div className="text-xs text-muted-foreground font-normal">{o.code}</div>
                     </th>
                   ))}

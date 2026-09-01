@@ -44,7 +44,7 @@ import {
   effectiveLockedPriceForItem,
   isPartPackageLocked,
 } from "@/lib/utils/package-pricing";
-import { excelOilLabel } from "@/lib/utils/oil-labels";
+import { oilLabel } from "@/lib/utils/oil-labels";
 import { buildDisplayRows, packageGroupKey } from "@/lib/utils/sales-display";
 
 export interface LineItem {
@@ -293,7 +293,7 @@ export function SalesLineItems({
       ...items,
       newLineItem({
         part_id: null,
-        description: `${excelOilLabel(oil.code, oil.name)} (${container})`,
+        description: `${oilLabel(oil)} (${container})`,
         quantity: qty,
         unit_price: rate,
         is_taxable: oil.is_taxable,
@@ -438,7 +438,7 @@ export function SalesLineItems({
           ? effectiveLockedPriceForItem(it)
           : effectiveCatalogPriceForItem(it);
         const litres = Number(it.litres ?? 0);
-        description = `${excelOilLabel(it.oil_type.code, it.oil_type.name)}${
+        description = `${oilLabel(it.oil_type)}${
           it.oil_container ? ` (${it.oil_container})` : ""
         }${litres ? ` × ${litres}L` : ""}`;
         isTaxable = it.oil_type.is_taxable;
@@ -532,7 +532,7 @@ export function SalesLineItems({
         const oid = pkgItem.oil_type_id;
         match = (it) => it.oil_type_id === oid;
         itemLabel = pkgItem.oil_type
-          ? excelOilLabel(pkgItem.oil_type.code, pkgItem.oil_type.name)
+          ? oilLabel(pkgItem.oil_type)
           : "oil";
       } else if (pkgItem.transmission_service_id) {
         const sid = pkgItem.transmission_service_id;

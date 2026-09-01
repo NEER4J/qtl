@@ -33,6 +33,7 @@ import {
 } from "@/components/sales/promotion-picker-button";
 import type { OilType, Promotion } from "@/lib/db/types";
 import { formatDate, formatMoney } from "@/lib/utils/format";
+import { oilLabelWithCode } from "@/lib/utils/oil-labels";
 
 export interface ExpenseLineItem {
   /** Local-only client id used for React keys; not persisted. */
@@ -81,12 +82,6 @@ export function newExpenseLineItem(partial: Partial<ExpenseLineItem> = {}): Expe
   };
 }
 
-/** Mirrors components/sales/sales-line-items.tsx excelOilLabel — kept local
- *  since the expense side doesn't otherwise depend on the sales module. */
-function oilLabel(oil: OilType): string {
-  return `${oil.code} — ${oil.name}`;
-}
-
 function OilPickerButton({
   oilTypes,
   onPick,
@@ -117,7 +112,7 @@ function OilPickerButton({
                   value={`${oil.code} ${oil.name}`}
                   className="flex items-center justify-between gap-2"
                 >
-                  <span className="min-w-0 truncate">{oilLabel(oil)}</span>
+                  <span className="min-w-0 truncate">{oilLabelWithCode(oil)}</span>
                   <div className="flex shrink-0 gap-1">
                     <Button
                       type="button"
@@ -282,7 +277,7 @@ export function ExpenseLineItems({
       newExpenseLineItem({
         oil_type_id: oil.id,
         oil_container: container,
-        description: `${oilLabel(oil)} (${container})`,
+        description: `${oilLabelWithCode(oil)} (${container})`,
         quantity: 1,
         unit_cost,
       }),

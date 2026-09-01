@@ -64,7 +64,7 @@ import {
 } from "@/lib/utils/package-pricing";
 import { normalizePartPricing } from "@/lib/utils/part-pricing";
 import { computePartSellTiers } from "@/lib/utils/part-sell-prices";
-import { excelOilLabel } from "@/lib/utils/oil-labels";
+import { oilLabel } from "@/lib/utils/oil-labels";
 import {
   matchEngineToPackage,
   type MatchConfidence,
@@ -1032,7 +1032,7 @@ export async function getPrintList(): Promise<PrintListResponse> {
   // was a hardcoded Excel subset that hid some oils.)
   const columns: PrintListColumn[] = [];
   for (const o of oilTypes) {
-    const label = excelOilLabel(o.code, o.name);
+    const label = oilLabel(o);
     columns.push({
       key: `${o.id}-gallon`,
       label,
@@ -2859,10 +2859,7 @@ async function fetchPackageItems(
                 : Number(row.transmission_service.labour),
             litres: row.transmission_service.litres,
             oil_type_name: row.transmission_service.oil_types
-              ? excelOilLabel(
-                  row.transmission_service.oil_types.code,
-                  row.transmission_service.oil_types.name,
-                )
+              ? oilLabel(row.transmission_service.oil_types)
               : null,
           }
         : null,
@@ -3209,11 +3206,11 @@ function mapTransServiceRow(r: TransServiceJoinRow): TransmissionService {
     service_kind: r.service_kind,
     is_synthetic: r.is_synthetic,
     oil_type_id: r.oil_type_id,
-    oil_type_name: r.oil_types ? excelOilLabel(r.oil_types.code, r.oil_types.name) : null,
+    oil_type_name: r.oil_types ? oilLabel(r.oil_types) : null,
     litres: r.litres,
     sell_price: Number(r.sell_price),
     oil_type_id_2: r.oil_type_id_2 ?? null,
-    oil_type_name_2: r.oil_types_2 ? excelOilLabel(r.oil_types_2.code, r.oil_types_2.name) : null,
+    oil_type_name_2: r.oil_types_2 ? oilLabel(r.oil_types_2) : null,
     litres_2: r.litres_2 ?? null,
     sell_price_2: r.sell_price_2 == null ? null : Number(r.sell_price_2),
     default_oil: Number(r.default_oil ?? 1),

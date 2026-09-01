@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { listPackagesForPicker } from "@/lib/actions/pricing";
 import type { PartPackageWithItems } from "@/lib/db/types";
-import { excelOilLabel } from "@/lib/utils/oil-labels";
+import { oilLabel } from "@/lib/utils/oil-labels";
 
 export function PackagePickerButton({
   onSelect,
@@ -68,7 +68,7 @@ export function PackagePickerButton({
                           .map((it) => {
                             const qty = Number(it.quantity);
                             if (it.part) return `${qty}× ${it.part.brand} ${it.part.part_number}`;
-                            if (it.oil_type) return `${qty}× ${excelOilLabel(it.oil_type.code, it.oil_type.name)}`;
+                            if (it.oil_type) return `${qty}× ${oilLabel(it.oil_type)}`;
                             if (it.transmission_service) return `${qty}× ${it.transmission_service.name}`;
                             return `${qty}× —`;
                           })

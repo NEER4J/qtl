@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatMoney } from "@/lib/utils/format";
-import { excelOilLabel } from "@/lib/utils/oil-labels";
+import { oilLabel } from "@/lib/utils/oil-labels";
 import { cn } from "@/lib/utils";
 import type { OilGroup, OilType } from "@/lib/db/types";
 
@@ -146,7 +146,7 @@ export function OilPickerButton({
             <CommandEmpty>No matching oils.</CommandEmpty>
             <CommandGroup>
               {oilTypes.map((oil) => {
-                const label = excelOilLabel(oil.code, oil.name);
+                const label = oilLabel(oil);
                 const rate = oilLineRate(oilTypes, oil, container, oilGroups);
                 const group = oilLineGroup(oil, oilGroups);
                 return (
@@ -188,7 +188,7 @@ export function OilPickerButton({
           </p>
         ) : baseOil ? (
           <p className="border-t px-2 py-1.5 text-[11px] text-muted-foreground">
-            Every grade is charged at the base rate ({excelOilLabel(baseOil.code, baseOil.name)}).
+            Every grade is charged at the base rate ({oilLabel(baseOil)}).
             Quantity and price stay editable on the line.
           </p>
         ) : null}

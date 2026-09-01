@@ -32,7 +32,7 @@ import { InfoTip } from "@/components/help/info-tip";
 import { createSalesJob, updateSalesJob } from "@/lib/actions/sales";
 import { createCustomer, getCustomer, getCustomerSalesHistory } from "@/lib/actions/customers";
 import { fetchCustomerCreditBalance } from "@/lib/actions/customer-credits";
-import { excelOilLabel } from "@/lib/utils/oil-labels";
+import { oilLabel } from "@/lib/utils/oil-labels";
 import { getCustomerVehicles } from "@/lib/actions/vehicles";
 import { VehicleFormDialog } from "@/components/customers/vehicle-form-dialog";
 import { isFreeGreaseEligible } from "@/lib/utils/free-grease";
@@ -1310,8 +1310,8 @@ export function SalesJobForm({
                           <SelectContent>
                             {oilTypes.map((o) => (
                               <SelectItem key={o.id} value={o.id}>
-                                {excelOilLabel(o.code, o.name)}{" "}
-                                <span className="text-muted-foreground">— {o.name}</span>
+                                {oilLabel(o)}{" "}
+                                <span className="text-muted-foreground">— {o.code}</span>
                               </SelectItem>
                             ))}
                           </SelectContent>
