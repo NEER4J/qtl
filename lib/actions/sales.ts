@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { toISODate, todayISO } from "@/lib/utils/tz";
 import { InsufficientStockError, wrapAction } from "@/lib/actions/_utils";
 import { AuthorizationError } from "@/lib/auth/require";
 import { canAccessLocation } from "@/lib/auth/locations";
@@ -562,12 +563,8 @@ export const updateSalesJob = wrapAction({
     // created (Toronto time). Owner / co_owner / manager / accountant are
     // unrestricted.
     if (profile.role === "staff" || profile.role === "technician") {
-      const dayOf = (iso: string) =>
-        new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Toronto" });
-      const today = new Date().toLocaleDateString("en-CA", {
-        timeZone: "America/Toronto",
-      });
-      if (existing?.created_at && dayOf(existing.created_at) !== today) {
+      const today = todayISO();
+      if (existing?.created_at && toISODate(new Date(existing.created_at)) !== today) {
         throw new Error("You can only edit a job on the day it was created.");
       }
     }

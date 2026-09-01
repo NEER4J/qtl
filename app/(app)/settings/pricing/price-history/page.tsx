@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHelp } from "@/components/help/page-help";
 import { requirePage } from "@/lib/auth/require";
 import { listPriceHistory } from "@/lib/actions/pricing";
+import { formatDateTime } from "@/lib/utils/format";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +79,7 @@ export default async function PriceHistoryPage() {
                   return (
                     <TableRow key={r.id}>
                       <TableCell className="text-xs text-muted-foreground tabular-nums">
-                        {new Date(r.changed_at).toLocaleString()}
+                        {formatDateTime(r.changed_at)}
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="text-xs">

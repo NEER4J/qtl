@@ -1,5 +1,6 @@
 import { getProductsAnalytics } from "@/lib/actions/analytics";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -32,5 +33,5 @@ export async function GET(req: Request) {
   sections.push(`## Monthly trend`);
   sections.push(toCsv(data.trend as unknown as Record<string, unknown>[], Object.keys(data.trend[0] ?? { month: "" })));
 
-  return csvResponse(`products-analytics-${new Date().toISOString().slice(0, 10)}.csv`, sections.join("\n"));
+  return csvResponse(`products-analytics-${todayISO()}.csv`, sections.join("\n"));
 }

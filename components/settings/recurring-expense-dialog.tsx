@@ -43,6 +43,7 @@ import type {
   RecurringExpense,
   Vendor,
 } from "@/lib/db/types";
+import { todayISO } from "@/lib/utils/tz";
 
 const DOW = [
   { value: 1, label: "Monday" },
@@ -92,7 +93,7 @@ export function RecurringExpenseDialog({ locations, categories, vendors, existin
           hst_rate: 0.13,
           frequency: "monthly",
           day_of_month: 1,
-          start_date: new Date().toISOString().slice(0, 10),
+          start_date: todayISO(),
           notes: "",
         },
   });

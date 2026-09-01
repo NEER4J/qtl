@@ -1,6 +1,7 @@
 import { listAllParts } from "@/lib/actions/pricing";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export async function GET(req: Request) {
   }));
 
   return csvResponse(
-    `parts-catalogue-${new Date().toISOString().slice(0, 10)}.csv`,
+    `parts-catalogue-${todayISO()}.csv`,
     toCsv(rows as unknown as Record<string, unknown>[], [
       "part_number",
       "brand",

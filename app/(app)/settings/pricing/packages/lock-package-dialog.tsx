@@ -15,15 +15,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { lockPartPackage } from "@/lib/actions/pricing";
 import type { PartPackageWithItems } from "@/lib/db/types";
+import { daysFromTodayISO, todayISO } from "@/lib/utils/tz";
 
 function defaultLockDate(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 30);
-  return d.toISOString().slice(0, 10);
+  return daysFromTodayISO(30);
 }
 
 function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayISO();
 }
 
 export function LockPackageDialog({

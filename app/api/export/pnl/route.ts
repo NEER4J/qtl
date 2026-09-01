@@ -1,5 +1,6 @@
 import { getPnlReport } from "@/lib/actions/reports";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -25,5 +26,5 @@ export async function GET(req: Request) {
   sections.push(`## By location`);
   sections.push(toCsv(data.by_location as unknown as Record<string, unknown>[], ["name", "sales", "expenses", "payroll", "net"]));
 
-  return csvResponse(`pnl-${new Date().toISOString().slice(0, 10)}.csv`, sections.join("\n"));
+  return csvResponse(`pnl-${todayISO()}.csv`, sections.join("\n"));
 }

@@ -1,5 +1,6 @@
 import { getExpenseAnalytics } from "@/lib/actions/analytics";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -33,5 +34,5 @@ export async function GET(req: Request) {
   sections.push(`## Top vendors`);
   sections.push(toCsv(data.top_vendors as unknown as Record<string, unknown>[], ["name", "total"]));
 
-  return csvResponse(`expense-analytics-${new Date().toISOString().slice(0, 10)}.csv`, sections.join("\n"));
+  return csvResponse(`expense-analytics-${todayISO()}.csv`, sections.join("\n"));
 }

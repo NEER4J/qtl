@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { hiddenColumnsForPage } from "@/lib/permissions/check";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
 import { deductionExemptions } from "@/lib/utils/payroll-flags";
+import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,7 @@ export async function GET(req: Request) {
   sections.push(`# Payroll — ${week.location_name}`);
   sections.push(`# Pay period,${week.week_start},to,${week.week_end}`);
   sections.push(`# Status,${week.status}`);
-  sections.push(`# Exported,${new Date().toISOString().slice(0, 10)}\n`);
+  sections.push(`# Exported,${todayISO()}\n`);
 
   const entryRows = week.entries.map((e) => ({
     employee: e.employee_name,

@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { hiddenColumnsForPage } from "@/lib/permissions/check";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
 import { formatPhone } from "@/lib/utils/phone";
+import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +68,7 @@ export async function GET(req: Request) {
   ];
 
   return csvResponse(
-    `customers-${new Date().toISOString().slice(0, 10)}.csv`,
+    `customers-${todayISO()}.csv`,
     toCsv(records as unknown as Record<string, unknown>[], columns),
   );
 }

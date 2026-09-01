@@ -10,6 +10,10 @@ import { getInitials } from "@/lib/utils";
 import { isSyntheticEmail } from "@/lib/schemas/users";
 import type { UserRole } from "@/lib/db/types";
 import { accessibleLocationIds, locationMode } from "@/lib/auth/locations";
+import {
+  formatDate,
+  formatDateTime as sharedFormatDateTime,
+} from "@/lib/utils/format";
 
 import { ProfileForm } from "./profile-form";
 import { ChangePasswordForm } from "./change-password-form";
@@ -31,24 +35,9 @@ const ROLE_LABELS: Record<UserRole, string> = {
 // Roles that inherently span every location — no single location to show.
 const ALL_LOCATION_ROLES = new Set<UserRole>(["owner", "co_owner", "accountant"]);
 
-function formatDate(value: string | null): string {
-  if (!value) return "—";
-  return new Date(value).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 function formatDateTime(value: string | null): string {
   if (!value) return "Never";
-  return new Date(value).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return sharedFormatDateTime(value);
 }
 
 function MetaRow({

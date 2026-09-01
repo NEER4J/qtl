@@ -2,6 +2,7 @@ import { resolveLocationFilter } from "@/lib/auth/locations";
 import { listPayrollWeeks } from "@/lib/actions/payroll";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
 
   const sections: string[] = [];
   sections.push(`# Payroll — pay weeks`);
-  sections.push(`# Exported,${new Date().toISOString().slice(0, 10)}\n`);
+  sections.push(`# Exported,${todayISO()}\n`);
   sections.push(
     toCsv(
       weeks.map((w) => ({
@@ -55,5 +56,5 @@ export async function GET(req: Request) {
     ),
   );
 
-  return csvResponse(`payroll-weeks-${new Date().toISOString().slice(0, 10)}.csv`, sections.join("\n"));
+  return csvResponse(`payroll-weeks-${todayISO()}.csv`, sections.join("\n"));
 }

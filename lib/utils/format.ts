@@ -1,3 +1,7 @@
+import { APP_TIME_ZONE, isDateOnly, parseDateOnly, todayISO } from "./tz";
+
+export { todayISO, APP_TIME_ZONE };
+
 /**
  * Money formatter — CAD, no-break spaces, .99-friendly.
  */
@@ -32,28 +36,70 @@ export function formatUnitCost(value: number | string | null | undefined): strin
   return unitCost.format(n);
 }
 
-const dateFmt = new Intl.DateTimeFormat("en-CA", {
+// Date-only columns (Postgres `date`: job_date, expense_date, paid_on, …) are
+// calendar facts with no zone. They are anchored at UTC midnight by
+// parseDateOnly and read back in UTC, so the stored day is the day shown — in
+// every browser, in every zone.
+const dateOnlyFmt = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "UTC",
   year: "numeric",
   month: "short",
   day: "2-digit",
 });
 
+// Timestamps (`timestamptz`: created_at, updated_at, …) are real instants and
+// must be shown as the shop experienced them, not as UTC.
+const timestampFmt = new Intl.DateTimeFormat("en-CA", {
+  timeZone: APP_TIME_ZONE,
+  year: "numeric",
+  month: "short",
+  day: "2-digit",
+});
+
+const timeFmt = new Intl.DateTimeFormat("en-CA", {
+  timeZone: APP_TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+const dateTimeFmt = new Intl.DateTimeFormat("en-CA", {
+  timeZone: APP_TIME_ZONE,
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+/**
+ * Format a date for display.
+ *
+ * Handles both shapes the app stores, because call sites legitimately pass
+ * either: a bare `YYYY-MM-DD` is rendered as that exact calendar day, and
+ * anything else is treated as an instant and rendered in Ontario time.
+ */
 export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return "—";
+  if (isDateOnly(value)) {
+    const d = parseDateOnly(value);
+    return d ? dateOnlyFmt.format(d) : "—";
+  }
   const d = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(d.getTime())) return "—";
-  return dateFmt.format(d);
+  return timestampFmt.format(d);
 }
 
+/** Clock time of an instant, in Ontario. */
 export function formatTime(value: string | Date | null | undefined): string {
   if (!value) return "—";
   const d = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleTimeString("en-CA", { hour: "2-digit", minute: "2-digit" });
+  return timeFmt.format(d);
 }
 
-export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+/** Date + clock time of an instant, in Ontario. For audit trails and "last edited". */
+export function formatDateTime(value: string | Date | null | undefined): string {
+  if (!value) return "—";
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return "—";
+  return dateTimeFmt.format(d);
 }
 
 /**

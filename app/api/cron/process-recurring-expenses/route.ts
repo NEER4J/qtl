@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export async function GET(req: Request) {
 
   const supabase = createAdminClient();
   const { data, error } = await supabase.rpc("process_recurring_expenses", {
-    as_of: new Date().toISOString().slice(0, 10),
+    as_of: todayISO(),
   });
   if (error) {
     return Response.json({ ok: false, error: error.message }, { status: 500 });

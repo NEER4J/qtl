@@ -1,6 +1,7 @@
 import { listInventory, listOilInventory } from "@/lib/actions/inventory";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export async function GET() {
 
   const sections: string[] = [];
   sections.push(`# Inventory — on-hand stock by location`);
-  sections.push(`# Exported ${new Date().toISOString().slice(0, 10)}\n`);
+  sections.push(`# Exported ${todayISO()}\n`);
 
   const locNames = inv.locations.map((l) => l.name);
 
@@ -69,7 +70,7 @@ export async function GET() {
   );
 
   return csvResponse(
-    `inventory-${new Date().toISOString().slice(0, 10)}.csv`,
+    `inventory-${todayISO()}.csv`,
     sections.join("\n"),
   );
 }

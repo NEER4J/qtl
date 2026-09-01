@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { daysFromTodayISO } from "@/lib/utils/tz";
 import { wrapAction } from "@/lib/actions/_utils";
 import {
   CreateCustomerInput,
@@ -92,9 +93,7 @@ export const grantFreeOilChange = wrapAction({
   roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<Customer> => {
     const supabase = await createClient();
-    const until = new Date();
-    until.setDate(until.getDate() + 30);
-    const untilISO = until.toISOString().slice(0, 10);
+    const untilISO = daysFromTodayISO(30);
 
     const { data, error } = await supabase
       .from("customers")

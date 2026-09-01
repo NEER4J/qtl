@@ -1,8 +1,8 @@
 "use server";
 
-import { format, parseISO, startOfMonth, subDays } from "date-fns";
 
 import { createClient } from "@/lib/supabase/server";
+import { addDaysISO, parseDateOnly, todayISO } from "@/lib/utils/tz";
 import { requireProfile } from "@/lib/auth/require";
 import { applyLocationFilter, resolveLocationFilter } from "@/lib/auth/locations";
 
@@ -22,9 +22,9 @@ export interface AnalyticsFilter {
 }
 
 function defaultRange(filter: AnalyticsFilter): { from: string; to: string; label: string } {
-  const today = new Date();
-  const from = filter.from ?? format(subDays(today, 29), "yyyy-MM-dd");
-  const to = filter.to ?? format(today, "yyyy-MM-dd");
+  const today = todayISO();
+  const from = filter.from ?? addDaysISO(today, -29);
+  const to = filter.to ?? today;
   const label = `${from} → ${to}`;
   return { from, to, label };
 }
@@ -710,7 +710,9 @@ export async function getSalesYoy(filter: AnalyticsFilter = {}): Promise<YoyComp
 }
 
 function shiftYear(iso: string, years: number): string {
-  const d = new Date(iso);
-  d.setFullYear(d.getFullYear() + years);
+  // UTC accessors throughout: `iso` is a date-only string, so mixing in the
+  // runtime's local zone here would shift the boundary by a day.
+  const d = parseDateOnly(iso) ?? new Date(iso);
+  d.setUTCFullYear(d.getUTCFullYear() + years);
   return d.toISOString().slice(0, 10);
 }

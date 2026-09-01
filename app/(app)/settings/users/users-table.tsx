@@ -36,6 +36,7 @@ import type { Location, UserRole, Profile } from "@/lib/db/types";
 import { visibleColumnKeys } from "@/lib/permissions/check";
 import { isSyntheticEmail } from "@/lib/schemas/users";
 import { locationMode } from "@/lib/auth/locations";
+import { formatDate, formatDateTime } from "@/lib/utils/format";
 
 import { InviteUserDialog } from "./invite-user-dialog";
 import { EditUserDialog } from "./edit-user-dialog";
@@ -132,10 +133,7 @@ export function UsersTable({
     );
   };
 
-  const fmtSetAt = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-  };
+  const fmtSetAt = (iso: string) => formatDate(iso);
 
   const handleToggle = (u: UserListRow) => {
     startTransition(async () => {
@@ -450,7 +448,7 @@ export function UsersTable({
                             </Button>
                             <span
                               className="text-[10px] text-muted-foreground"
-                              title={`Set on ${new Date(passwords[u.id].setAt).toLocaleString()}`}
+                              title={`Set on ${formatDateTime(passwords[u.id].setAt)}`}
                             >
                               {fmtSetAt(passwords[u.id].setAt)}
                             </span>
@@ -464,12 +462,7 @@ export function UsersTable({
                     )}
                     {visible("last_login") && (
                       <TableCell className="text-xs text-muted-foreground">
-                        {u.last_login_at
-                          ? new Date(u.last_login_at).toLocaleString(undefined, {
-                              dateStyle: "medium",
-                              timeStyle: "short",
-                            })
-                          : "Never"}
+                        {u.last_login_at ? formatDateTime(u.last_login_at) : "Never"}
                       </TableCell>
                     )}
                     {canManage && (

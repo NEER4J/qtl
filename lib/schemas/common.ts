@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { toISODate } from "@/lib/utils/tz";
+
 export const uuidSchema = z.string().uuid();
 
 export const moneySchema = z
@@ -16,7 +18,9 @@ export const signedMoneySchema = z
 
 export const dateSchema = z
   .union([z.string(), z.date()])
-  .transform((v) => (v instanceof Date ? v.toISOString().slice(0, 10) : v))
+  // A Date narrows to the Ontario calendar day it falls on — .toISOString()
+  // here handed back the UTC day, which is tomorrow after 8 PM local.
+  .transform((v) => (v instanceof Date ? toISODate(v) : v))
   .pipe(z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD"));
 
 export const paymentModeSchema = z.enum([

@@ -1,5 +1,6 @@
 import { getOutstandingInvoices } from "@/lib/actions/reports";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ export async function GET(req: Request) {
   });
 
   const sections: string[] = [];
-  sections.push(`# Outstanding Invoices — as of ${new Date().toISOString().slice(0, 10)}\n`);
+  sections.push(`# Outstanding Invoices — as of ${todayISO()}\n`);
   sections.push(`Total outstanding,${total_outstanding.toFixed(2)}`);
   for (const [bucket, amount] of Object.entries(by_bucket)) {
     sections.push(`${bucket},${amount.toFixed(2)}`);
@@ -25,5 +26,5 @@ export async function GET(req: Request) {
     ),
   );
 
-  return csvResponse(`outstanding-${new Date().toISOString().slice(0, 10)}.csv`, sections.join("\n"));
+  return csvResponse(`outstanding-${todayISO()}.csv`, sections.join("\n"));
 }

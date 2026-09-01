@@ -10,6 +10,7 @@ import { formatDate } from "@/lib/utils/format";
 
 import { InventoryTable } from "./inventory-table";
 import { OilInventoryTable } from "./oil-inventory-table";
+import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export default async function InventoryPage() {
       {/* Print header — only visible in print */}
       <div className="hidden print:block">
         <h1 className="text-2xl font-bold">Inventory — on-hand stock</h1>
-        <p className="text-xs">Printed {formatDate(new Date().toISOString().slice(0, 10))}</p>
+        <p className="text-xs">Printed {formatDate(todayISO())}</p>
       </div>
 
       <div className="print:hidden">

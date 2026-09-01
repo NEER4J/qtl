@@ -1,5 +1,6 @@
 import { getHstSummary } from "@/lib/actions/reports";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -26,5 +27,5 @@ export async function GET(req: Request) {
   sections.push(`## By location`);
   sections.push(toCsv(data.by_location as unknown as Record<string, unknown>[], ["location_name", "hst_collected", "hst_paid"]));
 
-  return csvResponse(`hst-summary-${new Date().toISOString().slice(0, 10)}.csv`, sections.join("\n"));
+  return csvResponse(`hst-summary-${todayISO()}.csv`, sections.join("\n"));
 }

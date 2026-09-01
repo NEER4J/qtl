@@ -12,7 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { requirePage } from "@/lib/auth/require";
 import { listAuditLog } from "@/lib/actions/audit";
-import { formatDate } from "@/lib/utils/format";
+import { formatDateTime } from "@/lib/utils/format";
 
 export const dynamic = "force-dynamic";
 
@@ -93,13 +93,7 @@ export default async function AuditLogPage({
                 {rows.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="whitespace-nowrap text-sm">
-                      {new Date(r.at).toLocaleString("en-CA", {
-                        year: "numeric",
-                        month: "short",
-                        day: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatDateTime(r.at)}
                     </TableCell>
                     <TableCell className="font-mono text-xs">{r.table_name}</TableCell>
                     <TableCell>

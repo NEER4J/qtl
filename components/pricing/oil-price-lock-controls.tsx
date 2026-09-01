@@ -18,15 +18,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { lockOilPrices, unlockOilPrices } from "@/lib/actions/pricing";
 import type { OilPriceLockInfo } from "@/lib/actions/pricing";
+import { daysFromTodayISO, todayISO } from "@/lib/utils/tz";
 
 function defaultLockDate(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 30);
-  return d.toISOString().slice(0, 10);
+  return daysFromTodayISO(30);
 }
 
 function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayISO();
 }
 
 function daysUntil(date: string): number {

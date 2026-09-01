@@ -1,6 +1,7 @@
 import { getPrintList } from "@/lib/actions/pricing";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -35,12 +36,12 @@ export async function GET() {
   const sections = [
     `# ${company_name} — oil change price list`,
     effective_date ? `# Effective ${effective_date}` : `# Effective date not set`,
-    `# Exported ${new Date().toISOString().slice(0, 10)}\n`,
+    `# Exported ${todayISO()}\n`,
     [headerLine, ...body.split("\n").slice(1)].join("\n"),
   ];
 
   return csvResponse(
-    `price-list-${new Date().toISOString().slice(0, 10)}.csv`,
+    `price-list-${todayISO()}.csv`,
     sections.join("\n"),
   );
 }

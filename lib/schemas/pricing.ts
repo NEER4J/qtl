@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { todayISO } from "@/lib/utils/tz";
+
 /**
  * A catalogue code (oil types, service costs). Vendor SKUs in this trade carry
  * dashes — "FF5588-NN", "259118-980" — so the character set allows them.
@@ -474,12 +476,10 @@ export const LockPartPackageInput = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date")
     .refine(
-      (s) => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const d = new Date(`${s}T00:00:00`);
-        return !Number.isNaN(d.getTime()) && d.getTime() >= today.getTime();
-      },
+      // Compared as plain YYYY-MM-DD strings against Ontario's today. Using
+      // Date objects here meant the server (UTC) rolled to tomorrow at 8 PM
+      // local and rejected the shop's actual current date.
+      (s) => s >= todayISO(),
       { message: "Lock date must be today or later" },
     ),
 });
@@ -496,12 +496,8 @@ const LockUntilDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date")
   .refine(
-    (s) => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const d = new Date(`${s}T00:00:00`);
-      return !Number.isNaN(d.getTime()) && d.getTime() >= today.getTime();
-    },
+    // See the note on LockPartPackageInput — Ontario's today, not the server's.
+    (s) => s >= todayISO(),
     { message: "Lock date must be today or later" },
   );
 
