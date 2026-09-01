@@ -1,5 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { listAllOilGroups, listAllOilTypes } from "@/lib/actions/pricing";
 
 import { OilGroupsTable } from "./oil-groups-table";
@@ -7,7 +7,7 @@ import { OilGroupsTable } from "./oil-groups-table";
 export const dynamic = "force-dynamic";
 
 export default async function OilGroupsPage() {
-  await requireRole("owner", "co_owner");
+  await requirePage("settings_pricing");
   const [groups, oilTypes] = await Promise.all([listAllOilGroups(), listAllOilTypes()]);
 
   // listAllOilGroups returns [] both when the table is missing and when nobody

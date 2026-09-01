@@ -9,7 +9,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { listPriceHistory } from "@/lib/actions/pricing";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +29,7 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 export default async function PriceHistoryPage() {
-  await requireRole("owner", "co_owner");
+  await requirePage("settings_pricing");
   const rows = await listPriceHistory(500);
 
   return (

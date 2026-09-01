@@ -1,5 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { listAllServiceTypes } from "@/lib/actions/services";
 
 import { ServicesTable } from "./services-table";
@@ -7,7 +7,7 @@ import { ServicesTable } from "./services-table";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsServicesPage() {
-  await requireRole("owner", "co_owner");
+  await requirePage("settings_services");
   const services = await listAllServiceTypes();
 
   return (

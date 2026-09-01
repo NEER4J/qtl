@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
 import { MinMarginThresholdCard } from "@/components/settings/min-margin-threshold-card";
 import { PricingSettingsCard } from "@/components/settings/pricing-settings-card";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { getAppSettings } from "@/lib/actions/reference";
 
 export const dynamic = "force-dynamic";
@@ -74,7 +74,7 @@ const CARDS = [
 ];
 
 export default async function PricingAdminHubPage() {
-  await requireRole("owner", "co_owner");
+  await requirePage("settings_pricing");
   const settings = await getAppSettings();
   const initialPct = Math.round(Number(settings.min_margin_alert_pct) * 1000) / 10;
   return (

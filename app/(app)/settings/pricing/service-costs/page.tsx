@@ -1,5 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { listAllServiceCosts } from "@/lib/actions/pricing";
 
 import { ServiceCostsTable } from "./service-costs-table";
@@ -7,7 +7,7 @@ import { ServiceCostsTable } from "./service-costs-table";
 export const dynamic = "force-dynamic";
 
 export default async function ServiceCostsPage() {
-  await requireRole("owner", "co_owner");
+  await requirePage("settings_pricing");
   const serviceCosts = await listAllServiceCosts();
 
   return (

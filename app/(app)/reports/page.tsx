@@ -11,7 +11,9 @@ import {
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
+import { isPageAllowed } from "@/lib/permissions/check";
+import { pageKeyForRequestPath } from "@/lib/permissions/registry";
 
 export const dynamic = "force-dynamic";
 
@@ -61,9 +63,14 @@ const REPORTS = [
 ] as const;
 
 export default async function ReportsHubPage() {
-  // Match registry: reports.defaultRoles = owner/co_owner/manager/accountant.
-  const profile = await requireRole("owner", "co_owner", "manager", "accountant");
-  const reports = REPORTS.filter((r) => (r.roles as readonly string[]).includes(profile.role));
+  const profile = await requirePage("reports");
+  // Same rule as the Analytics hub: registered sub-pages (HST, Customers,
+  // Vendors) follow the permissions matrix; unregistered ones ride on the
+  // `reports` grant. The old role filter re-hid granted pages.
+  const reports = REPORTS.filter((r) => {
+    const key = pageKeyForRequestPath(r.href);
+    return key ? isPageAllowed(profile, key) : true;
+  });
 
   return (
     <div className="flex flex-col gap-6">

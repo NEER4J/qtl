@@ -7,6 +7,7 @@ import { requireProfile } from "@/lib/auth/require";
 import { listSalesJobs } from "@/lib/actions/sales";
 import { listActiveLocations, listActiveServiceTypes } from "@/lib/actions/reference";
 import { hiddenColumnsForPage } from "@/lib/permissions/check";
+import { canChooseLocation } from "@/lib/auth/locations";
 
 import { SalesFilters } from "./sales-filters";
 import { SalesTable } from "./sales-table";
@@ -35,11 +36,9 @@ export default async function SalesListPage({
     listActiveServiceTypes(),
   ]);
 
-  const showLocationFilter =
-    profile.role === "owner"
-    || profile.role === "co_owner"
-    || profile.role === "accountant"
-    || profile.cross_location; // cross-location managers/staff can sort by location too
+  // Anyone who can reach more than one shop gets the location column /
+  // filter — all-locations roles and Multiple-mode users alike.
+  const showLocationFilter = canChooseLocation(profile);
   const canCreate = profile.role !== "accountant";
 
   return (

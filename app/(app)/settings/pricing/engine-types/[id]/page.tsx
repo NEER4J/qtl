@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { getEngineTypeDetail } from "@/lib/actions/pricing";
 
 import { EngineDetailHeader } from "./engine-detail-header";
@@ -19,7 +19,7 @@ export default async function EngineTypeDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole("owner", "co_owner");
+  await requirePage("settings_pricing");
   const { id } = await params;
   const detail = await getEngineTypeDetail(id);
   if (!detail) notFound();

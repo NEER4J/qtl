@@ -2,6 +2,7 @@ import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { listSalesJobs } from "@/lib/actions/sales";
 import { listActiveLocations } from "@/lib/actions/reference";
+import { canChooseLocation } from "@/lib/auth/locations";
 
 import { InvoicesFilters } from "./invoices-filters";
 import { InvoicesTable } from "./invoices-table";
@@ -28,11 +29,9 @@ export default async function InvoicesListPage({
     listActiveLocations(),
   ]);
 
-  const showLocationFilter =
-    profile.role === "owner"
-    || profile.role === "co_owner"
-    || profile.role === "accountant"
-    || profile.cross_location; // cross-location managers/staff can sort by location too
+  // Anyone who can reach more than one shop gets the location column /
+  // filter — all-locations roles and Multiple-mode users alike.
+  const showLocationFilter = canChooseLocation(profile);
 
   return (
     <div className="flex flex-col gap-6">

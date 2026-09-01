@@ -1,5 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
-import { requireProfile, requireRole } from "@/lib/auth/require";
+import { requirePage, requireProfile } from "@/lib/auth/require";
 import { listAllPartPackages } from "@/lib/actions/pricing";
 
 import { PartPackagesTable } from "./part-packages-table";
@@ -7,7 +7,7 @@ import { PartPackagesTable } from "./part-packages-table";
 export const dynamic = "force-dynamic";
 
 export default async function PartPackagesPage() {
-  await requireRole("owner", "co_owner");
+  await requirePage("settings_pricing");
   const profile = await requireProfile();
   const packages = await listAllPartPackages();
   const isOwner = (profile.role === "owner" || profile.role === "co_owner");

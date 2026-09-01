@@ -13,6 +13,7 @@ import {
   listActiveLocations,
 } from "@/lib/actions/reference";
 import { listOilTypes } from "@/lib/actions/pricing";
+import { accessibleLocationIds, canChooseLocation } from "@/lib/auth/locations";
 
 export const dynamic = "force-dynamic";
 
@@ -33,10 +34,10 @@ export default async function NewExpensePage() {
     listOilTypes(),
   ]);
 
-  const lockedLocationId =
-    profile.role === "staff" || profile.role === "manager"
-      ? profile.location_id
-      : null;
+  // Lock only when there is one shop to choose from — Multiple-access users
+  // (migration 0137) get the picker, single-location users stay pinned.
+  const allowedLocationIds = accessibleLocationIds(profile);
+  const lockedLocationId = canChooseLocation(profile) ? null : profile.location_id;
 
   return (
     <div className="flex flex-col gap-4">
@@ -63,7 +64,9 @@ export default async function NewExpensePage() {
 
       <ExpenseForm
         mode="create"
-        locations={locations}
+        locations={locations.filter(
+          (l) => allowedLocationIds?.includes(l.id) ?? true,
+        )}
         categories={categories}
         subcategories={subcategories}
         hstRate={Number(settings.hst_rate)}

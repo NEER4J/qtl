@@ -22,6 +22,7 @@ import { requireProfile } from "@/lib/auth/require";
 import { getSalesJob } from "@/lib/actions/sales";
 import { formatDate, formatMoney } from "@/lib/utils/format";
 import { buildDisplayRows } from "@/lib/utils/sales-display";
+import { canAccessLocation } from "@/lib/auth/locations";
 
 export const dynamic = "force-dynamic";
 
@@ -50,13 +51,13 @@ export default async function SalesJobDetailPage({
     profile.role === "owner" ||
     profile.role === "co_owner" ||
     (["manager", "supervisor", "staff", "technician"].includes(profile.role) &&
-      profile.location_id === job.location_id);
+      canAccessLocation(profile, job.location_id));
 
   const canAddPayment =
     profile.role !== "employee" &&
     ((profile.role === "owner" || profile.role === "co_owner") ||
       profile.role === "accountant" ||
-      profile.location_id === job.location_id);
+      canAccessLocation(profile, job.location_id));
 
   return (
     <div className="flex flex-col gap-6">

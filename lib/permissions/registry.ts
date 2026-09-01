@@ -64,19 +64,24 @@ export const PAGE_REGISTRY: PageDef[] = [
   { key: "reports_hst", label: "Reports — HST", group: "Insights", path: "/reports/hst", defaultRoles: ["owner", "co_owner"] },
 
   // Settings
-  // Matrix: every Settings row (incl. Audit Log) is ✗ for all but owner.
-  { key: "settings", label: "Settings (root)", group: "Settings", path: "/settings", defaultRoles: ["owner", "co_owner"] },
-  { key: "settings_users", label: "Users", group: "Settings", path: "/settings/users", defaultRoles: ["owner", "co_owner"] },
-  { key: "settings_locations", label: "Locations", group: "Settings", path: "/settings/locations", defaultRoles: ["owner", "co_owner"] },
-  { key: "settings_categories", label: "Expense Categories", group: "Settings", path: "/settings/categories", defaultRoles: ["owner", "co_owner"] },
-  { key: "settings_services", label: "Service Types", group: "Settings", path: "/settings/services", defaultRoles: ["owner", "co_owner"] },
-  { key: "settings_technicians", label: "Technicians", group: "Settings", path: "/settings/technicians", defaultRoles: ["owner", "co_owner"] },
-  { key: "settings_pricing", label: "Pricing Catalogue", group: "Settings", path: "/settings/pricing", defaultRoles: ["owner", "co_owner"] },
-  { key: "settings_promotions", label: "Promotions", group: "Settings", path: "/settings/promotions", defaultRoles: ["owner", "co_owner"] },
-  { key: "settings_recurring", label: "Recurring Expenses", group: "Settings", path: "/settings/recurring-expenses", defaultRoles: ["owner", "co_owner"] },
-  { key: "settings_statutory", label: "Statutory Rates", group: "Settings", path: "/settings/statutory-rates", defaultRoles: ["owner", "co_owner"] },
-  { key: "settings_ip_access", label: "IP Access", group: "Settings", path: "/settings/ip-access", defaultRoles: ["owner", "co_owner"] },
-  { key: "settings_audit_log", label: "Audit Log", group: "Settings", path: "/settings/audit-log", defaultRoles: ["owner", "co_owner"] },
+  // Matrix: every Settings row (incl. Audit Log) is ✗ by default for everyone
+  // but the Admin (co_owner). `owner` is deliberately NOT in these lists — the
+  // owner's default is "all pages except the Settings section", and
+  // defaultAllowedPagesForRole() has to agree with that or the matrix would
+  // pre-tick rows the enforcement layer then refuses. Any role (owner
+  // included) can still be granted these individually via allowed_pages.
+  { key: "settings", label: "Settings (root)", group: "Settings", path: "/settings", defaultRoles: ["co_owner"] },
+  { key: "settings_users", label: "Users", group: "Settings", path: "/settings/users", defaultRoles: ["co_owner"] },
+  { key: "settings_locations", label: "Locations", group: "Settings", path: "/settings/locations", defaultRoles: ["co_owner"] },
+  { key: "settings_categories", label: "Expense Categories", group: "Settings", path: "/settings/categories", defaultRoles: ["co_owner"] },
+  { key: "settings_services", label: "Service Types", group: "Settings", path: "/settings/services", defaultRoles: ["co_owner"] },
+  { key: "settings_technicians", label: "Technicians", group: "Settings", path: "/settings/technicians", defaultRoles: ["co_owner"] },
+  { key: "settings_pricing", label: "Pricing Catalogue", group: "Settings", path: "/settings/pricing", defaultRoles: ["co_owner"] },
+  { key: "settings_promotions", label: "Promotions", group: "Settings", path: "/settings/promotions", defaultRoles: ["co_owner"] },
+  { key: "settings_recurring", label: "Recurring Expenses", group: "Settings", path: "/settings/recurring-expenses", defaultRoles: ["co_owner"] },
+  { key: "settings_statutory", label: "Statutory Rates", group: "Settings", path: "/settings/statutory-rates", defaultRoles: ["co_owner"] },
+  { key: "settings_ip_access", label: "IP Access", group: "Settings", path: "/settings/ip-access", defaultRoles: ["co_owner"] },
+  { key: "settings_audit_log", label: "Audit Log", group: "Settings", path: "/settings/audit-log", defaultRoles: ["co_owner"] },
 ];
 
 const PAGE_KEY_BY_PATH = new Map(PAGE_REGISTRY.map((p) => [p.path, p.key]));
@@ -228,6 +233,9 @@ export function defaultLandingPath(opts: {
   allowedPages: string[] | null | undefined;
 }): string | null {
   if (opts.role === "portal_customer") return "/portal/invoices";
+  // The Admin (co_owner) bypasses allowed_pages everywhere else, so a stale
+  // override must not decide their landing page either.
+  if (opts.role === "co_owner") return "/dashboard";
   const allowed = opts.allowedPages ?? defaultAllowedPagesForRole(opts.role);
   if (allowed.includes("dashboard")) return "/dashboard";
   for (const p of PAGE_REGISTRY) {

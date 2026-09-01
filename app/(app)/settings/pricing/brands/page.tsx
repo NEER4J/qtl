@@ -1,5 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { listAllPartBrands } from "@/lib/actions/pricing";
 
 import { PartBrandsTable } from "./part-brands-table";
@@ -7,7 +7,7 @@ import { PartBrandsTable } from "./part-brands-table";
 export const dynamic = "force-dynamic";
 
 export default async function PartBrandsPage() {
-  await requireRole("owner", "co_owner");
+  await requirePage("settings_pricing");
   const brands = await listAllPartBrands();
 
   return (

@@ -4,6 +4,7 @@ import { format, subMonths } from "date-fns";
 
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/require";
+import { applyLocationFilter, resolveLocationFilter } from "@/lib/auth/locations";
 
 export interface ReportFilter {
   from?: string;
@@ -145,9 +146,8 @@ export async function getOutstandingInvoices(filter: ReportFilter = {}): Promise
     .in("payment_status", ["outstanding", "partial"])
     .order("job_date", { ascending: true });
 
-  const locationId = filter.location_id
-    ?? (profile.role === "manager" ? profile.location_id ?? undefined : undefined);
-  if (locationId) q = q.eq("location_id", locationId);
+  const { ids: locationIds } = resolveLocationFilter(profile, filter.location_id);
+  q = applyLocationFilter(q, "location_id", locationIds);
 
   const { data, error } = await q;
   if (error) throw error;
@@ -204,8 +204,7 @@ export async function getPnlReport(filter: ReportFilter = {}): Promise<PnlReport
   }
   const supabase = await createClient();
   const { from, to, label } = defaultRange(filter);
-  const locationId = filter.location_id
-    ?? (profile.role === "manager" ? profile.location_id ?? undefined : undefined);
+  const { ids: locationIds } = resolveLocationFilter(profile, filter.location_id);
 
   let salesQ = supabase
     .from("sales_jobs")
@@ -213,7 +212,7 @@ export async function getPnlReport(filter: ReportFilter = {}): Promise<PnlReport
     .is("deactivated_at", null)
     .gte("job_date", from)
     .lte("job_date", to);
-  if (locationId) salesQ = salesQ.eq("location_id", locationId);
+  salesQ = applyLocationFilter(salesQ, "location_id", locationIds);
 
   let expQ = supabase
     .from("expenses")
@@ -221,14 +220,14 @@ export async function getPnlReport(filter: ReportFilter = {}): Promise<PnlReport
     .is("deactivated_at", null)
     .gte("expense_date", from)
     .lte("expense_date", to);
-  if (locationId) expQ = expQ.eq("location_id", locationId);
+  expQ = applyLocationFilter(expQ, "location_id", locationIds);
 
   let payQ = supabase
     .from("payroll_entries")
     .select("gross_wages, bonus, misc_extra, benefit_employer_contribution, payroll_weeks!inner(week_start, location_id, locations:location_id(name))")
     .gte("payroll_weeks.week_start", from)
     .lte("payroll_weeks.week_start", to);
-  if (locationId) payQ = payQ.eq("payroll_weeks.location_id", locationId);
+  payQ = applyLocationFilter(payQ, "payroll_weeks.location_id", locationIds);
 
   const [salesR, expR, payR] = await Promise.all([salesQ, expQ, payQ]);
   if (salesR.error) throw salesR.error;
@@ -491,8 +490,11 @@ export async function getDailyJobReport(
   date: string,
   locationId: string | null = null,
 ): Promise<DailyJobReport> {
-  await requireProfile();
+  const profile = await requireProfile();
   const supabase = await createClient();
+  // The caller passes what the user picked in the filter; clamp it to the
+  // locations they're actually allowed to see (migration 0137).
+  const { ids: locationIds } = resolveLocationFilter(profile, locationId);
 
   let query = supabase
     .from("sales_jobs")
@@ -507,7 +509,7 @@ export async function getDailyJobReport(
     )
     .is("deactivated_at", null)
     .eq("job_date", date);
-  if (locationId) query = query.eq("location_id", locationId);
+  query = applyLocationFilter(query, "location_id", locationIds);
 
   const { data: jobsData, error: jobsErr } = await query;
   if (jobsErr) throw jobsErr;

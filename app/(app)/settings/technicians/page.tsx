@@ -1,5 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { listAllTechnicians } from "@/lib/actions/technicians";
 import { listLocations } from "@/lib/actions/locations";
 
@@ -8,7 +8,7 @@ import { TechniciansTable } from "./technicians-table";
 export const dynamic = "force-dynamic";
 
 export default async function TechniciansPage() {
-  await requireRole("owner", "co_owner");
+  await requirePage("settings_technicians");
   const [rows, locations] = await Promise.all([listAllTechnicians(), listLocations()]);
 
   return (

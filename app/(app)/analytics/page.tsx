@@ -10,7 +10,9 @@ import {
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
+import { isPageAllowed } from "@/lib/permissions/check";
+import { pageKeyForRequestPath } from "@/lib/permissions/registry";
 
 export const dynamic = "force-dynamic";
 
@@ -53,10 +55,16 @@ const CARDS = [
 ] as const;
 
 export default async function AnalyticsHubPage() {
-  // Match registry: analytics.defaultRoles = owner/co_owner/manager/accountant.
-  const profile = await requireRole("owner", "co_owner", "manager", "accountant");
+  const profile = await requirePage("analytics");
 
-  const cards = CARDS.filter((c) => (c.roles as readonly string[]).includes(profile.role));
+  // Tiles follow the permissions matrix, not the hard-coded `roles` list: a
+  // sub-page with its own registry key (Payroll) is shown when that key is
+  // granted, everything else rides on the parent `analytics` grant we just
+  // passed. Filtering by role here would re-hide pages the matrix allowed.
+  const cards = CARDS.filter((c) => {
+    const key = pageKeyForRequestPath(c.href);
+    return key ? isPageAllowed(profile, key) : true;
+  });
 
   return (
     <div className="flex flex-col gap-6">

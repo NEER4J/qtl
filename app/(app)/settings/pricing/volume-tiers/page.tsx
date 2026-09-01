@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { listAllOilTypes, listVolumeTiers } from "@/lib/actions/pricing";
 
 import { VolumeTiersByOil } from "./volume-tiers-by-oil";
@@ -11,7 +11,7 @@ import { VolumeTiersByOil } from "./volume-tiers-by-oil";
 export const dynamic = "force-dynamic";
 
 export default async function VolumeTiersPage() {
-  await requireRole("owner", "co_owner");
+  await requirePage("settings_pricing");
   const [oilTypes, tiers] = await Promise.all([listAllOilTypes(), listVolumeTiers()]);
 
   const tiersByOil = new Map<string, typeof tiers>();

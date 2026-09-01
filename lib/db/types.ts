@@ -61,6 +61,13 @@ export interface Profile {
   hidden_columns: Record<string, string[]>;
   /** When true, this manager/staff/employee can act on rows at any location (like owner/accountant). */
   cross_location: boolean;
+  /**
+   * Explicit multi-location grant (migration 0137). NULL = not in "Multiple"
+   * mode. Read it through lib/auth/locations.ts rather than directly — the
+   * three modes (all / single / multiple) are derived from cross_location +
+   * location_ids + location_id together.
+   */
+  location_ids: string[] | null;
 }
 
 export interface ServiceType {

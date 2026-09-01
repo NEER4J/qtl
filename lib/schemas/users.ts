@@ -107,6 +107,19 @@ const identityRefine = (
 /** NULL = use role default; array = explicit allowlist. */
 export const AllowedPagesField = z.array(z.string().min(1)).nullable().optional();
 
+/**
+ * Explicit multi-location grant (migration 0137). NULL = not in "Multiple"
+ * mode — the user falls back to `location_id` alone, or to every location when
+ * `cross_location` is set. The dialogs normalise this via locationAccessForSave()
+ * in lib/auth/locations.ts, so a 0- or 1-entry selection arrives here as null.
+ */
+export const LocationIdsField = z
+  .array(z.string().uuid())
+  .min(2, "Pick at least two locations, or use Single instead")
+  .nullable()
+  .optional()
+  .transform((v) => v ?? null);
+
 /** Hidden columns by pageKey. Missing key = all visible. */
 export const HiddenColumnsField = z
   .record(z.array(z.string().min(1)))
@@ -129,6 +142,7 @@ export const InviteUserInput = z
     location_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
     can_enter_expenses: z.coerce.boolean().default(false),
     cross_location: z.coerce.boolean().default(false),
+    location_ids: LocationIdsField,
     password: passwordField,
     allowed_pages: AllowedPagesField,
     hidden_columns: HiddenColumnsField,
@@ -150,6 +164,7 @@ export const UpdateUserInput = z
     location_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
     can_enter_expenses: z.coerce.boolean().default(false),
     cross_location: z.coerce.boolean().default(false),
+    location_ids: LocationIdsField,
     active: z.coerce.boolean(),
     allowed_pages: AllowedPagesField,
     hidden_columns: HiddenColumnsField,

@@ -1,5 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { listAllOilGroups, listAllOilTypes } from "@/lib/actions/pricing";
 
 import { OilTypesTable } from "./oil-types-table";
@@ -7,7 +7,7 @@ import { OilTypesTable } from "./oil-types-table";
 export const dynamic = "force-dynamic";
 
 export default async function OilTypesPage() {
-  await requireRole("owner", "co_owner");
+  await requirePage("settings_pricing");
   const [oilTypes, oilGroups] = await Promise.all([listAllOilTypes(), listAllOilGroups()]);
 
   return (

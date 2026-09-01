@@ -1,5 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import {
   listAllExpenseCategories,
   listAllExpenseSubcategories,
@@ -10,7 +10,7 @@ import { CategoriesManager } from "./categories-manager";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsCategoriesPage() {
-  await requireRole("owner", "co_owner");
+  await requirePage("settings_categories");
   const [categories, subcategories] = await Promise.all([
     listAllExpenseCategories(),
     listAllExpenseSubcategories(),

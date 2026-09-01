@@ -20,6 +20,7 @@ import { getPayrollWeek } from "@/lib/actions/payroll";
 import { formatDate, formatMoney } from "@/lib/utils/format";
 import { hiddenColumnsForPage } from "@/lib/permissions/check";
 import { deductionExemptions } from "@/lib/utils/payroll-flags";
+import { canAccessLocation } from "@/lib/auth/locations";
 import { PayrollEntryDialog } from "@/components/payroll/payroll-entry-dialog";
 import { CashDailyDialog } from "@/components/payroll/cash-daily-dialog";
 import { PayrollPaymentDialog } from "@/components/payroll/payroll-payment-dialog";
@@ -73,7 +74,7 @@ export default async function PayrollWeekPage({
   // after payday used to be permanent. Every change is audited.
   const canEdit =
     (profile.role === "owner" || profile.role === "co_owner" || profile.role === "accountant") ||
-    (profile.role === "manager" && profile.location_id === week.location_id);
+    (profile.role === "manager" && canAccessLocation(profile, week.location_id));
   const isDraft = week.status === "draft";
 
   const totalGross = week.entries.reduce(

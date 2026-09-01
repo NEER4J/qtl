@@ -1,5 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import {
   listAllParts,
   listAllServiceCosts,
@@ -17,7 +17,7 @@ export default async function PartsAdminPage({
 }: {
   searchParams: Promise<Record<string, string>>;
 }) {
-  await requireRole("owner", "co_owner");
+  await requirePage("settings_pricing");
   const sp = await searchParams;
   // Only Active / Inactive tabs (no "All"); default to Active.
   const status: "active" | "inactive" = sp.status === "inactive" ? "inactive" : "active";

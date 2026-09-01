@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { wrapAction } from "@/lib/actions/_utils";
 import { applyPartsSearch } from "@/lib/utils/parts-search";
+import { canAccessLocation } from "@/lib/auth/locations";
 import {
   AddExpensePaymentInput,
   DeactivateExpenseInput,
@@ -241,8 +242,13 @@ export const createExpense = wrapAction({
   schema: ExpenseInput,
   roles: ["owner", "co_owner", "accountant", "manager", "staff"],
   handler: async (input, profile): Promise<Expense> => {
+    // Staff write to a location they actually hold. With Multiple access
+    // (migration 0137) they may legitimately pick between their shops, so we
+    // only override when the requested one is out of reach — falling back to
+    // their home location. RLS blocks it either way; this keeps the error a
+    // sensible default instead of a policy violation.
     const locationId =
-      profile.role === "staff"
+      profile.role === "staff" && !canAccessLocation(profile, input.location_id)
         ? profile.location_id ?? input.location_id
         : input.location_id;
 

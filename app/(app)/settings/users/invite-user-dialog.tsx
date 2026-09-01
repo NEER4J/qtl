@@ -41,8 +41,10 @@ import {
 import { EmptyDropdownHint } from "@/components/help/empty-state";
 import { inviteUser, type UserListRow } from "@/lib/actions/users";
 import { InviteUserInput, isUsernameRole } from "@/lib/schemas/users";
+import { locationAccessForSave, locationMode } from "@/lib/auth/locations";
 import type { Location, UserRole } from "@/lib/db/types";
 
+import { LocationAccessField } from "./location-access-field";
 import { PermissionsMatrix } from "./permissions-matrix";
 
 const ROLE_OPTIONS: { value: UserRole; label: string; helper: string }[] = [
@@ -81,6 +83,7 @@ export function InviteUserDialog({
       location_id: null,
       can_enter_expenses: false,
       cross_location: false,
+      location_ids: null,
       password: "",
       allowed_pages: null,
       hidden_columns: {},
@@ -177,9 +180,12 @@ export function InviteUserDialog({
                       <Select
                         onValueChange={(v) => {
                           field.onChange(v);
-                          // Manager & Supervisor default to all-locations.
+                          // Manager & Supervisor default to all-locations;
+                          // an explicit multi-location list is cleared so the
+                          // two settings can't disagree.
                           if (v === "manager" || v === "supervisor") {
                             form.setValue("cross_location", true, { shouldDirty: true });
+                            form.setValue("location_ids", null, { shouldDirty: true });
                           }
                         }}
                         value={field.value}
@@ -334,26 +340,27 @@ export function InviteUserDialog({
                 )}
 
                 {showCrossLocation && (
-                  <FormField
-                    control={form.control}
-                    name="cross_location"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-start gap-3 rounded-md border p-3">
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                        <div className="space-y-1 leading-none">
-                          <FormLabel>Access to all locations</FormLabel>
-                          <FormDescription>
-                            Lets this user act on every shop, not just their assigned one.
-                            Their home location above is still recorded for reporting.
-                          </FormDescription>
-                        </div>
-                      </FormItem>
+                  <LocationAccessField
+                    locations={locations}
+                    homeId={form.watch("location_id") ?? null}
+                    mode={locationMode({
+                      role,
+                      location_id: form.watch("location_id") ?? null,
+                      location_ids: form.watch("location_ids") ?? null,
+                      cross_location: form.watch("cross_location"),
+                    })}
+                    extraIds={(form.watch("location_ids") ?? []).filter(
+                      (id) => id !== form.watch("location_id"),
                     )}
+                    onChange={({ mode, extraIds }) => {
+                      const next = locationAccessForSave(
+                        mode,
+                        form.watch("location_id") ?? null,
+                        extraIds,
+                      );
+                      form.setValue("cross_location", next.cross_location, { shouldDirty: true });
+                      form.setValue("location_ids", next.location_ids, { shouldDirty: true });
+                    }}
                   />
                 )}
 
@@ -398,12 +405,13 @@ export function InviteUserDialog({
               </TabsContent>
 
               <TabsContent value="permissions" className="pt-2">
-                {role === "owner" || role === "co_owner" ? (
+                {/* Only the Admin (co_owner) is a true bypass — see the same
+                    note in edit-user-dialog. Owners get the matrix, seeded
+                    with their default of "everything except Settings". */}
+                {role === "co_owner" ? (
                   <div className="rounded-md border bg-muted/40 p-4 text-sm text-muted-foreground">
-                    {role === "co_owner"
-                      ? "Admins have full access to every page and column, including Settings."
-                      : "Owners have full access to everything except the Settings section."}{" "}
-                    Page and column overrides don&apos;t apply.
+                    Admins have full access to every page and column, including
+                    Settings. Page and column overrides don&apos;t apply.
                   </div>
                 ) : (
                   <PermissionsMatrix

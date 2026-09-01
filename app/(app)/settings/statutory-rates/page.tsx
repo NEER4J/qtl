@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -10,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageHelp } from "@/components/help/page-help";
-import { requireProfile } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { listStatutoryRates } from "@/lib/actions/pricing";
 import { StatutoryRateDialog } from "@/components/settings/statutory-rate-dialog";
 import { Button } from "@/components/ui/button";
@@ -26,8 +25,7 @@ const RATE_LABELS: Record<string, string> = {
 };
 
 export default async function StatutoryRatesPage() {
-  const profile = await requireProfile();
-  if ((profile.role !== "owner" && profile.role !== "co_owner")) notFound();
+  await requirePage("settings_statutory");
 
   const rows = await listStatutoryRates();
 

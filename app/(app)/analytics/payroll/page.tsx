@@ -1,13 +1,12 @@
-import { notFound } from "next/navigation";
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { PageHelp } from "@/components/help/page-help";
 import { SimpleBar, SimpleLine, StackedBar } from "@/components/analytics/charts";
-import { requireProfile } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { getPayrollAnalytics } from "@/lib/actions/analytics";
 import { listActiveLocations } from "@/lib/actions/reference";
 import { formatMoney } from "@/lib/utils/format";
+import { canChooseLocation } from "@/lib/auth/locations";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +15,7 @@ export default async function PayrollAnalyticsPage({
 }: {
   searchParams: Promise<Record<string, string>>;
 }) {
-  const profile = await requireProfile();
-  if (profile.role === "staff" || profile.role === "employee") notFound();
+  const profile = await requirePage("analytics_payroll");
   const sp = await searchParams;
 
   const [data, locations] = await Promise.all([
@@ -50,7 +48,7 @@ export default async function PayrollAnalyticsPage({
 
       <AnalyticsFilters
         locations={locations}
-        canFilterLocation={profile.role !== "manager"}
+        canFilterLocation={canChooseLocation(profile)}
         exportHref="/api/export/payroll-analytics"
       />
 

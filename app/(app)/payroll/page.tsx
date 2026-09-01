@@ -14,7 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
+import { accessibleLocationIds } from "@/lib/auth/locations";
 import { listPayrollWeeks } from "@/lib/actions/payroll";
 import { getAppSettings } from "@/lib/actions/reference";
 import { formatDate, formatMoney } from "@/lib/utils/format";
@@ -31,12 +32,10 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default async function PayrollPage() {
-  // Match registry: payroll.defaultRoles = owner/co_owner/manager/accountant.
-  const profile = await requireRole("owner", "co_owner", "manager", "accountant");
-  const locationId =
-    profile.role === "manager" ? (profile.location_id ?? undefined) : undefined;
-
-  const weeks = await listPayrollWeeks(locationId);
+  const profile = await requirePage("payroll");
+  // null = every location (owner / co_owner / accountant / all-locations
+  // users); otherwise the shops this person may see (migration 0137).
+  const weeks = await listPayrollWeeks(accessibleLocationIds(profile));
 
   const canCreate =
     profile.role === "owner"

@@ -3,7 +3,7 @@ import { ChevronRight, Droplet, Package, ListChecks, FileText, Gauge, Wrench } f
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +17,7 @@ const CARDS = [
 ];
 
 export default async function PricingHubPage() {
-  // Match registry: pricing.defaultRoles = owner/co_owner/manager/accountant/staff.
-  await requireRole("owner", "co_owner", "manager", "accountant", "staff");
+  await requirePage("pricing");
   return <PricingHub />;
 }
 

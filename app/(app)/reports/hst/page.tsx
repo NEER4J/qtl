@@ -1,5 +1,3 @@
-import { notFound } from "next/navigation";
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -11,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { PageHelp } from "@/components/help/page-help";
-import { requireProfile } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { getHstSummary } from "@/lib/actions/reports";
 import { listActiveLocations } from "@/lib/actions/reference";
 import { formatMoney } from "@/lib/utils/format";
@@ -23,8 +21,7 @@ export default async function HstSummaryPage({
 }: {
   searchParams: Promise<Record<string, string>>;
 }) {
-  const profile = await requireProfile();
-  if ((profile.role !== "owner" && profile.role !== "co_owner") && profile.role !== "accountant") notFound();
+  await requirePage("reports_hst");
   const sp = await searchParams;
 
   const [data, locations] = await Promise.all([

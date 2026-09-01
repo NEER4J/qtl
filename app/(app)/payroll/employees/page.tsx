@@ -3,7 +3,7 @@ import { ChevronLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import {
   listAllEmployees,
   listLinkableProfiles,
@@ -15,7 +15,7 @@ import { EmployeesTable } from "./employees-table";
 export const dynamic = "force-dynamic";
 
 export default async function EmployeesPage() {
-  await requireRole("owner", "co_owner", "manager", "accountant");
+  await requirePage("payroll");
   const [rows, locations, profiles] = await Promise.all([
     listAllEmployees(),
     listActiveLocations(),

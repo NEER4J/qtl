@@ -1,3 +1,4 @@
+import { resolveLocationFilter } from "@/lib/auth/locations";
 import { listPayrollWeeks } from "@/lib/actions/payroll";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
@@ -11,14 +12,12 @@ export async function GET(req: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const requested = new URL(req.url).searchParams.get("location_id") ?? undefined;
-  // A manager only ever exports their own shop, whatever the query string says.
-  const locationId =
-    profile.role === "manager" || profile.role === "supervisor"
-      ? (profile.location_id ?? undefined)
-      : requested;
+  const requested = new URL(req.url).searchParams.get("location_id");
+  // Clamp to what this user may see — a hand-typed location_id in the query
+  // string can never widen the export beyond their granted shops.
+  const { ids: locationIds } = resolveLocationFilter(profile, requested);
 
-  const weeks = await listPayrollWeeks(locationId);
+  const weeks = await listPayrollWeeks(locationIds);
 
   const sections: string[] = [];
   sections.push(`# Payroll — pay weeks`);

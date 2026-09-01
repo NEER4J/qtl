@@ -1,5 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { listLocations } from "@/lib/actions/locations";
 import { listUserPasswords, listUsers } from "@/lib/actions/users";
 
@@ -8,10 +8,13 @@ import { UsersTable } from "./users-table";
 export const dynamic = "force-dynamic";
 
 export default async function UsersPage() {
-  // Owner-only — the settings layout admits owner/accountant/manager into
-  // /settings/* (each leaf locks down further), so the page itself must
-  // enforce the registry's `settings_users.defaultRoles = ["owner", "co_owner"]`.
-  const viewer = await requireRole("owner", "co_owner");
+  // Access follows the permissions matrix (`settings_users`), not a hard-coded
+  // role list — that's what makes "grant this person the Users page" work.
+  // WRITES are a separate, stricter gate: every user mutation is owner/
+  // co_owner-only in the server action and in the profiles_guard trigger, so
+  // anyone else granted this page gets a read-only view.
+  const viewer = await requirePage("settings_users");
+  const canManage = viewer.role === "owner" || viewer.role === "co_owner";
   const [users, locations, passwords] = await Promise.all([
     listUsers(),
     listLocations(),
@@ -33,7 +36,7 @@ export default async function UsersPage() {
         </div>
       </div>
       <PageHelp id="settings-users">
-        <p>Owner-only page. Manage who can sign in and what they can do.</p>
+        <p>Manage who can sign in and what they can do. Adding or changing users is Admin-only; other roles granted this page see it read-only.</p>
         <p><strong>Roles at a glance:</strong></p>
         <ul>
           <li><strong>Owner</strong> — sees everything, can change any setting, can delete users. At least one owner must always exist.</li>
@@ -58,6 +61,7 @@ export default async function UsersPage() {
         users={users}
         locations={locations}
         passwords={passwordMap}
+        canManage={canManage}
         viewer={{
           id: viewer.id,
           role: viewer.role,

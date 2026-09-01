@@ -1,5 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { listAllPromotions } from "@/lib/actions/promotions";
 
 import { PromotionsTable } from "./promotions-table";
@@ -7,7 +7,7 @@ import { PromotionsTable } from "./promotions-table";
 export const dynamic = "force-dynamic";
 
 export default async function PromotionsPage() {
-  await requireRole("owner", "co_owner");
+  await requirePage("settings_promotions");
   const promotions = await listAllPromotions();
 
   return (

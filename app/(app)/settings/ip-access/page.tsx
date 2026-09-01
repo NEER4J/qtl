@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { getIpLockEnabled, listIpRules } from "@/lib/actions/ip-access";
 import { listLocations } from "@/lib/actions/locations";
 import { clientIpFromHeaders } from "@/lib/security/client-ip";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function IpAccessPage() {
   // Settings is the Admin section, but each leaf enforces its own gate.
-  await requireRole("owner", "co_owner");
+  await requirePage("settings_ip_access");
 
   const [enabled, rules, locations] = await Promise.all([
     getIpLockEnabled(),

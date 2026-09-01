@@ -14,6 +14,7 @@ import {
 } from "@/lib/actions/reference";
 import { listOilTypes } from "@/lib/actions/pricing";
 import { formatDate } from "@/lib/utils/format";
+import { canAccessLocation } from "@/lib/auth/locations";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ export default async function EditExpensePage({
   const canEdit =
     (profile.role === "owner" || profile.role === "co_owner") ||
     profile.role === "accountant" ||
-    (profile.role === "manager" && profile.location_id === exp.location_id);
+    (profile.role === "manager" && canAccessLocation(profile, exp.location_id));
   if (!canEdit) redirect(`/expenses/${id}`);
   if (exp.deactivated_at) redirect(`/expenses/${id}`);
 

@@ -1,5 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import {
   engineLabourPackageSupported,
   listAllEngineTypes,
@@ -12,7 +12,7 @@ import { EngineTypesTable } from "./engine-types-table";
 export const dynamic = "force-dynamic";
 
 export default async function EngineTypesPage() {
-  await requireRole("owner", "co_owner");
+  await requirePage("settings_pricing");
   // Proposals for the unlinked engines, so the admin can accept them in one
   // pass instead of hunting 42 rows through a picker. Fetched alongside the
   // rest rather than after them: it re-reads the engines itself and returns []

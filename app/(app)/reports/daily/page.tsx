@@ -16,6 +16,7 @@ import { DailyReportCharts } from "./daily-report-charts";
 import { listLocations } from "@/lib/actions/locations";
 import { getDailyJobReport } from "@/lib/actions/reports";
 import { requireProfile } from "@/lib/auth/require";
+import { accessibleLocationIds, canChooseLocation } from "@/lib/auth/locations";
 import { formatMoney, todayISO } from "@/lib/utils/format";
 
 export const dynamic = "force-dynamic";
@@ -29,12 +30,11 @@ export default async function DailyReportPage({
   const sp = await searchParams;
   const date = sp.date ?? todayISO();
 
-  // Manager defaults to own location; owner/accountant — and cross-location
-  // managers/staff — can pick.
-  const isLocationScoped =
-    (profile.role === "manager" || profile.role === "staff") && !profile.cross_location;
-  const requestedLoc = sp.location_id ?? null;
-  const locationId = isLocationScoped ? profile.location_id : requestedLoc;
+  // Anyone with more than one shop in reach gets the picker; a single-location
+  // user is pinned to theirs. getDailyJobReport clamps whatever we pass to the
+  // caller's allowed locations, so a hand-typed location_id can't widen this.
+  const canPick = canChooseLocation(profile);
+  const locationId = canPick ? (sp.location_id ?? null) : profile.location_id;
 
   const [report, locations] = await Promise.all([
     getDailyJobReport(date, locationId ?? null),
@@ -60,8 +60,12 @@ export default async function DailyReportPage({
             location_id: locationId ?? "",
             customer_status: sp.customer_status ?? "",
           }}
-          locations={locations.filter((l) => l.active)}
-          locationLocked={isLocationScoped}
+          locations={locations.filter(
+            (l) =>
+              l.active &&
+              (accessibleLocationIds(profile)?.includes(l.id) ?? true),
+          )}
+          locationLocked={!canPick}
         />
       </div>
 

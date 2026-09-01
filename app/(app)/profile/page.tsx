@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getInitials } from "@/lib/utils";
 import { isSyntheticEmail } from "@/lib/schemas/users";
 import type { UserRole } from "@/lib/db/types";
+import { accessibleLocationIds, locationMode } from "@/lib/auth/locations";
 
 import { ProfileForm } from "./profile-form";
 import { ChangePasswordForm } from "./change-password-form";
@@ -89,11 +90,13 @@ export default async function ProfilePage() {
   const realEmail = isSyntheticEmail(profile.email) ? null : profile.email;
   const loginIdentity = usesUsername ? `@${profile.username}` : profile.email;
 
-  const locationDisplay = ALL_LOCATION_ROLES.has(profile.role)
-    ? "All locations"
-    : profile.cross_location
+  const mode = locationMode(profile);
+  const locationDisplay =
+    mode === "all"
       ? "All locations"
-      : (locationName ?? "Unassigned");
+      : mode === "multi"
+        ? `${accessibleLocationIds(profile)?.length ?? 0} locations`
+        : (locationName ?? "Unassigned");
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">

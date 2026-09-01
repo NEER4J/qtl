@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { InsufficientStockError, wrapAction } from "@/lib/actions/_utils";
 import { AuthorizationError } from "@/lib/auth/require";
+import { canAccessLocation } from "@/lib/auth/locations";
 import {
   assertCreditAppliedValid,
   assertCreditedFromJobValid,
@@ -316,8 +317,13 @@ export const createSalesJob = wrapAction({
   handler: async (input, profile): Promise<SaveSalesJobResult> => {
     // Staff MUST write to their own location. Enforce server-side even though
     // RLS also blocks cross-location writes.
+    // Staff write to a location they actually hold. With Multiple access
+    // (migration 0137) they may legitimately pick between their shops, so we
+    // only override when the requested one is out of reach — falling back to
+    // their home location. RLS blocks it either way; this keeps the error a
+    // sensible default instead of a policy violation.
     const locationId =
-      profile.role === "staff"
+      profile.role === "staff" && !canAccessLocation(profile, input.location_id)
         ? profile.location_id ?? input.location_id
         : input.location_id;
 

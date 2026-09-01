@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageHelp } from "@/components/help/page-help";
-import { requireProfile } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { listRecurringExpenses } from "@/lib/actions/recurring";
 import { listActiveLocations, listActiveExpenseCategories } from "@/lib/actions/reference";
 import { listVendors } from "@/lib/actions/vendors";
@@ -26,8 +25,7 @@ export const dynamic = "force-dynamic";
 const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default async function RecurringExpensesPage() {
-  const profile = await requireProfile();
-  if ((profile.role !== "owner" && profile.role !== "co_owner") && profile.role !== "manager") notFound();
+  await requirePage("settings_recurring");
 
   const [rows, locations, categories, vendors] = await Promise.all([
     listRecurringExpenses(),

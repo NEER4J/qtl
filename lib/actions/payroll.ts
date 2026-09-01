@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { applyLocationFilter } from "@/lib/auth/locations";
 import { wrapAction } from "@/lib/actions/_utils";
 import { REFERENCE_TAGS, revalidateReference } from "@/lib/cache/reference";
 import {
@@ -64,10 +65,12 @@ export const updatePayrollSettings = wrapAction({
 // Employees
 // ============================================================================
 
-export async function listEmployees(locationId?: string): Promise<Employee[]> {
+export async function listEmployees(
+  locationIds?: string[] | null,
+): Promise<Employee[]> {
   const supabase = await createClient();
   let q = supabase.from("employees").select("*").eq("active", true).order("full_name");
-  if (locationId) q = q.eq("location_id", locationId);
+  q = applyLocationFilter(q, "location_id", locationIds ?? null);
   const { data, error } = await q;
   if (error) throw error;
   return (data ?? []) as Employee[];
@@ -283,7 +286,9 @@ export interface PayrollWeekWithLocation extends PayrollWeek {
   total_paid: number;            // sum of payroll_payments.amount
 }
 
-export async function listPayrollWeeks(locationId?: string): Promise<PayrollWeekWithLocation[]> {
+export async function listPayrollWeeks(
+  locationIds?: string[] | null,
+): Promise<PayrollWeekWithLocation[]> {
   const supabase = await createClient();
   let q = supabase
     .from("payroll_weeks")
@@ -301,7 +306,7 @@ export async function listPayrollWeeks(locationId?: string): Promise<PayrollWeek
     )
     .order("week_start", { ascending: false })
     .limit(52);
-  if (locationId) q = q.eq("location_id", locationId);
+  q = applyLocationFilter(q, "location_id", locationIds ?? null);
   const { data, error } = await q;
   if (error) throw error;
   type EntryShape = {

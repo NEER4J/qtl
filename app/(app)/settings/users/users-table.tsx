@@ -35,6 +35,7 @@ import {
 import type { Location, UserRole, Profile } from "@/lib/db/types";
 import { visibleColumnKeys } from "@/lib/permissions/check";
 import { isSyntheticEmail } from "@/lib/schemas/users";
+import { locationMode } from "@/lib/auth/locations";
 
 import { InviteUserDialog } from "./invite-user-dialog";
 import { EditUserDialog } from "./edit-user-dialog";
@@ -73,11 +74,20 @@ export function UsersTable({
   locations,
   passwords,
   viewer,
+  canManage,
 }: {
   users: UserListRow[];
   locations: Location[];
   passwords: Record<string, StoredPassword>;
   viewer: Pick<Profile, "id" | "role" | "allowed_pages" | "hidden_columns">;
+  /**
+   * Whether the viewer can actually WRITE here. Page access is granted by the
+   * permissions matrix, but every user mutation stays owner/co_owner-only in
+   * the server action AND in the profiles_guard DB trigger — so someone who
+   * was granted this page without being an admin gets a read-only view rather
+   * than buttons that fail on click.
+   */
+  canManage: boolean;
 }) {
   const [inviting, setInviting] = useState(false);
   const [editing, setEditing] = useState<UserListRow | null>(null);
@@ -212,14 +222,18 @@ export function UsersTable({
   const otherUsers = useMemo(() => users.filter((u) => u.id !== viewer.id), [users, viewer.id]);
 
   // Column count for empty-state colspan: identity + checkbox + name + visibles + actions
-  const colspan = 3 + visibleKeys.length + 1;
+  const colspan = 2 + visibleKeys.length + (canManage ? 2 : 0);
 
   return (
     <>
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          {hasSelection ? (
+          {!canManage ? (
+            <span className="text-xs text-muted-foreground">
+              Read-only — only an Admin can add or change users.
+            </span>
+          ) : hasSelection ? (
             <>
               <Badge variant="secondary">{selected.size} selected</Badge>
               <Button
@@ -277,9 +291,11 @@ export function UsersTable({
               {allRevealed ? "Hide all passwords" : "Show all passwords"}
             </Button>
           )}
-          <Button onClick={() => setInviting(true)}>
-            <Plus className="size-4" /> Add user
-          </Button>
+          {canManage && (
+            <Button onClick={() => setInviting(true)}>
+              <Plus className="size-4" /> Add user
+            </Button>
+          )}
         </div>
       </div>
 
@@ -287,13 +303,15 @@ export function UsersTable({
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
-              <TableHead className="w-10">
-                <Checkbox
-                  checked={allSelected ? true : someSelected ? "indeterminate" : false}
-                  onCheckedChange={toggleSelectAll}
-                  aria-label="Select all"
-                />
-              </TableHead>
+              {canManage && (
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Select all"
+                  />
+                </TableHead>
+              )}
               <TableHead>Name</TableHead>
               <TableHead>Login</TableHead>
               {visible("role") && <TableHead>Role</TableHead>}
@@ -302,7 +320,7 @@ export function UsersTable({
               {visible("status") && <TableHead className="w-24">Status</TableHead>}
               {visible("password") && <TableHead className="w-56">Password</TableHead>}
               {visible("last_login") && <TableHead className="w-40">Last login</TableHead>}
-              <TableHead className="w-48 text-right">Actions</TableHead>
+              {canManage && <TableHead className="w-48 text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -322,14 +340,16 @@ export function UsersTable({
                 const isSelf = u.id === viewer.id;
                 return (
                   <TableRow key={u.id} className={!u.active ? "opacity-60" : undefined}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selected.has(u.id)}
-                        onCheckedChange={() => toggleSelect(u.id)}
-                        disabled={isSelf}
-                        aria-label={`Select ${u.full_name}`}
-                      />
-                    </TableCell>
+                    {canManage && (
+                      <TableCell>
+                        <Checkbox
+                          checked={selected.has(u.id)}
+                          onCheckedChange={() => toggleSelect(u.id)}
+                          disabled={isSelf}
+                          aria-label={`Select ${u.full_name}`}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell className="font-medium">{u.full_name}</TableCell>
                     <TableCell className="font-mono text-xs">
                       {u.username ? (
@@ -353,7 +373,7 @@ export function UsersTable({
                         <Badge variant={(u.role === "owner" || u.role === "co_owner") ? "default" : "secondary"}>
                           {ROLE_LABELS[u.role]}
                         </Badge>
-                        {u.allowed_pages !== null && (u.role !== "owner" && u.role !== "co_owner") && (
+                        {u.allowed_pages !== null && u.role !== "co_owner" && (
                           <Badge variant="outline" className="ml-1 text-[10px] py-0">custom</Badge>
                         )}
                       </TableCell>
@@ -362,13 +382,22 @@ export function UsersTable({
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-1">
                           <span>{u.location_name ?? "—"}</span>
-                          {u.cross_location && (
+                          {locationMode(u) === "all" && (
                             <Badge
                               variant="outline"
                               className="border-emerald-300 text-[10px] text-emerald-700"
                               title="Has access to all locations"
                             >
                               All locations
+                            </Badge>
+                          )}
+                          {locationMode(u) === "multi" && (
+                            <Badge
+                              variant="outline"
+                              className="border-sky-300 text-[10px] text-sky-700"
+                              title={`Also works at ${(u.location_ids ?? []).length - 1} other location(s)`}
+                            >
+                              +{Math.max((u.location_ids ?? []).length - 1, 0)} more
                             </Badge>
                           )}
                         </div>
@@ -443,6 +472,7 @@ export function UsersTable({
                           : "Never"}
                       </TableCell>
                     )}
+                    {canManage && (
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button
@@ -481,6 +511,7 @@ export function UsersTable({
                         </Button>
                       </div>
                     </TableCell>
+                    )}
                   </TableRow>
                 );
               })

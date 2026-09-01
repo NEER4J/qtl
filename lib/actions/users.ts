@@ -30,7 +30,7 @@ export async function listUsers(): Promise<UserListRow[]> {
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "id, email, username, full_name, role, location_id, can_enter_expenses, active, last_login_at, created_at, updated_at, allowed_pages, hidden_columns, cross_location, locations:location_id(name)",
+      "id, email, username, full_name, role, location_id, location_ids, can_enter_expenses, active, last_login_at, created_at, updated_at, allowed_pages, hidden_columns, cross_location, locations:location_id(name)",
     )
     .order("role")
     .order("full_name");
@@ -138,6 +138,7 @@ export const inviteUser = wrapAction({
           location_id: input.location_id,
           can_enter_expenses: input.can_enter_expenses,
           cross_location: input.cross_location,
+          location_ids: input.location_ids,
           allowed_pages: input.allowed_pages ?? null,
           hidden_columns: input.hidden_columns ?? {},
           active: true,
@@ -205,6 +206,7 @@ export const updateUser = wrapAction({
         location_id: input.location_id,
         can_enter_expenses: input.can_enter_expenses,
         cross_location: input.cross_location,
+        location_ids: input.location_ids,
         active: input.active,
         allowed_pages: input.allowed_pages ?? null,
         hidden_columns: input.hidden_columns ?? {},

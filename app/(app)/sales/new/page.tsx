@@ -13,6 +13,7 @@ import {
 } from "@/lib/actions/reference";
 import { listEngineTypes, listOilGroups, listOilTypes } from "@/lib/actions/pricing";
 import { listActiveTechnicians } from "@/lib/actions/technicians";
+import { accessibleLocationIds, canChooseLocation } from "@/lib/auth/locations";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,11 @@ export default async function NewSalesJobPage({
       listActiveTechnicians(),
     ]);
 
-  const lockedLocationId = profile.role === "staff" ? profile.location_id : null;
+  // Lock the location only when there is genuinely no choice. A staff member
+  // granted Multiple locations (migration 0137) picks between their shops;
+  // one with a single location is pinned to it, exactly as before.
+  const allowedLocationIds = accessibleLocationIds(profile);
+  const lockedLocationId = canChooseLocation(profile) ? null : profile.location_id;
 
   return (
     <div className="flex flex-col gap-4">
@@ -74,7 +79,9 @@ export default async function NewSalesJobPage({
 
       <SalesJobForm
         mode="create"
-        locations={locations}
+        locations={locations.filter(
+          (l) => allowedLocationIds?.includes(l.id) ?? true,
+        )}
         serviceTypes={serviceTypes}
         engineTypes={engineTypes}
         oilTypes={oilTypes}

@@ -1,5 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { listVendors } from "@/lib/actions/vendors";
 import { listActiveExpenseCategories } from "@/lib/actions/reference";
 import { listLocations } from "@/lib/actions/locations";
@@ -10,7 +10,7 @@ import { VendorsTable } from "./vendors-table";
 export const dynamic = "force-dynamic";
 
 export default async function VendorsPage() {
-  const profile = await requireRole("owner", "co_owner", "accountant", "manager");
+  const profile = await requirePage("vendors");
   const [vendors, categories, locations] = await Promise.all([
     listVendors(),
     listActiveExpenseCategories(),

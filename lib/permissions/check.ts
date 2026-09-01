@@ -30,12 +30,15 @@ export function effectiveAllowedPageKeys(profile: ProfileSubset): Set<string> {
     // locking them out.
     return new Set(PAGE_REGISTRY.map((p) => p.key));
   }
-  if (isOwnerProfile(profile)) {
-    // Owner gets everything except the Settings section.
-    return new Set(
-      PAGE_REGISTRY.filter((p) => !SETTINGS_PAGE_KEYS.has(p.key)).map((p) => p.key),
-    );
-  }
+  // Everyone else — owner included — goes through the same rule: a stored
+  // per-user override wins, otherwise the role's registry defaults.
+  //
+  // Owner used to short-circuit here with a hard-coded "all pages minus
+  // Settings" set, which meant a stored allowed_pages override was silently
+  // discarded for owners: you could tick extra pages in the matrix, save
+  // them, and nothing changed. The owner's default is unchanged (no Settings
+  // group in defaultRoles for those keys) — it just comes from the registry
+  // now, so an explicit grant actually takes effect.
   const allowed = profile.allowed_pages ?? defaultAllowedPagesForRole(profile.role);
   return new Set(allowed);
 }
@@ -58,9 +61,18 @@ function bypassesColumnHiding(profile: ProfileSubset): boolean {
 export function isPageAllowed(profile: ProfileSubset, pageKey: string): boolean {
   if (!profile) return false;
   if (isAdminProfile(profile)) return true;
-  // Owner and everyone else go through the effective allowlist (owner = all
-  // pages minus the Settings section).
+  // Owner and everyone else go through the effective allowlist.
   return effectiveAllowedPageKeys(profile).has(pageKey);
+}
+
+/** True when the user can reach at least one of the given pages. */
+export function isAnyPageAllowed(profile: ProfileSubset, pageKeys: string[]): boolean {
+  return pageKeys.some((k) => isPageAllowed(profile, k));
+}
+
+/** Every registry key in the Settings section. */
+export function settingsPageKeys(): string[] {
+  return [...SETTINGS_PAGE_KEYS];
 }
 
 export function isPathAllowed(profile: ProfileSubset, path: string): boolean {

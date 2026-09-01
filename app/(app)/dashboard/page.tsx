@@ -10,7 +10,7 @@ import {
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { getDashboardOverview, getOverdueJobs } from "@/lib/actions/dashboard";
 import { formatMoney } from "@/lib/utils/format";
 
@@ -27,8 +27,7 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  // Match registry: dashboard.defaultRoles = ["owner", "co_owner", "manager", "accountant"].
-  await requireRole("owner", "co_owner", "manager", "accountant");
+  await requirePage("dashboard");
   const sp = await searchParams;
   const range: DashboardRange | null =
     sp.range === "3m" || sp.range === "6m" || sp.range === "12m" ? sp.range : null;

@@ -14,6 +14,7 @@ import { requireProfile } from "@/lib/auth/require";
 import { getSalesAnalytics, getSalesYoy } from "@/lib/actions/analytics";
 import { listActiveLocations } from "@/lib/actions/reference";
 import { formatMoney } from "@/lib/utils/format";
+import { canChooseLocation } from "@/lib/auth/locations";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +59,7 @@ export default async function SalesAnalyticsPage({
 
       <AnalyticsFilters
         locations={locations}
-        canFilterLocation={profile.role !== "manager" || profile.cross_location}
+        canFilterLocation={canChooseLocation(profile)}
         exportHref="/api/export/sales-analytics"
       />
 

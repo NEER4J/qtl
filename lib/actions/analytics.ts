@@ -4,6 +4,7 @@ import { format, parseISO, startOfMonth, subDays } from "date-fns";
 
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/require";
+import { applyLocationFilter, resolveLocationFilter } from "@/lib/auth/locations";
 
 // ============================================================================
 // Shared filter shape
@@ -31,10 +32,12 @@ function defaultRange(filter: AnalyticsFilter): { from: string; to: string; labe
 async function scopedClient(filter: AnalyticsFilter) {
   const profile = await requireProfile();
   const supabase = await createClient();
-  const locationId =
-    filter.location_id
-    ?? (profile.role === "manager" ? profile.location_id ?? undefined : undefined);
-  return { supabase, profile, locationId };
+  // `null` means "every location, no filter" — an all-locations user with no
+  // explicit request. Anything else is the exact list they may see, which is
+  // one shop in Single mode and several in Multiple (migration 0137). An
+  // explicit filter.location_id is clamped to what they're allowed.
+  const { ids: locationIds } = resolveLocationFilter(profile, filter.location_id);
+  return { supabase, profile, locationIds };
 }
 
 // ============================================================================
@@ -54,7 +57,7 @@ export interface SalesAnalytics {
 }
 
 export async function getSalesAnalytics(filter: AnalyticsFilter = {}): Promise<SalesAnalytics> {
-  const { supabase, locationId } = await scopedClient(filter);
+  const { supabase, locationIds } = await scopedClient(filter);
   const { from, to, label } = defaultRange(filter);
 
   let q = supabase
@@ -64,7 +67,7 @@ export async function getSalesAnalytics(filter: AnalyticsFilter = {}): Promise<S
     .gte("job_date", from)
     .lte("job_date", to)
     .order("job_date");
-  if (locationId) q = q.eq("location_id", locationId);
+  q = applyLocationFilter(q, "location_id", locationIds);
   if (filter.service_type_id) q = q.eq("service_type_id", filter.service_type_id);
   if (filter.payment_mode) q = q.eq("payment_mode", filter.payment_mode);
 
@@ -173,7 +176,7 @@ export interface JobsAnalytics {
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export async function getJobsAnalytics(filter: AnalyticsFilter = {}): Promise<JobsAnalytics> {
-  const { supabase, locationId } = await scopedClient(filter);
+  const { supabase, locationIds } = await scopedClient(filter);
   const { from, to, label } = defaultRange(filter);
 
   let q = supabase
@@ -182,7 +185,7 @@ export async function getJobsAnalytics(filter: AnalyticsFilter = {}): Promise<Jo
     .is("deactivated_at", null)
     .gte("job_date", from)
     .lte("job_date", to);
-  if (locationId) q = q.eq("location_id", locationId);
+  q = applyLocationFilter(q, "location_id", locationIds);
   if (filter.service_type_id) q = q.eq("service_type_id", filter.service_type_id);
   if (filter.bay_no) q = q.eq("bay_no", Number(filter.bay_no));
 
@@ -309,7 +312,7 @@ export interface ProductsAnalytics {
 }
 
 export async function getProductsAnalytics(filter: AnalyticsFilter = {}): Promise<ProductsAnalytics> {
-  const { supabase, locationId } = await scopedClient(filter);
+  const { supabase, locationIds } = await scopedClient(filter);
   const { from, to, label } = defaultRange(filter);
 
   let q = supabase
@@ -318,7 +321,7 @@ export async function getProductsAnalytics(filter: AnalyticsFilter = {}): Promis
     .is("deactivated_at", null)
     .gte("job_date", from)
     .lte("job_date", to);
-  if (locationId) q = q.eq("location_id", locationId);
+  q = applyLocationFilter(q, "location_id", locationIds);
 
   const { data, error } = await q;
   if (error) throw error;
@@ -439,7 +442,7 @@ export interface ExpenseAnalytics {
 }
 
 export async function getExpenseAnalytics(filter: AnalyticsFilter = {}): Promise<ExpenseAnalytics> {
-  const { supabase, locationId } = await scopedClient(filter);
+  const { supabase, locationIds } = await scopedClient(filter);
   const { from, to, label } = defaultRange(filter);
 
   let q = supabase
@@ -448,7 +451,7 @@ export async function getExpenseAnalytics(filter: AnalyticsFilter = {}): Promise
     .is("deactivated_at", null)
     .gte("expense_date", from)
     .lte("expense_date", to);
-  if (locationId) q = q.eq("location_id", locationId);
+  q = applyLocationFilter(q, "location_id", locationIds);
   if (filter.category_id) q = q.eq("category_id", filter.category_id);
   if (filter.vendor_id) q = q.eq("vendor_id", filter.vendor_id);
 
@@ -542,7 +545,7 @@ export interface PayrollAnalytics {
 }
 
 export async function getPayrollAnalytics(filter: AnalyticsFilter = {}): Promise<PayrollAnalytics> {
-  const { supabase, profile, locationId } = await scopedClient(filter);
+  const { supabase, profile, locationIds } = await scopedClient(filter);
   if (profile.role === "staff" || profile.role === "employee") {
     throw new Error("Unauthorized");
   }
@@ -557,7 +560,7 @@ export async function getPayrollAnalytics(filter: AnalyticsFilter = {}): Promise
     `)
     .gte("payroll_weeks.week_start", from)
     .lte("payroll_weeks.week_start", to);
-  if (locationId) q = q.eq("payroll_weeks.location_id", locationId);
+  q = applyLocationFilter(q, "payroll_weeks.location_id", locationIds);
 
   const { data, error } = await q;
   if (error) throw error;
@@ -625,7 +628,7 @@ export async function getPayrollAnalytics(filter: AnalyticsFilter = {}): Promise
     .is("deactivated_at", null)
     .gte("job_date", from)
     .lte("job_date", to);
-  if (locationId) salesQ = salesQ.eq("location_id", locationId);
+  salesQ = applyLocationFilter(salesQ, "location_id", locationIds);
   const { data: salesData } = await salesQ;
   const revenue = ((salesData ?? []) as { total: number }[]).reduce((s, r) => s + Number(r.total), 0);
   const payroll_vs_revenue_pct = revenue > 0 ? (total_cost / revenue) * 100 : 0;
@@ -655,7 +658,7 @@ export interface YoyComparison {
 }
 
 export async function getSalesYoy(filter: AnalyticsFilter = {}): Promise<YoyComparison> {
-  const { supabase, locationId } = await scopedClient(filter);
+  const { supabase, locationIds } = await scopedClient(filter);
   const { from, to } = defaultRange(filter);
 
   const priorFrom = shiftYear(from, -1);
@@ -668,7 +671,7 @@ export async function getSalesYoy(filter: AnalyticsFilter = {}): Promise<YoyComp
       .is("deactivated_at", null)
       .gte("job_date", f)
       .lte("job_date", t);
-    if (locationId) q = q.eq("location_id", locationId);
+    q = applyLocationFilter(q, "location_id", locationIds);
     const { data, error } = await q;
     if (error) throw error;
     return (data ?? []) as { job_date: string; total: number }[];

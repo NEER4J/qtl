@@ -11,6 +11,7 @@ import {
   listActiveLocations,
 } from "@/lib/actions/reference";
 import { hiddenColumnsForPage } from "@/lib/permissions/check";
+import { canChooseLocation } from "@/lib/auth/locations";
 
 import { ExpensesFilters } from "./expenses-filters";
 import { ExpensesTable } from "./expenses-table";
@@ -39,11 +40,9 @@ export default async function ExpensesListPage({
     listActiveExpenseSubcategories(),
   ]);
 
-  const showLocationFilter =
-    profile.role === "owner"
-    || profile.role === "co_owner"
-    || profile.role === "accountant"
-    || profile.cross_location; // cross-location managers/staff can sort by location too
+  // Anyone who can reach more than one shop gets the location column /
+  // filter — all-locations roles and Multiple-mode users alike.
+  const showLocationFilter = canChooseLocation(profile);
 
   const canCreate =
     (profile.role === "owner" || profile.role === "co_owner") ||

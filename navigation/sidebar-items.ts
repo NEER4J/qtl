@@ -298,11 +298,24 @@ export function filterSidebar(
     .map((group) => ({
       ...group,
       items: group.items
-        .filter((item) => passes(item.url, item.roles))
-        .map((item) => ({
-          ...item,
-          subItems: item.subItems?.filter((s) => passes(s.url, s.roles)),
-        })),
+        .map((item) => {
+          const subItems = item.subItems?.filter((s) => passes(s.url, s.roles));
+          // Collapse an emptied list back to undefined — nav-main renders an
+          // item with `subItems` as a collapsible trigger, so an empty array
+          // would leave a menu that opens onto nothing.
+          return { ...item, subItems: subItems?.length ? subItems : undefined };
+        })
+        // A parent survives if its OWN page is allowed, or if any of its
+        // sub-items survived. Filtering the parent on its own URL alone hid
+        // whole menus whose children were granted: giving someone
+        // `settings_users` without the `settings` root key removed the entire
+        // Settings menu, so the page they'd been granted was unreachable from
+        // the nav. Parents with sub-items render as a collapsible trigger
+        // rather than a link, so keeping one costs no access.
+        .filter(
+          (item) =>
+            passes(item.url, item.roles) || (item.subItems?.length ?? 0) > 0,
+        ),
     }))
     .filter((group) => group.items.length > 0);
 }

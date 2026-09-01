@@ -18,6 +18,7 @@ import { StatusBadge } from "@/components/sales/status-badge";
 import { requireProfile } from "@/lib/auth/require";
 import { getExpense } from "@/lib/actions/expenses";
 import { formatDate, formatMoney, formatUnitCost } from "@/lib/utils/format";
+import { canAccessLocation } from "@/lib/auth/locations";
 
 export const dynamic = "force-dynamic";
 
@@ -45,12 +46,12 @@ export default async function ExpenseDetailPage({
   const canEdit =
     (profile.role === "owner" || profile.role === "co_owner") ||
     profile.role === "accountant" ||
-    (profile.role === "manager" && profile.location_id === exp.location_id);
+    (profile.role === "manager" && canAccessLocation(profile, exp.location_id));
 
   const canAddPayment =
     (profile.role === "owner" || profile.role === "co_owner") ||
     profile.role === "accountant" ||
-    (profile.role === "manager" && profile.location_id === exp.location_id);
+    (profile.role === "manager" && canAccessLocation(profile, exp.location_id));
 
   return (
     <div className="flex flex-col gap-6">

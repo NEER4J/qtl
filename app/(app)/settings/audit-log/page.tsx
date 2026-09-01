@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
@@ -11,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { requireProfile } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { listAuditLog } from "@/lib/actions/audit";
 import { formatDate } from "@/lib/utils/format";
 
@@ -32,10 +31,7 @@ export default async function AuditLogPage({
 }: {
   searchParams: Promise<Record<string, string>>;
 }) {
-  const profile = await requireProfile();
-  if ((profile.role !== "owner" && profile.role !== "co_owner") && profile.role !== "accountant") {
-    notFound();
-  }
+  await requirePage("settings_audit_log");
 
   const sp = await searchParams;
   const page = Number(sp.page ?? 1);

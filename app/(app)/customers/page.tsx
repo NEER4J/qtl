@@ -1,5 +1,5 @@
 import { PageHelp } from "@/components/help/page-help";
-import { requireRole } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { listCustomersPaged } from "@/lib/actions/customers";
 import { hiddenColumnsForPage } from "@/lib/permissions/check";
 
@@ -12,7 +12,7 @@ export default async function CustomersPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const profile = await requireRole("owner", "co_owner", "manager", "staff");
+  const profile = await requirePage("customers");
 
   const params = await searchParams;
   const singleParams = Object.fromEntries(

@@ -14,6 +14,7 @@ import {
 import { listEngineTypes, listOilGroups, listOilTypes } from "@/lib/actions/pricing";
 import { listActiveTechnicians } from "@/lib/actions/technicians";
 import { formatDate } from "@/lib/utils/format";
+import { canAccessLocation } from "@/lib/auth/locations";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,7 @@ export default async function EditSalesJobPage({
     profile.role === "owner" ||
     profile.role === "co_owner" ||
     (["manager", "supervisor", "staff", "technician"].includes(profile.role) &&
-      profile.location_id === job.location_id);
+      canAccessLocation(profile, job.location_id));
   if (!canEdit) redirect(`/sales/${id}`);
   if (job.deactivated_at) redirect(`/sales/${id}`);
 
