@@ -37,6 +37,19 @@ import { PartFormDialog } from "./part-form-dialog";
 
 const ANY_CATEGORY = "__any__";
 
+/** Which sell tiers this part holds at a fixed price (parts.*_price). A fixed
+ *  price wins over the cost / margin / service-charge formula, so these are the
+ *  tiers an edit to Cost or Margin will NOT move. */
+function fixedTiers(
+  p: Pick<AdminPartRow, "without_service_price" | "with_service_price" | "over_counter_price">,
+): string[] {
+  const out: string[] = [];
+  if (p.over_counter_price != null) out.push("Over the counter");
+  if (p.with_service_price != null) out.push("With service");
+  if (p.without_service_price != null) out.push("Without service");
+  return out;
+}
+
 function formatMargin(p: Pick<AdminPartRow, "margin_type" | "margin_value">): string {
   return p.margin_type === "percent"
     ? `${p.margin_value.toFixed(2)}%`
@@ -255,7 +268,23 @@ export function PartsTable({
                   <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(p.mhsw_fee)}</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(p.mhsw_buy)}</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">{formatMargin(p)}</TableCell>
-                  <TableCell className="text-right tabular-nums font-medium">{formatMoney(p.list_price)}</TableCell>
+                  <TableCell className="text-right tabular-nums font-medium">
+                    {formatMoney(p.list_price)}
+                    {/* List price follows Cost + Sell MHSW + Margin, but a tier
+                        held at a fixed price ignores all three — so editing cost
+                        here moves this number and nothing the customer is
+                        charged. Say so where the editing happens. */}
+                    {fixedTiers(p).length > 0 && (
+                      <span
+                        className="mt-0.5 block text-[10px] font-normal text-amber-600 dark:text-amber-500"
+                        title={`${fixedTiers(p).join(", ")} ${
+                          fixedTiers(p).length === 1 ? "is" : "are"
+                        } held at a fixed price on this part and will not follow Cost or Margin. Edit the part to see or clear it.`}
+                      >
+                        {fixedTiers(p).length === 3 ? "sell price fixed" : "some prices fixed"}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={p.is_taxable ? "default" : "secondary"}>
                       {p.is_taxable ? "Taxable" : "Exempt"}
