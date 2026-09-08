@@ -6,6 +6,12 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/db/types";
 
+/** Every profile column the app reads, except the ones added by a migration
+ *  that may not have run yet. Kept as one string so the primary read and the
+ *  fallback below can never drift apart. */
+const BASE_COLUMNS =
+  "id, email, username, full_name, role, location_id, location_ids, can_enter_expenses, active, last_login_at, created_at, updated_at, allowed_pages, hidden_columns, cross_location";
+
 /**
  * Read the current user's profile row. Cached per request.
  * Returns `null` if the user isn't signed in or has no profile yet.
@@ -21,11 +27,30 @@ export const getCurrentProfile = cache(async (): Promise<Profile | null> => {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select(
-      "id, email, username, full_name, role, location_id, location_ids, can_enter_expenses, active, last_login_at, created_at, updated_at, allowed_pages, hidden_columns, allowed_actions, cross_location",
-    )
+    .select(`${BASE_COLUMNS}, allowed_actions`)
     .eq("id", user.id)
     .maybeSingle();
+
+  // `allowed_actions` arrives with migration 0140. If the app is deployed
+  // before that migration runs, this select fails, every caller sees a null
+  // profile, and requireProfile() redirects the whole shop to the login page —
+  // a total lockout on a column nothing critical depends on. So on undefined
+  // column (Postgres 42703) only, retry without it and carry on: a missing
+  // value means "no override", which is what NULL means anyway, so actions
+  // fall back to the role defaults until the migration lands.
+  if (error?.code === "42703") {
+    const retry = await supabase
+      .from("profiles")
+      .select(BASE_COLUMNS)
+      .eq("id", user.id)
+      .maybeSingle();
+    if (retry.error) {
+      console.error("getCurrentProfile:", retry.error.message);
+      return null;
+    }
+    if (!retry.data) return null;
+    return { ...(retry.data as Omit<Profile, "allowed_actions">), allowed_actions: null };
+  }
 
   if (error) {
     console.error("getCurrentProfile:", error.message);
