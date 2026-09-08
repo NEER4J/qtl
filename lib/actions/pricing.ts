@@ -534,7 +534,7 @@ export async function getOilChangeGrid(): Promise<{
 //
 //   Over the Counter = List price (cost + Sell MHSW + margin)
 //   With Service     = Total cost (incl. Buy MHSW) + Service charge  (may be −)
-//   Without Service  = Linked labour (service_cost) + List price; 0 if bundled
+//   Without Service  = Linked labour (service_cost) + List price
 //   Customer Supplies = customer_supplies_labour (flat — customer brings their own filter)
 //
 // "Service charge" is the app_settings.counter_premium default (per-part
@@ -563,6 +563,11 @@ export interface FilterSellPriceRow {
   /** Tiers held at a fixed price (parts.*_price override) rather than computed.
    *  Surfaced so the list shows WHY a price ignores cost/margin edits. */
   fixed_tiers: { without_service: boolean; with_service: boolean; over_counter: boolean };
+  /** Bundled in a package. The list shows the calculated With Service price, but
+   *  adding this part to a job on its own charges $0 for it (the package already
+   *  did), so the row is marked rather than leaving the two surfaces to disagree
+   *  silently. */
+  in_package: boolean;
 }
 
 export async function getAllFilterSellPrices(filter?: {
@@ -651,6 +656,7 @@ export async function getAllFilterSellPrices(filter?: {
         with_service: r.with_service_price != null,
         over_counter: r.over_counter_price != null,
       },
+      in_package: r.in_package === true,
     };
   });
 
@@ -1496,11 +1502,16 @@ export async function listPartsForPicker(q?: string): Promise<PartForPicker[]> {
   return ((partsRes.data ?? []) as unknown as Row[]).map((row) => {
     const part = normalizePartPricing(mergePartCategory(row));
     const svcCost = Number(row.service_costs?.cost ?? 0);
+    // The ONLY surface that zeroes With Service for a bundled part: the job's
+    // tier dialog, where the package has already charged for it. The price
+    // lists / part editor deliberately keep the calculated price. (client
+    // 2026-09-08 — see computePartSellTiers.)
     const tiers = computePartSellTiers(
       part,
       svcCost,
       counterPremium,
       customerSuppliesLabour,
+      { bundledWithServiceIsFree: true },
     );
     return {
       ...part,

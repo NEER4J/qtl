@@ -222,8 +222,10 @@ export const CreatePartInput = z.object({
     .or(z.literal(""))
     .transform((v) => (v == null || v === "" ? null : v)),
   is_taxable: z.coerce.boolean().default(true),
-  // Marks the part as bundled in a package — Without Service price is forced
-  // to 0 and a second occurrence on the same sales job defaults to over_counter_price.
+  // Marks the part as bundled in a package — on the sales job tier dialog the
+  // With Service price is $0 (the package already charged for it), and a second
+  // occurrence on the same sales job defaults to over_counter_price. The price
+  // lists still show the calculated With Service price.
   in_package: z.coerce.boolean().default(false),
   // When true, the part's price is rounded up to the next .99 as it's added to a sales job.
   round_off: z.coerce.boolean().default(false),

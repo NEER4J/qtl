@@ -830,7 +830,7 @@ export function PartFormDialog({
                     <div className="leading-none">
                       <FormLabel className="cursor-pointer">Bundled in a package</FormLabel>
                       <FormDescription className="text-xs">
-                        Marks the part as part of a package. A package charges this part at its <strong>With Service</strong> price (cost + service charge). If the same part is added to a sales job a second time, the extra one auto-uses the <strong>Over the Counter</strong> price.
+                        Marks the part as part of a package. A package charges this part at its cost basis (cost + Sell MHSW) — the package&apos;s labour is its own separate line. Adding this part to a job on its own offers <strong>With Service</strong> at $0, since the package already covered it, and a second occurrence on the same job auto-uses the <strong>Over the Counter</strong> price. The price lists still show the calculated With Service price.
                       </FormDescription>
                     </div>
                   </FormItem>

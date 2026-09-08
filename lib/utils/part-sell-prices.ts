@@ -12,8 +12,12 @@ import { roundUpTo99 } from "@/lib/utils/format";
 //                        (Total cost = part.cost, which already includes Buy
 //                        MHSW. "Service charge" is the per-part counter_premium
 //                        column, relabelled — it may be NEGATIVE.)
-//   * Without Service  = Linked labour charge + List price. Bundled parts → 0.
+//   * Without Service  = Linked labour charge + List price.
 //   * Customer Supplies = flat labour fee (unchanged).
+//
+// A part flagged `in_package` prices at With Service = $0 on ONE surface only —
+// the sales job tier dialog — via `bundledWithServiceIsFree`. (The 0059 column
+// comment says the flag zeroes *Without* Service; it never has in this code.)
 //
 // Service charge and customer-supplies labour are per-part: a part's own value
 // wins; NULL falls back to the global app_settings value. Each tier also keeps
@@ -87,11 +91,24 @@ export function effectiveCustomerSuppliesOptions(
     : [effectiveCustomerSuppliesLabour(part, globalCustomerSuppliesLabour)];
 }
 
+/** The one rule that is NOT the same on every surface — see `withSvc` below. */
+export type PartSellTierOptions = {
+  /**
+   * When true, a part flagged `in_package` prices at With Service = $0: its
+   * package already covers it, so adding it individually to that job must not
+   * charge for it a second time. ONLY the sales job part-add tier dialog sets
+   * this. Reference surfaces (the All-filter-sell-price list, the part editor's
+   * "Calculated …" placeholder) leave it off and show the real formula price.
+   */
+  bundledWithServiceIsFree?: boolean;
+};
+
 export function computePartSellTiers(
   part: TierPart,
   serviceCost: number,
   globalCounterPremium: number,
   globalCustomerSuppliesLabour: number,
+  opts: PartSellTierOptions = {},
 ): PartSellTiers {
   // "Cost price" = base cost (incl Buy MHSW) + Sell MHSW — the SAME basis the
   // list price is built on (cost + Sell MHSW + margin). With Service is computed
@@ -107,22 +124,32 @@ export function computePartSellTiers(
       ? Number(part.over_counter_price)
       : round2(listPrice);
 
-  // With Service = Total cost + Service charge. BUT a part flagged as bundled
-  // (in_package) is already covered by its package, so when it's added
-  // individually to a job its With Service price is $0. (client 2026-07-16 —
-  // "with service should become zero when the bundle option is on"; this rule
-  // was dropped during the package-pricing rework and is restored here. Without
-  // Service / Over the Counter still charge — only With Service goes to 0.)
+  // With Service = Total cost + Service charge.
+  //
+  // The $0-for-bundled rule is now opt-in (`bundledWithServiceIsFree`) instead
+  // of unconditional. It belongs to ONE surface — adding a bundled part
+  // individually to a sales job, where the package has already covered it
+  // (client 2026-07-16: "with service should become zero when the bundle option
+  // is on"). Applying it everywhere zeroed the With Service column for all 80
+  // active in_package parts on the All-filter-sell-price list and made the part
+  // editor offer "Calculated $0.00", so a filter with a real cost and service
+  // charge looked like it had no With Service price at all — e.g. FF252
+  // ($45.48 cost + $10 per-part service charge, shown as $0.00). (client
+  // 2026-09-08 — "FF252, FF4212800MX, FF5206 not calculating with service
+  // price".) The reference surfaces now show the formula price; only the job
+  // tier dialog zeroes a bundled part.
+  //
   // The service charge may be negative enough to make the WHOLE result negative
   // (e.g. cost $20, service charge -$40 -> -$20) — that is INTENTIONAL (client
   // 2026-07-16: "if you put a negative number it is not calculating" — a prior
   // `Math.max(0, …)` floor was silently clamping a legitimately negative result
   // to $0; removed). A per-part override still wins for NON-bundled parts.
-  const withSvc = part.in_package
-    ? 0
-    : part.with_service_price != null
-      ? Number(part.with_service_price)
-      : Math.round((totalCost + serviceCharge) * 100) / 100;
+  const withSvc =
+    opts.bundledWithServiceIsFree && part.in_package
+      ? 0
+      : part.with_service_price != null
+        ? Number(part.with_service_price)
+        : Math.round((totalCost + serviceCharge) * 100) / 100;
 
   // Without Service = Linked labour charge + List price.
   const withoutSvc =

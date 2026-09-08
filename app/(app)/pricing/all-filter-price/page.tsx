@@ -87,6 +87,11 @@ export default async function AllFilterPricePage({
           <li><strong>With Service</strong> = Total cost (incl. Buy MHSW) + ${counter_premium.toFixed(2)} service charge.</li>
           <li><strong>Without Service</strong> = Linked labour charge + List price.</li>
           <li><strong>Customer Supplies</strong> = flat ${customer_supplies_labour.toFixed(2)} labour fee.</li>
+          <li>
+            A filter marked <strong>bundled</strong> is included in a package. This list shows what its
+            With Service price works out to, but a package has already charged for it, so adding that
+            filter to a job on its own charges $0 for the With Service tier.
+          </li>
         </ul>
         <p>
           Service charge and customer-supplies labour are set in{" "}
@@ -171,7 +176,17 @@ export default async function AllFilterPricePage({
                     {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(r.mhsw_fee)}</TableCell>}
                     {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(r.service_cost)}</TableCell>}
                     <TableCell className="text-right tabular-nums"><TierPrice value={r.without_service} fixed={r.fixed_tiers.without_service} /></TableCell>
-                    <TableCell className="text-right tabular-nums font-medium"><TierPrice value={r.with_service} fixed={r.fixed_tiers.with_service} /></TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">
+                      <TierPrice value={r.with_service} fixed={r.fixed_tiers.with_service} />
+                      {r.in_package && (
+                        <span
+                          className="ml-1 text-[10px] font-normal text-muted-foreground"
+                          title="Bundled in a package — a package already charges for this filter, so adding it to a job on its own charges $0."
+                        >
+                          bundled
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right tabular-nums"><TierPrice value={r.over_counter} fixed={r.fixed_tiers.over_counter} /></TableCell>
                     <TableCell className="text-right tabular-nums">
                       {r.customer_supplies_options.length > 1 ? (
