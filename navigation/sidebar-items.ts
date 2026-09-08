@@ -23,7 +23,18 @@ export interface NavSubItem {
   comingSoon?: boolean;
   newTab?: boolean;
   isNew?: boolean;
-  /** Roles that can see this subitem. Omit for "all authenticated". */
+  /**
+   * Roles that can see this entry.
+   *
+   * ONLY consulted for URLs with no entry in PAGE_REGISTRY — in practice just
+   * /my-pay. For everything else `filterSidebar()` resolves the URL to a
+   * registry key and asks the permissions layer, so a `roles` list here is a
+   * second, silently-ignored source of truth. Two had already drifted out of
+   * step with the registry (Dashboard and Vendors each listed roles the
+   * registry does not grant), which is the confusion this rule prevents: to
+   * change who sees a registered page, edit its `defaultRoles` in
+   * lib/permissions/registry.ts.
+   */
   roles?: UserRole[];
 }
 
@@ -35,7 +46,7 @@ export interface NavMainItem {
   comingSoon?: boolean;
   newTab?: boolean;
   isNew?: boolean;
-  /** Roles that can see this item. Omit for "all authenticated". */
+  /** Roles that can see this item. See NavSubItem.roles — registry first. */
   roles?: UserRole[];
 }
 
@@ -47,7 +58,10 @@ export interface NavGroup {
 }
 
 /**
- * Full QTL nav. Call `filterSidebarByRole(role)` to get what a given role sees.
+ * Full QTL nav. Call `filterSidebar(role, allowedPages)` — it resolves each
+ * URL to a PAGE_REGISTRY key and asks the permissions layer, so visibility is
+ * decided in ONE place. `filterSidebarByRole` is the role-only fallback, used
+ * for co_owner (who sees everything anyway).
  */
 export const sidebarItems: NavGroup[] = [
   {
@@ -57,7 +71,6 @@ export const sidebarItems: NavGroup[] = [
         title: "Dashboard",
         url: "/dashboard",
         icon: LayoutDashboard,
-        roles: ["owner", "co_owner", "manager", "accountant"],
       },
     ],
   },
@@ -69,13 +82,11 @@ export const sidebarItems: NavGroup[] = [
         title: "Sales",
         url: "/sales",
         icon: ClipboardList,
-        roles: ["owner", "co_owner", "manager", "accountant", "staff"],
       },
       {
         title: "Customers",
         url: "/customers",
         icon: Users,
-        roles: ["owner", "co_owner", "manager", "staff"],
       },
       {
         // Per-location stock counts for catalogue parts. Top-level so owner
@@ -84,13 +95,11 @@ export const sidebarItems: NavGroup[] = [
         title: "Inventory",
         url: "/inventory",
         icon: Boxes,
-        roles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"],
       },
       {
         title: "Vendors",
         url: "/vendors",
         icon: Truck,
-        roles: ["owner", "co_owner", "accountant", "manager"],
       },
     ],
   },
@@ -102,7 +111,6 @@ export const sidebarItems: NavGroup[] = [
         title: "Pricing",
         url: "/pricing",
         icon: Package,
-        roles: ["owner", "co_owner", "manager", "accountant", "staff"],
         subItems: [
           { title: "Catalog", url: "/pricing" },
           { title: "Filter price list", url: "/pricing/filters" },
@@ -115,13 +123,12 @@ export const sidebarItems: NavGroup[] = [
       },
       {
         // Parts / pricing CATALOGUE shortcuts. These pages live under
-        // /settings/pricing, which is Admin-only — so this tile is gated to
-        // co_owner (Admin). Other roles don't see it and can't open it; the
-        // permission is honoured, the links are just hidden from them.
+        // /settings/pricing, whose registry entry is Admin-only — so the whole
+        // tile disappears for everyone else via the registry lookup. Distinct
+        // from the Pricing menu above, which is the price SHEETS.
         title: "Pricing Catalogue",
         url: "/settings/pricing",
         icon: Package,
-        roles: ["co_owner"],
         subItems: [
           { title: "Parts", url: "/settings/pricing/parts" },
           { title: "Packages", url: "/settings/pricing/packages" },
@@ -146,19 +153,16 @@ export const sidebarItems: NavGroup[] = [
         title: "Invoices",
         url: "/invoices",
         icon: FileText,
-        roles: ["owner", "co_owner", "manager", "accountant"],
       },
       {
         title: "Expenses",
         url: "/expenses",
         icon: Receipt,
-        roles: ["owner", "co_owner", "manager", "accountant", "staff"],
       },
       {
         title: "Payroll",
         url: "/payroll",
         icon: Wallet,
-        roles: ["owner", "co_owner", "manager", "accountant"],
         subItems: [
           { title: "Pay weeks", url: "/payroll" },
           { title: "Employees", url: "/payroll/employees" },
@@ -179,25 +183,23 @@ export const sidebarItems: NavGroup[] = [
         title: "Analytics",
         url: "/analytics",
         icon: LineChart,
-        roles: ["owner", "co_owner", "manager", "accountant"],
         subItems: [
           { title: "Overview", url: "/analytics" },
           { title: "Sales & Revenue", url: "/analytics/sales" },
           { title: "Job Duration", url: "/analytics/jobs" },
           { title: "Products & Services", url: "/analytics/products" },
           { title: "Expenses", url: "/analytics/expenses" },
-          { title: "Payroll", url: "/analytics/payroll", roles: ["owner", "co_owner", "accountant"] },
+          { title: "Payroll", url: "/analytics/payroll" },
         ],
       },
       {
         title: "Reports",
         url: "/reports",
         icon: BookText,
-        roles: ["owner", "co_owner", "manager", "accountant"],
         subItems: [
           { title: "All reports", url: "/reports" },
           { title: "Daily job report", url: "/reports/daily" },
-          { title: "HST Summary", url: "/reports/hst", roles: ["owner", "co_owner", "accountant"] },
+          { title: "HST Summary", url: "/reports/hst" },
           { title: "P&L", url: "/reports/pnl" },
           { title: "Outstanding Invoices", url: "/reports/outstanding" },
         ],
@@ -212,19 +214,18 @@ export const sidebarItems: NavGroup[] = [
         title: "Settings",
         url: "/settings",
         icon: Settings,
-        roles: ["co_owner"],
         subItems: [
-          { title: "Users", url: "/settings/users", roles: ["co_owner"] },
-          { title: "Locations", url: "/settings/locations", roles: ["co_owner"] },
-          { title: "Expense Categories", url: "/settings/categories", roles: ["co_owner"] },
-          { title: "Service Types", url: "/settings/services", roles: ["co_owner"] },
-          { title: "Technicians", url: "/settings/technicians", roles: ["co_owner"] },
-          { title: "Pricing Catalogue", url: "/settings/pricing", roles: ["co_owner"] },
-          { title: "Promotions", url: "/settings/promotions", roles: ["co_owner"] },
-          { title: "Recurring Expenses", url: "/settings/recurring-expenses", roles: ["co_owner"] },
-          { title: "Statutory Rates", url: "/settings/statutory-rates", roles: ["co_owner"] },
-          { title: "IP Access", url: "/settings/ip-access", roles: ["co_owner"] },
-          { title: "Audit Log", url: "/settings/audit-log", roles: ["co_owner"] },
+          { title: "Users", url: "/settings/users" },
+          { title: "Locations", url: "/settings/locations" },
+          { title: "Expense Categories", url: "/settings/categories" },
+          { title: "Service Types", url: "/settings/services" },
+          { title: "Technicians", url: "/settings/technicians" },
+          { title: "Pricing Catalogue", url: "/settings/pricing" },
+          { title: "Promotions", url: "/settings/promotions" },
+          { title: "Recurring Expenses", url: "/settings/recurring-expenses" },
+          { title: "Statutory Rates", url: "/settings/statutory-rates" },
+          { title: "IP Access", url: "/settings/ip-access" },
+          { title: "Audit Log", url: "/settings/audit-log" },
         ],
       },
     ],
@@ -232,8 +233,13 @@ export const sidebarItems: NavGroup[] = [
 ];
 
 /**
- * Filter the nav to just what the given role is permitted to see.
- * Groups that become empty after filtering are dropped.
+ * Role-only filter. Groups that become empty after filtering are dropped.
+ *
+ * Use `filterSidebar()` instead unless you specifically want to bypass the
+ * per-user allowlist. Since the `roles` lists were removed from every entry
+ * whose URL is registered (they were dead weight — see NavSubItem.roles), this
+ * function now returns nearly the whole nav for ANY role. That is correct for
+ * its one caller, co_owner, and wrong for everyone else.
  */
 export function filterSidebarByRole(role: UserRole | undefined): NavGroup[] {
   if (!role) return [];

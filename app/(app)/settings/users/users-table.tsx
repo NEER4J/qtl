@@ -371,9 +371,10 @@ export function UsersTable({
                         <Badge variant={(u.role === "owner" || u.role === "co_owner") ? "default" : "secondary"}>
                           {ROLE_LABELS[u.role]}
                         </Badge>
-                        {u.allowed_pages !== null && u.role !== "co_owner" && (
-                          <Badge variant="outline" className="ml-1 text-[10px] py-0">custom</Badge>
-                        )}
+                        {(u.allowed_pages !== null || u.allowed_actions !== null) &&
+                          u.role !== "co_owner" && (
+                            <Badge variant="outline" className="ml-1 text-[10px] py-0">custom</Badge>
+                          )}
                       </TableCell>
                     )}
                     {visible("location") && (

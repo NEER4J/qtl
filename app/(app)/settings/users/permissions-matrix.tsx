@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ChevronDown, ChevronRight, EyeOff, RotateCcw, Sparkles, X } from "lucide-react";
+import { Ban, Check, ChevronDown, ChevronRight, EyeOff, RotateCcw, Sparkles, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,9 +15,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import {
+  ACTION_REGISTRY,
   PAGE_GROUPS,
   PAGE_REGISTRY,
+  actionsForPage,
   columnsForPage,
+  defaultAllowedActionsForRole,
   defaultAllowedPagesForRole,
 } from "@/lib/permissions/registry";
 import type { UserRole } from "@/lib/db/types";
@@ -28,21 +31,28 @@ interface Props {
   role: UserRole;
   allowedPages: string[] | null;
   hiddenColumns: Record<string, string[]>;
+  /** NULL = role default, same convention as allowedPages. */
+  allowedActions: string[] | null;
   otherUsers?: UserListRow[];
   onChange: (next: {
     allowed_pages: string[] | null;
     hidden_columns: Record<string, string[]>;
+    allowed_actions: string[] | null;
   }) => void;
 }
 
 const PAGES_WITH_COLUMNS = new Set(
   PAGE_REGISTRY.filter((p) => columnsForPage(p.key).length > 0).map((p) => p.key),
 );
+const PAGES_WITH_ACTIONS = new Set(ACTION_REGISTRY.map((a) => a.pageKey));
+/** Pages the right-hand panel has something to show for. */
+const PAGES_WITH_DETAIL = new Set([...PAGES_WITH_COLUMNS, ...PAGES_WITH_ACTIONS]);
 
 export function PermissionsMatrix({
   role,
   allowedPages,
   hiddenColumns,
+  allowedActions,
   otherUsers,
   onChange,
 }: Props) {
@@ -64,12 +74,22 @@ export function PermissionsMatrix({
     }
     return out;
   });
-  const [usingRoleDefault, setUsingRoleDefault] = useState(allowedPages === null);
+  // Lazy initialiser: seeded once on mount, like `allowed` above. The dialogs
+  // re-key the component per user + role so it re-seeds when either changes.
+  const [actions, setActions] = useState<Set<string>>(
+    () => new Set(allowedActions ?? defaultAllowedActionsForRole(role)),
+  );
+  // "Role default" only holds when BOTH axes are untouched — a custom action
+  // list with default pages is still a custom permission set, and emitting
+  // null for it would silently throw the action overrides away on save.
+  const [usingRoleDefault, setUsingRoleDefault] = useState(
+    allowedPages === null && allowedActions === null,
+  );
 
   // The page whose columns are visible in the right panel.
   const firstPageWithCols =
-    PAGE_REGISTRY.find((p) => allowed.has(p.key) && PAGES_WITH_COLUMNS.has(p.key))?.key ??
-    PAGE_REGISTRY.find((p) => PAGES_WITH_COLUMNS.has(p.key))?.key ??
+    PAGE_REGISTRY.find((p) => allowed.has(p.key) && PAGES_WITH_DETAIL.has(p.key))?.key ??
+    PAGE_REGISTRY.find((p) => PAGES_WITH_DETAIL.has(p.key))?.key ??
     null;
   const [focusedPage, setFocusedPage] = useState<string | null>(firstPageWithCols);
 
@@ -77,6 +97,9 @@ export function PermissionsMatrix({
     nextAllowed: Set<string>,
     nextHidden: Record<string, Set<string>>,
     nextUsingDefault: boolean,
+    // Optional so the existing page/column call sites stay unchanged — they
+    // carry the current action set through untouched.
+    nextActions: Set<string> = actions,
   ) => {
     // Safety net for the client invariant: a page that's ON must keep at least
     // one visible column. Any path that would leave an enabled page with every
@@ -93,6 +116,7 @@ export function PermissionsMatrix({
 
     setAllowed(normalizedAllowed);
     setHidden(nextHidden);
+    setActions(nextActions);
     setUsingRoleDefault(nextUsingDefault);
     onChange({
       allowed_pages: nextUsingDefault ? null : Array.from(normalizedAllowed),
@@ -101,6 +125,7 @@ export function PermissionsMatrix({
           .filter(([, v]) => v.size > 0)
           .map(([k, v]) => [k, Array.from(v)]),
       ),
+      allowed_actions: nextUsingDefault ? null : Array.from(nextActions),
     });
   };
 
@@ -131,10 +156,16 @@ export function PermissionsMatrix({
   // Select all = full access: every grantable page, all columns visible.
   // (Clearing hidden also avoids the commit normalizer dropping a page that
   // happened to have all its columns hidden.)
-  const selectAllPages = () => commit(new Set(grantableKeys), {}, false);
-  const clearAllPages = () => commit(new Set(), hidden, false);
+  const selectAllPages = () =>
+    commit(new Set(grantableKeys), {}, false, new Set(ACTION_REGISTRY.map((a) => a.key)));
+  const clearAllPages = () => commit(new Set(), hidden, false, new Set());
   const resetToRoleDefault = () =>
-    commit(new Set(defaultAllowedPagesForRole(role)), {}, true);
+    commit(
+      new Set(defaultAllowedPagesForRole(role)),
+      {},
+      true,
+      new Set(defaultAllowedActionsForRole(role)),
+    );
 
   const copyFromUser = (sourceUserId: string) => {
     const src = otherUsers?.find((u) => u.id === sourceUserId);
@@ -147,7 +178,22 @@ export function PermissionsMatrix({
     for (const [k, v] of Object.entries(src.hidden_columns ?? {})) {
       nextHidden[k] = new Set(v);
     }
-    commit(nextAllowed, nextHidden, src.allowed_pages === null);
+    const nextActions = new Set(
+      src.allowed_actions ?? defaultAllowedActionsForRole(src.role),
+    );
+    commit(
+      nextAllowed,
+      nextHidden,
+      src.allowed_pages === null && src.allowed_actions === null,
+      nextActions,
+    );
+  };
+
+  const toggleAction = (actionKey: string) => {
+    const next = new Set(actions);
+    if (next.has(actionKey)) next.delete(actionKey);
+    else next.add(actionKey);
+    commit(allowed, hidden, false, next);
   };
 
   const toggleColumn = (pageKey: string, columnKey: string) => {
@@ -188,6 +234,7 @@ export function PermissionsMatrix({
   // registry — "x/24 pages".
   const totalPages = grantableKeys.length;
   const hiddenColumnTotal = Object.values(hidden).reduce((acc, s) => acc + s.size, 0);
+  const revokedActionTotal = ACTION_REGISTRY.filter((a) => !actions.has(a.key)).length;
   const hasCopySource = !!otherUsers && otherUsers.length > 0;
 
   return (
@@ -208,6 +255,11 @@ export function PermissionsMatrix({
           {hiddenColumnTotal > 0 && (
             <span className="text-muted-foreground">
               · {hiddenColumnTotal} column{hiddenColumnTotal === 1 ? "" : "s"} hidden
+            </span>
+          )}
+          {revokedActionTotal > 0 && (
+            <span className="text-muted-foreground">
+              · {revokedActionTotal} action{revokedActionTotal === 1 ? "" : "s"} off
             </span>
           )}
         </div>
@@ -284,8 +336,11 @@ export function PermissionsMatrix({
                       const isOn = allowed.has(p.key);
                       const isFocused = focusedPage === p.key;
                       const isRoleDefault = roleDefaultSet.has(p.key);
-                      const hasColumns = PAGES_WITH_COLUMNS.has(p.key);
+                      const hasColumns = PAGES_WITH_DETAIL.has(p.key);
                       const hiddenCount = hidden[p.key]?.size ?? 0;
+                      const offActions = actionsForPage(p.key).filter(
+                        (a) => !actions.has(a.key),
+                      ).length;
                       const diverged = isRoleDefault !== isOn;
                       return (
                         <li key={p.key}>
@@ -352,6 +407,15 @@ export function PermissionsMatrix({
                                 {hiddenCount}
                               </span>
                             )}
+                            {offActions > 0 && (
+                              <span
+                                className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground"
+                                title={`${offActions} action${offActions === 1 ? "" : "s"} revoked`}
+                              >
+                                <Ban className="size-3" />
+                                {offActions}
+                              </span>
+                            )}
                             {hasColumns && (
                               <ChevronRight
                                 className={cn(
@@ -373,18 +437,20 @@ export function PermissionsMatrix({
 
         {/* Column detail panel */}
         <div className="rounded-lg border bg-card overflow-hidden">
-          {focusedPage && PAGES_WITH_COLUMNS.has(focusedPage) ? (
+          {focusedPage && PAGES_WITH_DETAIL.has(focusedPage) ? (
             <ColumnDetail
               pageKey={focusedPage}
               pageEnabled={allowed.has(focusedPage)}
               hidden={hidden[focusedPage] ?? new Set<string>()}
+              actions={actions}
               onToggle={(c) => toggleColumn(focusedPage, c)}
+              onToggleAction={toggleAction}
               onHideAll={() => hideAllColumns(focusedPage)}
               onShowAll={() => showAllColumns(focusedPage)}
             />
           ) : (
             <div className="flex h-full min-h-[200px] items-center justify-center px-6 py-10 text-center text-sm text-muted-foreground">
-              Select a page on the left to see its columns. Pages without configurable columns just inherit the page-level on/off setting.
+              Select a page on the left to see its columns and actions. Pages with neither just inherit the page-level on/off setting.
             </div>
           )}
         </div>
@@ -393,22 +459,33 @@ export function PermissionsMatrix({
   );
 }
 
+/**
+ * Right-hand detail for the focused page: the columns it can hide, and the
+ * actions it can revoke. A page may have either, both, or (if it has neither)
+ * never reach here — see PAGES_WITH_DETAIL.
+ */
 function ColumnDetail({
   pageKey,
   pageEnabled,
   hidden,
+  actions,
   onToggle,
+  onToggleAction,
   onHideAll,
   onShowAll,
 }: {
   pageKey: string;
   pageEnabled: boolean;
   hidden: Set<string>;
+  /** Every allowed action key, across all pages. */
+  actions: Set<string>;
   onToggle: (col: string) => void;
+  onToggleAction: (actionKey: string) => void;
   onHideAll: () => void;
   onShowAll: () => void;
 }) {
   const cols = columnsForPage(pageKey);
+  const pageActions = actionsForPage(pageKey);
   const allHidden = cols.length > 0 && cols.every((c) => hidden.has(c.key));
   const noneHidden = hidden.size === 0;
   const page = PAGE_REGISTRY.find((p) => p.key === pageKey);
@@ -424,69 +501,120 @@ function ColumnDetail({
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={onShowAll}
-            disabled={noneHidden}
-          >
-            Show all
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={onHideAll}
-            disabled={allHidden}
-            title="Hides every column, which turns the page off for this user"
-          >
-            Hide all
-          </Button>
-        </div>
+        {cols.length > 0 && (
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={onShowAll}
+              disabled={noneHidden}
+            >
+              Show all
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={onHideAll}
+              disabled={allHidden}
+              title="Hides every column, which turns the page off for this user"
+            >
+              Hide all
+            </Button>
+          </div>
+        )}
       </div>
+
       {pageEnabled ? (
-        <div className="px-4 py-2 text-[11px] text-muted-foreground">
-          At least one column must stay visible. Hiding the last one turns the
-          page off for this user.
-        </div>
+        cols.length > 0 && (
+          <div className="px-4 py-2 text-[11px] text-muted-foreground">
+            At least one column must stay visible. Hiding the last one turns the
+            page off for this user.
+          </div>
+        )
       ) : (
         <div className="px-4 py-2 text-xs text-muted-foreground">
           This page is off for the user. Tick the page on the left to re-enable
           it — all its columns become visible again.
         </div>
       )}
-      <ul className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3">
-        {cols.map((c) => {
-          const visible = !hidden.has(c.key);
-          return (
-            <li key={c.key} className="bg-card">
-              <label
-                className={cn(
-                  "flex items-start gap-2 px-3 py-2 text-sm",
-                  // Columns are only editable while the page is on. When it's
-                  // off, the page checkbox (which restores all columns) is the
-                  // single re-enable path — keeps the on/off rule unambiguous.
-                  pageEnabled ? "cursor-pointer hover:bg-muted/40" : "cursor-not-allowed opacity-50",
-                  !visible && pageEnabled && "opacity-60",
-                )}
-                title={pageEnabled ? c.hint : "Enable the page first"}
-              >
-                <Checkbox
-                  checked={visible}
-                  disabled={!pageEnabled}
-                  onCheckedChange={() => onToggle(c.key)}
-                  className="mt-0.5 size-4"
-                />
-                <span className="leading-tight">{c.label}</span>
-              </label>
-            </li>
-          );
-        })}
-      </ul>
+
+      {cols.length > 0 && (
+        <ul className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3">
+          {cols.map((c) => {
+            const visible = !hidden.has(c.key);
+            return (
+              <li key={c.key} className="bg-card">
+                <label
+                  className={cn(
+                    "flex items-start gap-2 px-3 py-2 text-sm",
+                    // Columns are only editable while the page is on. When it's
+                    // off, the page checkbox (which restores all columns) is the
+                    // single re-enable path — keeps the on/off rule unambiguous.
+                    pageEnabled ? "cursor-pointer hover:bg-muted/40" : "cursor-not-allowed opacity-50",
+                    !visible && pageEnabled && "opacity-60",
+                  )}
+                  title={pageEnabled ? c.hint : "Enable the page first"}
+                >
+                  <Checkbox
+                    checked={visible}
+                    disabled={!pageEnabled}
+                    onCheckedChange={() => onToggle(c.key)}
+                    className="mt-0.5 size-4"
+                  />
+                  <span className="leading-tight">{c.label}</span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {pageActions.length > 0 && (
+        <>
+          <div className="border-y bg-muted/30 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Actions
+          </div>
+          <ul className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2">
+            {pageActions.map((a) => {
+              const on = actions.has(a.key);
+              return (
+                <li key={a.key} className="bg-card">
+                  <label
+                    className={cn(
+                      "flex items-start gap-2 px-3 py-2 text-sm",
+                      // Same rule as columns: an action on a disabled page is
+                      // already denied server-side, so editing it here would
+                      // suggest a choice that has no effect.
+                      pageEnabled ? "cursor-pointer hover:bg-muted/40" : "cursor-not-allowed opacity-50",
+                      !on && pageEnabled && "opacity-60",
+                    )}
+                    title={pageEnabled ? a.hint : "Enable the page first"}
+                  >
+                    <Checkbox
+                      checked={on}
+                      disabled={!pageEnabled}
+                      onCheckedChange={() => onToggleAction(a.key)}
+                      className="mt-0.5 size-4"
+                    />
+                    <span className="leading-tight">
+                      {a.label}
+                      {a.hint && (
+                        <span className="block text-[11px] font-normal text-muted-foreground">
+                          {a.hint}
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

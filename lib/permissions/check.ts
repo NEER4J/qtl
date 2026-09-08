@@ -1,5 +1,12 @@
 import type { Profile, UserRole } from "@/lib/db/types";
-import { PAGE_REGISTRY, defaultAllowedPagesForRole, pageKeyForPath } from "./registry";
+import {
+  ACTION_REGISTRY,
+  PAGE_REGISTRY,
+  actionByKey,
+  defaultAllowedActionsForRole,
+  defaultAllowedPagesForRole,
+  pageKeyForPath,
+} from "./registry";
 
 // ----------------------------------------------------------------------------
 // Per-user permission checks
@@ -13,7 +20,44 @@ import { PAGE_REGISTRY, defaultAllowedPagesForRole, pageKeyForPath } from "./reg
 //                         for page access (but still sees all columns).
 //   everyone else       → role default / per-user allowlist as before.
 
-type ProfileSubset = Pick<Profile, "role" | "allowed_pages" | "hidden_columns"> | null | undefined;
+type ProfileSubset =
+  | (Pick<Profile, "role" | "allowed_pages" | "hidden_columns"> &
+      Partial<Pick<Profile, "allowed_actions">>)
+  | null
+  | undefined;
+
+// Registry keys for the Pricing sub-pages, which were added AFTER the first
+// `allowed_pages` overrides were saved. See applyLegacyPricingInheritance().
+const PRICING_SUBPAGE_KEYS = PAGE_REGISTRY.filter(
+  (p) => p.key !== "pricing" && p.path.startsWith("/pricing/"),
+).map((p) => p.key);
+
+/**
+ * Back-compat shim for per-user overrides saved before the Pricing sub-pages
+ * existed as their own registry keys.
+ *
+ * Such an override grants `pricing` and — because the keys did not exist when
+ * it was written — none of the sub-pages. Read literally, that would strip the
+ * entire Pricing menu's contents from every user with a custom allowlist the
+ * moment this code deploys. So: when an override grants Pricing but mentions
+ * no sub-page at all, we treat the sub-pages as unspecified and fall back to
+ * the role's defaults for them (which is where "Oil detail is owner-only" now
+ * lives).
+ *
+ * The shim stops firing as soon as the override names any sub-page — i.e.
+ * after migration 0140 backfills it, or after an admin next saves that user in
+ * the permissions matrix. It deliberately does NOT grant sub-pages to someone
+ * whose override withholds `pricing` itself.
+ */
+function applyLegacyPricingInheritance(allowed: Set<string>, role: UserRole): Set<string> {
+  if (!allowed.has("pricing")) return allowed;
+  if (PRICING_SUBPAGE_KEYS.some((k) => allowed.has(k))) return allowed;
+  const roleDefaults = new Set(defaultAllowedPagesForRole(role));
+  for (const k of PRICING_SUBPAGE_KEYS) {
+    if (roleDefaults.has(k)) allowed.add(k);
+  }
+  return allowed;
+}
 
 // Keys of every page that belongs to the Settings section. Owner does not get
 // these; the Admin (co_owner) does.
@@ -39,8 +83,9 @@ export function effectiveAllowedPageKeys(profile: ProfileSubset): Set<string> {
   // them, and nothing changed. The owner's default is unchanged (no Settings
   // group in defaultRoles for those keys) — it just comes from the registry
   // now, so an explicit grant actually takes effect.
-  const allowed = profile.allowed_pages ?? defaultAllowedPagesForRole(profile.role);
-  return new Set(allowed);
+  const stored = profile.allowed_pages;
+  if (!stored) return new Set(defaultAllowedPagesForRole(profile.role));
+  return applyLegacyPricingInheritance(new Set(stored), profile.role);
 }
 
 /** The "Admin": co_owner has unrestricted access to every page and column. */
@@ -79,6 +124,35 @@ export function isPathAllowed(profile: ProfileSubset, path: string): boolean {
   const key = pageKeyForPath(path);
   if (!key) return true; // unknown paths aren't permission-gated
   return isPageAllowed(profile, key);
+}
+
+// ----------------------------------------------------------------------------
+// Actions
+// ----------------------------------------------------------------------------
+// Third axis alongside pages and columns — see ACTION_REGISTRY. Actions are
+// gated on TOP of pages: you can never perform an action on a page you cannot
+// open, no matter what the stored allowlist says.
+
+export function effectiveAllowedActionKeys(profile: ProfileSubset): Set<string> {
+  if (!profile) return new Set();
+  if (isAdminProfile(profile)) return new Set(ACTION_REGISTRY.map((a) => a.key));
+  // Same rule as pages: a stored per-user override wins, otherwise the role
+  // defaults. `allowed_actions` is optional on the subset type so callers
+  // holding an older/partial profile shape still resolve to role defaults
+  // rather than silently losing every action.
+  const stored = profile.allowed_actions;
+  return new Set(stored ?? defaultAllowedActionsForRole(profile.role));
+}
+
+export function isActionAllowed(profile: ProfileSubset, actionKey: string): boolean {
+  if (!profile) return false;
+  if (isAdminProfile(profile)) return true;
+  const action = actionByKey(actionKey);
+  // An unregistered key is a caller bug. Deny rather than default-allow, so a
+  // typo in a gate fails closed.
+  if (!action) return false;
+  if (!isPageAllowed(profile, action.pageKey)) return false;
+  return effectiveAllowedActionKeys(profile).has(actionKey);
 }
 
 // ----------------------------------------------------------------------------

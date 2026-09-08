@@ -125,6 +125,9 @@ export const HiddenColumnsField = z
   .record(z.array(z.string().min(1)))
   .default({});
 
+/** NULL = use role default; array = explicit action allowlist (ACTION_REGISTRY). */
+export const AllowedActionsField = z.array(z.string().min(1)).nullable().optional();
+
 // ----------------------------------------------------------------------------
 // Invite (admin creates user directly with a password)
 // ----------------------------------------------------------------------------
@@ -146,6 +149,7 @@ export const InviteUserInput = z
     password: passwordField,
     allowed_pages: AllowedPagesField,
     hidden_columns: HiddenColumnsField,
+    allowed_actions: AllowedActionsField,
   })
   .superRefine(roleLocationRefine)
   .superRefine(identityRefine);
@@ -168,6 +172,7 @@ export const UpdateUserInput = z
     active: z.coerce.boolean(),
     allowed_pages: AllowedPagesField,
     hidden_columns: HiddenColumnsField,
+    allowed_actions: AllowedActionsField,
   })
   .superRefine(roleLocationRefine)
   .superRefine(identityRefine);
@@ -197,6 +202,7 @@ export const UpdateUserPermissionsInput = z.object({
   id: z.string().uuid(),
   allowed_pages: AllowedPagesField,
   hidden_columns: HiddenColumnsField,
+  allowed_actions: AllowedActionsField,
 });
 export type UpdateUserPermissionsInput = z.infer<typeof UpdateUserPermissionsInput>;
 

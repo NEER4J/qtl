@@ -30,7 +30,7 @@ export async function listUsers(): Promise<UserListRow[]> {
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "id, email, username, full_name, role, location_id, location_ids, can_enter_expenses, active, last_login_at, created_at, updated_at, allowed_pages, hidden_columns, cross_location, locations:location_id(name)",
+      "id, email, username, full_name, role, location_id, location_ids, can_enter_expenses, active, last_login_at, created_at, updated_at, allowed_pages, hidden_columns, allowed_actions, cross_location, locations:location_id(name)",
     )
     .order("role")
     .order("full_name");
@@ -141,6 +141,7 @@ export const inviteUser = wrapAction({
           location_ids: input.location_ids,
           allowed_pages: input.allowed_pages ?? null,
           hidden_columns: input.hidden_columns ?? {},
+          allowed_actions: input.allowed_actions ?? null,
           active: true,
         },
         { onConflict: "id" },
@@ -210,6 +211,7 @@ export const updateUser = wrapAction({
         active: input.active,
         allowed_pages: input.allowed_pages ?? null,
         hidden_columns: input.hidden_columns ?? {},
+        allowed_actions: input.allowed_actions ?? null,
       })
       .eq("id", input.id)
       .select("*")
@@ -234,6 +236,7 @@ export const updateUserPermissions = wrapAction({
       .update({
         allowed_pages: input.allowed_pages ?? null,
         hidden_columns: input.hidden_columns ?? {},
+        allowed_actions: input.allowed_actions ?? null,
       })
       .eq("id", input.id)
       .select("*")
@@ -258,7 +261,7 @@ export const applyDefaultPermissions = wrapAction({
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("profiles")
-      .update({ allowed_pages: null, hidden_columns: {} })
+      .update({ allowed_pages: null, hidden_columns: {}, allowed_actions: null })
       .in("id", input.ids)
       .select("id");
     if (error) throw error;

@@ -48,6 +48,20 @@ export const PAGE_REGISTRY: PageDef[] = [
   { key: "customers", label: "Customers", group: "Catalog", path: "/customers", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
   { key: "vendors", label: "Vendors", group: "Catalog", path: "/vendors", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant"] },
   { key: "pricing", label: "Pricing", group: "Catalog", path: "/pricing", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
+  // Pricing SUB-pages. Registered individually so the matrix can grant the
+  // Pricing menu while revoking a single sheet from it — before this, every
+  // /pricing/* URL resolved to the parent `pricing` key, so "Pricing but not
+  // Oil detail" was not expressible. `pageKeyForRequestPath` picks the longest
+  // matching prefix, so /pricing/oil-detail resolves here and not to `pricing`.
+  //
+  // Oil detail is owner/Admin-only by default: it exposes per-oil cost, profit
+  // and margin %, which the shop does not want on the floor.
+  { key: "pricing_filters", label: "Pricing — Filter price list", group: "Catalog", path: "/pricing/filters", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
+  { key: "pricing_all_filter_price", label: "Pricing — All filter sell price", group: "Catalog", path: "/pricing/all-filter-price", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
+  { key: "pricing_oil_grid", label: "Pricing — Oil-change grid", group: "Catalog", path: "/pricing/oil-grid", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
+  { key: "pricing_oil_detail", label: "Pricing — Oil detail", group: "Catalog", path: "/pricing/oil-detail", defaultRoles: ["owner", "co_owner"] },
+  { key: "pricing_print_list", label: "Pricing — Print list", group: "Catalog", path: "/pricing/print-list", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
+  { key: "pricing_trans_diff", label: "Pricing — Trans & Diff", group: "Catalog", path: "/pricing/trans-diff", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
   // Top-level Inventory (per-location stock counts). Viewable by everyone;
   // editing counts is gated server-side to owner / co_owner / manager.
   { key: "inventory", label: "Inventory", group: "Catalog", path: "/inventory", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
@@ -212,11 +226,67 @@ export function columnsForPage(pageKey: string): ColumnDef[] {
 }
 
 // ----------------------------------------------------------------------------
+// Action registry
+// ----------------------------------------------------------------------------
+// The third permission axis, alongside pages and columns: things a user can DO
+// on a page they can otherwise see. Pages answer "can you open it", columns
+// answer "what can you read", actions answer "what can you take away with you".
+//
+// Keys are persisted into profiles.allowed_actions, so DO NOT rename existing
+// ones casually. Every action belongs to a `pageKey`; an action is only ever
+// permitted when the page it lives on is also permitted (enforced in
+// lib/permissions/check.ts), so revoking a page implicitly revokes its actions.
+//
+// IMPORTANT: an entry here is only real once BOTH the UI control and its
+// server route check it. A registry entry with an ungated API route is a
+// hidden button, not a permission.
+
+export interface ActionDef {
+  key: string;
+  label: string;
+  /** Registry page key this action belongs to. */
+  pageKey: string;
+  /** Human hint describing what revoking this action achieves. */
+  hint?: string;
+  defaultRoles: UserRole[];
+}
+
+export const ACTION_REGISTRY: ActionDef[] = [
+  {
+    key: "customers.export",
+    label: "Export CSV",
+    pageKey: "customers",
+    hint: "Download the entire customer directory — every name, phone and email — as a spreadsheet.",
+    defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "technician"],
+  },
+  {
+    key: "inventory.export",
+    label: "Export CSV",
+    pageKey: "inventory",
+    hint: "Download on-hand part and oil stock for every location as a spreadsheet.",
+    defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "technician"],
+  },
+];
+
+const ACTION_BY_KEY = new Map(ACTION_REGISTRY.map((a) => [a.key, a]));
+export function actionByKey(key: string): ActionDef | null {
+  return ACTION_BY_KEY.get(key) ?? null;
+}
+export function actionsForPage(pageKey: string): ActionDef[] {
+  return ACTION_REGISTRY.filter((a) => a.pageKey === pageKey);
+}
+
+// ----------------------------------------------------------------------------
 // Defaults
 // ----------------------------------------------------------------------------
 /** Pages a freshly-created user of this role can access by default. */
 export function defaultAllowedPagesForRole(role: UserRole): string[] {
   return PAGE_REGISTRY.filter((p) => p.defaultRoles.includes(role)).map((p) => p.key);
+}
+
+/** Actions a freshly-created user of this role can perform by default. */
+export function defaultAllowedActionsForRole(role: UserRole): string[] {
+  return ACTION_REGISTRY.filter((a) => a.defaultRoles.includes(role)).map((a) => a.key);
 }
 
 /**

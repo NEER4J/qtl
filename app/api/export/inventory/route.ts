@@ -1,15 +1,21 @@
 import { listInventory, listOilInventory } from "@/lib/actions/inventory";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
+import { isActionAllowed } from "@/lib/permissions/check";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
 import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  // Same audience as the /inventory page: anyone signed into the app.
   const profile = await getCurrentProfile();
   if (!profile || profile.role === "portal_customer") {
     return new Response("Unauthorized", { status: 401 });
+  }
+  // Was "anyone signed into the app", which made the hidden button pointless —
+  // the CSV was one URL away. Now gated on `inventory.export`, which also
+  // requires the `inventory` page.
+  if (!isActionAllowed(profile, "inventory.export")) {
+    return new Response("Forbidden", { status: 403 });
   }
 
   const [inv, oil] = await Promise.all([listInventory(), listOilInventory()]);

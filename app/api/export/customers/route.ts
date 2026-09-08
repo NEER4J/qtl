@@ -1,19 +1,20 @@
 import { listCustomersForExport } from "@/lib/actions/customers";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
-import { hiddenColumnsForPage } from "@/lib/permissions/check";
+import { hiddenColumnsForPage, isActionAllowed } from "@/lib/permissions/check";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
 import { formatPhone } from "@/lib/utils/phone";
 import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
 
-// Same roles as the /customers page itself.
-const ALLOWED_ROLES = ["owner", "co_owner", "manager", "staff"];
-
 export async function GET(req: Request) {
   const profile = await getCurrentProfile();
   if (!profile) return new Response("Unauthorized", { status: 401 });
-  if (!ALLOWED_ROLES.includes(profile.role)) {
+  // Gated on the `customers.export` action rather than a hard-coded role list.
+  // The check also requires the `customers` page itself, so revoking the page
+  // revokes the export with it. This is the real gate — hiding the button in
+  // customers-table.tsx only stops people who don't know the URL.
+  if (!isActionAllowed(profile, "customers.export")) {
     return new Response("Forbidden", { status: 403 });
   }
 

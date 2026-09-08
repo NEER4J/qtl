@@ -87,6 +87,7 @@ export function EditUserDialog({
       active: true,
       allowed_pages: null,
       hidden_columns: {},
+      allowed_actions: null,
     },
   });
 
@@ -111,6 +112,7 @@ export function EditUserDialog({
         active: user.active,
         allowed_pages: user.allowed_pages,
         hidden_columns: user.hidden_columns ?? {},
+        allowed_actions: user.allowed_actions ?? null,
       });
     }
   }, [user, open, form]);
@@ -405,10 +407,12 @@ export function EditUserDialog({
                     role={role}
                     allowedPages={form.watch("allowed_pages") ?? null}
                     hiddenColumns={form.watch("hidden_columns") ?? {}}
+                    allowedActions={form.watch("allowed_actions") ?? null}
                     otherUsers={filteredOthers}
-                    onChange={({ allowed_pages, hidden_columns }) => {
+                    onChange={({ allowed_pages, hidden_columns, allowed_actions }) => {
                       form.setValue("allowed_pages", allowed_pages, { shouldDirty: true });
                       form.setValue("hidden_columns", hidden_columns, { shouldDirty: true });
+                      form.setValue("allowed_actions", allowed_actions, { shouldDirty: true });
                     }}
                   />
                 )}

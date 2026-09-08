@@ -5,6 +5,7 @@ import { PrintButton } from "@/components/pricing/print-button";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireProfile } from "@/lib/auth/require";
+import { isActionAllowed } from "@/lib/permissions/check";
 import { listInventory, listOilInventory } from "@/lib/actions/inventory";
 import { formatDate } from "@/lib/utils/format";
 
@@ -24,6 +25,9 @@ export default async function InventoryPage() {
   // Min/max thresholds are policy — parts_write / oil_types_write RLS is
   // owner-only (co_owner via the 0124 alias).
   const canEditLimits = profile.role === "owner" || profile.role === "co_owner";
+  // `inventory.export` from the action registry — /api/export/inventory
+  // enforces the same check, so hiding the button is presentation only.
+  const canExport = isActionAllowed(profile, "inventory.export");
 
   const lowParts = data.parts.filter(
     (p) => p.min_stock_qty != null && p.total < p.min_stock_qty,
@@ -49,11 +53,13 @@ export default async function InventoryPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button asChild variant="outline" size="sm">
-            <a href="/api/export/inventory" download>
-              <Download className="size-4" /> Export CSV
-            </a>
-          </Button>
+          {canExport && (
+            <Button asChild variant="outline" size="sm">
+              <a href="/api/export/inventory" download>
+                <Download className="size-4" /> Export CSV
+              </a>
+            </Button>
+          )}
           <PrintButton />
         </div>
       </div>

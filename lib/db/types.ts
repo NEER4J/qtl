@@ -59,6 +59,8 @@ export interface Profile {
   allowed_pages: string[] | null;
   /** Map of pageKey -> list of columnKeys the user should NOT see. Missing pageKey = show all columns for that page. */
   hidden_columns: Record<string, string[]>;
+  /** NULL = use the role's default action allowlist (see ACTION_REGISTRY in lib/permissions/registry.ts). */
+  allowed_actions: string[] | null;
   /** When true, this manager/staff/employee can act on rows at any location (like owner/accountant). */
   cross_location: boolean;
   /**

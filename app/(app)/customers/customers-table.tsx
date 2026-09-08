@@ -37,6 +37,7 @@ export function CustomersTable({
   pageSize,
   hiddenColumns,
   canMerge = false,
+  canExport = false,
 }: {
   rows: CustomerListRow[];
   total: number;
@@ -46,6 +47,12 @@ export function CustomersTable({
   hiddenColumns?: string[];
   /** Owner / co_owner may merge duplicate customers. */
   canMerge?: boolean;
+  /**
+   * `customers.export` from the action registry. Defaults to false so a caller
+   * that forgets to pass it hides the button rather than leaking the whole
+   * directory — /api/export/customers enforces the same check server-side.
+   */
+  canExport?: boolean;
 }) {
   const router = useRouter();
   // Search runs on the SERVER now. The list is paginated, so filtering the
@@ -96,20 +103,22 @@ export function CustomersTable({
               <GitMerge className="size-4" /> Merge customers
             </Button>
           )}
-          <Button asChild variant="outline">
-            {/* Exports every match, not just the page on screen — the route
-                re-runs the search server-side and pages past the 1000-row cap. */}
-            <a
-              href={
-                search
-                  ? `/api/export/customers?q=${encodeURIComponent(search)}`
-                  : "/api/export/customers"
-              }
-              download
-            >
-              <Download className="size-4" /> Export CSV
-            </a>
-          </Button>
+          {canExport && (
+            <Button asChild variant="outline">
+              {/* Exports every match, not just the page on screen — the route
+                  re-runs the search server-side and pages past the 1000-row cap. */}
+              <a
+                href={
+                  search
+                    ? `/api/export/customers?q=${encodeURIComponent(search)}`
+                    : "/api/export/customers"
+                }
+                download
+              >
+                <Download className="size-4" /> Export CSV
+              </a>
+            </Button>
+          )}
           <Button onClick={() => setCreating(true)}>
             <Plus className="size-4" /> New customer
           </Button>
