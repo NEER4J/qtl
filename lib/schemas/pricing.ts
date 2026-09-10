@@ -163,8 +163,19 @@ const trimmedOrNull = z
   .transform((v) => (v == null || v === "" ? null : v));
 
 /** A money field that is allowed to be absent: blank/undefined -> NULL. */
+/**
+ * A money field that is allowed to be absent: blank/undefined -> NULL.
+ *
+ * `z.literal("")` MUST come first. A union tries its members in order, and
+ * `z.coerce.number()` happily turns "" into 0 — so with the other order an
+ * empty box became a fixed $0 price, which then WINS over the cost/margin
+ * formula and sells the part for nothing. The parts dialog maps blanks to null
+ * before submitting, so the app never hit this, but nothing in the type says it
+ * has to and the failure is silent and expensive. Same rule as `optionalRate`
+ * above.
+ */
 const optionalMoney = z
-  .union([z.coerce.number().min(0, "Must be ≥ 0").max(9999999), z.literal("")])
+  .union([z.literal(""), z.coerce.number().min(0, "Must be ≥ 0").max(9999999)])
   .optional()
   .nullable()
   .transform((v) => (v == null || v === "" ? null : Number(v)));
