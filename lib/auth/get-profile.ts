@@ -35,10 +35,14 @@ export const getCurrentProfile = cache(async (): Promise<Profile | null> => {
   // before that migration runs, this select fails, every caller sees a null
   // profile, and requireProfile() redirects the whole shop to the login page —
   // a total lockout on a column nothing critical depends on. So on undefined
-  // column (Postgres 42703) only, retry without it and carry on: a missing
-  // value means "no override", which is what NULL means anyway, so actions
-  // fall back to the role defaults until the migration lands.
-  if (error?.code === "42703") {
+  // column (Postgres 42703) or a message naming the column, retry without it
+  // and carry on: a missing value means "no override", which is what NULL
+  // means anyway, so actions fall back to the role defaults until the
+  // migration lands.
+  const missingAllowedActions =
+    error?.code === "42703" ||
+    /allowed_actions/i.test(error?.message ?? "");
+  if (missingAllowedActions) {
     const retry = await supabase
       .from("profiles")
       .select(BASE_COLUMNS)

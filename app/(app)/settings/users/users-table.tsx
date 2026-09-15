@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Check, Copy, Eye, EyeOff, Lock, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Check, Copy, Eye, EyeOff, Lock, Mail, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -29,6 +29,7 @@ import {
   applyDefaultPermissions,
   bulkUserAction,
   deleteUser,
+  sendPasswordResetEmail,
   toggleUserActive,
   type UserListRow,
 } from "@/lib/actions/users";
@@ -134,6 +135,14 @@ export function UsersTable({
   };
 
   const fmtSetAt = (iso: string) => formatDate(iso);
+
+  const handleSendReset = (u: UserListRow) => {
+    startTransition(async () => {
+      const res = await sendPasswordResetEmail({ id: u.id });
+      if (!res.ok) toast.error(res.error);
+      else toast.success(`Password reset email sent to ${res.data.email}`);
+    });
+  };
 
   const handleToggle = (u: UserListRow) => {
     startTransition(async () => {
@@ -485,6 +494,17 @@ export function UsersTable({
                         >
                           <Lock className="size-4" />
                         </Button>
+                        {!isSyntheticEmail(u.email) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Send password reset email"
+                            disabled={isPending}
+                            onClick={() => handleSendReset(u)}
+                          >
+                            <Mail className="size-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="sm"

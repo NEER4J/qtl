@@ -195,6 +195,11 @@ export const SetUserPasswordInput = z.object({
 });
 export type SetUserPasswordInput = z.infer<typeof SetUserPasswordInput>;
 
+export const SendPasswordResetInput = z.object({
+  id: z.string().uuid(),
+});
+export type SendPasswordResetInput = z.infer<typeof SendPasswordResetInput>;
+
 // ----------------------------------------------------------------------------
 // Permissions-only update — for the matrix UI
 // ----------------------------------------------------------------------------

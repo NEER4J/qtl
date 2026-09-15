@@ -5,8 +5,10 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+
+import { createClient } from "@/lib/supabase/client";
 
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -26,9 +28,9 @@ const FormSchema = z
 function ResetPasswordContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [isValidToken, setIsValidToken] = useState(false);
-  const { updatePassword } = useAuth();
+  const [checking, setChecking] = useState(true);
+  const { updatePassword, signOut } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -39,18 +41,16 @@ function ResetPasswordContent() {
   });
 
   useEffect(() => {
-    // Check if we have the necessary tokens in the URL
-    const accessToken = searchParams.get('access_token');
-    const refreshToken = searchParams.get('refresh_token');
-    
-    if (accessToken && refreshToken) {
-      setIsValidToken(true);
-    } else {
-      toast.error("Invalid reset link", {
-        description: "This password reset link is invalid or has expired.",
+    // The email link lands on /auth/callback first, which trades its code /
+    // token_hash for a session. So a valid link means we're signed in here;
+    // an expired or reused one leaves no session behind.
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => {
+        setIsValidToken(!!data.user);
+        setChecking(false);
       });
-    }
-  }, [searchParams]);
+  }, []);
 
   const onSubmit = async (data: z.infer<typeof FormSchema>) => {
     setIsLoading(true);
@@ -65,11 +65,23 @@ function ResetPasswordContent() {
       toast.success("Password updated successfully", {
         description: "Your password has been updated. You can now log in.",
       });
+      // End the recovery session so they sign in fresh with the new password.
+      await signOut();
       router.push("/auth/login");
     }
-    
+
     setIsLoading(false);
   };
+
+  if (checking) {
+    return (
+      <div className="mx-auto flex w-full flex-col justify-center space-y-8 sm:w-[350px]">
+        <div className="space-y-2 text-center">
+          <h1 className="text-3xl font-medium">Checking your link…</h1>
+        </div>
+      </div>
+    );
+  }
 
   if (!isValidToken) {
     return (

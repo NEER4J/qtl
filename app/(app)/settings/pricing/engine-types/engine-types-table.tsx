@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -70,9 +72,20 @@ export function EngineTypesTable({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [autoLinking, setAutoLinking] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
   const [, startTransition] = useTransition();
 
-  const groups = useMemo(() => groupEngineTypes(engineTypes), [engineTypes]);
+  // Inactive engines can't always be deleted (old sales jobs still point at
+  // them), so they'd sit in the list forever — hidden unless asked for.
+  const inactiveCount = useMemo(
+    () => engineTypes.filter((e) => !e.active).length,
+    [engineTypes],
+  );
+  const shownEngines = useMemo(
+    () => (showInactive ? engineTypes : engineTypes.filter((e) => e.active)),
+    [engineTypes, showInactive],
+  );
+  const groups = useMemo(() => groupEngineTypes(shownEngines), [shownEngines]);
 
   /** Suggestions the dialog can actually apply, i.e. everything but the rows
    *  the matcher left to a person. */
@@ -118,6 +131,16 @@ export function EngineTypesTable({
       }
       return new Set([...prev, ...visibleIds]);
     });
+  };
+
+  const handleShowInactive = (next: boolean) => {
+    setShowInactive(next);
+    // Don't leave hidden rows selected — bulk delete would act on rows the
+    // admin can no longer see.
+    if (!next) {
+      const inactive = new Set(engineTypes.filter((e) => !e.active).map((e) => e.id));
+      setSelectedIds((prev) => new Set([...prev].filter((id) => !inactive.has(id))));
+    }
   };
 
   const toggleExpanded = (key: string) => {
@@ -218,6 +241,21 @@ export function EngineTypesTable({
           )}
         </div>
         <div className="flex items-center gap-2">
+          {inactiveCount > 0 && (
+            <div className="mr-2 flex items-center gap-2">
+              <Switch
+                id="show-inactive-engines"
+                checked={showInactive}
+                onCheckedChange={handleShowInactive}
+              />
+              <Label
+                htmlFor="show-inactive-engines"
+                className="text-sm font-normal text-muted-foreground"
+              >
+                Show inactive ({inactiveCount})
+              </Label>
+            </div>
+          )}
           {/* Count what can actually be applied, not every unlinked engine — the
               dialog lists the undecidable ones separately, and once only those
               are left the button would read "Link packages (0)" and open a
@@ -262,13 +300,17 @@ export function EngineTypesTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {engineTypes.length === 0 ? (
+            {groups.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={labourLinkSupported ? 8 : 7}
                   className="text-center text-muted-foreground py-8"
                 >
-                  No engine types yet. Click <strong>New engine type</strong> to add one.
+                  {engineTypes.length === 0 ? (
+                    <>No engine types yet. Click <strong>New engine type</strong> to add one.</>
+                  ) : (
+                    <>All engine types are inactive. Turn on <strong>Show inactive</strong> to see them.</>
+                  )}
                 </TableCell>
               </TableRow>
             ) : (

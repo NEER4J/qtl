@@ -1,5 +1,10 @@
 import { redirect } from 'next/navigation'
+import type { EmailOtpType } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+
+function first(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v
+}
 
 export default async function AuthCallback({
   searchParams,
@@ -9,44 +14,35 @@ export default async function AuthCallback({
   const supabase = await createClient()
   const params = await searchParams
 
-  console.log('OAuth callback received params:', params)
+  const code = first(params.code)
+  const tokenHash = first(params.token_hash)
+  const type = first(params.type) as EmailOtpType | undefined
+  // Only same-site paths — never bounce to an arbitrary URL from a link.
+  const rawNext = first(params.next) ?? '/dashboard'
+  const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/dashboard'
+  const failTo =
+    next === '/auth/reset-password' ? '/auth/reset-password' : '/auth/login?error=callback_error'
 
-  const code = Array.isArray(params.code) ? params.code[0] : params.code
-  const next = Array.isArray(params.next) ? params.next[0] : params.next ?? '/dashboard'
-
-  console.log('Code:', code, 'Next:', next)
-
-  if (code) {
-    console.log('Exchanging code for session...')
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-    
+  if (tokenHash && type) {
+    // Email links built from the template's {{ .TokenHash }} — these work in
+    // any browser, unlike `code`, which only the browser that asked can use.
+    const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash })
     if (error) {
-      console.error('OAuth callback error:', error)
-      redirect('/auth/login?error=callback_error')
+      console.error('auth callback: verifyOtp failed:', error.message)
+      redirect(failTo)
     }
-    
-    console.log('Session exchange successful:', data)
-  } else {
-    console.log('No code provided, checking existing session...')
-    // No code provided, check if user is already authenticated
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    
-    if (userError || !user) {
-      console.error('No code provided and no existing session:', userError)
-      redirect('/auth/login?error=no_code')
+  } else if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    if (error) {
+      console.error('auth callback: code exchange failed:', error.message)
+      redirect(failTo)
     }
-    
-    console.log('Existing user found:', user)
   }
 
-  // Get the user after the session exchange
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-  
-  if (userError || !user) {
-    console.error('User fetch error:', userError)
-    redirect('/auth/login?error=session_missing')
-  }
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect(next === '/auth/reset-password' ? failTo : '/auth/login?error=session_missing')
 
-  console.log('Redirecting to:', next)
-  redirect(next as string)
+  redirect(next)
 }

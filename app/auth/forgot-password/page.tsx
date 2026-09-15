@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth/use-auth";
 
 const FormSchema = z.object({
-  email: z.string().email({ message: "Please enter a valid email address." }),
+  identifier: z.string().trim().min(1, { message: "Please enter your email or username." }),
 });
 
 export default function ForgotPasswordPage() {
@@ -24,14 +24,14 @@ export default function ForgotPasswordPage() {
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      email: "",
+      identifier: "",
     },
   });
 
   const onSubmit = async (data: z.infer<typeof FormSchema>) => {
     setIsLoading(true);
-    
-    const { error } = await resetPassword(data.email);
+
+    const { error } = await resetPassword(data.identifier);
     
     if (error) {
       toast.error("Failed to send reset email", {
@@ -53,7 +53,7 @@ export default function ForgotPasswordPage() {
         <div className="space-y-2 text-center">
           <h1 className="text-3xl font-medium">Check your email</h1>
           <p className="text-neutral-500 dark:text-neutral-400 text-sm">
-            We've sent you a password reset link. Please check your email and follow the instructions.
+            We&apos;ve sent you a password reset link. Please check your email and follow the instructions.
           </p>
         </div>
         <div className="space-y-4">
@@ -72,24 +72,25 @@ export default function ForgotPasswordPage() {
       <div className="space-y-2 text-center">
         <h1 className="text-3xl font-medium">Forgot your password?</h1>
         <p className="text-neutral-500 dark:text-neutral-400 text-sm">
-          Enter your email address and we'll send you a link to reset your password.
+          Enter your email or username and we&apos;ll email you a link to reset your password.
+          Staff without an email address on file should ask their manager or admin.
         </p>
       </div>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <FormField
             control={form.control}
-            name="email"
+            name="identifier"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Email Address</FormLabel>
+                <FormLabel>Email or username</FormLabel>
                 <FormControl>
-                  <Input 
-                    id="email" 
-                    type="email" 
-                    placeholder="you@example.com" 
-                    autoComplete="email" 
-                    {...field} 
+                  <Input
+                    id="identifier"
+                    type="text"
+                    placeholder="you@example.com or jdoe"
+                    autoComplete="username"
+                    {...field}
                   />
                 </FormControl>
                 <FormMessage />

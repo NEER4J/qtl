@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -9,10 +10,12 @@ import {
   ApplyDefaultPermissionsInput,
   BulkUserAction,
   InviteUserInput,
+  SendPasswordResetInput,
   SetUserPasswordInput,
   ToggleUserActive,
   UpdateUserInput,
   UpdateUserPermissionsInput,
+  isSyntheticEmail,
   isUsernameRole,
   syntheticEmailForUsername,
 } from "@/lib/schemas/users";
@@ -27,16 +30,28 @@ export interface UserListRow extends Profile {
 
 export async function listUsers(): Promise<UserListRow[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select(
-      "id, email, username, full_name, role, location_id, location_ids, can_enter_expenses, active, last_login_at, created_at, updated_at, allowed_pages, hidden_columns, allowed_actions, cross_location, locations:location_id(name)",
-    )
-    .order("role")
-    .order("full_name");
+  const base =
+    "id, email, username, full_name, role, location_id, location_ids, can_enter_expenses, active, last_login_at, created_at, updated_at, allowed_pages, hidden_columns, cross_location, locations:location_id(name)";
+  const query = (columns: string) =>
+    supabase.from("profiles").select(columns).order("role").order("full_name");
+
+  let { data, error } = await query(`${base}, allowed_actions`);
+  // `allowed_actions` arrives with migration 0140 — same fallback as
+  // getCurrentProfile: if it hasn't run yet, read without it so the Users
+  // page still loads. NULL means "role defaults". Match on Postgres
+  // undefined_column (42703) or the column name in the message, because
+  // PostgREST sometimes surfaces the failure without a stable code.
+  const missingAllowedActions =
+    error?.code === "42703" ||
+    /allowed_actions/i.test(error?.message ?? "");
+  if (missingAllowedActions) {
+    ({ data, error } = await query(base));
+  }
   if (error) throw error;
 
-  return (data ?? []).map((row) => {
+  // The column list is built at runtime, so Supabase can't infer the row type.
+  const rows = (data ?? []) as unknown as (Profile & { locations: unknown })[];
+  return rows.map((row) => {
     const loc = row.locations as { name: string | null } | { name: string | null }[] | null;
     const locationName = Array.isArray(loc)
       ? (loc[0]?.name ?? null)
@@ -45,7 +60,11 @@ export async function listUsers(): Promise<UserListRow[]> {
     // Strip the joined relation before returning so the shape matches Profile + location_name.
     const { locations: _locations, ...rest } = row as typeof row & { locations: unknown };
     void _locations;
-    return { ...(rest as Profile), location_name: locationName };
+    return {
+      ...(rest as Profile),
+      allowed_actions: (rest as Profile).allowed_actions ?? null,
+      location_name: locationName,
+    };
   });
 }
 
@@ -442,6 +461,36 @@ export interface StoredCredential {
   set_at: string;
   set_by: string | null;
 }
+
+// ----------------------------------------------------------------------------
+// Send reset email — the user picks their own new password from the link,
+// for when the admin shouldn't know it (Set password is the other route).
+// ----------------------------------------------------------------------------
+export const sendPasswordResetEmail = wrapAction({
+  schema: SendPasswordResetInput,
+  roles: ["owner", "co_owner"],
+  handler: async (input): Promise<{ email: string }> => {
+    const admin = createAdminClient();
+    const { data: profile, error } = await admin
+      .from("profiles")
+      .select("email")
+      .eq("id", input.id)
+      .maybeSingle();
+    if (error) throw error;
+    if (!profile?.email || isSyntheticEmail(profile.email)) {
+      throw new Error("This user has no email address on file — use Set password instead.");
+    }
+
+    const origin = (await headers()).get("origin");
+    if (!origin) throw new Error("Couldn't work out the site address for the reset link.");
+
+    const { error: sendErr } = await admin.auth.resetPasswordForEmail(profile.email, {
+      redirectTo: `${origin}/auth/callback?next=/auth/reset-password`,
+    });
+    if (sendErr) throw sendErr;
+    return { email: profile.email };
+  },
+});
 
 export async function listUserPasswords(): Promise<StoredCredential[]> {
   const supabase = await createClient();

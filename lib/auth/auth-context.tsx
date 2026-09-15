@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import type { Session, User } from '@supabase/supabase-js'
 
 import { createClient } from '@/lib/supabase/client'
+import { isSyntheticEmail } from '@/lib/schemas/users'
 import type { AuthContextType, AuthUser } from '@/types/auth'
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -118,10 +119,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message || null }
   }
 
-  const resetPassword = async (email: string) => {
+  const resetPassword = async (identifier: string) => {
     const supabase = createClient()
+
+    // Same email-or-username rule as signIn.
+    let email = identifier.trim()
+    if (!email.includes('@')) {
+      const { data, error } = await supabase.rpc('auth_email_for_username', {
+        p_username: email.toLowerCase(),
+      })
+      if (error || !data) {
+        return { error: 'No account found for that username.' }
+      }
+      email = data as string
+    }
+    // Username-only staff sign in with a made-up <username>@team.qtl.app
+    // address — a reset email would go nowhere.
+    if (isSyntheticEmail(email)) {
+      return {
+        error: 'This account has no email address on file — ask your manager or admin to reset your password.',
+      }
+    }
+
+    // Through /auth/callback, which turns the link's code / token_hash into a
+    // session before the reset page asks for the new password.
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset-password`,
+      redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`,
     })
     return { error: error?.message || null }
   }
