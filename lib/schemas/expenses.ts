@@ -18,7 +18,10 @@ export const ExpenseItemInput = z.object({
   oil_type_id: z.string().uuid().nullable().optional(),
   oil_container: z.enum(["bulk", "gallon"]).nullable().optional(),
   description: z.string().trim().min(1, "Description required").max(500),
-  quantity: z.coerce.number().min(0.001),
+  // expense_items.quantity is numeric(10,2) with CHECK (quantity > 0): anything
+  // under 0.01 rounds to 0.00 in the database and fails that check, so reject
+  // it here with a readable message instead.
+  quantity: z.coerce.number().min(0.01, "Quantity must be at least 0.01"),
   // Signed so a promotion / vendor-discount line can carry a negative unit_cost.
   unit_cost: signedMoneySchema,
   // Snapshot of the part's last buying price at pick time. Persisted so the

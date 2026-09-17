@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -24,11 +24,12 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { createOilGroup, setOilGroupMembers, updateOilGroup } from "@/lib/actions/pricing";
-import type { OilGroup, OilType } from "@/lib/db/types";
+import type { OilGroup, OilGroupPricingMode, OilType } from "@/lib/db/types";
 import { formatMoney } from "@/lib/utils/format";
 
 type FormValues = {
   name: string;
+  pricing_mode: OilGroupPricingMode;
   bulk_price_per_litre: string;
   gallon_price_per_container: string;
   sort_order: string;
@@ -37,11 +38,44 @@ type FormValues = {
 
 const blank: FormValues = {
   name: "",
+  pricing_mode: "manual",
   bulk_price_per_litre: "",
   gallon_price_per_container: "",
   sort_order: "100",
   active: true,
 };
+
+/**
+ * The most expensive of the ticked, active oils — the same rule the database
+ * applies in highest_cost mode (private.oil_group_highest_costs, mig 0145), so
+ * the dialog can show the price before saving. Gallons are compared per litre
+ * because jug sizes differ; oils with no cost entered are skipped.
+ */
+function highestCosts(members: OilType[]) {
+  let bulk: OilType | null = null;
+  let gallon: OilType | null = null;
+  const gallonPerLitre = (o: OilType) =>
+    Number(o.gallon_cost_per_litre) / Number(o.litres_per_gallon);
+  for (const o of members) {
+    if (!o.active) continue;
+    if (Number(o.bulk_cost_per_litre) > 0 && (!bulk || Number(o.bulk_cost_per_litre) > Number(bulk.bulk_cost_per_litre))) {
+      bulk = o;
+    }
+    if (
+      Number(o.gallon_cost_per_litre) > 0 &&
+      Number(o.litres_per_gallon) > 0 &&
+      (!gallon || gallonPerLitre(o) > gallonPerLitre(gallon))
+    ) {
+      gallon = o;
+    }
+  }
+  return {
+    bulk,
+    bulkRate: bulk ? Number(bulk.bulk_cost_per_litre) : null,
+    gallon,
+    gallonPerLitre: gallon ? gallonPerLitre(gallon) : null,
+  };
+}
 
 /** "" -> null so a cleared rate means "not set, fall back", not a $0 price. */
 const rateOrNull = (v: string): number | null => {
@@ -79,6 +113,7 @@ export function OilGroupFormDialog({
       mode === "edit" && group
         ? {
             name: group.name,
+            pricing_mode: group.pricing_mode ?? "manual",
             bulk_price_per_litre:
               group.bulk_price_per_litre == null ? "" : String(group.bulk_price_per_litre),
             gallon_price_per_container:
@@ -112,10 +147,21 @@ export function OilGroupFormDialog({
   const otherGroupId = (o: OilType) =>
     o.oil_group_id && o.oil_group_id !== group?.id ? o.oil_group_id : null;
 
+  const pricingMode = useWatch({ control: form.control, name: "pricing_mode" });
+  const auto = pricingMode === "highest_cost";
+  const highest = useMemo(
+    () => highestCosts(oilTypes.filter((o) => memberIds.includes(o.id))),
+    [oilTypes, memberIds],
+  );
+
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
+      // In highest_cost mode the database sets the prices and the action drops
+      // the typed ones (oilGroupWriteRow). Switching back to manual starts
+      // from the last derived bulk price and the gallon price as last typed.
       const payload = {
         name: values.name.trim(),
+        pricing_mode: values.pricing_mode,
         bulk_price_per_litre: rateOrNull(values.bulk_price_per_litre),
         gallon_price_per_container: rateOrNull(values.gallon_price_per_container),
         sort_order: Number(values.sort_order) || 100,
@@ -178,54 +224,112 @@ export function OilGroupFormDialog({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="bulk_price_per_litre"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Bulk price $/L</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="not set"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>Charged per litre.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="gallon_price_per_container"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Gallon price $/container</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="not set"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>Whole container, not per litre.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            <FormField
+              control={form.control}
+              name="pricing_mode"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start gap-3 space-y-0 rounded-md border p-3">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value === "highest_cost"}
+                      onCheckedChange={(v) => field.onChange(v === true ? "highest_cost" : "manual")}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="cursor-pointer">
+                      Price from the most expensive oil in this group
+                    </FormLabel>
+                    <FormDescription className="text-xs">
+                      Bulk and gallon prices follow the highest cost among the ticked, active oils
+                      below, and update by themselves when any of those costs change. It&apos;s
+                      charged at cost — the profit comes from the volume tier premium, as on the
+                      oil-change price list. Leave groups of very different fluids (e.g. Gear &amp;
+                      Trans) on manual.
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
 
-            <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              Leave a price <strong>empty</strong> to fall back to the old single base-grade
-              rate for that container. Entering <strong>0</strong> is a real $0 price, not a
-              fallback.
-            </p>
+            {auto ? (
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">Bulk price $/L</div>
+                  <div className="rounded-md border bg-muted/40 px-3 py-2 tabular-nums">
+                    {highest.bulkRate != null ? formatMoney(highest.bulkRate) : "not set"}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {highest.bulk
+                      ? `From ${highest.bulk.name}.`
+                      : "No ticked oil has a bulk cost — lines fall back to the base grade."}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">Gallon price $/L</div>
+                  <div className="rounded-md border bg-muted/40 px-3 py-2 tabular-nums">
+                    {highest.gallonPerLitre != null
+                      ? `${formatMoney(highest.gallonPerLitre)}/L`
+                      : "not set"}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {highest.gallon
+                      ? `From ${highest.gallon.name}. Each oil's jug is charged at this × its own size (a ${Number(highest.gallon.litres_per_gallon)} L jug = ${formatMoney(Math.round(highest.gallonPerLitre! * Number(highest.gallon.litres_per_gallon) * 100) / 100)}).`
+                      : "No ticked oil has a gallon cost — lines fall back to the base grade."}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="bulk_price_per_litre"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Bulk price $/L</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="not set"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Charged per litre.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="gallon_price_per_container"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Gallon price $/container</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="not set"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Whole container, not per litre.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+
+            {!auto && (
+              <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                Leave a price <strong>empty</strong> to fall back to the old single base-grade
+                rate for that container. Entering <strong>0</strong> is a real $0 price, not a
+                fallback.
+              </p>
+            )}
 
             {oilTypes.length > 0 && (
               <div className="space-y-2">
@@ -283,6 +387,17 @@ export function OilGroupFormDialog({
                           {moving && (
                             <span className="mt-0.5 shrink-0 text-[10px] text-amber-600 dark:text-amber-500">
                               moves from another group
+                            </span>
+                          )}
+                          {auto && memberIds.includes(o.id) && (
+                            highest.bulk?.id === o.id || highest.gallon?.id === o.id
+                          ) && (
+                            <span className="mt-0.5 shrink-0 text-[10px] font-medium text-primary">
+                              {highest.bulk?.id === o.id && highest.gallon?.id === o.id
+                                ? "sets both prices"
+                                : highest.bulk?.id === o.id
+                                  ? "sets bulk price"
+                                  : "sets gallon price"}
                             </span>
                           )}
                         </label>

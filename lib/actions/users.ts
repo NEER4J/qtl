@@ -68,6 +68,26 @@ export async function listUsers(): Promise<UserListRow[]> {
   });
 }
 
+// Every profile write sends `allowed_actions` (migration 0140). Before that
+// migration lands, PostgREST rejects the write with PGRST204 / 42703 and a
+// message nobody on the Users page can act on — name the migration instead.
+// Anything else is returned untouched so wrapAction's mapError still sees the
+// Postgres code (23505, 42501, …).
+function profileWriteError(error: { code?: string; message?: string }): unknown {
+  // Both forms name the column — PGRST204 "Could not find the 'allowed_actions'
+  // column…", 42703 "column profiles.allowed_actions does not exist" — so match
+  // on the name; a different missing column must not be blamed on 0140.
+  const missingAllowedActions =
+    (error.code === "PGRST204" || error.code === "42703") &&
+    /allowed_actions/i.test(error.message ?? "");
+  if (missingAllowedActions) {
+    return new Error(
+      "Saving permissions needs migration 0140_page_action_permissions.sql — apply it to the database, then try again.",
+    );
+  }
+  return error;
+}
+
 // ----------------------------------------------------------------------------
 // Invite — admin creates auth user + profile via trigger, then patches role
 // ----------------------------------------------------------------------------
@@ -165,7 +185,7 @@ export const inviteUser = wrapAction({
         },
         { onConflict: "id" },
       );
-    if (upsertErr) throw upsertErr;
+    if (upsertErr) throw profileWriteError(upsertErr);
 
     // Mirror the plaintext into profile_credentials so the owner can recall
     // it from the users page. RLS on profile_credentials restricts SELECT to
@@ -235,7 +255,7 @@ export const updateUser = wrapAction({
       .eq("id", input.id)
       .select("*")
       .single();
-    if (error) throw error;
+    if (error) throw profileWriteError(error);
     revalidatePath("/settings/users");
     revalidatePath("/", "layout");
     return data as Profile;
@@ -260,7 +280,7 @@ export const updateUserPermissions = wrapAction({
       .eq("id", input.id)
       .select("*")
       .single();
-    if (error) throw error;
+    if (error) throw profileWriteError(error);
     revalidatePath("/settings/users");
     revalidatePath("/", "layout");
     return data as Profile;
@@ -283,7 +303,7 @@ export const applyDefaultPermissions = wrapAction({
       .update({ allowed_pages: null, hidden_columns: {}, allowed_actions: null })
       .in("id", input.ids)
       .select("id");
-    if (error) throw error;
+    if (error) throw profileWriteError(error);
     revalidatePath("/settings/users");
     revalidatePath("/", "layout");
     return { affected: data?.length ?? 0 };

@@ -765,13 +765,22 @@ export interface RecurringExpense {
  * every oil in a group is charged the group's rate. A NULL rate means "not
  * set" and falls back to the old single-base behaviour — see oilLineRate.
  */
+export type OilGroupPricingMode = "manual" | "highest_cost";
+
 export interface OilGroup {
   id: string;
   name: string;
   /** Charged per LITRE for a bulk line. NULL = not set, fall back. */
   bulk_price_per_litre: number | null;
-  /** Charged per CONTAINER for a gallon line. NULL = not set, fall back. */
+  /** Charged per CONTAINER for a gallon line. NULL = not set, fall back.
+   *  Manual mode only — ignored while pricing_mode is 'highest_cost'. */
   gallon_price_per_container: number | null;
+  /** 'highest_cost' derives the prices from the group's most expensive active
+   *  oil (migration 0145); absent before that migration = 'manual'. */
+  pricing_mode?: OilGroupPricingMode;
+  /** highest_cost mode: highest member gallon cost PER LITRE. A gallon line
+   *  charges this × the oil's own litres_per_gallon. NULL = not set, fall back. */
+  gallon_price_per_litre?: number | null;
   active: boolean;
   sort_order: number;
   created_at: string;
@@ -872,8 +881,8 @@ export interface Part {
   without_service_price: number | null;
   with_service_price: number | null;
   over_counter_price: number | null;
-  /** When true the part is bundled in a package — Without Service price is forced to 0
-   *  and a second occurrence on the same sales job defaults to over_counter_price. */
+  /** When true the part is bundled in a package — adding it to a sales job on its own
+   *  charges With Service at $0 (computePartSellTiers, bundledWithServiceIsFree). */
   in_package: boolean;
   /** When true, this part's unit price is rounded up to the next .99 when added to a sales job. */
   round_off: boolean;

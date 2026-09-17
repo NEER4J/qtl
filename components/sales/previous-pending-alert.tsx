@@ -5,33 +5,31 @@ import { AlertTriangle, Wallet } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { getCustomerOutstanding, type CustomerOutstanding } from "@/lib/actions/customers";
-import { fetchCustomerCreditBalance } from "@/lib/actions/customer-credits";
 import { formatDate, formatMoney } from "@/lib/utils/format";
 
-export function PreviousPendingAlert({ customerId }: { customerId: string | null }) {
+export function PreviousPendingAlert({
+  customerId,
+  storeCredit,
+}: {
+  customerId: string | null;
+  /** The balance the sales form already loaded for its payment section. Passed
+   *  in rather than fetched again: server actions run one at a time, so a
+   *  duplicate read here held up every picker opened after picking a customer.
+   *  It's also the figure the payment section offers, which this alert points to. */
+  storeCredit: number;
+}) {
   const [outstanding, setOutstanding] = useState<CustomerOutstanding | null>(null);
-  const [storeCredit, setStoreCredit] = useState(0);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!customerId) {
       setOutstanding(null);
-      setStoreCredit(0);
       return;
     }
     setLoading(true);
-    Promise.all([
-      getCustomerOutstanding(customerId),
-      fetchCustomerCreditBalance(customerId),
-    ])
-      .then(([o, credit]) => {
-        setOutstanding(o);
-        setStoreCredit(credit);
-      })
-      .catch(() => {
-        setOutstanding(null);
-        setStoreCredit(0);
-      })
+    getCustomerOutstanding(customerId)
+      .then((o) => setOutstanding(o))
+      .catch(() => setOutstanding(null))
       .finally(() => setLoading(false));
   }, [customerId]);
 

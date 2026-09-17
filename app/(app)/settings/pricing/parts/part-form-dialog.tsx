@@ -744,6 +744,15 @@ export function PartFormDialog({
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {OVERRIDE_FIELDS.map((f) => {
                   const calculated = formulaTiers[f.tier];
+                  // A bundled part charges $0 for With Service on a job — even
+                  // over a fixed price (computePartSellTiers) — so say so here
+                  // as the box is ticked, with the calculated figure alongside.
+                  const bundledFree = f.tier === "with_service" && inPackage;
+                  const placeholder = bundledFree
+                    ? `$0 on jobs · calc ${calculated != null ? formatMoney(calculated) : "—"}`
+                    : calculated != null
+                      ? `Calculated ${formatMoney(calculated)}`
+                      : "Calculated";
                   return (
                     <FormField
                       key={f.name}
@@ -757,14 +766,18 @@ export function PartFormDialog({
                               type="number"
                               min="0"
                               step="0.01"
-                              placeholder={
-                                calculated != null ? `Calculated ${formatMoney(calculated)}` : "Calculated"
-                              }
+                              placeholder={placeholder}
                               {...field}
                             />
                           </FormControl>
                           <FormDescription className="text-xs">
-                            {field.value.trim() === "" ? f.formula : `Overrides ${f.formula.toLowerCase()}`}
+                            {bundledFree
+                              ? field.value.trim() === ""
+                                ? "Bundled — a job charges $0; price lists show $0 with the calculated price"
+                                : "Bundled — a job still charges $0; this fixed price shows on the price lists"
+                              : field.value.trim() === ""
+                                ? f.formula
+                                : `Overrides ${f.formula.toLowerCase()}`}
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -830,7 +843,7 @@ export function PartFormDialog({
                     <div className="leading-none">
                       <FormLabel className="cursor-pointer">Bundled in a package</FormLabel>
                       <FormDescription className="text-xs">
-                        Marks the part as part of a package. A package charges this part at its cost basis (cost + Sell MHSW) — the package&apos;s labour is its own separate line. Adding this part to a job on its own offers <strong>With Service</strong> at $0, since the package already covered it, and a second occurrence on the same job auto-uses the <strong>Over the Counter</strong> price. The price lists still show the calculated With Service price.
+                        Marks the part as part of a package. A package charges this part at its cost basis (cost + Sell MHSW) — the package&apos;s labour is its own separate line. Adding this part to a job on its own charges <strong>With Service</strong> at $0, since the package already covered it. The With service box above and the price lists show $0 with the calculated price alongside.
                       </FormDescription>
                     </div>
                   </FormItem>

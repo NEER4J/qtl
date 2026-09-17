@@ -27,19 +27,17 @@ import {
 import type { EngineType } from "@/lib/db/types";
 
 import { AutoLinkDialog } from "./auto-link-dialog";
+import { baseModelName } from "./base-model-name";
 import { EngineTypeFormDialog } from "./engine-type-form-dialog";
 import { LabourPackagePicker } from "./labour-package-picker";
+import { MergeEngineDialog } from "./merge-engine-dialog";
 
-// Filter-variant rows (e.g. "4.6L V8" and "4.6L V8 With Bosch Filter") are
-// separate engine_types rows on purpose — each is wired to its own
-// engine_filters part/brand and priced independently (see getOilDetail). We
-// must NOT merge or hide that data (tried once, reverted — see migrations
-// 0110/0111). This only GROUPS them for display: one row per base engine
-// number by default, with the variants a click away, so admins aren't
-// staring at near-duplicate rows for the same physical engine.
-function baseModelName(model: string): string {
-  return model.replace(/\s+with\s+.*filter\s*$/i, "").trim();
-}
+// Filter variants must NOT be merged or hidden automatically (tried once,
+// reverted — see migrations 0110/0111). This only GROUPS them for display: one
+// row per base engine number by default, with the variants a click away, so
+// admins aren't staring at near-duplicate rows for the same physical engine.
+// Merging is only ever a deliberate admin choice (MergeEngineDialog), offered
+// when a delete is blocked by sales-job history.
 
 function groupEngineTypes(engineTypes: EngineType[]) {
   const groups = new Map<string, EngineType[]>();
@@ -73,6 +71,10 @@ export function EngineTypesTable({
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [autoLinking, setAutoLinking] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
+  // A delete blocked by sales-job history opens the merge dialog for that row.
+  const [mergeBlocked, setMergeBlocked] = useState<{ engine: EngineType; reason: string } | null>(
+    null,
+  );
   const [, startTransition] = useTransition();
 
   // Inactive engines can't always be deleted (old sales jobs still point at
@@ -174,8 +176,9 @@ export function EngineTypesTable({
     startTransition(async () => {
       const res = await deleteEngineType({ id: e.id });
       setPendingId(null);
-      if (!res.ok) toast.error(res.error);
-      else toast.success("Engine type deleted");
+      if (res.ok) toast.success("Engine type deleted");
+      else if (res.code === "engine_in_use") setMergeBlocked({ engine: e, reason: res.error });
+      else toast.error(res.error);
     });
   };
 
@@ -192,6 +195,7 @@ export function EngineTypesTable({
     setBulkDeleting(true);
     startTransition(async () => {
       let deleted = 0;
+      let inUse = 0;
       const failedIds = new Set<string>();
       let firstError: string | null = null;
       for (const id of ids) {
@@ -200,7 +204,8 @@ export function EngineTypesTable({
           deleted += 1;
         } else {
           failedIds.add(id);
-          firstError ??= res.error;
+          if (res.code === "engine_in_use") inUse += 1;
+          else firstError ??= res.error;
         }
       }
       setBulkDeleting(false);
@@ -208,9 +213,16 @@ export function EngineTypesTable({
       if (deleted > 0) {
         toast.success(`Deleted ${deleted} engine type${deleted === 1 ? "" : "s"}`);
       }
-      if (failedIds.size > 0) {
+      // Engines with sales-job history are left selected. Merging needs a
+      // target picked per engine, so it's done one row at a time.
+      if (inUse > 0) {
         toast.error(
-          `${failedIds.size} couldn't be deleted${firstError ? ` — ${firstError}` : ""}`,
+          `${inUse} ${inUse === 1 ? "is" : "are"} on sales jobs and can't be deleted — use each row's delete button to merge ${inUse === 1 ? "it" : "them"} into the engine ${inUse === 1 ? "it duplicates" : "they duplicate"}, or deactivate.`,
+        );
+      }
+      if (failedIds.size > inUse) {
+        toast.error(
+          `${failedIds.size - inUse} couldn't be deleted${firstError ? ` — ${firstError}` : ""}`,
         );
       }
     });
@@ -348,6 +360,13 @@ export function EngineTypesTable({
         open={autoLinking}
         onOpenChange={setAutoLinking}
         suggestions={suggestions}
+      />
+
+      <MergeEngineDialog
+        source={mergeBlocked?.engine ?? null}
+        reason={mergeBlocked?.reason ?? null}
+        engineTypes={engineTypes}
+        onOpenChange={(open) => !open && setMergeBlocked(null)}
       />
 
       <EngineTypeFormDialog open={creating} onOpenChange={setCreating} mode="create" />

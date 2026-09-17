@@ -49,6 +49,17 @@ export default async function OilGroupsPage() {
             for that container. <strong>0</strong> is a real $0 price, not a fallback.
           </li>
           <li>
+            Tick <strong>Price from the most expensive oil in this group</strong> and the group
+            prices itself: bulk $/L is the highest bulk cost among its active oils, and gallons
+            use the highest cost <em>per litre</em> — each oil&apos;s jug is charged at that rate
+            × its own jug size, since jugs aren&apos;t all the same size. It updates by itself
+            whenever one of those oils&apos; costs changes, or an oil joins or leaves the group.
+            It&apos;s charged at cost: the profit comes from the volume tier premium. A top-up
+            smaller than the lowest volume tier gets no premium, so add a small tier from 1 L in{" "}
+            <strong>Volume tiers</strong> if those should make money. Keep groups of very
+            different fluids (e.g. Gear &amp; Trans) on manual.
+          </li>
+          <li>
             <strong>Create a group and tick its grades in the same dialog</strong> — press
             <strong> New oil group</strong>, name it, set the rate, then tick every grade it
             should price. You can also set a grade&apos;s group from the{" "}

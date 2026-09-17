@@ -36,6 +36,7 @@ import {
   CreateVolumeTierInput,
   DeleteEngineFilterInput,
   DeleteEngineTypeInput,
+  MergeEngineTypesInput,
   DeleteVolumeTierInput,
   LockOilPricesInput,
   LockPartPackageInput,
@@ -76,10 +77,11 @@ import {
   getCachedActiveOilTypes,
   getCachedActivePartBrands,
   getCachedActivePartCategories,
+  getCachedAppSettings,
   getCachedServiceCosts,
   revalidateReference,
 } from "@/lib/cache/reference";
-import { applyPartsSearch } from "@/lib/utils/parts-search";
+import { applyPartsSearch, orFilterValue } from "@/lib/utils/parts-search";
 import { TRANSMISSION_KIND_LABEL } from "@/lib/utils/transmission";
 
 /**
@@ -1487,17 +1489,18 @@ export async function listPartsForPicker(q?: string): Promise<PartForPicker[]> {
     "description",
     "brand",
   ]);
-  const [partsRes, settingsRes] = await Promise.all([
+  // Settings come from the cross-request cache (updatePricingSettings
+  // revalidates it), so each picker search is one database round trip.
+  const [partsRes, settings] = await Promise.all([
     query,
-    supabase
-      .from("app_settings")
-      .select("counter_premium, customer_supplies_labour")
-      .eq("id", 1)
-      .single(),
+    getCachedAppSettings().catch(() => null) as Promise<{
+      counter_premium?: number | null;
+      customer_supplies_labour?: number | null;
+    } | null>,
   ]);
   if (partsRes.error) throw partsRes.error;
-  const counterPremium = Number(settingsRes.data?.counter_premium ?? 10);
-  const customerSuppliesLabour = Number(settingsRes.data?.customer_supplies_labour ?? 20);
+  const counterPremium = Number(settings?.counter_premium ?? 10);
+  const customerSuppliesLabour = Number(settings?.customer_supplies_labour ?? 20);
   type Row = PartJoinRow & { service_costs: { cost: number } | null };
   return ((partsRes.data ?? []) as unknown as Row[]).map((row) => {
     const part = normalizePartPricing(mergePartCategory(row));
@@ -1618,16 +1621,49 @@ export async function listAllOilGroups(): Promise<OilGroup[]> {
   return (data ?? []) as OilGroup[];
 }
 
+const OIL_GROUP_AUTO_NEEDS_MIGRATION =
+  "Pricing a group from its most expensive oil needs migration 0145_oil_group_highest_cost.sql — apply it to the database, then try again.";
+
+/** PostgREST / Postgres rejecting a write because `pricing_mode` isn't there yet. */
+function isMissingPricingMode(error: { code?: string; message?: string }): boolean {
+  return (
+    (error.code === "PGRST204" || error.code === "42703") &&
+    /pricing_mode/i.test(error.message ?? "")
+  );
+}
+
+/**
+ * The row a group save writes. In highest_cost mode the prices are derived by
+ * the database (trg_oil_groups_highest_cost), so the typed ones are left out —
+ * which also keeps the manual gallon price intact for switching back.
+ */
+function oilGroupWriteRow<T extends Partial<CreateOilGroupInput>>(input: T) {
+  if (input.pricing_mode !== "highest_cost") return input;
+  const { bulk_price_per_litre: _bulk, gallon_price_per_container: _gallon, ...rest } = input;
+  void _bulk;
+  void _gallon;
+  return rest;
+}
+
+/** Drops pricing_mode for a database without 0145 — only valid for manual saves. */
+function withoutPricingMode<T extends { pricing_mode?: unknown }>(row: T) {
+  const { pricing_mode: _mode, ...rest } = row;
+  void _mode;
+  return rest;
+}
+
 export const createOilGroup = wrapAction({
   schema: CreateOilGroupInput,
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<OilGroup> => {
     const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("oil_groups")
-      .insert(input)
-      .select("*")
-      .single();
+    const insert = (row: object) =>
+      supabase.from("oil_groups").insert(row).select("*").single();
+    let { data, error } = await insert(oilGroupWriteRow(input));
+    if (error && isMissingPricingMode(error)) {
+      if (input.pricing_mode === "highest_cost") throw new Error(OIL_GROUP_AUTO_NEEDS_MIGRATION);
+      ({ data, error } = await insert(withoutPricingMode(input)));
+    }
     if (error) throw error;
     revalidatePricing("oil-groups");
     return data as OilGroup;
@@ -1639,12 +1675,13 @@ export const updateOilGroup = wrapAction({
   roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<OilGroup> => {
     const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("oil_groups")
-      .update(fields)
-      .eq("id", id)
-      .select("*")
-      .single();
+    const update = (row: object) =>
+      supabase.from("oil_groups").update(row).eq("id", id).select("*").single();
+    let { data, error } = await update(oilGroupWriteRow(fields));
+    if (error && isMissingPricingMode(error)) {
+      if (fields.pricing_mode === "highest_cost") throw new Error(OIL_GROUP_AUTO_NEEDS_MIGRATION);
+      ({ data, error } = await update(withoutPricingMode(fields)));
+    }
     if (error) throw error;
     revalidatePricing("oil-groups");
     return data as OilGroup;
@@ -1654,10 +1691,14 @@ export const updateOilGroup = wrapAction({
 /**
  * Set exactly which grades a group prices, from the group's own dialog.
  *
- * Two writes rather than one: grades ticked join the group, and grades that
- * were in it but are no longer ticked are released back to the base-grade
- * fallback (oil_group_id = null). Scoping the clear to THIS group is what stops
- * it from stealing grades that belong to another one.
+ * Grades ticked join the group, and grades that were in it but are no longer
+ * ticked are released back to the base-grade fallback (oil_group_id = null).
+ * Scoping the release to THIS group is what stops it from stealing grades that
+ * belong to another one.
+ *
+ * One transaction via set_oil_group_members (0145), so an auto-priced group
+ * never prices from a half-applied member list. Before that migration it falls
+ * back to the original two writes.
  */
 export const setOilGroupMembers = wrapAction({
   schema: SetOilGroupMembersInput,
@@ -1665,21 +1706,29 @@ export const setOilGroupMembers = wrapAction({
   handler: async ({ group_id, oil_type_ids }): Promise<{ member_count: number }> => {
     const supabase = await createClient();
 
-    // Released: in this group, not in the new list.
-    let release = supabase
-      .from("oil_types")
-      .update({ oil_group_id: null })
-      .eq("oil_group_id", group_id);
-    if (oil_type_ids.length > 0) release = release.not("id", "in", `(${oil_type_ids.join(",")})`);
-    const { error: relErr } = await release;
-    if (relErr) throw relErr;
+    const { error: rpcErr } = await supabase.rpc("set_oil_group_members", {
+      p_group: group_id,
+      p_oil_type_ids: oil_type_ids,
+    });
+    if (rpcErr && rpcErr.code !== "PGRST202") throw rpcErr;
 
-    if (oil_type_ids.length > 0) {
-      const { error: addErr } = await supabase
+    if (rpcErr) {
+      // Released: in this group, not in the new list.
+      let release = supabase
         .from("oil_types")
-        .update({ oil_group_id: group_id })
-        .in("id", oil_type_ids);
-      if (addErr) throw addErr;
+        .update({ oil_group_id: null })
+        .eq("oil_group_id", group_id);
+      if (oil_type_ids.length > 0) release = release.not("id", "in", `(${oil_type_ids.join(",")})`);
+      const { error: relErr } = await release;
+      if (relErr) throw relErr;
+
+      if (oil_type_ids.length > 0) {
+        const { error: addErr } = await supabase
+          .from("oil_types")
+          .update({ oil_group_id: group_id })
+          .in("id", oil_type_ids);
+        if (addErr) throw addErr;
+      }
     }
 
     revalidatePricing("oil-groups");
@@ -1908,14 +1957,55 @@ export const deleteEngineType = wrapAction({
     const { error } = await supabase.from("engine_types").delete().eq("id", input.id);
     if (error) {
       if (error.code === "23503") {
-        throw new Error(
-          "This engine has been used on a sales job and can't be deleted — deactivate it instead.",
+        // Only counted on this failure path, so a normal delete stays one
+        // round trip. The code lets the Engine types page offer "Merge into…"
+        // instead of a dead end — a duplicate's history can move, not vanish.
+        const { count } = await supabase
+          .from("sales_jobs")
+          .select("id", { count: "exact", head: true })
+          .eq("engine_type_id", input.id);
+        const jobs = count ?? 0;
+        throw Object.assign(
+          new Error(
+            jobs > 0
+              ? `This engine is on ${jobs} sales job${jobs === 1 ? "" : "s"}, so it can't be deleted. Merge it into the engine it duplicates, or deactivate it.`
+              : "This engine has been used on a sales job and can't be deleted — merge it into the engine it duplicates, or deactivate it.",
+          ),
+          { code: "engine_in_use" },
         );
       }
       throw error;
     }
     revalidatePricing("engine-types");
     return { id: input.id };
+  },
+});
+
+/**
+ * Folds a duplicate engine into the one it duplicates: its sales jobs move to
+ * the kept engine, then the duplicate is deleted (merge_engine_types, 0144).
+ * The duplicate's own filters, manual prices and price-lock rows are dropped,
+ * never copied — copying them would change what the kept engine charges.
+ */
+export const mergeEngineType = wrapAction({
+  schema: MergeEngineTypesInput,
+  roles: ["owner", "co_owner"],
+  handler: async ({ target_id, source_id }): Promise<{ moved_jobs: number }> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("merge_engine_types", {
+      p_target: target_id,
+      p_source: source_id,
+    });
+    if (error) {
+      if (error.code === "PGRST202") {
+        throw new Error(
+          "Merging engines needs migration 0144_merge_engine_types.sql — apply it to the database, then try again.",
+        );
+      }
+      throw error;
+    }
+    revalidatePricing("engine-types");
+    return { moved_jobs: Number(data) || 0 };
   },
 });
 
@@ -2748,6 +2838,128 @@ function revalidatePartPackages() {
   revalidatePath("/sales/new");
 }
 
+// Every field a package item carries — for the settings screens, lockPartPackage
+// and the sales package picker alike, so they all get the same shape.
+const PACKAGE_ITEM_SELECT =
+  "id, package_id, part_id, quantity, unit_price, locked_unit_price, position, created_at, oil_type_id, litres, oil_container, transmission_service_id, " +
+  "part:parts(id, brand, part_number, description, list_price, extra_price, category_id, cost, mhsw_fee, counter_premium, is_taxable, part_categories:category_id(name, unit_of_measure)), " +
+  "oil_type:oil_types(id, code, name, bulk_cost_per_litre, gallon_cost_per_litre, litres_per_gallon, is_taxable), " +
+  "transmission_service:transmission_services(id, name, service_kind, is_synthetic, sell_price, sell_price_2, labour, litres, oil_types:oil_type_id(code, name))";
+
+type PackageItemPartShape = {
+  id: string;
+  brand: string;
+  part_number: string;
+  description: string | null;
+  list_price: number;
+  extra_price: number;
+  category_id: string;
+  cost: number;
+  mhsw_fee: number;
+  counter_premium: number | null;
+  is_taxable: boolean;
+  part_categories: {
+    name: string;
+    unit_of_measure: Part["unit_of_measure"];
+  } | null;
+};
+type PackageItemOilShape = {
+  id: string;
+  code: string;
+  name: string;
+  bulk_cost_per_litre: number;
+  gallon_cost_per_litre: number;
+  litres_per_gallon: number;
+  is_taxable: boolean;
+};
+type PackageItemTransShape = {
+  id: string;
+  name: string;
+  service_kind: string;
+  is_synthetic: boolean;
+  sell_price: number;
+  sell_price_2: number | null;
+  labour: number | null;
+  litres: number | null;
+  oil_types: { code: string; name: string } | null;
+};
+type PackageItemDbRow = Omit<PartPackageItem, "id"> & {
+  id: string;
+  part: PackageItemPartShape | null;
+  oil_type: PackageItemOilShape | null;
+  transmission_service: PackageItemTransShape | null;
+};
+
+function toPackageItemRow(row: PackageItemDbRow): PartPackageItemRow {
+  const cat = row.part?.part_categories;
+  // A package charges each part at its COST basis (cost + Sell MHSW) only —
+  // NO service/labour markup. Labour for a package is a single separate line
+  // (the package's own "Labor charge" / labor_selling_price), never folded
+  // per-part. (client 2026-06-30 — previously added the counter_premium
+  // "service charge" here, which doubled up against the package labour.)
+  const partCostBasis =
+    row.part == null
+      ? 0
+      : Math.max(
+          0,
+          Math.round((Number(row.part.cost) + Number(row.part.mhsw_fee)) * 100) / 100,
+        );
+  const merged: PartPackageItemRow = {
+    id: row.id,
+    package_id: row.package_id,
+    part_id: row.part_id,
+    quantity: row.quantity,
+    unit_price: row.unit_price,
+    locked_unit_price: row.locked_unit_price,
+    position: row.position,
+    created_at: row.created_at,
+    oil_type_id: row.oil_type_id,
+    litres: row.litres,
+    oil_container: row.oil_container,
+    transmission_service_id: row.transmission_service_id,
+    part: row.part
+      ? {
+          id: row.part.id,
+          brand: row.part.brand,
+          part_number: row.part.part_number,
+          description: row.part.description,
+          list_price: Number(row.part.list_price),
+          extra_price: Number(row.part.extra_price ?? 0),
+          category_id: row.part.category_id,
+          cost: Number(row.part.cost),
+          mhsw_fee: Number(row.part.mhsw_fee),
+          is_taxable: row.part.is_taxable,
+          category: cat?.name ?? "",
+          unit_of_measure: cat?.unit_of_measure ?? "pcs",
+          package_unit_price: partCostBasis,
+        }
+      : null,
+    oil_type: row.oil_type ?? null,
+    transmission_service: row.transmission_service
+      ? {
+          id: row.transmission_service.id,
+          name: row.transmission_service.name,
+          service_kind: row.transmission_service.service_kind,
+          is_synthetic: row.transmission_service.is_synthetic,
+          sell_price: Number(row.transmission_service.sell_price),
+          sell_price_2:
+            row.transmission_service.sell_price_2 == null
+              ? null
+              : Number(row.transmission_service.sell_price_2),
+          labour:
+            row.transmission_service.labour == null
+              ? null
+              : Number(row.transmission_service.labour),
+          litres: row.transmission_service.litres,
+          oil_type_name: row.transmission_service.oil_types
+            ? oilLabel(row.transmission_service.oil_types)
+            : null,
+        }
+      : null,
+  };
+  return merged;
+}
+
 async function fetchPackageItems(
   supabase: Awaited<ReturnType<typeof createClient>>,
   packageIds: string[],
@@ -2756,127 +2968,13 @@ async function fetchPackageItems(
   if (packageIds.length === 0) return out;
   const { data, error } = await supabase
     .from("part_package_items")
-    .select(
-      "id, package_id, part_id, quantity, unit_price, locked_unit_price, position, created_at, oil_type_id, litres, oil_container, transmission_service_id, " +
-        "part:parts(id, brand, part_number, description, list_price, extra_price, category_id, cost, mhsw_fee, counter_premium, is_taxable, part_categories:category_id(name, unit_of_measure)), " +
-        "oil_type:oil_types(id, code, name, bulk_cost_per_litre, gallon_cost_per_litre, litres_per_gallon, is_taxable), " +
-        "transmission_service:transmission_services(id, name, service_kind, is_synthetic, sell_price, sell_price_2, labour, litres, oil_types:oil_type_id(code, name))",
-    )
+    .select(PACKAGE_ITEM_SELECT)
     .in("package_id", packageIds)
     .order("position");
   if (error) throw error;
-  type PartShape = {
-    id: string;
-    brand: string;
-    part_number: string;
-    description: string | null;
-    list_price: number;
-    extra_price: number;
-    category_id: string;
-    cost: number;
-    mhsw_fee: number;
-    counter_premium: number | null;
-    is_taxable: boolean;
-    part_categories: {
-      name: string;
-      unit_of_measure: Part["unit_of_measure"];
-    } | null;
-  };
-  type OilShape = {
-    id: string;
-    code: string;
-    name: string;
-    bulk_cost_per_litre: number;
-    gallon_cost_per_litre: number;
-    litres_per_gallon: number;
-    is_taxable: boolean;
-  };
-  type TransShape = {
-    id: string;
-    name: string;
-    service_kind: string;
-    is_synthetic: boolean;
-    sell_price: number;
-    sell_price_2: number | null;
-    labour: number | null;
-    litres: number | null;
-    oil_types: { code: string; name: string } | null;
-  };
-  type RowFromDb = Omit<PartPackageItem, "id"> & {
-    id: string;
-    part: PartShape | null;
-    oil_type: OilShape | null;
-    transmission_service: TransShape | null;
-  };
-  for (const row of (data ?? []) as unknown as RowFromDb[]) {
-    const cat = row.part?.part_categories;
-    // A package charges each part at its COST basis (cost + Sell MHSW) only —
-    // NO service/labour markup. Labour for a package is a single separate line
-    // (the package's own "Labor charge" / labor_selling_price), never folded
-    // per-part. (client 2026-06-30 — previously added the counter_premium
-    // "service charge" here, which doubled up against the package labour.)
-    const partCostBasis =
-      row.part == null
-        ? 0
-        : Math.max(
-            0,
-            Math.round((Number(row.part.cost) + Number(row.part.mhsw_fee)) * 100) / 100,
-          );
-    const merged: PartPackageItemRow = {
-      id: row.id,
-      package_id: row.package_id,
-      part_id: row.part_id,
-      quantity: row.quantity,
-      unit_price: row.unit_price,
-      locked_unit_price: row.locked_unit_price,
-      position: row.position,
-      created_at: row.created_at,
-      oil_type_id: row.oil_type_id,
-      litres: row.litres,
-      oil_container: row.oil_container,
-      transmission_service_id: row.transmission_service_id,
-      part: row.part
-        ? {
-            id: row.part.id,
-            brand: row.part.brand,
-            part_number: row.part.part_number,
-            description: row.part.description,
-            list_price: Number(row.part.list_price),
-            extra_price: Number(row.part.extra_price ?? 0),
-            category_id: row.part.category_id,
-            cost: Number(row.part.cost),
-            mhsw_fee: Number(row.part.mhsw_fee),
-            is_taxable: row.part.is_taxable,
-            category: cat?.name ?? "",
-            unit_of_measure: cat?.unit_of_measure ?? "pcs",
-            package_unit_price: partCostBasis,
-          }
-        : null,
-      oil_type: row.oil_type ?? null,
-      transmission_service: row.transmission_service
-        ? {
-            id: row.transmission_service.id,
-            name: row.transmission_service.name,
-            service_kind: row.transmission_service.service_kind,
-            is_synthetic: row.transmission_service.is_synthetic,
-            sell_price: Number(row.transmission_service.sell_price),
-            sell_price_2:
-              row.transmission_service.sell_price_2 == null
-                ? null
-                : Number(row.transmission_service.sell_price_2),
-            labour:
-              row.transmission_service.labour == null
-                ? null
-                : Number(row.transmission_service.labour),
-            litres: row.transmission_service.litres,
-            oil_type_name: row.transmission_service.oil_types
-              ? oilLabel(row.transmission_service.oil_types)
-              : null,
-          }
-        : null,
-    };
+  for (const row of (data ?? []) as unknown as PackageItemDbRow[]) {
     const arr = out.get(row.package_id) ?? [];
-    arr.push(merged);
+    arr.push(toPackageItemRow(row));
     out.set(row.package_id, arr);
   }
   return out;
@@ -2910,21 +3008,28 @@ export async function getPartPackage(id: string): Promise<PartPackageWithItems |
 
 export async function listPackagesForPicker(q?: string): Promise<PartPackageWithItems[]> {
   const supabase = await createClient();
+  // ONE round trip: the items ride along as an embedded resource instead of a
+  // second query after the packages come back. The database is in Seoul and
+  // the shops are in Ontario, so the old two-step read was the bulk of the
+  // "Add package" lag. Same item shape as fetchPackageItems (toPackageItemRow).
   let query = supabase
     .from("part_packages")
-    .select("*")
+    .select(`*, part_package_items(${PACKAGE_ITEM_SELECT})`)
     .eq("active", true)
     .order("name")
+    .order("position", { referencedTable: "part_package_items" })
     .limit(50);
   if (q && q.trim()) {
-    const term = `%${q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+    const term = orFilterValue(q.trim());
     query = query.or(`name.ilike.${term},description.ilike.${term}`);
   }
   const { data, error } = await query;
   if (error) throw error;
-  const packages = (data ?? []) as PartPackage[];
-  const itemsByPkg = await fetchPackageItems(supabase, packages.map((p) => p.id));
-  return packages.map((p) => ({ ...p, items: itemsByPkg.get(p.id) ?? [] }));
+  type Row = PartPackage & { part_package_items: PackageItemDbRow[] | null };
+  return ((data ?? []) as unknown as Row[]).map(({ part_package_items, ...pkg }) => ({
+    ...pkg,
+    items: (part_package_items ?? []).map(toPackageItemRow),
+  }));
 }
 
 export const createPartPackage = wrapAction({
@@ -3339,7 +3444,8 @@ export async function listTransServicesForPicker(
     .order("name")
     .limit(100);
   if (q && q.trim()) {
-    const term = `%${q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+    // Quoted: a raw comma or period in the search box broke the .or() filter.
+    const term = orFilterValue(q.trim());
     query = query.or(`name.ilike.${term},notes.ilike.${term}`);
   }
   const { data, error } = await query;

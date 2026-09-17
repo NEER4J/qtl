@@ -23,11 +23,15 @@ export function PartPickerButton({
   onSelect,
   label = "Add part from catalog",
   excludeIds,
+  cacheKey,
 }: {
   onSelect: (part: PartForPicker) => void;
   label?: string;
   /** Hide these part_ids from the result list (e.g. parts already in the package). */
   excludeIds?: ReadonlySet<string>;
+  /** Share results across pickers for a minute (useDebouncedSearch). Left off in
+   *  settings screens, where a part edited a moment ago must show fresh. */
+  cacheKey?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -35,6 +39,7 @@ export function PartPickerButton({
     open,
     query: q,
     fetcher: (query) => listPartsForPicker(query),
+    cacheKey,
   });
 
   const visible = excludeIds ? results.filter((p) => !excludeIds.has(p.id)) : results;

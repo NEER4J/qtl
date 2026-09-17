@@ -234,9 +234,13 @@ export function ExpenseForm({
   };
 
   const onSubmit = form.handleSubmit((values) => {
-    const cleanItems = items
-      .filter((it) => it.description.trim() || it.quantity > 0 || it.unit_cost > 0)
-      .map((it) => ({
+    // Keep each row's on-screen line number: blank rows are dropped, so the
+    // index in the payload doesn't match what the user sees.
+    const keptItems = items
+      .map((it, i) => ({ it, lineNo: i + 1 }))
+      .filter(({ it }) => it.description.trim() || it.quantity > 0 || it.unit_cost > 0);
+    const cleanItems = keptItems
+      .map(({ it }) => ({
         part_id: it.part_id,
         vendor_part_id: it.vendor_part_id,
         oil_type_id: it.oil_type_id,
@@ -258,10 +262,21 @@ export function ExpenseForm({
       items: cleanItems,
     };
 
+    // Line items aren't react-hook-form fields, so setError on "items.0.quantity"
+    // showed nothing and Save silently did nothing. Name the line in a toast.
+    const itemIssue = (path: string, message: string): boolean => {
+      const m = /^items\.(\d+)\./.exec(path);
+      if (!m) return false;
+      const lineNo = keptItems[Number(m[1])]?.lineNo;
+      toast.error(lineNo ? `Line ${lineNo}: ${message}` : message);
+      return true;
+    };
+
     const parsed = ExpenseInput.safeParse(payload);
     if (!parsed.success) {
       for (const issue of parsed.error.issues) {
         const path = issue.path.join(".");
+        if (itemIssue(path, issue.message)) continue;
         form.setError(path as keyof FormValues, { message: issue.message });
       }
       return;
@@ -276,6 +291,7 @@ export function ExpenseForm({
         toast.error(res.error);
         if (res.fieldErrors) {
           for (const [k, v] of Object.entries(res.fieldErrors)) {
+            if (itemIssue(k, v[0])) continue;
             form.setError(k as keyof FormValues, { message: v[0] });
           }
         }

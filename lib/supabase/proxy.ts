@@ -16,6 +16,10 @@ function isExemptFromIpLock(pathname: string): boolean {
   return IP_LOCK_EXEMPT.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
+function isCronPath(pathname: string): boolean {
+  return pathname === "/api/cron" || pathname.startsWith("/api/cron/");
+}
+
 export async function updateSession(request: NextRequest) {
   // Surface the current pathname to Server Components / layouts via a request
   // header. Next.js doesn't expose pathname to layouts otherwise, and the
@@ -66,11 +70,15 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
 
+  // /api/cron has no session — Vercel cron authenticates with CRON_SECRET,
+  // which the route itself checks. Redirecting it to the login page meant the
+  // scheduled job never ran.
   if (
     request.nextUrl.pathname !== "/" &&
     !user &&
     !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/auth")
+    !request.nextUrl.pathname.startsWith("/auth") &&
+    !isCronPath(request.nextUrl.pathname)
   ) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone();

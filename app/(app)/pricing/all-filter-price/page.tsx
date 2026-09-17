@@ -88,9 +88,10 @@ export default async function AllFilterPricePage({
           <li><strong>Without Service</strong> = Linked labour charge + List price.</li>
           <li><strong>Customer Supplies</strong> = flat ${customer_supplies_labour.toFixed(2)} labour fee.</li>
           <li>
-            A filter marked <strong>bundled</strong> is included in a package. This list shows what its
-            With Service price works out to, but a package has already charged for it, so adding that
-            filter to a job on its own charges $0 for the With Service tier.
+            A filter marked <strong>bundled</strong> is included in a package, which has already
+            charged for it — so adding that filter to a job on its own charges <strong>$0</strong> for
+            With Service, and that&apos;s the price shown. The small figure underneath is what With
+            Service works out to (<em>calc</em>) or the fixed price set on the part (<em>fixed</em>).
           </li>
         </ul>
         <p>
@@ -177,14 +178,26 @@ export default async function AllFilterPricePage({
                     {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(r.service_cost)}</TableCell>}
                     <TableCell className="text-right tabular-nums"><TierPrice value={r.without_service} fixed={r.fixed_tiers.without_service} /></TableCell>
                     <TableCell className="text-right tabular-nums font-medium">
-                      <TierPrice value={r.with_service} fixed={r.fixed_tiers.with_service} />
-                      {r.in_package && (
-                        <span
-                          className="ml-1 text-[10px] font-normal text-muted-foreground"
-                          title="Bundled in a package — a package already charges for this filter, so adding it to a job on its own charges $0."
+                      {/* Bundled: a job charges $0 for With Service, so that is the
+                          price shown (and printed). The calculated — or fixed —
+                          figure stays visible underneath, because showing only
+                          $0 is what prompted the 2026-09-08 "not calculating"
+                          report. Client 2026-09-15 asked for the $0 back. */}
+                      {r.in_package ? (
+                        <div
+                          className="flex flex-col items-end leading-tight"
+                          title="Bundled in a package — a package already charges for this filter, so adding it to a job on its own charges $0 for With Service."
                         >
-                          bundled
-                        </span>
+                          <span>{formatMoney(0)}</span>
+                          {r.with_service != null && (
+                            <span className="text-[10px] font-normal text-muted-foreground">
+                              bundled · {r.fixed_tiers.with_service ? "fixed" : "calc"}{" "}
+                              {formatMoney(r.with_service)}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <TierPrice value={r.with_service} fixed={r.fixed_tiers.with_service} />
                       )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums"><TierPrice value={r.over_counter} fixed={r.fixed_tiers.over_counter} /></TableCell>

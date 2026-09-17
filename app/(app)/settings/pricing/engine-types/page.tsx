@@ -47,6 +47,11 @@ export default async function EngineTypesPage() {
         <ul>
           <li>Click an engine to edit its filter set (which parts and how many of each).</li>
           <li>The unique key is <em>manufacturer + model</em>. Deactivate instead of deleting if the engine is retired.</li>
+          <li>
+            An engine that&apos;s been used on a sales job can&apos;t simply be deleted. If it&apos;s a
+            duplicate, deleting it offers <strong>Merge</strong>: its sales jobs move to the engine
+            you keep and the duplicate is removed. The kept engine&apos;s prices don&apos;t change.
+          </li>
           <li>Changing the oil capacity or filter set recomputes every cell in that row.</li>
           <li>
             <strong>Labour package</strong> — the package whose <em>Labor charge</em> is this

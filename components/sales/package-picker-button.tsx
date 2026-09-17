@@ -29,6 +29,7 @@ export function PackagePickerButton({
     open,
     query: q,
     fetcher: (query) => listPackagesForPicker(query),
+    cacheKey: "sales-packages",
   });
 
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState } from "react";
 import { ChevronsUpDown, Cog, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import {
   listTransServicesForPicker,
   type TransmissionService,
@@ -53,16 +54,14 @@ export function TransServicePickerButton({
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<TransmissionService[]>([]);
-  const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    if (!open) return;
-    startTransition(async () => {
-      const data = await listTransServicesForPicker(q);
-      setResults(data);
-    });
-  }, [q, open]);
+  // Debounced like every other picker: this one used to fire a server action on
+  // each keystroke, and Next runs those one at a time, so typing "allison"
+  // queued seven round trips before the list settled.
+  const { results, searching } = useDebouncedSearch<TransmissionService>({
+    open,
+    query: q,
+    fetcher: (query) => listTransServicesForPicker(query),
+  });
 
   const visible = excludeIds ? results.filter((s) => !excludeIds.has(s.id)) : results;
 
@@ -90,7 +89,7 @@ export function TransServicePickerButton({
             onWheel={(e) => e.stopPropagation()}
           >
             <CommandEmpty>
-              {isPending ? "Searching…" : "No matching services."}
+              {searching ? "Searching…" : "No matching services."}
             </CommandEmpty>
             <CommandGroup>
               {visible.map((s) => (

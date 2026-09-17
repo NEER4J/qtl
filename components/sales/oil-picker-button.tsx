@@ -43,6 +43,10 @@ export function oilUnitLabel(container: OilContainer): string {
  *   2. the single is_base grade's rate (the old behaviour),
  *   3. the picked oil's own rate (when no base grade is configured).
  * A group rate of null means "not set" and falls through; 0 is a real price.
+ *
+ * A group priced from its most expensive oil (pricing_mode 'highest_cost', mig
+ * 0145) stores its gallon rate PER LITRE, because jug sizes differ within a
+ * group — so the line's container price is that rate × this oil's own jug size.
  */
 export function oilLineRate(
   oilTypes: OilType[],
@@ -55,7 +59,7 @@ export function oilLineRate(
     : undefined;
   const groupRate = group
     ? container === "gallon"
-      ? group.gallon_price_per_container
+      ? groupGallonRate(group, oil)
       : group.bulk_price_per_litre
     : null;
   if (groupRate != null && Number.isFinite(Number(groupRate))) return Number(groupRate);
@@ -66,6 +70,15 @@ export function oilLineRate(
       ? Number(priceOil.gallon_cost_per_litre)
       : Number(priceOil.bulk_cost_per_litre);
   return Number.isFinite(rate) ? rate : 0;
+}
+
+/** A group's price for ONE container of this oil, or null when not set. */
+function groupGallonRate(group: OilGroup, oil: OilType): number | null {
+  if (group.pricing_mode !== "highest_cost") return group.gallon_price_per_container;
+  const perLitre = group.gallon_price_per_litre;
+  const jug = Number(oil.litres_per_gallon);
+  if (perLitre == null || !(jug > 0)) return null;
+  return Math.round(Number(perLitre) * jug * 100) / 100;
 }
 
 /** The group an oil is priced by, for showing WHY a rate is what it is. */

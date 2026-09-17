@@ -384,10 +384,13 @@ export function ExpenseLineItems({
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
+                        {/* step="any": a gallon jug is 3.785 / 4.546 L, and a
+                            step of 0.01 made the browser refuse to submit a
+                            3-decimal quantity. */}
                         <Input
                           type="number"
                           min="0"
-                          step="0.01"
+                          step="any"
                           className="text-right"
                           value={row.quantity}
                           onChange={(e) =>

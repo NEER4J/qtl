@@ -882,7 +882,7 @@ export function SalesLineItems({
       )}
 
       <div className="flex flex-wrap gap-2">
-        <PartPickerButton onSelect={addPart} />
+        <PartPickerButton onSelect={addPart} cacheKey="sales-parts" />
         <PackagePickerButton onSelect={addPackage} />
         {oilTypes.length > 0 && (
           <OilPickerButton oilTypes={oilTypes} oilGroups={oilGroups} onSelect={addOil} />
@@ -894,7 +894,7 @@ export function SalesLineItems({
         <Button type="button" variant="outline" size="sm" onClick={addCustom}>
           <Plus className="size-4" /> Add custom item
         </Button>
-        <PartPickerButton onSelect={addReturn} label="Add return / credit" />
+        <PartPickerButton onSelect={addReturn} label="Add return / credit" cacheKey="sales-parts" />
         <PromotionPickerButton onSelect={addPromotion} />
       </div>
 

@@ -605,6 +605,24 @@ export async function getCustomerSalesHistory(
   return (data ?? []) as SalesJob[];
 }
 
+/** Slim invoice references for the sales form's "credit from invoice" list —
+ *  the three columns it shows, instead of every column of 30 jobs. */
+export async function listCustomerInvoiceRefs(
+  customerId: string,
+  limit = 30,
+): Promise<Pick<SalesJob, "id" | "invoice_no" | "job_date">[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("sales_jobs")
+    .select("id, invoice_no, job_date")
+    .eq("customer_id", customerId)
+    .is("deactivated_at", null)
+    .order("job_date", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as Pick<SalesJob, "id" | "invoice_no" | "job_date">[];
+}
+
 // Free-grease eligibility helper has moved to lib/utils/free-grease.ts so it
 // can be imported by client components (this file is "use server").
 // Re-export removed deliberately — import from "@/lib/utils/free-grease".

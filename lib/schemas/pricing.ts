@@ -56,10 +56,14 @@ const optionalRate = z
   .nullable()
   .default(null);
 
+/** manual = typed prices; highest_cost = derived from the dearest oil (mig 0145). */
+export const oilGroupPricingModeSchema = z.enum(["manual", "highest_cost"]);
+
 export const CreateOilGroupInput = z.object({
   name: z.string().trim().min(1, "Name is required").max(80),
   bulk_price_per_litre: optionalRate,
   gallon_price_per_container: optionalRate,
+  pricing_mode: oilGroupPricingModeSchema.default("manual"),
   sort_order: z.coerce.number().int().min(0).default(100),
   active: z.coerce.boolean().default(true),
 });
@@ -67,6 +71,10 @@ export type CreateOilGroupInput = z.infer<typeof CreateOilGroupInput>;
 
 export const UpdateOilGroupInput = CreateOilGroupInput.extend({
   id: z.string().uuid(),
+  // No default on update: updateOilGroup writes every field it's given, so a
+  // default here would flip an auto-priced group back to manual whenever a
+  // save left the field out (e.g. a tab opened before this shipped).
+  pricing_mode: oilGroupPricingModeSchema.optional(),
 });
 export type UpdateOilGroupInput = z.infer<typeof UpdateOilGroupInput>;
 
@@ -152,6 +160,18 @@ export const DeleteEngineTypeInput = z.object({
 });
 export type DeleteEngineTypeInput = z.infer<typeof DeleteEngineTypeInput>;
 
+/** Fold a duplicate engine (source) into the one it duplicates (target). */
+export const MergeEngineTypesInput = z
+  .object({
+    target_id: z.string().uuid("Pick the engine to keep"),
+    source_id: z.string().uuid(),
+  })
+  .refine((v) => v.target_id !== v.source_id, {
+    message: "Pick a different engine to keep",
+    path: ["target_id"],
+  });
+export type MergeEngineTypesInput = z.infer<typeof MergeEngineTypesInput>;
+
 // ============================================================================
 // parts
 // ============================================================================
@@ -234,9 +254,9 @@ export const CreatePartInput = z.object({
     .transform((v) => (v == null || v === "" ? null : v)),
   is_taxable: z.coerce.boolean().default(true),
   // Marks the part as bundled in a package — on the sales job tier dialog the
-  // With Service price is $0 (the package already charged for it), and a second
-  // occurrence on the same sales job defaults to over_counter_price. The price
-  // lists still show the calculated With Service price.
+  // With Service price is $0 (the package already charged for it). The part
+  // editor and the All-filter-sell-price list show that $0 with the calculated
+  // With Service price alongside.
   in_package: z.coerce.boolean().default(false),
   // When true, the part's price is rounded up to the next .99 as it's added to a sales job.
   round_off: z.coerce.boolean().default(false),

@@ -45,13 +45,18 @@ export function OilTypesTable({
    */
   const chargedRate = (oil: OilType): { rate: number; source: string } => {
     const g = groupOf(oil);
-    if (g && g.bulk_price_per_litre != null) {
-      return { rate: Number(g.bulk_price_per_litre), source: g.name };
+    // The sales picker only loads ACTIVE groups, so an inactive group's rate is
+    // never charged — show the fallback it actually gets.
+    if (g && g.active && g.bulk_price_per_litre != null) {
+      return {
+        rate: Number(g.bulk_price_per_litre),
+        source: g.pricing_mode === "highest_cost" ? `${g.name} · highest cost` : g.name,
+      };
     }
     if (currentBase) {
       return {
         rate: Number(currentBase.bulk_cost_per_litre),
-        source: g ? "group has no rate" : "base grade",
+        source: !g ? "base grade" : !g.active ? "group inactive" : "group has no rate",
       };
     }
     return { rate: Number(oil.bulk_cost_per_litre), source: "own cost" };

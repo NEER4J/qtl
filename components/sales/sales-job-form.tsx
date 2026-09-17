@@ -30,7 +30,7 @@ import {
 import { EmptyDropdownHint } from "@/components/help/empty-state";
 import { InfoTip } from "@/components/help/info-tip";
 import { createSalesJob, updateSalesJob } from "@/lib/actions/sales";
-import { createCustomer, getCustomer, getCustomerSalesHistory } from "@/lib/actions/customers";
+import { createCustomer, getCustomer, listCustomerInvoiceRefs } from "@/lib/actions/customers";
 import { fetchCustomerCreditBalance } from "@/lib/actions/customer-credits";
 import { oilLabel } from "@/lib/utils/oil-labels";
 import { getCustomerVehicles } from "@/lib/actions/vehicles";
@@ -427,7 +427,7 @@ export function SalesJobForm({
     (async () => {
       const [balance, history] = await Promise.all([
         fetchCustomerCreditBalance(customerId, initial?.id),
-        getCustomerSalesHistory(customerId, 30),
+        listCustomerInvoiceRefs(customerId, 30),
       ]);
       if (cancelled) return;
       setStoreCreditBalance(balance);
@@ -834,7 +834,10 @@ export function SalesJobForm({
                   </div>
                 </div>
 
-                <PreviousPendingAlert customerId={customerId ?? null} />
+                <PreviousPendingAlert
+                  customerId={customerId ?? null}
+                  storeCredit={customerId ? storeCreditBalance : 0}
+                />
 
                 {/* Vehicle picker (item #4 — multiple trucks) */}
                 <FormItem>

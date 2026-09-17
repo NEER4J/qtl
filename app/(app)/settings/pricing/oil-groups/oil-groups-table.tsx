@@ -64,7 +64,12 @@ export function OilGroupsTable({
             <TableRow>
               <TableHead>Group</TableHead>
               <TableHead className="w-32 text-right">Bulk $/L</TableHead>
-              <TableHead className="w-40 text-right">Gallon $/container</TableHead>
+              <TableHead className="w-40 text-right">
+                Gallon
+                <span className="block text-[10px] font-normal text-muted-foreground">
+                  $/container, or $/L when auto
+                </span>
+              </TableHead>
               <TableHead>Grades priced by it</TableHead>
               <TableHead className="w-24">Status</TableHead>
               <TableHead className="w-40 text-right">Actions</TableHead>
@@ -81,14 +86,34 @@ export function OilGroupsTable({
             ) : (
               groups.map((g) => {
                 const members = membersOf(g.id);
+                const auto = g.pricing_mode === "highest_cost";
                 return (
                   <TableRow key={g.id} className={g.active ? undefined : "opacity-60"}>
-                    <TableCell className="font-medium">{g.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {g.name}
+                      {auto && (
+                        <Badge
+                          variant="outline"
+                          className="ml-2 text-[10px]"
+                          title="Priced from the most expensive active oil in the group"
+                        >
+                          highest cost
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {rate(g.bulk_price_per_litre)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {rate(g.gallon_price_per_container)}
+                      {auto ? (
+                        g.gallon_price_per_litre == null ? (
+                          rate(null)
+                        ) : (
+                          <>{formatMoney(g.gallon_price_per_litre)}/L</>
+                        )
+                      ) : (
+                        rate(g.gallon_price_per_container)
+                      )}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {members.length === 0 ? (
