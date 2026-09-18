@@ -23,22 +23,31 @@ Each task was traced to its root cause. After that, three read-only audits mappe
   - T9: decks = Upper and Lower.
   - T11: employer amounts pre-fill but are editable; vacation and WSIB stay automatic.
 
-## Progress (2026-09-17)
-- **Done in code (phase 0 + 1):**
+## Progress (2026-09-18) — every task is built in code
+- **Built:**
   - cron login-redirect fix
-  - T10 write-side 0140 message
-  - T8 (0143 RLS, quantity rules, visible item errors)
-  - T2 (0144 merge + dialog)
-  - T6 (bundled $0 display)
-  - T3 quick wins: single-query package picker, debounced Trans & Diff, opt-in picker cache, cached settings in the part picker, no duplicate credit-balance read, slim invoice refs
-  - T5 oil groups (0145): opt-in "price from the most expensive oil"; bulk = highest active cost, gallons compared per litre and charged × each oil's jug size, no markup (profit comes from the volume tier); membership saved in one transaction
-- **Checks run:** `tsc`, `lint` on changed files and `next build` pass. **The migrations haven't been applied anywhere yet** (no local DB running).
-- **Still to do on prod:**
-  - apply the migration gap plus 0143, 0144 and 0145
-  - confirm FF252's tier dialog shows $0
-  - get the T8 error text from the client
-  - measure picker timings
-- **Migration numbers:** files apply in name order, so each new migration takes the next free number when it's written. The numbers used in the per-task sections below (0143 cost_bucket, 0144 oil_change_price, …) are placeholders: phase 1 already used **0143** (expense_items RLS) and **0144** (engine merge), and T5 used **0145**, so T1 starts at **0146**.
+  - T10: users.ts saves name migration 0140 when it's missing
+  - T8: 0143 expense_items cross-location RLS, quantity rules, visible line errors
+  - T2: 0144 merge a duplicate engine + dialog
+  - T6: bundled parts show $0 with the calculated price alongside
+  - T5: 0145 oil groups priced from their most expensive active oil (opt-in per group), membership in one transaction
+  - T9: 0146 `deck_analytics()` + "Upper & Lower deck" section on Analytics → Job Duration, technician filter, CSV (export now checks the Analytics permission)
+  - T11: EI / CPP / CPP2 typed per entry (employee + employer), Estimate from rates, net-pay check; switches kept as exemptions
+  - T1: 0147 `part_categories.cost_bucket` (+ "Counts as" in Part categories); Oil detail filter cost from the package at package qty, falling back to `engine_filters`, never both; "Package filters" column on Oil-change detailed pricing; 0148 raises `engine_filters` qty to match the linked package; seed fixed
+  - T4 + T7: 0149 — `sales_job_items.oil_container` / `auto_fee`, waiver flags, `app_settings.grease_only_fee`, gallon-aware stock trigger + stock check; automatic "Volume tier premium" line and "Grease-only service fee" line (lib/utils/sales-auto-lines.ts), shown under Total Miscellaneous on the invoice; edit-mode auto-price no longer re-prices a saved job on open
+  - T3: single-query package picker (then load-once + browser filter), debounced + cached Trans & Diff, cached promotions and part picker, one credit-balance read, signed IP-verdict cookie (off until `IP_VERDICT_SECRET` is set), memoized line-items table
+- **Deliberately not done:**
+  - Oil-change grid, Print list and sales auto-price still read `engine_filters` (now with corrected quantities) rather than packages. Moving them would re-price every engine without a manual price.
+  - SQL `oil_change_price` gallon regression. Fixing it changes gallon auto-prices; needs the client's OK.
+  - Vercel region pin (measure first) and the sales-form totals / `form.watch` refactor (high risk, low gain).
+- **Checks run:** `tsc`, `lint` on changed files, `next build`, scratch checks of the auto-line rules. **No migration has been applied anywhere** (no local DB).
+- **To do on prod, in order:**
+  - apply the migration gap, then 0143 → 0149
+  - Settings → Part categories: check each "Counts as"
+  - Settings → Oil groups: tick "Price from the most expensive oil" per group (not Gear & Trans)
+  - Settings → Pricing defaults: set the grease-only fee
+  - optional: set `CRON_SECRET` / `IP_VERDICT_SECRET` in Vercel
+- **Migration numbers:** each new migration took the next free number. The per-task sections below still use the placeholder numbers from the first plan.
 
 ## Sequencing
 | Phase | Work |

@@ -34,23 +34,65 @@ import {
 import { EmptyDropdownHint } from "@/components/help/empty-state";
 import { InfoTip } from "@/components/help/info-tip";
 import { PayrollEntryInput } from "@/lib/schemas/payroll";
-import { upsertPayrollEntry, listEmployees } from "@/lib/actions/payroll";
-import type { Employee, PayrollEntry } from "@/lib/db/types";
+import {
+  getStatutoryRatesForYear,
+  listEmployees,
+  upsertPayrollEntry,
+} from "@/lib/actions/payroll";
+import type { Employee, PayrollEntry, StatutoryRate } from "@/lib/db/types";
+import { computeStatutoryDeductions } from "@/lib/utils/payroll-math";
 
 interface Props {
   weekId: string;
+  /** The week's start date — its year picks the statutory rates for Estimate. */
+  weekStart?: string;
+  /** The user can't see the EI + CPP column (Settings → Users). Their amounts
+   *  aren't shown here; an existing entry keeps its stored figures and a new one
+   *  is calculated from the rates on save. */
+  hideEmployeeDeductions?: boolean;
+  /** Same for the employer-remit column (employer EI / CPP). */
+  hideEmployerDeductions?: boolean;
   existing?: PayrollEntry & { employee_name: string; employee_payroll_type: string };
   children: React.ReactNode;
 }
 
-export function PayrollEntryDialog({ weekId, existing, children }: Props) {
+type AmountKey =
+  | "ei_employee"
+  | "cpp_employee"
+  | "cpp_employee2"
+  | "ei_employer"
+  | "cpp_employer"
+  | "cpp_employer2";
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+export function PayrollEntryDialog({
+  weekId,
+  weekStart,
+  hideEmployeeDeductions = false,
+  hideEmployerDeductions = false,
+  existing,
+  children,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  // Statutory rates for the week's year: the employer-EI multiplier and the
+  // Estimate button. Empty when none are set up (or the role can't read them).
+  const [rates, setRates] = useState<StatutoryRate[]>([]);
   const router = useRouter();
+  const rateYear = weekStart ? Number(weekStart.slice(0, 4)) : new Date().getFullYear();
 
   useEffect(() => {
     listEmployees().then(setEmployees).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    getStatutoryRatesForYear(rateYear).then(setRates).catch(() => setRates([]));
+  }, [open, rateYear]);
+
+  const eiMultiplier =
+    Number(rates.find((r) => r.type === "ei_employer_multiplier")?.rate) || 1.4;
 
   const form = useForm<PayrollEntryInput>({
     resolver: zodResolver(PayrollEntryInput),
@@ -70,6 +112,14 @@ export function PayrollEntryDialog({ weekId, existing, children }: Props) {
           benefit_employee_deduction: existing.benefit_employee_deduction,
           benefit_employer_contribution: existing.benefit_employer_contribution,
           cheque_amount: existing.cheque_amount,
+          // The stored amounts, even when this user can't see them — so editing
+          // hours never recalculates EI/CPP someone typed in.
+          ei_employee: Number(existing.ei_employee) || 0,
+          cpp_employee: Number(existing.cpp_employee) || 0,
+          cpp_employee2: Number(existing.cpp_employee2) || 0,
+          ei_employer: Number(existing.ei_employer) || 0,
+          cpp_employer: Number(existing.cpp_employer) || 0,
+          cpp_employer2: Number(existing.cpp_employer2) || 0,
           // `?? true` guards a row saved before migration 0135 added the
           // columns — those entries were calculated with everything applied.
           apply_ei: existing.apply_ei ?? true,
@@ -95,6 +145,13 @@ export function PayrollEntryDialog({ weekId, existing, children }: Props) {
           benefit_employee_deduction: 0,
           benefit_employer_contribution: 0,
           cheque_amount: 0,
+          // A hidden pair is left out, so the server calculates it from the rates.
+          ei_employee: hideEmployeeDeductions ? undefined : 0,
+          cpp_employee: hideEmployeeDeductions ? undefined : 0,
+          cpp_employee2: hideEmployeeDeductions ? undefined : 0,
+          ei_employer: hideEmployerDeductions ? undefined : 0,
+          cpp_employer: hideEmployerDeductions ? undefined : 0,
+          cpp_employer2: hideEmployerDeductions ? undefined : 0,
           apply_ei: true,
           apply_cpp: true,
           apply_cpp2: true,
@@ -117,7 +174,9 @@ export function PayrollEntryDialog({ weekId, existing, children }: Props) {
   }
 
   const isEdit = !!existing;
+  const applyEi = form.watch("apply_ei");
   const applyCpp = form.watch("apply_cpp");
+  const applyCpp2 = form.watch("apply_cpp2");
   const applyTax = form.watch("apply_income_tax");
 
   // Holiday pay is hours × rate now (0136). The rate field is optional: left at
@@ -127,6 +186,65 @@ export function PayrollEntryDialog({ weekId, existing, children }: Props) {
   const regularRate = Number(form.watch("rate")) || 0;
   const effectiveHolidayRate = holidayRateInput > 0 ? holidayRateInput : regularRate;
   const holidayPay = Math.round(holidayHours * effectiveHolidayRate * 100) / 100;
+
+  // Same pay basis as buildEntryPayload: insurable = regular + OT + bonus +
+  // holiday; misc extra is taxable but not insurable.
+  const num = (k: keyof PayrollEntryInput) => Number(form.watch(k)) || 0;
+  const gross = round2(num("hours") * regularRate + num("overtime_hours") * num("overtime_rate"));
+  const insurable = round2(gross + num("bonus") + holidayPay);
+  const netPreview = round2(
+    insurable +
+      num("misc_extra") -
+      (applyEi ? num("ei_employee") : 0) -
+      (applyCpp ? num("cpp_employee") : 0) -
+      (applyCpp && applyCpp2 ? num("cpp_employee2") : 0) -
+      (applyTax ? num("income_tax") : 0) -
+      num("benefit_employee_deduction"),
+  );
+
+  /**
+   * Typing an employee amount fills the employer side — EI × the employer
+   * multiplier, CPP and CPP2 matched 1:1 — as long as the employer box still
+   * holds what the previous employee amount would have filled in (or 0). Once
+   * someone types their own employer figure, it's left alone.
+   */
+  const employerFor: Record<"ei_employee" | "cpp_employee" | "cpp_employee2", [AmountKey, (v: number) => number]> = {
+    ei_employee: ["ei_employer", (v) => round2(v * eiMultiplier)],
+    cpp_employee: ["cpp_employer", (v) => round2(v)],
+    cpp_employee2: ["cpp_employer2", (v) => round2(v)],
+  };
+  function onEmployeeAmountChange(key: keyof typeof employerFor, raw: string) {
+    const prev = Number(form.getValues(key)) || 0;
+    form.setValue(key, raw as unknown as number, { shouldDirty: true });
+    if (hideEmployerDeductions) return;
+    const [employerKey, derive] = employerFor[key];
+    const employerNow = Number(form.getValues(employerKey)) || 0;
+    if (employerNow === 0 || employerNow === derive(prev)) {
+      form.setValue(employerKey, derive(Number(raw) || 0), { shouldDirty: true });
+    }
+  }
+
+  /** Fill all six amounts from the rate table — a starting point to check. */
+  function estimateFromRates() {
+    if (rates.length === 0) {
+      toast.error(
+        `No statutory rates for ${rateYear} — add them in Settings → Statutory rates, or type the amounts in.`,
+      );
+      return;
+    }
+    const c = computeStatutoryDeductions(insurable, rates, rateYear);
+    const set = (k: AmountKey, v: number) => form.setValue(k, round2(v), { shouldDirty: true });
+    if (!hideEmployeeDeductions) {
+      set("ei_employee", c.ei);
+      set("cpp_employee", c.cpp);
+      set("cpp_employee2", c.cpp2);
+    }
+    if (!hideEmployerDeductions) {
+      set("ei_employer", c.ei_employer);
+      set("cpp_employer", c.cpp_employer);
+      set("cpp_employer2", c.cpp_employer2);
+    }
+  }
 
   /**
    * Picking an employee on a NEW entry seeds the switches from that person's
@@ -260,8 +378,8 @@ export function PayrollEntryDialog({ weekId, existing, children }: Props) {
                 />
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                EI, CPP (tier 1 + 2), employer EI, employer CPP, WSIB, and vacation pay (4% default)
-                are calculated automatically on save — for whichever of them is switched on below.
+                Vacation pay (4% default) and WSIB are calculated on save. EI and CPP are entered
+                in <strong>EI &amp; CPP</strong> below.
               </p>
             </Fieldset>
 
@@ -316,6 +434,47 @@ export function PayrollEntryDialog({ weekId, existing, children }: Props) {
               </p>
             </Fieldset>
 
+            {!(hideEmployeeDeductions && hideEmployerDeductions) && (
+              <Fieldset legend="EI & CPP">
+                <div className="grid grid-cols-[4rem_1fr_1fr] items-end gap-x-4 gap-y-3">
+                  <span />
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {hideEmployeeDeductions ? "" : "Employee ($)"}
+                  </span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {hideEmployerDeductions ? "" : "Employer ($)"}
+                  </span>
+                  {(
+                    [
+                      ["EI", "ei_employee", "ei_employer", !applyEi],
+                      ["CPP", "cpp_employee", "cpp_employer", !applyCpp],
+                      ["CPP2", "cpp_employee2", "cpp_employer2", !(applyCpp && applyCpp2)],
+                    ] as const
+                  ).map(([label, employeeKey, employerKey, off]) => (
+                    <AmountRow
+                      key={label}
+                      label={label}
+                      off={off}
+                      control={form.control}
+                      employeeKey={hideEmployeeDeductions ? null : employeeKey}
+                      employerKey={hideEmployerDeductions ? null : employerKey}
+                      onEmployeeChange={(raw) => onEmployeeAmountChange(employeeKey, raw)}
+                    />
+                  ))}
+                </div>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground max-w-md">
+                    Enter this period&apos;s amounts from your payroll calculator. The employer side
+                    fills in as you type (EI × {eiMultiplier}, CPP matched) and can be changed. A
+                    switched-off item is saved as $0.
+                  </p>
+                  <Button type="button" variant="outline" size="sm" onClick={estimateFromRates}>
+                    Estimate from rates
+                  </Button>
+                </div>
+              </Fieldset>
+            )}
+
             <Fieldset legend="Benefits">
               <div className="grid grid-cols-2 gap-4">
                 <NumberField name="benefit_employee_deduction" label="Employee deduction ($)" control={form.control} />
@@ -343,6 +502,17 @@ export function PayrollEntryDialog({ weekId, existing, children }: Props) {
                 </FormItem>
               )}
             />
+
+            <p
+              className={
+                netPreview < 0
+                  ? "text-sm font-medium text-destructive"
+                  : "text-sm text-muted-foreground"
+              }
+            >
+              Net pay: <span className="tabular-nums">${netPreview.toFixed(2)}</span>
+              {netPreview < 0 && " — the deductions are more than this period's pay."}
+            </p>
 
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
@@ -440,5 +610,80 @@ function SwitchField({
         </FormItem>
       )}
     />
+  );
+}
+
+/** One EI / CPP / CPP2 row: employee and employer amount, greyed when switched off. */
+function AmountRow({
+  label,
+  off,
+  control,
+  employeeKey,
+  employerKey,
+  onEmployeeChange,
+}: {
+  label: string;
+  off: boolean;
+  control: ReturnType<typeof useForm<PayrollEntryInput>>["control"];
+  employeeKey: AmountKey | null;
+  employerKey: AmountKey | null;
+  onEmployeeChange: (raw: string) => void;
+}) {
+  return (
+    <>
+      <span className={off ? "pb-2 text-sm text-muted-foreground" : "pb-2 text-sm font-medium"}>
+        {label}
+        {off && <span className="block text-[10px] font-normal">switched off</span>}
+      </span>
+      {employeeKey ? (
+        <FormField
+          control={control}
+          name={employeeKey}
+          render={({ field }) => (
+            <FormItem>
+              <FormControl>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  disabled={off}
+                  aria-label={`${label} employee`}
+                  {...field}
+                  value={off ? 0 : ((field.value as number | string | undefined) ?? "")}
+                  onChange={(e) => onEmployeeChange(e.target.value)}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      ) : (
+        <span />
+      )}
+      {employerKey ? (
+        <FormField
+          control={control}
+          name={employerKey}
+          render={({ field }) => (
+            <FormItem>
+              <FormControl>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  disabled={off}
+                  aria-label={`${label} employer`}
+                  {...field}
+                  value={off ? 0 : ((field.value as number | string | undefined) ?? "")}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      ) : (
+        <span />
+      )}
+    </>
   );
 }

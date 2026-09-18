@@ -14,6 +14,8 @@ interface Props {
     counter_premium: number;
     customer_supplies_labour: number;
     dump_truck_surcharge: number;
+    /** Undefined before migration 0149 — the field is then hidden. */
+    grease_only_fee?: number;
     price_list_effective_date: string | null;
   };
 }
@@ -22,6 +24,8 @@ export function PricingSettingsCard({ initial }: Props) {
   const [counter, setCounter] = useState(String(initial.counter_premium));
   const [supplies, setSupplies] = useState(String(initial.customer_supplies_labour));
   const [dumpTruck, setDumpTruck] = useState(String(initial.dump_truck_surcharge));
+  const greaseFeeSupported = initial.grease_only_fee !== undefined;
+  const [greaseFee, setGreaseFee] = useState(String(initial.grease_only_fee ?? 0));
   const [effective, setEffective] = useState(initial.price_list_effective_date ?? "");
   const [isPending, startTransition] = useTransition();
 
@@ -29,13 +33,14 @@ export function PricingSettingsCard({ initial }: Props) {
     const counterNum = Number(counter);
     const suppliesNum = Number(supplies);
     const dumpTruckNum = Number(dumpTruck);
+    const greaseFeeNum = Number(greaseFee);
     // Service charge may be negative; the other amounts can't.
     if (!Number.isFinite(counterNum)) {
       toast.error("Service charge must be a number");
       return;
     }
-    if ([suppliesNum, dumpTruckNum].some((n) => !Number.isFinite(n) || n < 0)) {
-      toast.error("Labour and surcharge amounts must be ≥ 0");
+    if ([suppliesNum, dumpTruckNum, greaseFeeNum].some((n) => !Number.isFinite(n) || n < 0)) {
+      toast.error("Labour, surcharge and fee amounts must be ≥ 0");
       return;
     }
     startTransition(async () => {
@@ -43,6 +48,7 @@ export function PricingSettingsCard({ initial }: Props) {
         counter_premium: counterNum,
         customer_supplies_labour: suppliesNum,
         dump_truck_surcharge: dumpTruckNum,
+        ...(greaseFeeSupported ? { grease_only_fee: greaseFeeNum } : {}),
         price_list_effective_date: effective || null,
       });
       if (!res.ok) {
@@ -83,6 +89,14 @@ export function PricingSettingsCard({ initial }: Props) {
             onChange={setDumpTruck}
             tip="Flat amount added to a sales job's sub total when the vehicle is a dump truck. The sales form ticks the box automatically for vehicles marked as dump trucks."
           />
+          {greaseFeeSupported && (
+            <Field
+              label="Grease-only job fee ($)"
+              value={greaseFee}
+              onChange={setGreaseFee}
+              tip="Added as its own line on a sales job that is only greasing — grease items but no oil, filters, fuel or Trans & Diff. Not charged when the customer's free-grease offer is used. Staff can remove it on a job. 0 turns it off."
+            />
+          )}
           <div>
             <label className="text-sm font-medium flex items-center gap-1">
               Price list effective date

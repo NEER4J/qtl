@@ -245,12 +245,15 @@ export const getCachedActiveEngineTypes = cachedReference(
 );
 
 export const getCachedActivePartCategories = cachedReference(
-  "active-part-categories",
+  // v2: the select widened to `*` for cost_bucket (0147). unstable_cache keys on
+  // the callback source and this name, not the select string, so without a new
+  // name the old three-column rows would be served for up to an hour.
+  "active-part-categories-v2",
   REFERENCE_TAGS.pricing,
   async (db) => {
     const { data, error } = await db
       .from("part_categories")
-      .select("id, name, unit_of_measure")
+      .select("*")
       .eq("active", true)
       .order("sort_order")
       .order("name");

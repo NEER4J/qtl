@@ -11,7 +11,13 @@ import {
   listActiveLocations,
   listActiveServiceTypes,
 } from "@/lib/actions/reference";
-import { listEngineTypes, listOilGroups, listOilTypes } from "@/lib/actions/pricing";
+import {
+  listEngineTypes,
+  listOilGroups,
+  listOilTypes,
+  listPartCategories,
+  listVolumeTiers,
+} from "@/lib/actions/pricing";
 import { listActiveTechnicians } from "@/lib/actions/technicians";
 import { formatDate } from "@/lib/utils/format";
 import { canAccessLocation } from "@/lib/auth/locations";
@@ -38,16 +44,28 @@ export default async function EditSalesJobPage({
   if (!canEdit) redirect(`/sales/${id}`);
   if (job.deactivated_at) redirect(`/sales/${id}`);
 
-  const [locations, serviceTypes, settings, engineTypes, oilTypes, oilGroups, technicians] =
-    await Promise.all([
-      listActiveLocations(),
-      listActiveServiceTypes(),
-      getAppSettings(),
-      listEngineTypes(),
-      listOilTypes(),
-      listOilGroups(),
-      listActiveTechnicians(),
-    ]);
+  const [
+    locations,
+    serviceTypes,
+    settings,
+    engineTypes,
+    oilTypes,
+    oilGroups,
+    technicians,
+    volumeTiers,
+    partCategories,
+  ] = await Promise.all([
+    listActiveLocations(),
+    listActiveServiceTypes(),
+    getAppSettings(),
+    listEngineTypes(),
+    listOilTypes(),
+    listOilGroups(),
+    listActiveTechnicians(),
+    // For the automatic tier premium and grease-only fee on the job.
+    listVolumeTiers(),
+    listPartCategories(),
+  ]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -75,6 +93,9 @@ export default async function EditSalesJobPage({
         technicians={technicians}
         hstRate={Number(settings.hst_rate)}
         dumpTruckSurcharge={Number(settings.dump_truck_surcharge ?? 0)}
+        volumeTiers={volumeTiers}
+        greaseOnlyFee={Number(settings.grease_only_fee ?? 0)}
+        partCategories={partCategories}
         currentUserRole={profile.role}
         initialItems={job.items.map((it) => ({
           key: it.id,
@@ -88,10 +109,13 @@ export default async function EditSalesJobPage({
           package_label: it.package_label ?? null,
           package_group: it.package_group ?? null,
           oil_type_id: it.oil_type_id ?? null,
+          // NULL on lines saved before 0149 — they stay "litres", as saved.
+          oil_container: it.oil_container ?? null,
           transmission_service_id: it.transmission_service_id ?? null,
           merged_unit_price: it.merged_unit_price ?? null,
           is_customer_supplied: it.is_customer_supplied ?? false,
           part_category_id: it.part_category_id ?? null,
+          auto_fee: it.auto_fee ?? null,
         }))}
         initial={{
           id: job.id,
@@ -124,6 +148,8 @@ export default async function EditSalesJobPage({
           end_time: job.end_time?.slice(0, 5) ?? "",
           is_dump_truck: job.is_dump_truck ?? false,
           dump_truck_surcharge: Number(job.dump_truck_surcharge ?? 0),
+          oil_tier_premium_waived: job.oil_tier_premium_waived ?? false,
+          grease_only_fee_waived: job.grease_only_fee_waived ?? false,
           free_grease_applied: job.free_grease_applied ?? false,
           free_grease_override_reason: job.free_grease_override_reason ?? "",
           comments: job.comments ?? "",

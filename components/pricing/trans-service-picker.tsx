@@ -47,10 +47,14 @@ export function TransServicePickerButton({
   onSelect,
   label = "Add Trans & Diff service",
   excludeIds,
+  cacheKey,
 }: {
   onSelect: (service: TransmissionService) => void;
   label?: string;
   excludeIds?: ReadonlySet<string>;
+  /** Share results for a minute (useDebouncedSearch). Left off in the package
+   *  editor, where a service edited a moment ago must show fresh. */
+  cacheKey?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -61,6 +65,7 @@ export function TransServicePickerButton({
     open,
     query: q,
     fetcher: (query) => listTransServicesForPicker(query),
+    cacheKey,
   });
 
   const visible = excludeIds ? results.filter((s) => !excludeIds.has(s.id)) : results;

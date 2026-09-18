@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { addDaysISO, parseDateOnly, todayISO } from "@/lib/utils/tz";
 import { requireProfile } from "@/lib/auth/require";
 import { applyLocationFilter, resolveLocationFilter } from "@/lib/auth/locations";
+import { isPageAllowed } from "@/lib/permissions/check";
 
 // ============================================================================
 // Shared filter shape
@@ -289,6 +290,90 @@ export async function getJobsAnalytics(filter: AnalyticsFilter = {}): Promise<Jo
     by_dow,
     volume_trend,
     duration_buckets,
+  };
+}
+
+// ============================================================================
+// Deck analytics — Upper tech / Lower tech on each job (mig 0146)
+// ============================================================================
+export type Deck = "upper" | "lower";
+
+export interface DeckAnalytics {
+  /** False until migration 0146 is applied — the page explains instead of erroring. */
+  supported: boolean;
+  period_label: string;
+  total_jobs: number;
+  coverage: { deck: Deck; assigned: number; blank: number }[];
+  by_tech: {
+    deck: Deck;
+    tech: string;
+    jobs: number;
+    revenue: number;
+    avg_minutes: number | null;
+    timed_jobs: number;
+  }[];
+  service_mix: { deck: Deck; tech: string; service_code: string; service_name: string; jobs: number }[];
+  pairs: { upper_tech: string; lower_tech: string; jobs: number; revenue: number }[];
+  weekly: { week: string; jobs: number; upper: number; lower: number }[];
+}
+
+/**
+ * Who worked the Upper and Lower deck, how often, for how much and how fast.
+ * Aggregated by the deck_analytics() SQL function because a month of jobs can
+ * pass PostgREST's 1,000-row cap. It runs as the caller, so RLS scopes the
+ * shops exactly like the rest of this file.
+ *
+ * Per-technician sales is Analytics-page data, so the page permission is
+ * checked here too — a server action is reachable without opening the page.
+ */
+export async function getDeckAnalytics(
+  filter: AnalyticsFilter & { technician?: string },
+): Promise<DeckAnalytics> {
+  const { supabase, profile, locationIds } = await scopedClient(filter);
+  const { from, to, label } = defaultRange(filter);
+  const empty: DeckAnalytics = {
+    supported: true,
+    period_label: label,
+    total_jobs: 0,
+    coverage: [],
+    by_tech: [],
+    service_mix: [],
+    pairs: [],
+    weekly: [],
+  };
+  if (!isPageAllowed(profile, "analytics")) return empty;
+
+  const { data, error } = await supabase.rpc("deck_analytics", {
+    p_from: from,
+    p_to: to,
+    p_location_ids: locationIds,
+    p_technician: filter.technician?.trim() || null,
+  });
+  if (error) {
+    if (error.code === "PGRST202") return { ...empty, supported: false };
+    throw error;
+  }
+  const d = (data ?? {}) as Partial<DeckAnalytics>;
+  const num = (v: unknown) => Number(v) || 0;
+  return {
+    ...empty,
+    total_jobs: num(d.total_jobs),
+    coverage: (d.coverage ?? []).map((c) => ({ ...c, assigned: num(c.assigned), blank: num(c.blank) })),
+    by_tech: (d.by_tech ?? []).map((t) => ({
+      ...t,
+      jobs: num(t.jobs),
+      revenue: num(t.revenue),
+      avg_minutes: t.avg_minutes == null ? null : Number(t.avg_minutes),
+      timed_jobs: num(t.timed_jobs),
+    })),
+    service_mix: (d.service_mix ?? []).map((s) => ({ ...s, jobs: num(s.jobs) })),
+    pairs: (d.pairs ?? []).map((p) => ({ ...p, jobs: num(p.jobs), revenue: num(p.revenue) })),
+    weekly: (d.weekly ?? []).map((w) => ({
+      week: w.week,
+      jobs: num(w.jobs),
+      upper: num(w.upper),
+      lower: num(w.lower),
+    })),
   };
 }
 

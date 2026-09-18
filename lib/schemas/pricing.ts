@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { COST_BUCKETS } from "@/lib/utils/cost-bucket";
+
 import { todayISO } from "@/lib/utils/tz";
 
 /**
@@ -324,6 +326,10 @@ export const DeleteEngineFilterInput = z.object({
 export const CreatePartCategoryInput = z.object({
   name: z.string().trim().min(1, "Name is required").max(80),
   unit_of_measure: unitOfMeasureSchema.default("pcs"),
+  // Optional with NO default — updatePartCategory writes every field it's
+  // given, so a default would reset a saved bucket whenever a save left it out.
+  // Left out on create, the database default ('other') applies.
+  cost_bucket: z.enum(COST_BUCKETS).optional(),
   sort_order: z.coerce.number().int().min(0).default(100),
   active: z.coerce.boolean().default(true),
 });

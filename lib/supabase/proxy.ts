@@ -20,6 +20,58 @@ function isCronPath(pathname: string): boolean {
   return pathname === "/api/cron" || pathname.startsWith("/api/cron/");
 }
 
+// ----------------------------------------------------------------------------
+// IP-lock verdict cookie. check_ip_access is a round trip to the database (in
+// Seoul) on EVERY request, server actions included — the sales pickers paid it
+// on each open and each search. When IP_VERDICT_SECRET is set, an ALLOWED
+// verdict is remembered for a few minutes in a signed, httpOnly cookie bound to
+// this user and this IP, and requests carrying a valid one skip the RPC.
+//
+//   * allow only — a denied or failed check is never cached, so adding an IP
+//     to the allowlist takes effect on the very next request;
+//   * the cost is that removing an IP, deactivating a user or switching the
+//     lock on takes up to IP_VERDICT_TTL_S to bite;
+//   * unset IP_VERDICT_SECRET and this is off — every request runs the RPC,
+//     exactly as before.
+// HMAC through Web Crypto: middleware runs on the Edge runtime.
+// ----------------------------------------------------------------------------
+const IP_VERDICT_COOKIE = "qtl_ip_ok";
+const IP_VERDICT_TTL_S = 5 * 60;
+
+async function signVerdict(secret: string, message: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(message)));
+  return Array.from(sig, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function sameString(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+async function hasValidVerdict(
+  request: NextRequest,
+  secret: string,
+  userId: string,
+  ip: string,
+): Promise<boolean> {
+  const raw = request.cookies.get(IP_VERDICT_COOKIE)?.value;
+  if (!raw) return false;
+  const [expText, sig] = raw.split(".");
+  const exp = Number(expText);
+  if (!sig || !Number.isFinite(exp) || exp * 1000 < Date.now()) return false;
+  return sameString(sig, await signVerdict(secret, `${userId}|${ip}|${exp}`));
+}
+
 export async function updateSession(request: NextRequest) {
   // Surface the current pathname to Server Components / layouts via a request
   // header. Next.js doesn't expose pathname to layouts otherwise, and the
@@ -93,6 +145,13 @@ export async function updateSession(request: NextRequest) {
   // --------------------------------------------------------------------------
   if (user && !isExemptFromIpLock(request.nextUrl.pathname)) {
     const ip = clientIpFromHeaders(request.headers);
+    const verdictSecret = process.env.IP_VERDICT_SECRET;
+    const userId = typeof user.sub === "string" ? user.sub : null;
+    const canCache = Boolean(verdictSecret && userId && ip);
+
+    if (canCache && (await hasValidVerdict(request, verdictSecret!, userId!, ip!))) {
+      return supabaseResponse;
+    }
 
     // One round trip: the DB decides, because the allowlist and the master
     // switch aren't readable by ordinary roles. `check_ip_access` also handles
@@ -101,6 +160,23 @@ export async function updateSession(request: NextRequest) {
       "check_ip_access",
       { p_ip: ip ?? "" },
     );
+
+    if (!verdictError && canCache && !(verdict?.enforced && !verdict?.allowed)) {
+      // Allowed (or the lock is off): remember it on the response getClaims
+      // may already have replaced, so the auth cookies it set still go out.
+      const exp = Math.floor(Date.now() / 1000) + IP_VERDICT_TTL_S;
+      supabaseResponse.cookies.set(
+        IP_VERDICT_COOKIE,
+        `${exp}.${await signVerdict(verdictSecret!, `${userId}|${ip}|${exp}`)}`,
+        {
+          httpOnly: true,
+          secure: request.nextUrl.protocol === "https:",
+          sameSite: "lax",
+          path: "/",
+          maxAge: IP_VERDICT_TTL_S,
+        },
+      );
+    }
 
     if (verdictError) {
       // Fail OPEN. A missing migration or a transient DB hiccup must not lock

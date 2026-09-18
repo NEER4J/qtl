@@ -53,7 +53,7 @@ export default async function StatutoryRatesPage() {
 
       <PageHelp id="settings-statutory" defaultOpen>
         <p>
-          Federal EI and CPP rates change every January. When they do, add a row for the new year here so the payroll calculations use the right numbers.
+          Federal EI and CPP rates change every January. EI and CPP are typed on each payroll entry now; these rates power the entry&apos;s Estimate from rates button, the employer-EI multiplier it fills in, and any entry saved without its amounts. Add a row for each new year so those use the right numbers.
         </p>
         <ul>
           <li><strong>EI (employee)</strong> — the rate you deduct from employee pay.</li>

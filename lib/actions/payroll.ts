@@ -621,8 +621,21 @@ async function buildEntryPayload(
   // misc_extra is taxable but NOT insurable (per current convention).
   const insurable = round2(grossWages + input.bonus + holidayPay);
 
-  const rates = await getStatutoryRatesForYear(year);
-  const computed = _computeStatutoryDeductions(insurable, rates, year);
+  // EI / CPP / CPP2 are typed on the entry (client 2026-09-15). Only an amount
+  // the save left out is calculated from the rate table — see PayrollEntryInput
+  // — so the rates are read only when something is actually missing.
+  const typed = {
+    ei: input.ei_employee,
+    cpp: input.cpp_employee,
+    cpp2: input.cpp_employee2,
+    ei_employer: input.ei_employer,
+    cpp_employer: input.cpp_employer,
+    cpp_employer2: input.cpp_employer2,
+  };
+  const computed = Object.values(typed).some((v) => v === undefined)
+    ? _computeStatutoryDeductions(insurable, await getStatutoryRatesForYear(year), year)
+    : null;
+  const amount = (key: keyof typeof typed) => round2(typed[key] ?? computed?.[key] ?? 0);
 
   // Optional statutory items (0135). A flag that is off zeroes the employee
   // amount AND the employer side that mirrors it — an EI-exempt employee costs
@@ -630,12 +643,12 @@ async function buildEntryPayload(
   // tier 1 (under 18, over 70, CPT30) is exempt from tier 2 by definition.
   const applyCpp2 = input.apply_cpp && input.apply_cpp2;
 
-  const ei = input.apply_ei ? computed.ei : 0;
-  const ei_employer = input.apply_ei ? computed.ei_employer : 0;
-  const cpp = input.apply_cpp ? computed.cpp : 0;
-  const cpp_employer = input.apply_cpp ? computed.cpp_employer : 0;
-  const cpp2 = applyCpp2 ? computed.cpp2 : 0;
-  const cpp_employer2 = applyCpp2 ? computed.cpp_employer2 : 0;
+  const ei = input.apply_ei ? amount("ei") : 0;
+  const ei_employer = input.apply_ei ? amount("ei_employer") : 0;
+  const cpp = input.apply_cpp ? amount("cpp") : 0;
+  const cpp_employer = input.apply_cpp ? amount("cpp_employer") : 0;
+  const cpp2 = applyCpp2 ? amount("cpp2") : 0;
+  const cpp_employer2 = applyCpp2 ? amount("cpp_employer2") : 0;
   const incomeTax = input.apply_income_tax ? input.income_tax : 0;
 
   const wsibEmployer = input.apply_wsib ? round2(insurable * wsibRate) : 0;
@@ -651,6 +664,13 @@ async function buildEntryPayload(
       - incomeTax
       - input.benefit_employee_deduction,
   );
+  // Deductions are typed now, so a slipped digit could take more than the
+  // period paid. Nothing legitimate on this form produces a negative cheque.
+  if (netPay < 0) {
+    throw new Error(
+      `Deductions ($${round2(ei + cpp + cpp2 + incomeTax + input.benefit_employee_deduction).toFixed(2)}) are more than this period's pay — check the EI, CPP, tax and benefit amounts.`,
+    );
+  }
 
   return {
     payroll_week_id: input.payroll_week_id,

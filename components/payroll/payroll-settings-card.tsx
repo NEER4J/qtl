@@ -57,8 +57,9 @@ export function PayrollSettingsCard({ initial }: Props) {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Rates applied when calculating each payroll entry. Changes affect new and recalculated
-          entries; already-saved entries keep their stored amounts.
+          Vacation pay and WSIB are calculated from these rates on each payroll entry (EI and CPP
+          are typed in). Changes affect entries saved from now on; already-saved entries keep their
+          stored amounts.
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 max-w-xl">
           <Field

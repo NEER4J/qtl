@@ -68,6 +68,13 @@ export default async function OilChangeDetailPage() {
                 and grease are <em>unknown</em>, not zero. Link it under{" "}
                 <Link href="/settings/pricing/engine-types" className="underline">engine types</Link>.
               </li>
+              <li>
+                <em>Package filters</em> is the filter cost the Oil detail page uses: the
+                filter-category items in the engine&apos;s package at the package&apos;s quantities
+                (a filter used twice counts twice). The brand columns are the filter sets wired
+                to the engine itself — they still price the Oil-change grid and Print list, and
+                stand in on Oil detail for an engine with no package filters.
+              </li>
               <li>Add or change brand options for an engine on its detail page.</li>
             </ul>
           </>
@@ -108,6 +115,9 @@ export default async function OilChangeDetailPage() {
                   ))}
                   {showCost && <th className="p-2 text-right min-w-[90px] border-l">Fuel</th>}
                   {showCost && <th className="p-2 text-right min-w-[90px] border-l">Grease</th>}
+                  {showCost && (
+                    <th className="p-2 text-right min-w-[110px] border-l">Package filters</th>
+                  )}
                 </tr>
                 {showCost && (
                   <tr className="border-t text-xs text-muted-foreground">
@@ -121,6 +131,7 @@ export default async function OilChangeDetailPage() {
                         </div>
                       </th>
                     ))}
+                    <th className="border-l" />
                     <th className="border-l" />
                     <th className="border-l" />
                   </tr>
@@ -183,6 +194,26 @@ export default async function OilChangeDetailPage() {
                             <span
                               className="text-amber-600 dark:text-amber-500"
                               title="No package linked to this engine — grease usage unknown"
+                            >
+                              —
+                            </span>
+                          )}
+                        </td>
+                      )}
+                      {/* What Oil detail uses as filter cost: the Filter-category
+                          items in the engine's package at the package's qty. */}
+                      {showCost && (
+                        <td className="p-1 border-l text-right tabular-nums text-sm">
+                          {r.package_filter_cost != null ? (
+                            formatMoney(r.package_filter_cost)
+                          ) : (
+                            <span
+                              className="text-muted-foreground"
+                              title={
+                                r.extras_known
+                                  ? "This engine's package lists no filters — Oil detail uses the brand columns"
+                                  : "No package linked — Oil detail uses the brand columns"
+                              }
                             >
                               —
                             </span>

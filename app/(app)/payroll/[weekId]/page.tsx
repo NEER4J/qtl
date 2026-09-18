@@ -179,7 +179,7 @@ export default async function PayrollWeekPage({
         <PageHelp id="payroll-detail">
           <p>The weekly workflow:</p>
           <ol>
-            <li><strong>Add entries</strong> — one per employee working this week. Fill in hours, rate, bonus, extras, and benefits. EI / CPP / tax update as you type.</li>
+            <li><strong>Add entries</strong> — one per employee working this week. Fill in hours, rate, bonus, extras and benefits, then type this period&apos;s income tax, EI and CPP from your payroll calculator (the employer side fills in as you type; <strong>Estimate from rates</strong> gives a starting point). Vacation pay and WSIB are calculated for you.</li>
             <li><strong>Daily cash</strong> — for management employees, click the &quot;Cash&quot; button to log cash paid on each day. The total rolls up into the cash column. Days already logged can be corrected or removed from that same dialog.</li>
             <li><strong>Approve</strong> — signs the numbers off once hours are final.</li>
             <li><strong>Record payment</strong> — log the actual cheque numbers, e-transfer references, etc. as they go out.</li>
@@ -193,7 +193,7 @@ export default async function PayrollWeekPage({
           <p>
             <strong>EI, CPP, CPP2, income tax, vacation accrual, and WSIB are switches</strong> on
             each entry — turn off whatever doesn&apos;t apply (family members are usually EI-exempt;
-            under 18 / over 70 is CPP-exempt) and both the employee and employer side drop to $0.
+            under 18 / over 70 is CPP-exempt) and both the employee and employer side are saved as $0.
             The switches start from the person&apos;s defaults on{" "}
             <Link href="/payroll/employees" className="underline">Payroll → Employees</Link> and can be
             overridden for a single pay period. Anything switched off is listed under the
@@ -225,7 +225,12 @@ export default async function PayrollWeekPage({
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Entries</CardTitle>
           {canEdit && (
-            <PayrollEntryDialog weekId={week.id}>
+            <PayrollEntryDialog
+              weekId={week.id}
+              weekStart={week.week_start}
+              hideEmployeeDeductions={!show("ei_cpp")}
+              hideEmployerDeductions={!show("benefits")}
+            >
               <Button size="sm" className="print:hidden">
                 <Plus className="size-4" /> Add entry
               </Button>
@@ -324,7 +329,13 @@ export default async function PayrollWeekPage({
                       <TableCell className="print:hidden">
                         <div className="flex gap-1 justify-end">
                           {canEdit && (
-                            <PayrollEntryDialog weekId={week.id} existing={entry}>
+                            <PayrollEntryDialog
+                              weekId={week.id}
+                              weekStart={week.week_start}
+                              hideEmployeeDeductions={!show("ei_cpp")}
+                              hideEmployerDeductions={!show("benefits")}
+                              existing={entry}
+                            >
                               <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">Edit</Button>
                             </PayrollEntryDialog>
                           )}

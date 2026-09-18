@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, memo, useEffect, useRef, useState } from "react";
 import { Boxes, Plus, Trash2 } from "lucide-react";
 
 import {
@@ -46,6 +46,7 @@ import {
 } from "@/lib/utils/package-pricing";
 import { oilLabel } from "@/lib/utils/oil-labels";
 import { buildDisplayRows, packageGroupKey } from "@/lib/utils/sales-display";
+import type { AutoFee } from "@/lib/utils/sales-auto-lines";
 
 export interface LineItem {
   /** Local key for React; not persisted. */
@@ -79,6 +80,9 @@ export interface LineItem {
   transmission_service_id?: string | null;
   /** When set, this is a merged duplicate billed at $0; value is the waived unit price. */
   merged_unit_price?: number | null;
+  /** A line the form adds and keeps up to date itself — the volume tier premium
+   *  or the grease-only fee (lib/utils/sales-auto-lines.ts). */
+  auto_fee?: AutoFee | null;
 }
 
 export function newLineItem(partial: Partial<LineItem> = {}): LineItem {
@@ -102,6 +106,7 @@ export function newLineItem(partial: Partial<LineItem> = {}): LineItem {
     oil_container: null,
     transmission_service_id: null,
     merged_unit_price: null,
+    auto_fee: null,
     ...partial,
   };
 }
@@ -224,14 +229,24 @@ type PendingAdd =
       delta: number;
     };
 
-export function SalesLineItems({
+// Memoized: the sales form re-renders on every keystroke in any of its fields,
+// and this table is the heaviest thing on it. Its props (the line state, a
+// useCallback handler, server-loaded oil lists) only change when lines do.
+export const SalesLineItems = memo(SalesLineItemsTable);
+
+const NO_OIL_TYPES: OilType[] = [];
+const NO_OIL_GROUPS: OilGroup[] = [];
+
+function SalesLineItemsTable({
   items,
   onChange,
-  oilTypes = [],
-  oilGroups = [],
+  oilTypes = NO_OIL_TYPES,
+  oilGroups = NO_OIL_GROUPS,
 }: {
   items: LineItem[];
-  onChange: (items: LineItem[]) => void;
+  /** `waive` says staff just took over an automatic charge (edited or deleted
+   *  it), so the form must stop managing that charge on this job. */
+  onChange: (items: LineItem[], opts?: { waive?: AutoFee }) => void;
   /** Oil grades — pickable as standalone oil line items. */
   oilTypes?: OilType[];
   oilGroups?: OilGroup[];
@@ -243,9 +258,26 @@ export function SalesLineItems({
   const addingRef = useRef(false);
 
   const update = (key: string, patch: Partial<LineItem>) => {
-    onChange(items.map((it) => (it.key === key ? { ...it, ...patch } : it)));
+    const target = items.find((it) => it.key === key);
+    // Changing an automatic line's amount, quantity or wording makes it a normal
+    // line the staff member owns — the form stops recalculating it.
+    const takesOver =
+      target?.auto_fee != null &&
+      ("unit_price" in patch || "quantity" in patch || "description" in patch);
+    onChange(
+      items.map((it) =>
+        it.key === key ? { ...it, ...patch, ...(takesOver ? { auto_fee: null } : {}) } : it,
+      ),
+      takesOver ? { waive: target!.auto_fee! } : undefined,
+    );
   };
-  const remove = (key: string) => onChange(items.filter((it) => it.key !== key));
+  const remove = (key: string) => {
+    const target = items.find((it) => it.key === key);
+    onChange(
+      items.filter((it) => it.key !== key),
+      target?.auto_fee ? { waive: target.auto_fee } : undefined,
+    );
+  };
   /** Remove every line belonging to one collapsed package instance. */
   const removeGroup = (groupKey: string) =>
     onChange(items.filter((it) => packageGroupKey(it) !== groupKey));
@@ -649,6 +681,15 @@ export function SalesLineItems({
             onChange={(e) => update(it.key, { description: e.target.value, part_id: it.part_id })}
             placeholder={it.part_id ? "Part description" : "Custom item description"}
           />
+          {it.auto_fee && (
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Added automatically
+              {it.auto_fee === "oil_tier_premium"
+                ? " from the oil on this job (Volume tiers)"
+                : " — grease-only job (Pricing defaults)"}
+              . Edit or delete it to set it by hand.
+            </p>
+          )}
           {(it.part_id || cs) && (
             <p className="text-[10px] text-muted-foreground mt-1">
               {it.part_id && <span>From catalog</span>}
@@ -887,7 +928,7 @@ export function SalesLineItems({
         {oilTypes.length > 0 && (
           <OilPickerButton oilTypes={oilTypes} oilGroups={oilGroups} onSelect={addOil} />
         )}
-        <TransServicePickerButton onSelect={addTransService} />
+        <TransServicePickerButton onSelect={addTransService} cacheKey="sales-trans" />
         <Button type="button" variant="outline" size="sm" onClick={addLabour}>
           <Plus className="size-4" /> Add labour
         </Button>

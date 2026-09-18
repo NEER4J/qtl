@@ -36,18 +36,35 @@ import {
   type UnitOfMeasureValue,
 } from "@/lib/schemas/pricing";
 import type { PartCategory } from "@/lib/db/types";
+import {
+  COST_BUCKETS,
+  COST_BUCKET_LABEL,
+  costBucketFor,
+  costBucketFromName,
+  type CostBucket,
+} from "@/lib/utils/cost-bucket";
 
 type FormValues = {
   name: string;
   unit_of_measure: UnitOfMeasureValue;
+  cost_bucket: CostBucket;
   sort_order: string;
   active: boolean;
 };
 const blank: FormValues = {
   name: "",
   unit_of_measure: "pcs",
+  cost_bucket: "other",
   sort_order: "100",
   active: true,
+};
+
+const COST_BUCKET_HINT: Record<CostBucket, string> = {
+  filter: "Counts toward Filter cost on the oil-change pages.",
+  oil: "Oil sold as a part. Shown, but never added to Oil cost (that is litres × the grade).",
+  fuel: "Counts toward the Fuel column (diesel treatment).",
+  grease: "Counts toward the Grease column, and marks a grease-only job.",
+  other: "Not part of the oil-change cost columns.",
 };
 
 export function PartCategoryFormDialog({
@@ -71,6 +88,7 @@ export function PartCategoryFormDialog({
         ? {
             name: category.name,
             unit_of_measure: category.unit_of_measure,
+            cost_bucket: costBucketFor(category),
             sort_order: String(category.sort_order),
             active: category.active,
           }
@@ -83,6 +101,7 @@ export function PartCategoryFormDialog({
       const payload = {
         name: values.name.trim(),
         unit_of_measure: values.unit_of_measure,
+        cost_bucket: values.cost_bucket,
         sort_order: Number(values.sort_order),
         active: values.active,
       };
@@ -105,6 +124,14 @@ export function PartCategoryFormDialog({
   });
 
   const nameChanged = mode === "edit" && category && form.watch("name").trim() !== category.name;
+
+  // New category: suggest "Counts as" from the name as it's typed ("Oil Filter"
+  // → Filter), until someone picks one themselves.
+  const typedName = form.watch("name");
+  useEffect(() => {
+    if (mode !== "create" || form.getFieldState("cost_bucket").isDirty) return;
+    form.setValue("cost_bucket", costBucketFromName(typedName));
+  }, [mode, typedName, form]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -158,6 +185,31 @@ export function PartCategoryFormDialog({
                   <FormDescription>
                     How parts in this category are counted on invoices and line items.
                   </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="cost_bucket"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Counts as</FormLabel>
+                  <Select value={field.value} onValueChange={(v) => field.onChange(v as CostBucket)}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {COST_BUCKETS.map((b) => (
+                        <SelectItem key={b} value={b}>
+                          {COST_BUCKET_LABEL[b]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>{COST_BUCKET_HINT[field.value]}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

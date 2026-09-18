@@ -62,6 +62,40 @@ function canEditJobDate(profile: Profile): boolean {
   );
 }
 
+// ----------------------------------------------------------------------------
+// Columns from migration 0149. Before it is applied PostgREST rejects a write
+// that names them (PGRST204), and the job save isn't transactional — a refused
+// line insert would leave a job with no lines. So each write that sends them
+// retries without them when they're missing.
+// ----------------------------------------------------------------------------
+function isMissingColumn(
+  error: { code?: string; message?: string } | null,
+  columns: readonly string[],
+): boolean {
+  if (!error || (error.code !== "PGRST204" && error.code !== "42703")) return false;
+  return columns.some((c) => (error.message ?? "").includes(c));
+}
+
+const JOB_0149_COLUMNS = ["oil_tier_premium_waived", "grease_only_fee_waived"] as const;
+const ITEM_0149_COLUMNS = ["oil_container", "auto_fee"] as const;
+
+function omitKeys<T extends Record<string, unknown>>(row: T, keys: readonly string[]): T {
+  const out: Record<string, unknown> = { ...row };
+  for (const k of keys) delete out[k];
+  return out as T;
+}
+
+/** The waiver flags, only when the form sent them (undefined keeps the job's). */
+function waiverColumns(input: {
+  oil_tier_premium_waived?: boolean;
+  grease_only_fee_waived?: boolean;
+}): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  if (input.oil_tier_premium_waived !== undefined) out.oil_tier_premium_waived = input.oil_tier_premium_waived;
+  if (input.grease_only_fee_waived !== undefined) out.grease_only_fee_waived = input.grease_only_fee_waived;
+  return out;
+}
+
 // Shared by createSalesJob / updateSalesJob — throws before anything is
 // written if the sale would need more of a part/oil than is on hand, unless
 // the caller is privileged AND explicitly asked to override.
@@ -381,9 +415,7 @@ export const createSalesJob = wrapAction({
 
     const status = deriveStatus(input.total, effectivePaidAmount, creditApplied);
 
-    const { data, error } = await supabase
-      .from("sales_jobs")
-      .insert({
+    const jobRow: Record<string, unknown> = {
         location_id: locationId,
         job_date: input.job_date,
         start_time: input.start_time,
@@ -431,10 +463,16 @@ export const createSalesJob = wrapAction({
         stock_override: stockOverride,
         created_by: profile.id,
         updated_by: profile.id,
-      })
-      .select("*")
-      .single();
+      ...waiverColumns(input),
+    };
+    const insertJob = (row: Record<string, unknown>) =>
+      supabase.from("sales_jobs").insert(row).select("*").single();
+    let { data, error } = await insertJob(jobRow);
+    if (isMissingColumn(error, JOB_0149_COLUMNS)) {
+      ({ data, error } = await insertJob(omitKeys(jobRow, JOB_0149_COLUMNS)));
+    }
     if (error) throw error;
+    if (!data) throw new Error("The job was not saved.");
 
     // Persist payments to the ledger. Multi-row path inserts each entry;
     // single-shot path mirrors the legacy paid_amount/payment_mode as one row
@@ -543,7 +581,9 @@ export const updateSalesJob = wrapAction({
     const sameLocation = existing?.location_id === input.location_id;
     const { data: oldItemRows, error: oldItemsErr } = await supabase
       .from("sales_job_items")
-      .select("part_id, oil_type_id, quantity, unit_price, is_customer_supplied")
+      // `*`: includes oil_container / package_group for the gallon-to-litres
+      // netting once 0149 is in, and still works before it.
+      .select("*")
       .eq("sales_job_id", input.id);
     if (oldItemsErr) throw oldItemsErr;
     await assertStockAvailable(
@@ -603,9 +643,7 @@ export const updateSalesJob = wrapAction({
 
     const status = deriveStatus(input.total, paidAmount, creditApplied);
 
-    const { data, error } = await supabase
-      .from("sales_jobs")
-      .update({
+    const jobPatch: Record<string, unknown> = {
         location_id: input.location_id,
         job_date: input.job_date,
         paid_amount: paidAmount,
@@ -652,11 +690,16 @@ export const updateSalesJob = wrapAction({
         auto_priced_at: input.auto_priced_at ?? null,
         stock_override: stockOverride,
         updated_by: profile.id,
-      })
-      .eq("id", input.id)
-      .select("*")
-      .single();
+      ...waiverColumns(input),
+    };
+    const updateJob = (patch: Record<string, unknown>) =>
+      supabase.from("sales_jobs").update(patch).eq("id", input.id).select("*").single();
+    let { data, error } = await updateJob(jobPatch);
+    if (isMissingColumn(error, JOB_0149_COLUMNS)) {
+      ({ data, error } = await updateJob(omitKeys(jobPatch, JOB_0149_COLUMNS)));
+    }
     if (error) throw error;
+    if (!data) throw new Error("The job was not saved.");
 
     await replaceJobItems(
       supabase,
@@ -799,6 +842,8 @@ async function replaceJobItems(
         transmission_service_id?: string | null;
         merged_unit_price?: number | null;
         is_customer_supplied?: boolean;
+        oil_container?: "bulk" | "gallon" | null;
+        auto_fee?: "oil_tier_premium" | "grease_only_fee" | null;
       }[]
     | undefined,
   userId: string,
@@ -839,10 +884,19 @@ async function replaceJobItems(
     transmission_service_id: it.transmission_service_id ?? null,
     merged_unit_price: it.merged_unit_price ?? null,
     is_customer_supplied: it.is_customer_supplied ?? false,
+    // Only a standalone oil line has a container: a package's oil quantity is
+    // an item count, and the stock trigger scales gallon lines by jug size.
+    oil_container: it.oil_type_id && !it.package_group ? it.oil_container ?? null : null,
+    auto_fee: it.auto_fee ?? null,
     position: idx,
     created_by: userId,
   }));
-  const { error: insErr } = await supabase.from("sales_job_items").insert(rows);
+  let { error: insErr } = await supabase.from("sales_job_items").insert(rows);
+  if (isMissingColumn(insErr, ITEM_0149_COLUMNS)) {
+    ({ error: insErr } = await supabase
+      .from("sales_job_items")
+      .insert(rows.map((r) => omitKeys(r, ITEM_0149_COLUMNS))));
+  }
   if (insErr) throw insErr;
 }
 

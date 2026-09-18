@@ -16,6 +16,10 @@ export interface StockConsumingLine {
   unit_price: number;
   /** Customer-supplied lines never draw on the shop's own stock. */
   is_customer_supplied?: boolean;
+  /** A standalone gallon oil line counts jugs; stock is litres (0149). */
+  oil_container?: "bulk" | "gallon" | null;
+  /** Package oil quantity is an item count, never scaled by jug size. */
+  package_group?: string | null;
 }
 
 export interface StockShortfall {
@@ -28,12 +32,23 @@ export interface StockShortfall {
   unit: string;
 }
 
+/** Litres per unit of an oil line — the jug size for a standalone gallon line,
+ *  else 1. Same rule as the stock trigger (0149), fallback included. */
+function oilLitresPerUnit(line: StockConsumingLine, lpgById: Map<string, number>): number {
+  if (!line.oil_type_id || line.oil_container !== "gallon" || line.package_group) return 1;
+  const lpg = lpgById.get(line.oil_type_id) ?? 0;
+  return lpg > 0 ? lpg : 1;
+}
+
 /**
  * Net "how much MORE of this part/oil would this save consume" per catalogue
  * item. A return/credit line (unit_price < 0) gives stock back, so it's
- * netted as negative consumption rather than ignored.
+ * netted as negative consumption rather than ignored. Oil is counted in litres.
  */
-function netConsumptionByKey(lines: StockConsumingLine[]): Map<string, number> {
+function netConsumptionByKey(
+  lines: StockConsumingLine[],
+  lpgById: Map<string, number>,
+): Map<string, number> {
   const map = new Map<string, number>();
   for (const line of lines) {
     if (line.is_customer_supplied) continue;
@@ -43,7 +58,7 @@ function netConsumptionByKey(lines: StockConsumingLine[]): Map<string, number> {
         ? `oil:${line.oil_type_id}`
         : null;
     if (!key) continue;
-    const qty = Number(line.quantity) || 0;
+    const qty = (Number(line.quantity) || 0) * (line.part_id ? 1 : oilLitresPerUnit(line, lpgById));
     const signed = Number(line.unit_price) < 0 ? -qty : qty;
     map.set(key, (map.get(key) ?? 0) + signed);
   }
@@ -63,8 +78,26 @@ export async function findStockShortfalls(
   newLines: StockConsumingLine[],
   oldLines: StockConsumingLine[] = [],
 ): Promise<StockShortfall[]> {
-  const newMap = netConsumptionByKey(newLines);
-  const oldMap = netConsumptionByKey(oldLines);
+  // Jug sizes, only for oils that appear on a standalone gallon line.
+  const gallonOilIds = [
+    ...new Set(
+      [...newLines, ...oldLines]
+        .filter((l) => l.oil_type_id && l.oil_container === "gallon" && !l.package_group)
+        .map((l) => l.oil_type_id as string),
+    ),
+  ];
+  const lpgById = new Map<string, number>();
+  if (gallonOilIds.length > 0) {
+    const { data, error } = await supabase
+      .from("oil_types")
+      .select("id, litres_per_gallon")
+      .in("id", gallonOilIds);
+    if (error) throw error;
+    for (const o of data ?? []) lpgById.set(o.id as string, Number(o.litres_per_gallon));
+  }
+
+  const newMap = netConsumptionByKey(newLines, lpgById);
+  const oldMap = netConsumptionByKey(oldLines, lpgById);
 
   const netNeeded = new Map<string, number>();
   for (const [key, qty] of newMap) {
@@ -145,9 +178,11 @@ export async function findStockShortfalls(
 }
 
 export function formatStockShortfalls(shortfalls: StockShortfall[]): string {
+  // Gallon lines make fractional litres (3 × 4.546) — keep the message readable.
+  const n = (v: number) => Number(v.toFixed(2));
   const lines = shortfalls.map(
     (s) =>
-      `${s.label}: need ${s.required}${s.unit}, have ${s.available}${s.unit}`,
+      `${s.label}: need ${n(s.required)}${s.unit}, have ${n(s.available)}${s.unit}`,
   );
   return `Not enough stock to complete this sale — ${lines.join("; ")}.`;
 }

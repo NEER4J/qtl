@@ -3,8 +3,11 @@ import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { PageHelp } from "@/components/help/page-help";
 import { SimpleBar, SimpleLine } from "@/components/analytics/charts";
 import { requireProfile } from "@/lib/auth/require";
-import { getJobsAnalytics } from "@/lib/actions/analytics";
+import { getDeckAnalytics, getJobsAnalytics } from "@/lib/actions/analytics";
 import { listActiveLocations } from "@/lib/actions/reference";
+import { listAllTechnicians } from "@/lib/actions/technicians";
+
+import { DecksSection } from "./decks-section";
 
 export const dynamic = "force-dynamic";
 
@@ -16,16 +19,28 @@ export default async function JobsAnalyticsPage({
   const profile = await requireProfile();
   const sp = await searchParams;
 
-  const [data, locations] = await Promise.all([
-    getJobsAnalytics({
-      from: sp.from,
-      to: sp.to,
-      location_id: sp.location_id,
-      service_type_id: sp.service_type_id,
-      bay_no: sp.bay_no,
-    }),
+  const filter = {
+    from: sp.from,
+    to: sp.to,
+    location_id: sp.location_id,
+    service_type_id: sp.service_type_id,
+    bay_no: sp.bay_no,
+  };
+  const [data, decks, locations, technicians] = await Promise.all([
+    getJobsAnalytics(filter),
+    // The technician filter only narrows the deck section below.
+    getDeckAnalytics({ ...filter, technician: sp.technician }),
     listActiveLocations(),
+    listAllTechnicians(),
   ]);
+
+  // Everyone on the roster, including people who have left, so their history
+  // can still be picked. One entry per name, whatever its capitalisation.
+  const technicianOptions = [
+    ...new Map(technicians.map((t) => [t.name.trim().toLowerCase(), t.name.trim()])).values(),
+  ]
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => ({ value: name, label: name }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -42,6 +57,13 @@ export default async function JobsAnalyticsPage({
           <li><strong>Average duration by service type</strong> — helps you spot when something&apos;s running long or short.</li>
           <li><strong>Jobs per hour of day</strong> — shows when the shop is busiest. Useful for scheduling staff.</li>
           <li><strong>Duration buckets</strong> (0–15 min, 15–30, 30–60, 60+) — where most of the work falls.</li>
+          <li>
+            <strong>Upper &amp; Lower deck</strong> (bottom of the page) — who worked each deck, from the
+            Upper tech and Lower tech on every job: jobs, sales, average time and service types per
+            person, who works together, and how many jobs were left with a deck blank. Pick a
+            <strong> Technician (decks)</strong> to see only jobs they worked on either deck. Credit
+            and return jobs aren&apos;t counted.
+          </li>
         </ul>
         <p>
           Encourage staff to record start and end times on every job — the more jobs with times, the clearer these charts get.
@@ -52,6 +74,7 @@ export default async function JobsAnalyticsPage({
         locations={locations}
         canFilterLocation={profile.role !== "manager"}
         exportHref="/api/export/jobs-analytics"
+        extras={[{ key: "technician", label: "Technician (decks)", options: technicianOptions }]}
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -110,6 +133,8 @@ export default async function JobsAnalyticsPage({
           </CardContent>
         </Card>
       </div>
+
+      <DecksSection data={decks} technician={sp.technician} />
     </div>
   );
 }

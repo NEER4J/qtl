@@ -110,6 +110,9 @@ export default async function PricingAdminHubPage() {
           counter_premium: Number(settings.counter_premium ?? 10),
           customer_supplies_labour: Number(settings.customer_supplies_labour ?? 20),
           dump_truck_surcharge: Number(settings.dump_truck_surcharge ?? 0),
+          // Absent until migration 0149 — the card hides the field until then.
+          grease_only_fee:
+            settings.grease_only_fee === undefined ? undefined : Number(settings.grease_only_fee),
           price_list_effective_date: settings.price_list_effective_date ?? null,
         }}
       />

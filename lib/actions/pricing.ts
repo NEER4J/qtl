@@ -82,6 +82,7 @@ import {
   revalidateReference,
 } from "@/lib/cache/reference";
 import { applyPartsSearch, orFilterValue } from "@/lib/utils/parts-search";
+import { costBucketFor } from "@/lib/utils/cost-bucket";
 import { TRANSMISSION_KIND_LABEL } from "@/lib/utils/transmission";
 
 /**
@@ -111,8 +112,15 @@ export type LabourPackageRow = {
   active: boolean;
 };
 
-/** What one job burns beyond the filters, in dollars. */
-export type PackageExtras = { fuel: number; grease: number };
+/**
+ * What one job's package holds, in dollars, bucketed by part category
+ * (part_categories.cost_bucket, 0147 — see lib/utils/cost-bucket.ts).
+ * `filter_items` counts the filter lines, so a package that lists no filters
+ * can be told apart from one whose filters cost $0.
+ */
+export type PackageExtras = { fuel: number; grease: number; filter: number; filter_items: number };
+
+const NO_EXTRAS: PackageExtras = { fuel: 0, grease: 0, filter: 0, filter_items: 0 };
 
 export type EnginePackageMatch = {
   pkg: LabourPackageRow | null;
@@ -134,10 +142,13 @@ const normPackageName = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase
  * pages while the Excel tabs carried a combined "Fuel / Grease" cost column all
  * along. They run $6–$10 a job, straight off the profit line.
  *
- * Matching is on the part's CATEGORY, exactly: "Fuel Filter" and "Fuel
- * Separator" are filters, already counted in filter cost, so only the bare
- * "Fuel" (diesel treatment, per litre) and "Grease" (per kg) categories land
- * here. Cost basis is (cost + MHSW) × quantity, same as filter cost.
+ * Each item lands in the bucket its part CATEGORY says (costBucketFor):
+ * "Fuel Filter" and "Fuel Separator" are filters, only the bare "Fuel" (diesel
+ * treatment, per litre) and "Grease" (per kg) categories are fuel and grease.
+ * Filters are summed too — the Oil detail page takes an engine's filter cost
+ * from its package (client 2026-09-15: "pull filter pricing from packages,
+ * same as fuel / grease / labour", with the package's quantities, so LF17503
+ * × 2 counts twice). Cost basis is (cost + MHSW) × quantity throughout.
  *
  * Engine → package resolves by the explicit `engine_types.labour_package_id`
  * link (migration 0130) first, then falls back to an exact engine-name ==
@@ -147,19 +158,13 @@ const normPackageName = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase
  */
 /** Every package with the fuel/grease it consumes, plus the two lookups. */
 async function loadPackagesWithExtras(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const [packagesRes, itemsRes] = await Promise.all([
+  const [packagesRes, items] = await Promise.all([
     // Inactive packages are included so an explicit link to one still resolves
     // instead of silently dropping to the fallback.
     supabase.from("part_packages").select("id, name, labor_selling_price, active"),
-    supabase
-      .from("part_package_items")
-      .select(
-        "package_id, quantity, parts:part_id(cost, mhsw_fee, part_categories:category_id(name))",
-      )
-      .limit(10000),
+    loadPackageItemCosts(supabase),
   ]);
   if (packagesRes.error) throw packagesRes.error;
-  if (itemsRes.error) throw itemsRes.error;
 
   const rows = ((packagesRes.data ?? []) as LabourPackageRow[]).map((p) => ({
     ...p,
@@ -172,24 +177,56 @@ async function loadPackagesWithExtras(supabase: Awaited<ReturnType<typeof create
     if (p.active) byName.set(normPackageName(p.name), p);
   }
 
-  type PackageItemRow = {
-    package_id: string;
-    quantity: number;
-    parts: { cost: number; mhsw_fee: number; part_categories: { name: string } | null } | null;
-  };
   const extrasByPackage = new Map<string, PackageExtras>();
-  for (const it of (itemsRes.data ?? []) as unknown as PackageItemRow[]) {
-    if (!it.parts) continue;
-    const cat = normPackageName(it.parts.part_categories?.name ?? "");
-    if (cat !== "fuel" && cat !== "grease") continue;
+  for (const it of items) {
+    if (!it.parts) continue; // oil / Trans & Diff lines — not a part category
+    const bucket = costBucketFor(it.parts.part_categories);
+    if (bucket !== "filter" && bucket !== "fuel" && bucket !== "grease") continue;
     const line = (Number(it.parts.cost) + Number(it.parts.mhsw_fee)) * (Number(it.quantity) || 0);
-    const slot = extrasByPackage.get(it.package_id) ?? { fuel: 0, grease: 0 };
-    if (cat === "fuel") slot.fuel += line;
+    const slot = extrasByPackage.get(it.package_id) ?? { ...NO_EXTRAS };
+    if (bucket === "filter") {
+      slot.filter += line;
+      slot.filter_items += 1;
+    } else if (bucket === "fuel") slot.fuel += line;
     else slot.grease += line;
     extrasByPackage.set(it.package_id, slot);
   }
 
   return { rows, byId, byName, extrasByPackage };
+}
+
+type PackageItemCostRow = {
+  package_id: string;
+  quantity: number;
+  parts: {
+    cost: number;
+    mhsw_fee: number;
+    // `*` rather than naming cost_bucket: before migration 0147 the column
+    // isn't there and costBucketFor falls back to the category name.
+    part_categories: { name?: string | null; cost_bucket?: string | null } | null;
+  } | null;
+};
+
+/**
+ * Every package item's part cost and category. Paged, because PostgREST caps
+ * one response at 1,000 rows whatever .limit() asks for — past that, packages
+ * would silently lose items and under-count their filters, fuel and grease.
+ */
+async function loadPackageItemCosts(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<PackageItemCostRow[]> {
+  const PAGE = 1000;
+  const out: PackageItemCostRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("part_package_items")
+      .select("id, package_id, quantity, parts:part_id(cost, mhsw_fee, part_categories:category_id(*))")
+      .order("id")
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    out.push(...((data ?? []) as unknown as PackageItemCostRow[]));
+    if ((data ?? []).length < PAGE) return out;
+  }
 }
 
 async function loadEnginePackages(
@@ -212,7 +249,7 @@ async function loadEnginePackages(
     return {
       pkg,
       source: linked ? "package" : named ? "package-name-match" : "parts",
-      extras: pkg ? extrasByPackage.get(pkg.id) ?? { fuel: 0, grease: 0 } : null,
+      extras: pkg ? extrasByPackage.get(pkg.id) ?? { ...NO_EXTRAS } : null,
     };
   };
 }
@@ -704,6 +741,10 @@ export interface OilDetailRow {
   grease_cost: number;
   /** False when no package resolved, so fuel/grease are unknown rather than $0. */
   extras_known: boolean;
+  /** Where filter_cost came from: the filters in the engine's package, or — for
+   *  an engine with no package, or one that lists no filters — the filter set
+   *  wired to the engine itself (engine_filters). Never both added together. */
+  filter_source: "package" | "engine_filters";
   /** The labour charge for this engine's oil change (the Labour column). */
   service_cost: number;
   /** Where `service_cost` came from — a linked package, a name match, or the
@@ -902,10 +943,16 @@ export async function getOilDetail(
 
   const rows: OilDetailRow[] = ((enginesRes.data ?? []) as EngineType[]).map((e) => {
     const cap = Number(e.oil_capacity_litres);
-    const filterCost = enginePartCost.get(e.id) ?? 0;
     // Labour = the linked package's "Labor charge"; else the same-named package's
     // (legacy); else the summed part service-costs for this engine.
     const match = matchEnginePackage(e);
+    // Filter cost comes from the package too, at the package's quantities and
+    // only for items in a Filter category (client 2026-09-15). An engine with
+    // no package — or a package that lists no filters — keeps the filter set
+    // wired to the engine. One or the other, never both: adding them together
+    // is exactly the double count the Excel sheet was blamed for.
+    const packageFilters = match.extras != null && match.extras.filter_items > 0;
+    const filterCost = packageFilters ? match.extras!.filter : enginePartCost.get(e.id) ?? 0;
     const labourPkg = match.pkg;
     const serviceCost = labourPkg
       ? Number(labourPkg.labor_selling_price) || 0
@@ -962,6 +1009,7 @@ export async function getOilDetail(
       fuel_cost: fuelCost,
       grease_cost: greaseCost,
       extras_known: extras != null,
+      filter_source: packageFilters ? "package" : "engine_filters",
       service_cost: serviceCost,
       service_cost_source: serviceCostSource,
       service_cost_package: labourPkg?.name ?? null,
@@ -1127,6 +1175,10 @@ export interface OilChangeDetailRow {
   extras_known: boolean;
   /** Name of the package the two came from, for the cell tooltip. */
   extras_package: string | null;
+  /** The filters in the engine's package, (cost + MHSW) × the package's qty —
+   *  what Oil detail uses as filter cost. Null when there's no package or it
+   *  lists no filters (Oil detail then falls back to the brand columns). */
+  package_filter_cost: number | null;
 }
 
 export async function getOilChangeDetails(): Promise<{
@@ -1205,6 +1257,8 @@ export async function getOilChangeDetails(): Promise<{
       grease: match.extras?.grease ?? 0,
       extras_known: match.extras != null,
       extras_package: match.pkg?.name ?? null,
+      package_filter_cost:
+        match.extras && match.extras.filter_items > 0 ? match.extras.filter : null,
     };
   });
 
@@ -1345,6 +1399,7 @@ export async function suggestEngineLabourPackages(): Promise<EngineLabourSuggest
       labor_selling_price: p.labor_selling_price,
       fuel: packages.extrasByPackage.get(p.id)?.fuel ?? 0,
       grease: packages.extrasByPackage.get(p.id)?.grease ?? 0,
+      filter: packages.extrasByPackage.get(p.id)?.filter ?? 0,
     }));
 
   const engines = (enginesRes.data ?? []) as EngineType[];
@@ -1428,7 +1483,7 @@ export async function listAllParts(filter?: {
  */
 export type PartCategoryOption = Pick<
   PartCategory,
-  "id" | "name" | "unit_of_measure"
+  "id" | "name" | "unit_of_measure" | "cost_bucket"
 >;
 
 export async function listPartCategories(): Promise<PartCategoryOption[]> {
@@ -2267,16 +2322,33 @@ export const searchPartsForEngine = wrapAction({
 // part_categories — create / update (with cascade rename on parts) / toggle
 // ============================================================================
 
+/** The write was refused because part_categories.cost_bucket isn't there yet (0147). */
+function isMissingCostBucket(error: { code?: string; message?: string }): boolean {
+  return (
+    (error.code === "PGRST204" || error.code === "42703") &&
+    /cost_bucket/i.test(error.message ?? "")
+  );
+}
+
+/** Drops cost_bucket for a database without 0147 — the category-name rule
+ *  (costBucketFor) covers it until then. */
+function withoutCostBucket<T extends { cost_bucket?: unknown }>(row: T) {
+  const { cost_bucket: _bucket, ...rest } = row;
+  void _bucket;
+  return rest;
+}
+
 export const createPartCategory = wrapAction({
   schema: CreatePartCategoryInput,
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<PartCategory> => {
     const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("part_categories")
-      .insert({ ...input, name: input.name.trim() })
-      .select("*")
-      .single();
+    const insert = (row: object) =>
+      supabase.from("part_categories").insert(row).select("*").single();
+    let { data, error } = await insert({ ...input, name: input.name.trim() });
+    if (error && isMissingCostBucket(error)) {
+      ({ data, error } = await insert({ ...withoutCostBucket(input), name: input.name.trim() }));
+    }
     if (error) throw error;
     revalidatePricing("categories");
     revalidatePath("/settings/pricing/parts");
@@ -2289,12 +2361,12 @@ export const updatePartCategory = wrapAction({
   roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<PartCategory> => {
     const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("part_categories")
-      .update({ ...fields, name: fields.name.trim() })
-      .eq("id", id)
-      .select("*")
-      .single();
+    const update = (row: object) =>
+      supabase.from("part_categories").update(row).eq("id", id).select("*").single();
+    let { data, error } = await update({ ...fields, name: fields.name.trim() });
+    if (error && isMissingCostBucket(error)) {
+      ({ data, error } = await update({ ...withoutCostBucket(fields), name: fields.name.trim() }));
+    }
     if (error) throw error;
     // Parts are FK-linked, so a name change is automatically visible on every
     // part — no cascade needed.
@@ -2779,6 +2851,8 @@ const PricingSettingsInput = z.object({
   counter_premium: z.coerce.number().min(-9999999),
   customer_supplies_labour: z.coerce.number().min(0),
   dump_truck_surcharge: z.coerce.number().min(0),
+  // Grease-only job fee (0149); optional so a save without it leaves it alone.
+  grease_only_fee: z.coerce.number().min(0).max(9999).optional(),
   price_list_effective_date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -2799,9 +2873,17 @@ export const updatePricingSettings = wrapAction({
         customer_supplies_labour: input.customer_supplies_labour,
         dump_truck_surcharge: input.dump_truck_surcharge,
         price_list_effective_date: input.price_list_effective_date || null,
+        ...(input.grease_only_fee !== undefined ? { grease_only_fee: input.grease_only_fee } : {}),
       })
       .eq("id", 1);
-    if (error) throw error;
+    if (error) {
+      if ((error.code === "PGRST204" || error.code === "42703") && /grease_only_fee/.test(error.message ?? "")) {
+        throw new Error(
+          "The grease-only fee needs migration 0149_sales_auto_lines.sql — apply it to the database, then try again.",
+        );
+      }
+      throw error;
+    }
     revalidateReference(REFERENCE_TAGS.appSettings);
     revalidatePath("/settings/pricing");
     revalidatePath("/pricing/all-filter-price");
@@ -2836,6 +2918,9 @@ function revalidatePartPackages() {
   revalidatePath("/settings/pricing");
   revalidatePath("/settings/pricing/packages");
   revalidatePath("/sales/new");
+  // A package's filters, fuel, grease and labour feed the oil-change pages.
+  revalidatePath("/pricing/oil-detail", "layout");
+  revalidatePath("/pricing/oil-grid/detail");
 }
 
 // Every field a package item carries — for the settings screens, lockPartPackage
@@ -3006,24 +3091,23 @@ export async function getPartPackage(id: string): Promise<PartPackageWithItems |
   return { ...(data as PartPackage), items: itemsByPkg.get(id) ?? [] };
 }
 
-export async function listPackagesForPicker(q?: string): Promise<PartPackageWithItems[]> {
+export async function listPackagesForPicker(): Promise<PartPackageWithItems[]> {
   const supabase = await createClient();
   // ONE round trip: the items ride along as an embedded resource instead of a
   // second query after the packages come back. The database is in Seoul and
   // the shops are in Ontario, so the old two-step read was the bulk of the
   // "Add package" lag. Same item shape as fetchPackageItems (toPackageItemRow).
-  let query = supabase
+  //
+  // Returns EVERY active package, not a search page: the picker loads the list
+  // once and filters it in the browser, so typing never waits on Seoul.
+  // 1000 is PostgREST's max-rows ceiling.
+  const { data, error } = await supabase
     .from("part_packages")
     .select(`*, part_package_items(${PACKAGE_ITEM_SELECT})`)
     .eq("active", true)
     .order("name")
     .order("position", { referencedTable: "part_package_items" })
-    .limit(50);
-  if (q && q.trim()) {
-    const term = orFilterValue(q.trim());
-    query = query.or(`name.ilike.${term},description.ilike.${term}`);
-  }
-  const { data, error } = await query;
+    .limit(1000);
   if (error) throw error;
   type Row = PartPackage & { part_package_items: PackageItemDbRow[] | null };
   return ((data ?? []) as unknown as Row[]).map(({ part_package_items, ...pkg }) => ({

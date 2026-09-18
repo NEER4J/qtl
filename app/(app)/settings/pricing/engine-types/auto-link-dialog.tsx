@@ -92,8 +92,8 @@ export function AutoLinkDialog({
           <DialogTitle>Link engines to labour packages</DialogTitle>
           <DialogDescription>
             Matched on engine family, filter brand and model number — so a Cat filter never
-            picks up a Fleetguard package. Untick anything you don&apos;t want. Labour, fuel
-            and grease on the oil pages come from whatever you link here.
+            picks up a Fleetguard package. Untick anything you don&apos;t want. Labour, filters,
+            fuel and grease on the Oil detail page come from whatever you link here.
           </DialogDescription>
         </DialogHeader>
 

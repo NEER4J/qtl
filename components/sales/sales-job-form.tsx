@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { Plus, Trash2 } from "lucide-react";
@@ -37,6 +37,15 @@ import { getCustomerVehicles } from "@/lib/actions/vehicles";
 import { VehicleFormDialog } from "@/components/customers/vehicle-form-dialog";
 import { isFreeGreaseEligible } from "@/lib/utils/free-grease";
 import { isFreeOilChangeEligible } from "@/lib/utils/free-oil-change";
+import { costBucketFor } from "@/lib/utils/cost-bucket";
+import type { VolumeTierRow } from "@/lib/utils/oil-tier";
+import {
+  autoCharges,
+  reconcileAutoLines,
+  type AutoFee,
+  type AutoFeeWaivers,
+  type AutoLineContext,
+} from "@/lib/utils/sales-auto-lines";
 import { lookupOilChangePrice } from "@/lib/actions/pricing";
 import { SalesJobInput } from "@/lib/schemas/sales";
 import type {
@@ -129,6 +138,9 @@ export interface SalesJobFormProps {
     auto_priced_at?: string | null;
     /** $ snapshot baked into the saved sub_total (edit mode). */
     dump_truck_surcharge?: number;
+    /** Staff took over the automatic tier premium / grease-only fee (0149). */
+    oil_tier_premium_waived?: boolean;
+    grease_only_fee_waived?: boolean;
   };
   locations: Location[];
   serviceTypes: ServiceType[];
@@ -140,6 +152,12 @@ export interface SalesJobFormProps {
   hstRate: number;
   /** Flat $ added to sub_total when the vehicle is a dump truck (app setting). */
   dumpTruckSurcharge: number;
+  /** Volume tiers, for the automatic tier premium on oil lines. */
+  volumeTiers?: VolumeTierRow[];
+  /** Fee for a grease-only job (app setting; 0 = off). */
+  greaseOnlyFee?: number;
+  /** Part categories with their cost bucket — tells a grease line from a filter. */
+  partCategories?: { id: string; name: string; cost_bucket?: string | null }[];
   /** Force location to this value (staff role). */
   lockedLocationId?: string | null;
   /** Existing line items (edit mode). */
@@ -167,6 +185,12 @@ const JOB_DATE_EDIT_ROLES: ReadonlySet<UserRole> = new Set([
   "supervisor",
 ]);
 
+// Stable empty defaults: a fresh [] per render would defeat the memoized
+// SalesLineItems and re-run every hook that depends on these.
+const NO_OIL_GROUPS: OilGroup[] = [];
+const NO_TIERS: VolumeTierRow[] = [];
+const NO_CATEGORIES: { id: string; name: string; cost_bucket?: string | null }[] = [];
+
 /** Description for the $0 line item that represents the free-grease offer. */
 const FREE_GREASE_LINE_DESC = "Free Grease (offer)";
 
@@ -182,10 +206,13 @@ export function SalesJobForm({
   serviceTypes,
   engineTypes,
   oilTypes,
-  oilGroups = [],
+  oilGroups = NO_OIL_GROUPS,
   technicians,
   hstRate,
   dumpTruckSurcharge,
+  volumeTiers = NO_TIERS,
+  greaseOnlyFee = 0,
+  partCategories = NO_CATEGORIES,
   lockedLocationId,
   initialItems,
   currentUserRole,
@@ -202,6 +229,11 @@ export function SalesJobForm({
     initial?.auto_priced_at && initial?.sub_total ? initial.sub_total : null,
   );
   const [lineItems, setLineItems] = useState<LineItem[]>(initialItems ?? []);
+  // Charges staff took over on this job (edited or deleted the automatic line).
+  const [autoWaived, setAutoWaived] = useState<AutoFeeWaivers>({
+    oil_tier_premium: initial?.oil_tier_premium_waived ?? false,
+    grease_only_fee: initial?.grease_only_fee_waived ?? false,
+  });
   // Create-mode multi-payment ledger. Each row becomes a sales_payments
   // insert at save time. Edit mode uses the existing AddPaymentDialog on the
   // detail page instead — we don't try to round-trip the ledger through this
@@ -286,6 +318,68 @@ export function SalesJobForm({
   const [appliedSurcharge, setAppliedSurcharge] = useState<number>(
     initial?.is_dump_truck ? Number(initial?.dump_truck_surcharge ?? 0) : 0,
   );
+
+  // --------------------------------------------------------------------------
+  // Automatic lines — volume tier premium + grease-only fee
+  // (lib/utils/sales-auto-lines.ts). Reconciled on every line change staff
+  // make and on the free-grease tick, never just because a job was opened, so
+  // an old invoice doesn't gain a charge by being looked at.
+  // --------------------------------------------------------------------------
+  const freeGreaseApplied = useWatch({ control: form.control, name: "free_grease_applied" });
+  const bucketByCategory = useMemo(
+    () => new Map(partCategories.map((c) => [c.id, costBucketFor(c)])),
+    [partCategories],
+  );
+  const autoLineContext = useCallback(
+    (waived: AutoFeeWaivers, freeGrease: boolean): AutoLineContext => ({
+      oilTypes,
+      tiers: volumeTiers,
+      greaseOnlyFee,
+      freeGreaseApplied: freeGrease,
+      waived,
+      bucketOf: (id) => (id ? bucketByCategory.get(id) ?? "other" : "other"),
+    }),
+    [oilTypes, volumeTiers, greaseOnlyFee, bucketByCategory],
+  );
+
+  /** Every staff change to the lines goes through here. */
+  const handleLineItemsChange = useCallback(
+    (next: LineItem[], opts?: { waive?: AutoFee; freeGrease?: boolean }) => {
+      const waived = opts?.waive ? { ...autoWaived, [opts.waive]: true } : autoWaived;
+      if (opts?.waive) setAutoWaived(waived);
+      const ctx = autoLineContext(waived, opts?.freeGrease ?? Boolean(freeGreaseApplied));
+      setLineItems(reconcileAutoLines(next, ctx, newLineItem));
+    },
+    [autoWaived, autoLineContext, freeGreaseApplied],
+  );
+
+  /** "Add it back" for a charge staff took over. */
+  const restoreAutoCharge = (kind: AutoFee) => {
+    const waived = { ...autoWaived, [kind]: false };
+    setAutoWaived(waived);
+    setLineItems((prev) =>
+      reconcileAutoLines(prev, autoLineContext(waived, Boolean(freeGreaseApplied)), newLineItem),
+    );
+  };
+
+  // Picking a customer can tick free grease without touching a line, so re-check
+  // the automatic charges when the tick itself changes — but not on the first
+  // render, which is just the saved job loading.
+  const freeGreaseSeenRef = useRef(Boolean(freeGreaseApplied));
+  useEffect(() => {
+    const now = Boolean(freeGreaseApplied);
+    if (freeGreaseSeenRef.current === now) return;
+    freeGreaseSeenRef.current = now;
+    setLineItems((prev) => reconcileAutoLines(prev, autoLineContext(autoWaived, now), newLineItem));
+  }, [freeGreaseApplied, autoLineContext, autoWaived]);
+
+  // Charges that would apply but are waived — shown with an "Add it back" link.
+  const waivedCharges = useMemo(() => {
+    const would = autoCharges(lineItems, autoLineContext(autoWaived, Boolean(freeGreaseApplied)));
+    return (["oil_tier_premium", "grease_only_fee"] as const).filter(
+      (k) => autoWaived[k] && would[k] != null && !lineItems.some((it) => it.auto_fee === k),
+    ).map((k) => ({ kind: k, ...would[k]! }));
+  }, [lineItems, autoWaived, autoLineContext, freeGreaseApplied]);
 
   // --------------------------------------------------------------------------
   // Line items drive sub_total whenever there is at least one row.
@@ -389,6 +483,17 @@ export function SalesJobForm({
     if (!isOilChange) return;
     if (itemsHaveRows) return;
     if (!engineTypeId || !oilTypeId || !oilContainer) return;
+    // Editing a saved job: only re-price once someone changes the engine, oil
+    // or container. Opening an old oil-change job used to overwrite its saved
+    // sub total with today's catalogue price the moment the page loaded.
+    if (
+      mode === "edit" &&
+      engineTypeId === (initial?.engine_type_id ?? "") &&
+      oilTypeId === (initial?.oil_type_id ?? "") &&
+      oilContainer === (initial?.oil_container ?? "")
+    ) {
+      return;
+    }
     let cancelled = false;
     (async () => {
       const res = await lookupOilChangePrice({
@@ -408,7 +513,7 @@ export function SalesJobForm({
       setLastAutoPrice(formatted);
     })();
     return () => { cancelled = true; };
-  }, [isOilChange, itemsHaveRows, engineTypeId, oilTypeId, oilContainer, appliedSurcharge, form]);
+  }, [isOilChange, itemsHaveRows, engineTypeId, oilTypeId, oilContainer, appliedSurcharge, form, mode, initial?.engine_type_id, initial?.oil_type_id, initial?.oil_container]);
 
   // --------------------------------------------------------------------------
   // Customer picker sync — billing_name, plate, contact, email auto-fill
@@ -650,6 +755,8 @@ export function SalesJobForm({
         oil_container: values.oil_container || null,
         auto_priced_at: stillAutoPriced ? new Date().toISOString() : null,
         dump_truck_surcharge: appliedSurcharge,
+        oil_tier_premium_waived: autoWaived.oil_tier_premium,
+        grease_only_fee_waived: autoWaived.grease_only_fee,
         initial_payments: cleanedPayments.length > 0 ? cleanedPayments : undefined,
         items: lineItems.map((it) => ({
           part_id: it.part_id,
@@ -661,9 +768,13 @@ export function SalesJobForm({
           package_label: it.package_label ?? null,
           package_group: it.package_group ?? null,
           oil_type_id: it.oil_type_id ?? null,
+          // Only a standalone oil line keeps its container; a package's oil
+          // quantity is an item count, not jugs.
+          oil_container: it.oil_type_id && !it.package_group ? it.oil_container ?? null : null,
           transmission_service_id: it.transmission_service_id ?? null,
           merged_unit_price: it.merged_unit_price ?? null,
           is_customer_supplied: it.is_customer_supplied ?? false,
+          auto_fee: it.auto_fee ?? null,
         })),
       };
 
@@ -926,9 +1037,11 @@ export function SalesJobForm({
                       // hidden flag: the grease shows on the job/invoice, and a
                       // free-only job is a tangible $0 line (not an empty,
                       // bogus-outstanding invoice).
-                      setLineItems((prev) => {
-                        const without = prev.filter((it) => !isFreeGreaseLine(it));
-                        return v
+                      // Through the reconcile, with the NEW tick: a free-grease
+                      // redemption never carries the grease-only fee.
+                      const without = lineItems.filter((it) => !isFreeGreaseLine(it));
+                      handleLineItemsChange(
+                        v
                           ? [
                               ...without,
                               newLineItem({
@@ -938,8 +1051,9 @@ export function SalesJobForm({
                                 is_taxable: false,
                               }),
                             ]
-                          : without;
-                      });
+                          : without,
+                        { freeGrease: v },
+                      );
                     }}
                     onChangeReason={(v) => form.setValue("free_grease_override_reason", v)}
                   />
@@ -1461,10 +1575,23 @@ export function SalesJobForm({
             </div>
             <SalesLineItems
               items={lineItems}
-              onChange={setLineItems}
+              onChange={handleLineItemsChange}
               oilTypes={oilTypes}
               oilGroups={oilGroups}
             />
+            {waivedCharges.map((c) => (
+              <p key={c.kind} className="text-xs text-muted-foreground">
+                {c.kind === "oil_tier_premium" ? "Volume tier premium" : "Grease-only fee"} (
+                {formatMoney(c.amount)}) is set by hand on this job.{" "}
+                <button
+                  type="button"
+                  className="underline hover:text-foreground"
+                  onClick={() => restoreAutoCharge(c.kind)}
+                >
+                  Add it back automatically
+                </button>
+              </p>
+            ))}
           </section>
 
           {/* ----------------------------------------------------------------

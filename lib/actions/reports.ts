@@ -572,9 +572,8 @@ export async function getDailyJobReport(
   if (jobIds.length > 0) {
     const { data: items, error: itemsErr } = await supabase
       .from("sales_job_items")
-      .select(
-        "part_id, description, quantity, line_total, parts:part_id(part_number, brand)",
-      )
+      // `*` so auto_fee (0149) is read when present without breaking before it.
+      .select("*, parts:part_id(part_number, brand)")
       .in("sales_job_id", jobIds);
     if (itemsErr) throw itemsErr;
     type Item = {
@@ -582,15 +581,26 @@ export async function getDailyJobReport(
       description: string;
       quantity: number;
       line_total: number;
+      auto_fee?: "oil_tier_premium" | "grease_only_fee" | null;
       parts:
         | { part_number: string | null; brand: string | null }
         | { part_number: string | null; brand: string | null }[]
         | null;
     };
     const map = new Map<string, DailyJobReportPart>();
-    for (const it of (items ?? []) as unknown as Item[]) {
+    for (const row of (items ?? []) as unknown as Item[]) {
+      let it = row;
       const partRel = Array.isArray(it.parts) ? it.parts[0] : it.parts;
-      const key = it.part_id ?? `desc:${it.description}`;
+      // Automatic charges carry a per-job description ("Volume tier premium —
+      // Delo … 34 L"), so group them by kind rather than one row per job.
+      const autoLabel =
+        it.auto_fee === "oil_tier_premium"
+          ? "Volume tier premium"
+          : it.auto_fee === "grease_only_fee"
+            ? "Grease-only service fee"
+            : null;
+      if (autoLabel) it = { ...it, description: autoLabel };
+      const key = it.part_id ?? (autoLabel ? `auto:${it.auto_fee}` : `desc:${it.description}`);
       const existing = map.get(key);
       if (existing) {
         existing.qty_total += Number(it.quantity);

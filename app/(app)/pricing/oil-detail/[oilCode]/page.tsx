@@ -155,7 +155,15 @@ export default async function OilDetailPage({
               Same behaviour as a locked package.
             </li>
           )}
-          <li><strong>Filter cost</strong> — sum of (part cost + MHSW) × qty for every filter wired to this engine.</li>
+          <li>
+            <strong>Filter cost</strong> — the filters in the package linked to this engine,
+            (part cost + MHSW) × the package&apos;s quantity, so a filter used twice counts twice.
+            What counts as a filter is set per category in{" "}
+            <Link href="/settings/pricing/categories" className="underline">Part categories</Link>.
+            An engine with no package — or a package listing no filters — uses the filter set
+            wired to the engine instead, marked <span className="font-semibold">*</span>. The two
+            are never added together.
+          </li>
           <li><strong>Oil cost</strong> — per-litre cost × engine oil capacity.</li>
           <li>
             <strong>Fuel</strong> and <strong>Grease</strong> — what the job consumes beyond
@@ -246,7 +254,7 @@ export default async function OilDetailPage({
                 <TableHead className="text-right">
                   Computed
                   <span className="block text-[10px] font-normal text-muted-foreground">
-                    filter+oil+labour+tier
+                    filter+oil+fuel+grease+labour+tier
                   </span>
                 </TableHead>
                 <TableHead className="text-right">
@@ -255,7 +263,14 @@ export default async function OilDetailPage({
                     vs selling
                   </span>
                 </TableHead>
-                {showCost && <TableHead className="text-right">Filter cost</TableHead>}
+                {showCost && (
+                  <TableHead className="text-right">
+                    Filter cost
+                    <span className="block text-[10px] font-normal text-muted-foreground">
+                      from package
+                    </span>
+                  </TableHead>
+                )}
                 {showCost && <TableHead className="text-right">Oil cost</TableHead>}
                 {showCost && (
                   <TableHead className="text-right">
@@ -347,7 +362,19 @@ export default async function OilDetailPage({
                       </span>
                     )}
                   </TableCell>
-                  {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(r.filter_cost)}</TableCell>}
+                  {showCost && (
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {formatMoney(r.filter_cost)}
+                      {r.filter_source === "engine_filters" && (
+                        <span
+                          className="ml-0.5 text-amber-600 dark:text-amber-500"
+                          title="No package filters for this engine — this is the filter set wired to the engine itself"
+                        >
+                          *
+                        </span>
+                      )}
+                    </TableCell>
+                  )}
                   {showCost && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(r.oil_cost)}</TableCell>}
                   {/* Fuel + grease come from the engine's package. No package
                       linked means unknown, not zero — show a dash so the row

@@ -2,6 +2,8 @@
 //   supabase gen types typescript --local > lib/db/types.ts
 // once `supabase start` has applied the migrations.
 
+import type { CostBucket } from "@/lib/utils/cost-bucket";
+
 export type UserRole = 'owner' | 'co_owner' | 'manager' | 'supervisor' | 'accountant' | 'staff' | 'technician' | 'employee' | 'portal_customer';
 
 export type PaymentMode =
@@ -367,6 +369,11 @@ export interface SalesJob {
   is_dump_truck: boolean;
   /** Snapshot of the surcharge baked into sub_total (0 when not applied). */
   dump_truck_surcharge: number;
+  /** Staff took over the automatic volume tier premium / grease-only fee
+   *  (edited or removed it), so the form no longer manages it (0149).
+   *  Absent before that migration. */
+  oil_tier_premium_waived?: boolean;
+  grease_only_fee_waived?: boolean;
   comments: string | null;
   sub_total: number;
   hst: number;
@@ -424,6 +431,11 @@ export interface SalesJobItem {
   merged_unit_price: number | null;
   /** True when the customer brought the part themselves; line_total forced to 0. */
   is_customer_supplied: boolean;
+  /** bulk (qty in litres) / gallon (qty in jugs) for a standalone oil line.
+   *  NULL = saved before 0149, treated as litres. */
+  oil_container?: "bulk" | "gallon" | null;
+  /** A line the sales form adds itself (0149). */
+  auto_fee?: "oil_tier_premium" | "grease_only_fee" | null;
   created_at: string;
   created_by: string | null;
 }
@@ -503,6 +515,8 @@ export interface AppSettings {
   price_list_effective_date: string | null;
   /** Flat $ added to a sales job's sub total when the vehicle is a dump truck. */
   dump_truck_surcharge: number;
+  /** Extra charge on a grease-only sales job; 0 = off (0149, absent before it). */
+  grease_only_fee?: number;
   /** Master switch for the IP lock (Settings → IP Access). */
   ip_lock_enabled: boolean;
   updated_at: string;
@@ -902,6 +916,9 @@ export interface PartCategory {
   id: string;
   name: string;
   unit_of_measure: UnitOfMeasure;
+  /** Which oil-change cost column its parts count toward (migration 0147).
+   *  Absent before that migration — read it through costBucketFor(). */
+  cost_bucket?: CostBucket;
   sort_order: number;
   active: boolean;
   created_at: string;

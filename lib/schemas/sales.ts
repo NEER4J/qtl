@@ -24,10 +24,20 @@ export const SalesJobItemInput = z.object({
   merged_unit_price: z.coerce.number().min(0).nullable().optional(),
   // True when the customer brought the part themselves; line_total forced to 0.
   is_customer_supplied: z.coerce.boolean().default(false),
+  // bulk (qty in litres) / gallon (qty in jugs) for a standalone oil line (0149).
+  // The enum matches the DB check exactly — the save isn't transactional, so a
+  // value the database would refuse must be refused here first.
+  oil_container: z.enum(["bulk", "gallon"]).nullable().optional(),
+  // A line the form adds itself: the volume tier premium / grease-only fee (0149).
+  auto_fee: z.enum(["oil_tier_premium", "grease_only_fee"]).nullable().optional(),
 })
   .refine((it) => !(it.part_id && it.oil_type_id), {
     message: "A line can't be both a catalog part and an oil item",
     path: ["part_id"],
+  })
+  .refine((it) => !(it.auto_fee && (it.part_id || it.oil_type_id)), {
+    message: "An automatic charge can't be tied to a part or an oil",
+    path: ["auto_fee"],
   });
 export type SalesJobItemInput = z.infer<typeof SalesJobItemInput>;
 
@@ -114,6 +124,12 @@ export const SalesJobInput = z
     // Dump-truck surcharge — the $ snapshot actually baked into sub_total.
     is_dump_truck: z.coerce.boolean().default(false),
     dump_truck_surcharge: z.coerce.number().min(0).default(0),
+
+    // Staff took over the automatic tier premium / grease-only fee (0149).
+    // Optional, not defaulted: a save that leaves them out (e.g. a tab opened
+    // before this shipped) keeps whatever the job already has.
+    oil_tier_premium_waived: z.coerce.boolean().optional(),
+    grease_only_fee_waived: z.coerce.boolean().optional(),
 
     // Free grease (item #15)
     free_grease_applied: z.coerce.boolean().default(false),

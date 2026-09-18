@@ -24,6 +24,12 @@ export function promotionLabel(p: Promotion): string {
     : `${formatMoney(p.discount_value)} off`;
 }
 
+// The active promotions are a short list that changes rarely, so it's kept for
+// a minute across opens (and across the sales and expense forms) instead of a
+// server round trip on every open. A stale list shows at once and refreshes.
+const PROMOTIONS_FRESH_MS = 60_000;
+let promotionsCache: { at: number; data: Promotion[] } | null = null;
+
 export function PromotionPickerButton({
   onSelect,
   label = "Add promotion",
@@ -32,13 +38,17 @@ export function PromotionPickerButton({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [results, setResults] = useState<Promotion[]>([]);
+  const [results, setResults] = useState<Promotion[]>(() => promotionsCache?.data ?? []);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     if (!open) return;
+    if (promotionsCache) setResults(promotionsCache.data);
+    if (promotionsCache && Date.now() - promotionsCache.at < PROMOTIONS_FRESH_MS) return;
     startTransition(async () => {
-      setResults(await listActivePromotions());
+      const data = await listActivePromotions();
+      promotionsCache = { at: Date.now(), data };
+      setResults(data);
     });
   }, [open]);
 

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import { togglePartCategoryActive } from "@/lib/actions/pricing";
 import type { PartCategory } from "@/lib/db/types";
+import { COST_BUCKET_LABEL, costBucketFor } from "@/lib/utils/cost-bucket";
 
 import { PartCategoryFormDialog } from "./part-category-form-dialog";
 
@@ -49,6 +50,7 @@ export function PartCategoriesTable({ categories }: { categories: PartCategory[]
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead className="w-28">Unit</TableHead>
+              <TableHead className="w-28">Counts as</TableHead>
               <TableHead className="w-24">Sort</TableHead>
               <TableHead className="w-24">Status</TableHead>
               <TableHead className="w-40 text-right">Actions</TableHead>
@@ -57,7 +59,7 @@ export function PartCategoriesTable({ categories }: { categories: PartCategory[]
           <TableBody>
             {categories.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                   No categories yet. Click <strong>New category</strong> to add one.
                 </TableCell>
               </TableRow>
@@ -68,6 +70,7 @@ export function PartCategoriesTable({ categories }: { categories: PartCategory[]
                   <TableCell>
                     <Badge variant="outline">{c.unit_of_measure}</Badge>
                   </TableCell>
+                  <TableCell className="text-sm">{COST_BUCKET_LABEL[costBucketFor(c)]}</TableCell>
                   <TableCell>{c.sort_order}</TableCell>
                   <TableCell>
                     <Badge variant={c.active ? "default" : "secondary"}>

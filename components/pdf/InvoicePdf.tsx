@@ -279,9 +279,17 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
   // Packages render in the Description-of-Work section, so their total rolls
   // into Total Labour. (Subtotal/HST/Total come from the stored job fields, so
   // this split is cosmetic and always reconciles to the stored subtotal.)
+  // Charges the sales form adds itself — the volume tier premium and the
+  // grease-only fee (0149) — print as their own lines like any other, but they
+  // aren't labour, so they total under Miscellaneous.
+  const isAutoCharge = (it: (typeof singles)[number]) => it.auto_fee != null;
   const totalLabour =
-    labour.reduce((s, it) => s + Number(it.line_total ?? 0), 0) + packagesTotal;
+    labour.filter((it) => !isAutoCharge(it)).reduce((s, it) => s + Number(it.line_total ?? 0), 0) +
+    packagesTotal;
   const totalParts = parts.reduce((s, it) => s + Number(it.line_total ?? 0), 0);
+  const totalMisc = labour
+    .filter(isAutoCharge)
+    .reduce((s, it) => s + Number(it.line_total ?? 0), 0);
 
   return (
     <Document title={`Invoice ${job.invoice_no ?? ""}`} author="Quick Truck Lube">
@@ -583,7 +591,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
             </View>
             <View style={styles.totalsRow}>
               <Text>Total Miscellaneous</Text>
-              <Text>{money(0)}</Text>
+              <Text>{money(totalMisc)}</Text>
             </View>
             <View style={styles.totalsRow}>
               <Text style={{ fontFamily: "Helvetica-Bold" }}>Subtotal</Text>

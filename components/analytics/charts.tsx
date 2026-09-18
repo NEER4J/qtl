@@ -142,6 +142,42 @@ export function SimplePie({
   );
 }
 
+/** Several series on one time axis — for counts that overlap (e.g. the same job
+ *  counted on the Upper and the Lower deck), where stacking would double up. */
+export function MultiLine({
+  data, xKey, keys, labels, height = 240,
+}: {
+  data: Record<string, unknown>[];
+  xKey: string;
+  keys: string[];
+  /** Legend / tooltip name per key; defaults to the key. */
+  labels?: Record<string, string>;
+  height?: number;
+}) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <LineChart data={data}>
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+        <XAxis dataKey={xKey} tick={{ fontSize: 11 }} />
+        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+        <Tooltip />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        {keys.map((k, i) => (
+          <Line
+            key={k}
+            type="monotone"
+            dataKey={k}
+            name={labels?.[k] ?? k}
+            stroke={CHART_COLORS[i % CHART_COLORS.length]}
+            strokeWidth={2}
+            dot={false}
+          />
+        ))}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
 export function StackedBar({
   data, xKey, keys, money, height = 240,
 }: {

@@ -26,8 +26,10 @@
  *                   which beats nothing.
  *
  * Anything still tied is only auto-linkable when every tied package would
- * charge the same — same labour, same fuel, same grease. Then the choice
- * cannot change a number on the page.
+ * charge the same — same labour, same filters, same fuel, same grease. Then
+ * the choice cannot change a number on the page (Oil detail takes filter cost
+ * from the package too, so two packages with different filters are NOT the
+ * same pick).
  */
 
 /** The bits of a package this module needs to rank and compare candidates. */
@@ -35,9 +37,10 @@ export interface MatchablePackage {
   id: string;
   name: string;
   labor_selling_price: number;
-  /** Fuel + grease the package consumes, so ties can be tested for sameness. */
+  /** Filters, fuel and grease the package holds, so ties can be tested for sameness. */
   fuel?: number;
   grease?: number;
+  filter?: number;
 }
 
 export type MatchConfidence =
@@ -144,10 +147,11 @@ const contains = (big: Set<string>, small: Set<string>) => [...small].every((x) 
 const eitherContains = (a: Set<string>, b: Set<string>) => contains(a, b) || contains(b, a);
 
 const money = (n: number | undefined) => Math.round((Number(n) || 0) * 100);
-/** Same labour, same fuel, same grease — the pick can't move a number. */
+/** Same labour, filters, fuel and grease — the pick can't move a number. */
 function chargesTheSame(a: MatchablePackage, b: MatchablePackage): boolean {
   return (
     money(a.labor_selling_price) === money(b.labor_selling_price) &&
+    money(a.filter) === money(b.filter) &&
     money(a.fuel) === money(b.fuel) &&
     money(a.grease) === money(b.grease)
   );
@@ -224,7 +228,7 @@ export function matchEngineToPackage(
       pkg: top[0]!,
       confidence: "tied-identical",
       candidates: [...top, ...others],
-      reason: `${top.length} packages fit and all charge the same labour, fuel and grease.`,
+      reason: `${top.length} packages fit and all charge the same labour, filters, fuel and grease.`,
     };
   }
 

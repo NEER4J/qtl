@@ -104,6 +104,18 @@ export const PayrollEntryInput = z.object({
   bonus: moneySchema.default(0),
   misc_extra: moneySchema.default(0),
   income_tax: moneySchema.default(0),
+  // EI / CPP / CPP2, employee and employer side, typed from the owner's payroll
+  // calculator (client 2026-09-15 — the rates change too often for the old
+  // automatic calculation). Optional and NOT defaulted: a save that leaves them
+  // out — a tab opened before this shipped, or a user who can't see the EI/CPP
+  // columns — falls back to the rate-table calculation (buildEntryPayload)
+  // instead of silently saving $0. A switch that's off still forces its pair to 0.
+  ei_employee: moneySchema.optional(),
+  cpp_employee: moneySchema.optional(),
+  cpp_employee2: moneySchema.optional(),
+  ei_employer: moneySchema.optional(),
+  cpp_employer: moneySchema.optional(),
+  cpp_employer2: moneySchema.optional(),
   benefit_employee_deduction: moneySchema.default(0),
   benefit_employer_contribution: moneySchema.default(0),
   cheque_amount: moneySchema.default(0),

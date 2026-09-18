@@ -60,6 +60,11 @@ export default async function EngineTypeDetailPage({
           <li>Add any part you stock. Typical sets are oil + fuel + air, sometimes plus cabin / coolant / DEF.</li>
           <li>Quantity is usually 1. Some engines use two of the same filter — bump the quantity instead of adding a duplicate row.</li>
           <li>Edits here change the row&apos;s prices on the oil-change grid immediately.</li>
+          <li>
+            The <strong>Oil detail</strong> page takes filter cost from the package linked to this
+            engine instead (its filter items, at the package&apos;s quantities), and only uses the
+            filters here when the package lists none. Keep the two in step.
+          </li>
         </ul>
       </PageHelp>
 
