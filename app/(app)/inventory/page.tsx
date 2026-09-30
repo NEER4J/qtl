@@ -8,6 +8,7 @@ import { requireProfile } from "@/lib/auth/require";
 import { isActionAllowed } from "@/lib/permissions/check";
 import { listInventory, listOilInventory } from "@/lib/actions/inventory";
 import { formatDate } from "@/lib/utils/format";
+import { isLowAnywhere } from "@/lib/utils/stock-limits";
 
 import { InventoryTable } from "./inventory-table";
 import { OilInventoryTable } from "./oil-inventory-table";
@@ -22,19 +23,17 @@ export default async function InventoryPage() {
   // Editing counts is limited to high-level roles; everyone else is view-only.
   const canEdit =
     profile.role === "owner" || profile.role === "co_owner" || profile.role === "manager";
-  // Min/max thresholds are policy — parts_write / oil_types_write RLS is
-  // owner-only (co_owner via the 0124 alias).
+  // Min/max thresholds are policy — part_location_limits / oil_location_limits
+  // RLS is owner + co_owner only.
   const canEditLimits = profile.role === "owner" || profile.role === "co_owner";
   // `inventory.export` from the action registry — /api/export/inventory
   // enforces the same check, so hiding the button is presentation only.
   const canExport = isActionAllowed(profile, "inventory.export");
 
-  const lowParts = data.parts.filter(
-    (p) => p.min_stock_qty != null && p.total < p.min_stock_qty,
-  ).length;
-  const lowOils = oilData.oils.filter(
-    (o) => o.min_stock_litres != null && o.total < o.min_stock_litres,
-  ).length;
+  // Low = below its minimum at one location or more. Each shop is checked
+  // against its own threshold; stock at another shop doesn't cover it.
+  const lowParts = data.parts.filter(isLowAnywhere).length;
+  const lowOils = oilData.oils.filter(isLowAnywhere).length;
 
   return (
     <div className="flex flex-col gap-4">
@@ -84,6 +83,13 @@ export default async function InventoryPage() {
           </li>
           <li>Type a count and click away (or press Enter) to save that cell.</li>
           <li>Oil stock is tracked in <strong>litres</strong> (fractional allowed).</li>
+          <li>
+            <strong>Min</strong> and <strong>Max</strong> are set <strong>per location</strong>,
+            beside that location&apos;s count, by the Owner or Admin. A count below its own
+            shop&apos;s Min is flagged <strong>Low</strong>, above its Max <strong>Over</strong> —
+            stock at another location doesn&apos;t count toward it. Leave a box empty for no
+            threshold.
+          </li>
           <li>Parts and oils themselves are managed under Settings → Pricing Catalogue.</li>
         </ul>
       </PageHelp>
@@ -100,9 +106,17 @@ export default async function InventoryPage() {
             ]
               .filter(Boolean)
               .join(" and ")}{" "}
-            below the minimum level — tick <strong>Low stock only</strong> in the table to see
-            what needs reordering.
+            below the minimum at one location or more — tick <strong>Low stock only</strong> in
+            the table to see what needs reordering, and where.
           </span>
+        </div>
+      )}
+
+      {canEditLimits && !data.limits_supported && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200 print:hidden">
+          Min / max levels are now set per location. Apply{" "}
+          <span className="font-mono text-xs">migration 0151</span> to turn them on — until then
+          the Min and Max columns are empty.
         </div>
       )}
 

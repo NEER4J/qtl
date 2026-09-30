@@ -8,6 +8,7 @@ import { requireProfile } from "@/lib/auth/require";
 import { wrapAction } from "@/lib/actions/_utils";
 import type {
   EngineFilter,
+  EngineFilterOption,
   EngineType,
   OilGroup,
   OilType,
@@ -23,6 +24,7 @@ import type {
   VolumeTier,
 } from "@/lib/db/types";
 import {
+  AddEngineFilterOptionInput,
   ApplyEngineLabourPackagesInput,
   CreateEngineTypeInput,
   CreateOilGroupInput,
@@ -41,10 +43,12 @@ import {
   LockOilPricesInput,
   LockPartPackageInput,
   MergePartPackagePricesInput,
+  RemoveEngineFilterOptionInput,
   SetEngineLabourPackageInput,
   ToggleActiveInput,
   UnlockOilPricesInput,
   UnlockPartPackageInput,
+  UpdateEngineFilterOptionInput,
   UpdateEngineTypeInput,
   SetOilGroupMembersInput,
   UpdateOilGroupInput,
@@ -74,6 +78,7 @@ import {
 import {
   REFERENCE_TAGS,
   getCachedActiveEngineTypes,
+  getCachedEngineFilterOptions,
   getCachedActiveOilTypes,
   getCachedActivePartBrands,
   getCachedActivePartCategories,
@@ -83,6 +88,12 @@ import {
 } from "@/lib/cache/reference";
 import { applyPartsSearch, orFilterValue } from "@/lib/utils/parts-search";
 import { costBucketFor } from "@/lib/utils/cost-bucket";
+import {
+  engineRowKey,
+  expandEngineRows,
+  groupFilterOptions,
+  type EnginePricingRow,
+} from "@/lib/utils/engine-rows";
 import { TRANSMISSION_KIND_LABEL } from "@/lib/utils/transmission";
 
 /**
@@ -93,6 +104,36 @@ import { TRANSMISSION_KIND_LABEL } from "@/lib/utils/transmission";
  */
 function isMissingRelation(err: { code?: string } | null): boolean {
   return err?.code === "PGRST205" || err?.code === "42P01";
+}
+
+/** True when the error means "that column isn't there yet" — same idea, for a
+ *  column a pending migration adds to a table that already exists. */
+function isMissingColumn(
+  err: { code?: string; message?: string } | null,
+  column: string,
+): boolean {
+  if (!err || (err.code !== "PGRST204" && err.code !== "42703")) return false;
+  return (err.message ?? "").includes(column);
+}
+
+const NEEDS_0150 =
+  "Filter options need migration 0150_engine_filter_options.sql — apply it to the database, then try again.";
+
+/**
+ * Every engine's filter options (migration 0150). [] until the table exists, so
+ * every engine prices as a single row — exactly how it worked before.
+ */
+async function loadEngineFilterOptions(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<EngineFilterOption[]> {
+  const { data, error } = await supabase
+    .from("engine_filter_options")
+    .select("id, engine_type_id, package_id, label, oil_capacity_litres, sort_order");
+  if (error) {
+    if (isMissingRelation(error)) return [];
+    throw error;
+  }
+  return (data ?? []) as EngineFilterOption[];
 }
 
 // ============================================================================
@@ -286,8 +327,17 @@ export async function listOilTypes(): Promise<OilType[]> {
   return (await getCachedActiveOilTypes()) as OilType[];
 }
 
+/** Active engines, each with the filter options it is sold with (if any). */
 export async function listEngineTypes(): Promise<EngineType[]> {
-  return (await getCachedActiveEngineTypes()) as EngineType[];
+  const [engines, options] = await Promise.all([
+    getCachedActiveEngineTypes(),
+    getCachedEngineFilterOptions(),
+  ]);
+  const byEngine = groupFilterOptions(options as EngineFilterOption[]);
+  return (engines as EngineType[]).map((e) => ({
+    ...e,
+    filter_options: byEngine.get(e.id) ?? [],
+  }));
 }
 
 export interface PriceListRow extends Part {
@@ -364,6 +414,8 @@ export async function listVolumeTiers(): Promise<VolumeTier[]> {
 
 export interface PriceGridCell {
   engine_id: string;
+  /** The filter option this row is, on an engine that has them. */
+  option_id: string | null;
   oil_type_id: string;
   bulk: number | null;
   /** Gallon price BEFORE tax. */
@@ -373,8 +425,10 @@ export interface PriceGridCell {
 }
 
 export async function getOilChangeGrid(): Promise<{
-  engines: EngineType[];
+  /** One per engine, or per filter option of an engine that has them. */
+  rows: EnginePricingRow[];
   oilTypes: OilType[];
+  /** Keyed `${row.key}|${oil_type_id}`. */
   cells: Map<string, PriceGridCell>;
   hstRate: number;
 }> {
@@ -383,7 +437,16 @@ export async function getOilChangeGrid(): Promise<{
   // Mirrors public.oil_change_price(): one batched read per table instead of
   // engines×oil_types×containers RPCs (the prior approach overwhelmed the
   // request pipeline and surfaced as RangeError on this page).
-  const [enginesRes, oilTypesRes, filtersRes, tiersRes, overridesRes, settingsRes, locksRes] =
+  const [
+    enginesRes,
+    oilTypesRes,
+    filtersRes,
+    tiersRes,
+    overridesRes,
+    settingsRes,
+    locksRes,
+    filterOptions,
+  ] =
     await Promise.all([
       supabase
         .from("engine_types")
@@ -397,20 +460,22 @@ export async function getOilChangeGrid(): Promise<{
         .eq("active", true)
         .eq("is_engine_oil", true)
         .order("name"),
+      // `*` so engine_option_id comes along once migration 0150 adds it.
       supabase
         .from("engine_filters")
-        .select("engine_type_id, quantity, parts:part_id(cost, mhsw_fee, service_costs:service_cost_id(cost))"),
+        .select("*, parts:part_id(cost, mhsw_fee, service_costs:service_cost_id(cost))"),
       supabase.from("volume_tiers").select("oil_type_id, min_litres, premium"),
       supabase
         .from("engine_sell_prices")
-        .select("engine_type_id, oil_type_id, container, sell_price")
+        .select("*")
         .limit(10000),  // Supabase REST defaults to 1000; we have ~1400+ rows.
       supabase.from("app_settings").select("hst_rate").eq("id", 1).single(),
       // Live price locks (oil-detail page). A locked price beats the override
       // here exactly as it does in public.oil_change_price().
       supabase
         .from("oil_price_locks")
-        .select("oil_type_id, container, lock_until, oil_price_lock_items(engine_type_id, locked_price)"),
+        .select("oil_type_id, container, lock_until, oil_price_lock_items(*)"),
+      loadEngineFilterOptions(supabase),
     ]);
 
   if (enginesRes.error) throw enginesRes.error;
@@ -422,41 +487,50 @@ export async function getOilChangeGrid(): Promise<{
   if (locksRes.error && !isMissingRelation(locksRes.error)) throw locksRes.error;
   const hstRate = Number(settingsRes.data?.hst_rate ?? 0.13);
 
-  // "engine|oil|container" -> locked_price, live locks only.
+  // Everything below is keyed by ROW (engineRowKey): the filter option where
+  // the engine has them, the engine itself where it doesn't.
+  // "row|oil|container" -> locked_price, live locks only.
   type LockGridRow = {
     oil_type_id: string;
     container: "bulk" | "gallon";
     lock_until: string;
-    oil_price_lock_items: { engine_type_id: string; locked_price: number }[] | null;
+    oil_price_lock_items:
+      | { engine_type_id: string; engine_option_id?: string | null; locked_price: number }[]
+      | null;
   };
   const lockedMap = new Map<string, number>();
   for (const l of (locksRes.data ?? []) as unknown as LockGridRow[]) {
     if (!isLockDateLive(l.lock_until)) continue;
     for (const li of l.oil_price_lock_items ?? []) {
       lockedMap.set(
-        `${li.engine_type_id}|${l.oil_type_id}|${l.container}`,
+        `${engineRowKey(li.engine_type_id, li.engine_option_id)}|${l.oil_type_id}|${l.container}`,
         Number(li.locked_price),
       );
     }
   }
 
-  // Build override lookup: "engine|oil|container" -> sell_price
+  // Build override lookup: "row|oil|container" -> sell_price
   type OverrideRow = {
     engine_type_id: string;
+    engine_option_id?: string | null;
     oil_type_id: string;
     container: "bulk" | "gallon";
     sell_price: number;
   };
   const overrideMap = new Map<string, number>();
   for (const o of (overridesRes.data ?? []) as OverrideRow[]) {
-    overrideMap.set(`${o.engine_type_id}|${o.oil_type_id}|${o.container}`, Number(o.sell_price));
+    overrideMap.set(
+      `${engineRowKey(o.engine_type_id, o.engine_option_id)}|${o.oil_type_id}|${o.container}`,
+      Number(o.sell_price),
+    );
   }
 
-  const engines = (enginesRes.data ?? []) as EngineType[];
+  const rows = expandEngineRows((enginesRes.data ?? []) as EngineType[], filterOptions);
   const oilTypes = (oilTypesRes.data ?? []) as OilType[];
 
   type FilterRow = {
     engine_type_id: string;
+    engine_option_id?: string | null;
     quantity: number;
     parts: {
       cost: number;
@@ -471,8 +545,9 @@ export async function getOilChangeGrid(): Promise<{
     const qty = Number(f.quantity) || 0;
     const partCost = (Number(f.parts.cost) + Number(f.parts.mhsw_fee)) * qty;
     const svcCost = Number(f.parts.service_costs?.cost ?? 0) * qty;
-    enginePartCost.set(f.engine_type_id, (enginePartCost.get(f.engine_type_id) ?? 0) + partCost);
-    engineServiceCost.set(f.engine_type_id, (engineServiceCost.get(f.engine_type_id) ?? 0) + svcCost);
+    const key = engineRowKey(f.engine_type_id, f.engine_option_id);
+    enginePartCost.set(key, (enginePartCost.get(key) ?? 0) + partCost);
+    engineServiceCost.set(key, (engineServiceCost.get(key) ?? 0) + svcCost);
   }
 
   type TierRow = { oil_type_id: string; min_litres: number; premium: number };
@@ -501,14 +576,15 @@ export async function getOilChangeGrid(): Promise<{
     Number.isFinite(sell) && sell > 0 ? Math.ceil(sell) - 0.01 : null;
 
   const cells = new Map<string, PriceGridCell>();
-  for (const e of engines) {
-    const capacity = Number(e.oil_capacity_litres);
-    const filterCost = enginePartCost.get(e.id) ?? 0;
-    const serviceCost = engineServiceCost.get(e.id) ?? 0;
+  for (const row of rows) {
+    const capacity = Number(row.engine.oil_capacity_litres);
+    const filterCost = enginePartCost.get(row.key) ?? 0;
+    const serviceCost = engineServiceCost.get(row.key) ?? 0;
     if (!Number.isFinite(capacity) || capacity <= 0) {
       for (const o of oilTypes) {
-        cells.set(`${e.id}|${o.id}`, {
-          engine_id: e.id,
+        cells.set(`${row.key}|${o.id}`, {
+          engine_id: row.engine_id,
+          option_id: row.option_id,
           oil_type_id: o.id,
           bulk: null,
           gallon: null,
@@ -531,10 +607,10 @@ export async function getOilChangeGrid(): Promise<{
       // Override wins; otherwise fall back to cost-up. round99 returns null
       // when the raw price isn't positive (oil has no cost configured), so
       // "—" shows instead of -$0.01.
-      const overrideBulk   = overrideMap.get(`${e.id}|${o.id}|bulk`);
-      const overrideGallon = overrideMap.get(`${e.id}|${o.id}|gallon`);
-      const lockedBulk   = lockedMap.get(`${e.id}|${o.id}|bulk`);
-      const lockedGallon = lockedMap.get(`${e.id}|${o.id}|gallon`);
+      const overrideBulk   = overrideMap.get(`${row.key}|${o.id}|bulk`);
+      const overrideGallon = overrideMap.get(`${row.key}|${o.id}|gallon`);
+      const lockedBulk   = lockedMap.get(`${row.key}|${o.id}|bulk`);
+      const lockedGallon = lockedMap.get(`${row.key}|${o.id}|gallon`);
       const bulk = lockedBulk != null
         ? lockedBulk
         : overrideBulk != null
@@ -554,8 +630,9 @@ export async function getOilChangeGrid(): Promise<{
         gallon != null && o.is_taxable
           ? Math.round(gallon * (1 + hstRate) * 100) / 100
           : null;
-      cells.set(`${e.id}|${o.id}`, {
-        engine_id: e.id,
+      cells.set(`${row.key}|${o.id}`, {
+        engine_id: row.engine_id,
+        option_id: row.option_id,
         oil_type_id: o.id,
         bulk,
         gallon,
@@ -564,7 +641,7 @@ export async function getOilChangeGrid(): Promise<{
     }
   }
 
-  return { engines, oilTypes, cells, hstRate };
+  return { rows, oilTypes, cells, hstRate };
 }
 
 // ============================================================================
@@ -716,7 +793,11 @@ export async function getAllFilterSellPrices(filter?: {
 // ============================================================================
 
 export interface OilDetailRow {
+  /** Unique per row — the option's id, or the engine's when it has none. */
+  row_key: string;
   engine_id: string;
+  /** The filter option this row is, on an engine that has them. */
+  option_id: string | null;
   engine_name: string;
   oil_capacity_litres: number;
   selling: number | null;
@@ -725,8 +806,8 @@ export interface OilDetailRow {
   /** ID of the engine_sell_prices row backing the override (null if cost-up). */
   override_id: string | null;
   /**
-   * PROPOSED selling price = total cost (filter + oil + fuel + grease + tier)
-   * + labour, exactly as entered (no .99 round-up). Shown in its own column
+   * PROPOSED selling price = total cost (filter + oil + fuel + grease) + tier
+   * premium + labour, exactly as entered (no .99 round-up). Shown in its own column
    * next to the live Selling price so the owner can verify it before we make
    * it the price. (client 2026-08-07.)
    */
@@ -752,9 +833,12 @@ export interface OilDetailRow {
   service_cost_source: "package" | "package-name-match" | "parts";
   /** Name of the package `service_cost` came from; null for the parts fallback. */
   service_cost_package: string | null;
+  /** The volume tier premium charged on top — profit, not a cost. */
   volume_tier_premium: number;
+  /** filter + oil + fuel + grease. Labour and the tier premium are not in it. */
   total_cost: number;
-  /** null when selling is null (no data to compute against). */
+  /** selling − total_cost, so it carries the labour charge AND the tier premium.
+   *  null when selling is null (no data to compute against). */
   profit: number | null;
   cost_pct: number | null;     // 0..1
   profit_pct: number | null;   // 0..1
@@ -767,7 +851,7 @@ export interface OilPriceLockInfo {
   lock_until: string;
   /** True while lock_until is today or later. */
   is_live: boolean;
-  /** How many engine rows the snapshot covers. */
+  /** How many rows the snapshot covers. */
   item_count: number;
 }
 
@@ -801,6 +885,7 @@ export async function getOilDetail(
     overridesRes,
     matchEnginePackage,
     locksRes,
+    filterOptions,
   ] =
     await Promise.all([
       supabase
@@ -818,13 +903,14 @@ export async function getOilDetail(
         .eq("active", true)
         .eq("is_engine_oil", true)
         .order("name"),
+      // `*` so engine_option_id comes along once migration 0150 adds it.
       supabase
         .from("engine_filters")
-        .select("engine_type_id, quantity, parts:part_id(cost, mhsw_fee, service_costs:service_cost_id(cost))"),
+        .select("*, parts:part_id(cost, mhsw_fee, service_costs:service_cost_id(cost))"),
       supabase.from("volume_tiers").select("oil_type_id, min_litres, premium"),
       supabase
         .from("engine_sell_prices")
-        .select("id, engine_type_id, oil_type_id, container, sell_price")
+        .select("*")
         .limit(10000),  // Supabase REST defaults to 1000; we have ~1400+ rows.
       // Package labour + the fuel/grease that package consumes. The Labour
       // column shows the "Labor charge" of the package wired to the engine
@@ -833,8 +919,9 @@ export async function getOilDetail(
       // Price lock for this page (oil type + container), with its snapshots.
       supabase
         .from("oil_price_locks")
-        .select("id, oil_type_id, container, lock_until, oil_price_lock_items(engine_type_id, locked_price)")
+        .select("id, oil_type_id, container, lock_until, oil_price_lock_items(*)")
         .eq("container", container),
+      loadEngineFilterOptions(supabase),
     ]);
   if (enginesRes.error) throw enginesRes.error;
   if (oilTypesRes.error) throw oilTypesRes.error;
@@ -855,16 +942,22 @@ export async function getOilDetail(
     oil_type_id: string;
     container: "bulk" | "gallon";
     lock_until: string;
-    oil_price_lock_items: { engine_type_id: string; locked_price: number }[] | null;
+    oil_price_lock_items:
+      | { engine_type_id: string; engine_option_id?: string | null; locked_price: number }[]
+      | null;
   };
   const lockRow = ((locksRes.data ?? []) as unknown as LockRow[]).find(
     (l) => l.oil_type_id === oilType.id,
   );
   const lockItems = lockRow?.oil_price_lock_items ?? [];
   const lockIsLive = isLockDateLive(lockRow?.lock_until);
-  const lockedPriceByEngine = new Map<string, number>();
+  // Keyed by row (engineRowKey), as are the overrides and filter costs below.
+  const lockedPriceByRow = new Map<string, number>();
   for (const li of lockItems) {
-    lockedPriceByEngine.set(li.engine_type_id, Number(li.locked_price));
+    lockedPriceByRow.set(
+      engineRowKey(li.engine_type_id, li.engine_option_id),
+      Number(li.locked_price),
+    );
   }
   const lock: OilPriceLockInfo | null = lockRow
     ? {
@@ -880,6 +973,7 @@ export async function getOilDetail(
   type OverrideRow = {
     id: string;
     engine_type_id: string;
+    engine_option_id?: string | null;
     oil_type_id: string;
     container: "bulk" | "gallon";
     sell_price: number;
@@ -887,13 +981,14 @@ export async function getOilDetail(
   const overrideMap = new Map<string, { id: string; price: number }>();
   for (const o of (overridesRes.data ?? []) as OverrideRow[]) {
     overrideMap.set(
-      `${o.engine_type_id}|${o.oil_type_id}|${o.container}`,
+      `${engineRowKey(o.engine_type_id, o.engine_option_id)}|${o.oil_type_id}|${o.container}`,
       { id: o.id, price: Number(o.sell_price) },
     );
   }
 
   type FilterRow = {
     engine_type_id: string;
+    engine_option_id?: string | null;
     quantity: number;
     parts: {
       cost: number;
@@ -906,14 +1001,15 @@ export async function getOilDetail(
   for (const f of (filtersRes.data ?? []) as unknown as FilterRow[]) {
     if (!f.parts) continue;
     const qty = Number(f.quantity) || 0;
+    const key = engineRowKey(f.engine_type_id, f.engine_option_id);
     enginePartCost.set(
-      f.engine_type_id,
-      (enginePartCost.get(f.engine_type_id) ?? 0)
+      key,
+      (enginePartCost.get(key) ?? 0)
         + (Number(f.parts.cost) + Number(f.parts.mhsw_fee)) * qty,
     );
     engineServiceCost.set(
-      f.engine_type_id,
-      (engineServiceCost.get(f.engine_type_id) ?? 0)
+      key,
+      (engineServiceCost.get(key) ?? 0)
         + Number(f.parts.service_costs?.cost ?? 0) * qty,
     );
   }
@@ -941,7 +1037,14 @@ export async function getOilDetail(
     ? (Number.isFinite(lpg) && lpg > 0 ? Number(oilType.gallon_cost_per_litre) / lpg : NaN)
     : Number(oilType.bulk_cost_per_litre);
 
-  const rows: OilDetailRow[] = ((enginesRes.data ?? []) as EngineType[]).map((e) => {
+  // One row per engine, or per filter option: `e` is the engine as that row
+  // prices it (the option's name, capacity and package), `row.key` what its
+  // prices, locks and filters are stored under.
+  const rows: OilDetailRow[] = expandEngineRows(
+    (enginesRes.data ?? []) as EngineType[],
+    filterOptions,
+  ).map((row) => {
+    const e = row.engine;
     const cap = Number(e.oil_capacity_litres);
     // Labour = the linked package's "Labor charge"; else the same-named package's
     // (legacy); else the summed part service-costs for this engine.
@@ -952,11 +1055,11 @@ export async function getOilDetail(
     // wired to the engine. One or the other, never both: adding them together
     // is exactly the double count the Excel sheet was blamed for.
     const packageFilters = match.extras != null && match.extras.filter_items > 0;
-    const filterCost = packageFilters ? match.extras!.filter : enginePartCost.get(e.id) ?? 0;
+    const filterCost = packageFilters ? match.extras!.filter : enginePartCost.get(row.key) ?? 0;
     const labourPkg = match.pkg;
     const serviceCost = labourPkg
       ? Number(labourPkg.labor_selling_price) || 0
-      : engineServiceCost.get(e.id) ?? 0;
+      : engineServiceCost.get(row.key) ?? 0;
     const serviceCostSource: OilDetailRow["service_cost_source"] = match.source;
     // Fuel + grease ride along with the labour package: no package resolved
     // means we don't know what the job consumes, not that it consumes nothing.
@@ -965,21 +1068,23 @@ export async function getOilDetail(
     const greaseCost = extras?.grease ?? 0;
     const tier = tierFor(cap);
     const oilCost = Number.isFinite(perLitre) ? perLitre * cap : 0;
-    // Cost = filter + oil + fuel + grease + tier, mirroring the Excel tabs where
-    // the combined "Fuel / Grease" column sits inside cost. Labour is a CHARGE
-    // (the package's labour), shown as its own line, not folded into the cost.
-    // (client 2026-06-30, fuel/grease added 2026-08-27.)
-    const totalCost = filterCost + oilCost + fuelCost + greaseCost + tier;
-    // Cost-up price = everything we spend + the labour we charge. Adding fuel
-    // and grease to the cost therefore raises this basis by the same $6-$10 —
-    // that is the point: a proposed price that didn't cover them was short.
-    // Engines with a manual anchor (most of them) are untouched.
-    const sellBasis = totalCost + serviceCost;
+    // Cost = filter + oil + fuel + grease: what the job actually consumes,
+    // mirroring the Excel tabs where the combined "Fuel / Grease" column sits
+    // inside cost. Labour and the volume tier premium are CHARGES — nothing is
+    // spent on either — so each is its own line and both land in profit. The
+    // tier used to be counted as a cost, which understated profit by exactly
+    // the premium. (client 2026-06-30, fuel/grease 2026-08-27, tier 2026-09-30.)
+    const totalCost = filterCost + oilCost + fuelCost + greaseCost;
+    // Cost-up price = everything we spend + the labour and tier we charge.
+    // Adding fuel and grease to the cost therefore raises this basis by the
+    // same $6-$10 — that is the point: a proposed price that didn't cover them
+    // was short. Engines with a manual anchor (most of them) are untouched.
+    const sellBasis = totalCost + tier + serviceCost;
     // A live lock wins over everything (mirrors public.oil_change_price), then
     // the manual override, then cost-up. round99 returns null when the result
     // isn't positive so we don't render "-$0.01" for empty oils.
-    const override = overrideMap.get(`${e.id}|${oilType.id}|${container}`);
-    const lockedPrice = lockIsLive ? lockedPriceByEngine.get(e.id) ?? null : null;
+    const override = overrideMap.get(`${row.key}|${oilType.id}|${container}`);
+    const lockedPrice = lockIsLive ? lockedPriceByRow.get(row.key) ?? null : null;
     const liveSelling = override
       ? override.price
       : Number.isFinite(perLitre) && perLitre > 0
@@ -996,7 +1101,9 @@ export async function getOilDetail(
     const costPct = selling != null && selling > 0 ? totalCost / selling : null;
     const profitPct = costPct != null ? 1 - costPct : null;
     return {
-      engine_id: e.id,
+      row_key: row.key,
+      engine_id: row.engine_id,
+      option_id: row.option_id,
       engine_name: `${e.manufacturer} ${e.model}`,
       oil_capacity_litres: cap,
       selling,
@@ -1057,6 +1164,8 @@ export interface PrintListColumn {
 }
 
 export interface PrintListRow {
+  /** Unique per row — the option's id, or the engine's when it has none. */
+  row_key: string;
   engine_id: string;
   engine_name: string;
   oil_capacity_litres: number;
@@ -1073,7 +1182,7 @@ export interface PrintListResponse {
 
 export async function getPrintList(): Promise<PrintListResponse> {
   const supabase = await createClient();
-  const [{ engines, oilTypes, cells }, settingsRes] = await Promise.all([
+  const [{ rows: engineRows, oilTypes, cells }, settingsRes] = await Promise.all([
     getOilChangeGrid(),
     supabase
       .from("app_settings")
@@ -1109,17 +1218,19 @@ export async function getPrintList(): Promise<PrintListResponse> {
 
   // First pass: build raw prices for every column so we can detect empty ones.
   type RawRow = {
+    row_key: string;
     engine_id: string;
     engine_name: string;
     oil_capacity_litres: number;
     prices: Array<number | null>;
   };
-  const rawRows: RawRow[] = engines.map((e) => ({
-    engine_id: e.id,
-    engine_name: `${e.manufacturer} ${e.model}`,
-    oil_capacity_litres: Number(e.oil_capacity_litres),
+  const rawRows: RawRow[] = engineRows.map((row) => ({
+    row_key: row.key,
+    engine_id: row.engine_id,
+    engine_name: `${row.engine.manufacturer} ${row.engine.model}`,
+    oil_capacity_litres: Number(row.engine.oil_capacity_litres),
     prices: columns.map((col) => {
-      const cell = cells.get(`${e.id}|${col.oil_type_id}`);
+      const cell = cells.get(`${row.key}|${col.oil_type_id}`);
       return col.container === "bulk" ? cell?.bulk ?? null : cell?.gallon ?? null;
     }),
   }));
@@ -1133,6 +1244,7 @@ export async function getPrintList(): Promise<PrintListResponse> {
   }
   const filteredColumns = keepIdx.map((i) => columns[i]);
   const rows: PrintListRow[] = rawRows.map((r) => ({
+    row_key: r.row_key,
     engine_id: r.engine_id,
     engine_name: r.engine_name,
     oil_capacity_litres: r.oil_capacity_litres,
@@ -1165,6 +1277,9 @@ export interface OilChangeDetailBrand {
 }
 
 export interface OilChangeDetailRow {
+  /** Unique per row — the option's id, or the engine's when it has none. */
+  row_key: string;
+  /** The engine as this row prices it (a filter option carries its label). */
   engine: EngineType;
   brands: OilChangeDetailBrand[];
   /** Diesel/fuel treatment used on the job, from the engine's package. */
@@ -1187,7 +1302,7 @@ export async function getOilChangeDetails(): Promise<{
 }> {
   const supabase = await createClient();
 
-  const [enginesRes, filtersRes, settingsRes, matchEnginePackage] = await Promise.all([
+  const [enginesRes, filtersRes, settingsRes, matchEnginePackage, filterOptions] = await Promise.all([
     supabase
       .from("engine_types")
       .select("*")
@@ -1197,10 +1312,11 @@ export async function getOilChangeDetails(): Promise<{
     supabase
       .from("engine_filters")
       .select(
-        "engine_type_id, quantity, parts:part_id(brand, part_number, cost, mhsw_fee, service_costs:service_cost_id(cost))",
+        "*, parts:part_id(brand, part_number, cost, mhsw_fee, service_costs:service_cost_id(cost))",
       ),
     supabase.from("app_settings").select("hst_rate").eq("id", 1).single(),
     loadEnginePackages(supabase),
+    loadEngineFilterOptions(supabase),
   ]);
 
   if (enginesRes.error) throw enginesRes.error;
@@ -1209,6 +1325,7 @@ export async function getOilChangeDetails(): Promise<{
 
   type FilterJoin = {
     engine_type_id: string;
+    engine_option_id?: string | null;
     quantity: number;
     parts: {
       brand: string;
@@ -1228,7 +1345,8 @@ export async function getOilChangeDetails(): Promise<{
     const filterCost = (Number(part.cost) + Number(part.mhsw_fee)) * qty;
     const labourCost = Number(part.service_costs?.cost ?? 0) * qty;
 
-    const byEngine = grouped.get(r.engine_type_id) ?? new Map<string, OilChangeDetailBrand>();
+    const rowKey = engineRowKey(r.engine_type_id, r.engine_option_id);
+    const byEngine = grouped.get(rowKey) ?? new Map<string, OilChangeDetailBrand>();
     const slot =
       byEngine.get(brand) ??
       ({ brand, filter_cost: 0, labour: 0, parts: [] } satisfies OilChangeDetailBrand);
@@ -1241,16 +1359,21 @@ export async function getOilChangeDetails(): Promise<{
       mhsw_fee: Number(part.mhsw_fee),
     });
     byEngine.set(brand, slot);
-    grouped.set(r.engine_type_id, byEngine);
+    grouped.set(rowKey, byEngine);
   }
 
-  const rows: OilChangeDetailRow[] = ((enginesRes.data ?? []) as EngineType[]).map((e) => {
+  const rows: OilChangeDetailRow[] = expandEngineRows(
+    (enginesRes.data ?? []) as EngineType[],
+    filterOptions,
+  ).map((row) => {
+    const e = row.engine;
     // Fuel + grease ride along with the engine's package: no package resolved
     // means we don't know what the job consumes, not that it consumes nothing.
     const match = matchEnginePackage(e);
     return {
+      row_key: row.key,
       engine: e,
-      brands: Array.from(grouped.get(e.id)?.values() ?? []).sort((a, b) =>
+      brands: Array.from(grouped.get(row.key)?.values() ?? []).sort((a, b) =>
         a.brand.localeCompare(b.brand),
       ),
       fuel: match.extras?.fuel ?? 0,
@@ -1320,15 +1443,19 @@ export async function listAllOilTypes(): Promise<OilType[]> {
   return (data ?? []) as OilType[];
 }
 
+/** Every engine, each with the filter options it is sold with (if any). */
 export async function listAllEngineTypes(): Promise<EngineType[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("engine_types")
-    .select("*")
-    .order("manufacturer")
-    .order("model");
+  const [{ data, error }, options] = await Promise.all([
+    supabase.from("engine_types").select("*").order("manufacturer").order("model"),
+    loadEngineFilterOptions(supabase),
+  ]);
   if (error) throw error;
-  return (data ?? []) as EngineType[];
+  const byEngine = groupFilterOptions(options);
+  return ((data ?? []) as EngineType[]).map((e) => ({
+    ...e,
+    filter_options: byEngine.get(e.id) ?? [],
+  }));
 }
 
 /** Slim package list for the engine → labour-package picker. */
@@ -1380,7 +1507,7 @@ export interface EngineLabourSuggestion {
  */
 export async function suggestEngineLabourPackages(): Promise<EngineLabourSuggestion[]> {
   const supabase = await createClient();
-  const [enginesRes, packages] = await Promise.all([
+  const [enginesRes, packages, filterOptions] = await Promise.all([
     supabase
       .from("engine_types")
       .select("*")
@@ -1388,8 +1515,11 @@ export async function suggestEngineLabourPackages(): Promise<EngineLabourSuggest
       .order("manufacturer")
       .order("model"),
     loadPackagesWithExtras(supabase),
+    loadEngineFilterOptions(supabase),
   ]);
   if (enginesRes.error) throw enginesRes.error;
+  // An engine with filter options gets its packages from them, not this link.
+  const hasOptions = new Set(filterOptions.map((o) => o.engine_type_id));
 
   const matchable: MatchablePackage[] = packages.rows
     .filter((p) => p.active)
@@ -1404,7 +1534,7 @@ export async function suggestEngineLabourPackages(): Promise<EngineLabourSuggest
 
   const engines = (enginesRes.data ?? []) as EngineType[];
   return engines
-    .filter((e) => !e.labour_package_id)
+    .filter((e) => !e.labour_package_id && !hasOptions.has(e.id))
     .map((e) => {
       const engineName = `${e.manufacturer} ${e.model}`;
       const match = matchEngineToPackage(engineName, matchable);
@@ -1587,7 +1717,13 @@ export interface EngineFilterRow extends EngineFilter {
 
 export interface EngineTypeDetail {
   engine: EngineType;
+  /** Every filter wired to the engine; on an engine with filter options each
+   *  one carries the `engine_option_id` it belongs to. */
   filters: EngineFilterRow[];
+  /** The filter brands the engine is sold with. Empty = sold one way. */
+  options: EngineFilterOption[];
+  /** False until migration 0150 — the options editor hides itself. */
+  options_supported: boolean;
 }
 
 export async function getEngineTypeDetail(id: string): Promise<EngineTypeDetail | null> {
@@ -1613,7 +1749,20 @@ export async function getEngineTypeDetail(id: string): Promise<EngineTypeDetail 
     part: mergePartCategory(r.part),
   }));
 
-  return { engine: engine as EngineType, filters: rows };
+  const { data: options, error: oErr } = await supabase
+    .from("engine_filter_options")
+    .select("id, engine_type_id, package_id, label, oil_capacity_litres, sort_order")
+    .eq("engine_type_id", id)
+    .order("sort_order")
+    .order("label");
+  if (oErr && !isMissingRelation(oErr)) throw oErr;
+
+  return {
+    engine: engine as EngineType,
+    filters: rows,
+    options: (options ?? []) as EngineFilterOption[],
+    options_supported: !oErr,
+  };
 }
 
 // ============================================================================
@@ -2002,6 +2151,71 @@ export const applyEngineLabourPackages = wrapAction({
   },
 });
 
+// ----------------------------------------------------------------------------
+// engine_filter_options — the filter brands an engine is sold with (0150).
+// Adding and removing go through SQL functions because both move the engine's
+// prices, locks and filters between "the engine" and "this option", which has
+// to happen in one transaction or a price list shows a gap in between.
+// ----------------------------------------------------------------------------
+
+export const addEngineFilterOption = wrapAction({
+  schema: AddEngineFilterOptionInput,
+  roles: ["owner", "co_owner"],
+  handler: async (input): Promise<{ id: string }> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("add_engine_filter_option", {
+      p_engine: input.engine_type_id,
+      p_package: input.package_id,
+      p_label: input.label,
+      p_capacity: input.oil_capacity_litres,
+    });
+    if (error) {
+      if (error.code === "PGRST202") throw new Error(NEEDS_0150);
+      throw error;
+    }
+    revalidatePricing("engine-types");
+    return { id: data as string };
+  },
+});
+
+export const updateEngineFilterOption = wrapAction({
+  schema: UpdateEngineFilterOptionInput,
+  roles: ["owner", "co_owner"],
+  handler: async ({ id, ...fields }): Promise<EngineFilterOption> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("engine_filter_options")
+      .update(fields)
+      .eq("id", id)
+      .select("id, engine_type_id, package_id, label, oil_capacity_litres, sort_order")
+      .single();
+    if (error) {
+      if (isMissingRelation(error)) throw new Error(NEEDS_0150);
+      if (error.code === "23505") {
+        throw new Error("This engine already has a filter option with that name or that package.");
+      }
+      throw error;
+    }
+    revalidatePricing("engine-types");
+    return data as EngineFilterOption;
+  },
+});
+
+export const removeEngineFilterOption = wrapAction({
+  schema: RemoveEngineFilterOptionInput,
+  roles: ["owner", "co_owner"],
+  handler: async ({ id }): Promise<{ id: string }> => {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("remove_engine_filter_option", { p_option: id });
+    if (error) {
+      if (error.code === "PGRST202") throw new Error(NEEDS_0150);
+      throw error;
+    }
+    revalidatePricing("engine-types");
+    return { id };
+  },
+});
+
 export const deleteEngineType = wrapAction({
   schema: DeleteEngineTypeInput,
   roles: ["owner", "co_owner"],
@@ -2281,13 +2495,26 @@ export const deleteVolumeTier = wrapAction({
 export const upsertEngineFilter = wrapAction({
   schema: UpsertEngineFilterInput,
   roles: ["owner", "co_owner"],
-  handler: async (input): Promise<EngineFilter> => {
+  handler: async ({ engine_option_id, ...input }): Promise<EngineFilter> => {
     const supabase = await createClient();
-    const { data, error } = await supabase
+    // 0150 made a filter unique per (engine, part, option). Before it the
+    // column isn't there, and the only key is (engine, part).
+    let { data, error } = await supabase
       .from("engine_filters")
-      .upsert(input, { onConflict: "engine_type_id,part_id" })
+      .upsert(
+        { ...input, engine_option_id: engine_option_id ?? null },
+        { onConflict: "engine_type_id,part_id,engine_option_id" },
+      )
       .select("*")
       .single();
+    if (isMissingColumn(error, "engine_option_id")) {
+      if (engine_option_id) throw new Error(NEEDS_0150);
+      ({ data, error } = await supabase
+        .from("engine_filters")
+        .upsert(input, { onConflict: "engine_type_id,part_id" })
+        .select("*")
+        .single());
+    }
     if (error) throw error;
     revalidatePricing("engine-types");
     return data as EngineFilter;
@@ -2650,16 +2877,21 @@ export async function listLowMarginParts(): Promise<{
 export const lookupOilChangePrice = wrapAction({
   schema: z.object({
     engine_type_id: z.string().uuid(),
+    /** The filter option, on an engine that has them. */
+    engine_option_id: z.string().uuid().nullable().optional(),
     oil_type_id: z.string().uuid(),
     oil_container: z.enum(["bulk", "gallon"]),
   }),
   roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input): Promise<{ sub_total: number | null }> => {
     const supabase = await createClient();
+    // p_option_id only when there is one: before migration 0150 the function
+    // takes three arguments and would not be found with a fourth.
     const { data, error } = await supabase.rpc("oil_change_price", {
       p_engine_id: input.engine_type_id,
       p_oil_type_id: input.oil_type_id,
       p_container: input.oil_container,
+      ...(input.engine_option_id ? { p_option_id: input.engine_option_id } : {}),
     });
     if (error) throw error;
     return { sub_total: data == null ? null : Number(data) };
@@ -2667,13 +2899,15 @@ export const lookupOilChangePrice = wrapAction({
 });
 
 // ============================================================================
-// engine_sell_prices — manual override per (engine, oil, container).
+// engine_sell_prices — manual override per (engine, oil, container), and per
+// filter option on an engine that has them (0150).
 // Owner-only writes. Fall-through to cost-up if no row exists.
 // ============================================================================
 
 export interface EngineSellPriceRow {
   id: string;
   engine_type_id: string;
+  engine_option_id?: string | null;
   oil_type_id: string;
   container: "bulk" | "gallon";
   sell_price: number;
@@ -2684,7 +2918,7 @@ export async function listEngineSellPrices(): Promise<EngineSellPriceRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("engine_sell_prices")
-    .select("id, engine_type_id, oil_type_id, container, sell_price, notes")
+    .select("*")
     .order("engine_type_id")
     .limit(10000);  // Supabase REST defaults to 1000; we have ~1400+ rows.
   if (error) throw error;
@@ -2693,6 +2927,8 @@ export async function listEngineSellPrices(): Promise<EngineSellPriceRow[]> {
 
 const UpsertEngineSellPriceInput = z.object({
   engine_type_id: z.string().uuid(),
+  /** The filter option the price is for, on an engine that has them. */
+  engine_option_id: z.string().uuid().nullable().optional(),
   oil_type_id: z.string().uuid(),
   container: z.enum(["bulk", "gallon"]),
   sell_price: z.coerce.number().positive("Must be greater than zero"),
@@ -2704,22 +2940,33 @@ export const upsertEngineSellPrice = wrapAction({
   roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<EngineSellPriceRow> => {
     const supabase = await createClient();
-    const { data, error } = await supabase
+    const row = {
+      engine_type_id: input.engine_type_id,
+      oil_type_id: input.oil_type_id,
+      container: input.container,
+      sell_price: input.sell_price,
+      notes: input.notes || null,
+      created_by: profile.id,
+      updated_by: profile.id,
+    };
+    // 0150 made a price unique per (engine, oil, container, option). Before it
+    // the column isn't there, and the only key is the first three.
+    let { data, error } = await supabase
       .from("engine_sell_prices")
       .upsert(
-        {
-          engine_type_id: input.engine_type_id,
-          oil_type_id: input.oil_type_id,
-          container: input.container,
-          sell_price: input.sell_price,
-          notes: input.notes || null,
-          created_by: profile.id,
-          updated_by: profile.id,
-        },
-        { onConflict: "engine_type_id,oil_type_id,container" },
+        { ...row, engine_option_id: input.engine_option_id ?? null },
+        { onConflict: "engine_type_id,oil_type_id,container,engine_option_id" },
       )
-      .select("id, engine_type_id, oil_type_id, container, sell_price, notes")
+      .select("*")
       .single();
+    if (isMissingColumn(error, "engine_option_id")) {
+      if (input.engine_option_id) throw new Error(NEEDS_0150);
+      ({ data, error } = await supabase
+        .from("engine_sell_prices")
+        .upsert(row, { onConflict: "engine_type_id,oil_type_id,container" })
+        .select("*")
+        .single());
+    }
     if (error) throw error;
     revalidatePricing("sell-prices");
     return data as EngineSellPriceRow;
@@ -2795,11 +3042,14 @@ export const lockOilPrices = wrapAction({
 
     // Rows with no price (oil with no cost configured) can't be locked — the
     // table requires locked_price > 0, and there is nothing to freeze.
+    // engine_option_id only on the rows that have one, so this still inserts
+    // before migration 0150 adds the column (no engine has options then).
     const items = detail.rows
       .filter((r) => r.selling != null && r.selling > 0)
       .map((r) => ({
         lock_id: lockId,
         engine_type_id: r.engine_id,
+        ...(r.option_id ? { engine_option_id: r.option_id } : {}),
         locked_price: r.selling as number,
         filter_cost: Math.round(r.filter_cost * 100) / 100,
         oil_cost: Math.round(r.oil_cost * 100) / 100,

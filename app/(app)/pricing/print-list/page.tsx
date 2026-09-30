@@ -112,7 +112,7 @@ export default async function PrintListPage() {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.engine_id} className="border-t">
+                  <tr key={r.row_key} className="border-t">
                     <td className="p-2 font-medium sticky left-0 bg-background print:bg-transparent print:border print:border-foreground/40 whitespace-nowrap">
                       {r.engine_name}
                     </td>

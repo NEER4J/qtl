@@ -182,7 +182,8 @@ export default async function PayrollWeekPage({
             <li><strong>Add entries</strong> — one per employee working this week. Fill in hours, rate, bonus, extras and benefits, then type this period&apos;s income tax, EI and CPP from your payroll calculator (the employer side fills in as you type; <strong>Estimate from rates</strong> gives a starting point). Vacation pay and WSIB are calculated for you.</li>
             <li><strong>Daily cash</strong> — for management employees, click the &quot;Cash&quot; button to log cash paid on each day. The total rolls up into the cash column. Days already logged can be corrected or removed from that same dialog.</li>
             <li><strong>Approve</strong> — signs the numbers off once hours are final.</li>
-            <li><strong>Record payment</strong> — log the actual cheque numbers, e-transfer references, etc. as they go out.</li>
+            <li><strong>Pay date</strong> and <strong>Cheque no.</strong> — set on each entry (Add entry / Edit). They show under the employee&apos;s name here and print on the pay stub and the register.</li>
+            <li><strong>Record payment</strong> — log the money actually going out (cheque, e-transfer, cash) with its reference, including part payments.</li>
             <li><strong>Mark as paid</strong> — closes the week. From here on it counts in the payroll analytics.</li>
           </ol>
           <p>
@@ -282,6 +283,16 @@ export default async function PayrollWeekPage({
                     <TableRow>
                       <TableCell className="font-medium">
                         {entry.employee_name}
+                        {(entry.pay_date || entry.cheque_no) && (
+                          <div className="text-xs font-normal text-muted-foreground">
+                            {[
+                              entry.pay_date ? `Paid ${formatDate(entry.pay_date)}` : null,
+                              entry.cheque_no ? `Chq #${entry.cheque_no}` : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                        )}
                         {exempt.length > 0 && (
                           <div className="text-xs font-normal text-muted-foreground">
                             No {exempt.join(", ")}

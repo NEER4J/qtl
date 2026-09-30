@@ -705,9 +705,27 @@ async function buildEntryPayload(
     apply_vacation: input.apply_vacation,
     apply_wsib: input.apply_wsib,
     cheque_amount: input.cheque_amount,
+    // Only when the form sent them, so an older tab can't blank them out.
+    ...(input.cheque_no !== undefined ? { cheque_no: input.cheque_no || null } : {}),
+    ...(input.pay_date !== undefined ? { pay_date: input.pay_date || null } : {}),
     net_pay: netPay,
     notes: input.notes || null,
   };
+}
+
+// cheque_no / pay_date arrive with migration 0152. Until it is applied the
+// save drops them and goes through, rather than failing the whole entry.
+const ENTRY_0152_COLUMNS = ["cheque_no", "pay_date"] as const;
+
+function isMissingEntryColumn(error: { code?: string; message?: string } | null): boolean {
+  if (!error || (error.code !== "PGRST204" && error.code !== "42703")) return false;
+  return ENTRY_0152_COLUMNS.some((c) => (error.message ?? "").includes(c));
+}
+
+function without0152<T extends Record<string, unknown>>(row: T): T {
+  const out: Record<string, unknown> = { ...row };
+  for (const k of ENTRY_0152_COLUMNS) delete out[k];
+  return out as T;
 }
 
 export const upsertPayrollEntry = wrapAction({
@@ -717,14 +735,15 @@ export const upsertPayrollEntry = wrapAction({
     const supabase = await createClient();
     const payload = await buildEntryPayload(supabase, input);
 
-    const { data, error } = await supabase
-      .from("payroll_entries")
-      .upsert(
-        { ...payload, created_by: profile.id, updated_by: profile.id },
-        { onConflict: "payroll_week_id,employee_id" },
-      )
-      .select("*")
-      .single();
+    const save = (row: Record<string, unknown>) =>
+      supabase
+        .from("payroll_entries")
+        .upsert(row, { onConflict: "payroll_week_id,employee_id" })
+        .select("*")
+        .single();
+    const row = { ...payload, created_by: profile.id, updated_by: profile.id };
+    let { data, error } = await save(row);
+    if (isMissingEntryColumn(error)) ({ data, error } = await save(without0152(row)));
     if (error) throw error;
     revalidatePath(`/payroll/${input.payroll_week_id}`);
     return data as PayrollEntry;
@@ -739,12 +758,11 @@ export const updatePayrollEntry = wrapAction({
     const { id, ...rest } = input;
     const payload = await buildEntryPayload(supabase, rest);
 
-    const { data, error } = await supabase
-      .from("payroll_entries")
-      .update({ ...payload, updated_by: profile.id })
-      .eq("id", id)
-      .select("*")
-      .single();
+    const save = (patch: Record<string, unknown>) =>
+      supabase.from("payroll_entries").update(patch).eq("id", id).select("*").single();
+    const patch = { ...payload, updated_by: profile.id };
+    let { data, error } = await save(patch);
+    if (isMissingEntryColumn(error)) ({ data, error } = await save(without0152(patch)));
     if (error) throw error;
     revalidatePath(`/payroll/${rest.payroll_week_id}`);
     return data as PayrollEntry;

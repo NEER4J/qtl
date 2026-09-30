@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, ExternalLink, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { ExternalLink, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -27,28 +27,15 @@ import {
 import type { EngineType } from "@/lib/db/types";
 
 import { AutoLinkDialog } from "./auto-link-dialog";
-import { baseModelName } from "./base-model-name";
 import { EngineTypeFormDialog } from "./engine-type-form-dialog";
 import { LabourPackagePicker } from "./labour-package-picker";
 import { MergeEngineDialog } from "./merge-engine-dialog";
 
-// Filter variants must NOT be merged or hidden automatically (tried once,
-// reverted — see migrations 0110/0111). This only GROUPS them for display: one
-// row per base engine number by default, with the variants a click away, so
-// admins aren't staring at near-duplicate rows for the same physical engine.
-// Merging is only ever a deliberate admin choice (MergeEngineDialog), offered
-// when a delete is blocked by sales-job history.
-
-function groupEngineTypes(engineTypes: EngineType[]) {
-  const groups = new Map<string, EngineType[]>();
-  for (const e of engineTypes) {
-    const key = `${e.manufacturer}|${baseModelName(e.model).toLowerCase()}`;
-    const list = groups.get(key);
-    if (list) list.push(e);
-    else groups.set(key, [e]);
-  }
-  return [...groups.values()];
-}
+// One row per engine. An engine sold with a choice of filter brand is still one
+// engine: its filter options (each a package, with its own prices) are listed
+// in the Labour package column and edited on the engine's own page. Two rows
+// that are the same engine are only ever merged deliberately (MergeEngineDialog,
+// offered when a delete is blocked by sales-job history).
 
 export function EngineTypesTable({
   engineTypes,
@@ -66,7 +53,6 @@ export function EngineTypesTable({
   const [editing, setEditing] = useState<EngineType | null>(null);
   const [creating, setCreating] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [autoLinking, setAutoLinking] = useState(false);
@@ -87,7 +73,6 @@ export function EngineTypesTable({
     () => (showInactive ? engineTypes : engineTypes.filter((e) => e.active)),
     [engineTypes, showInactive],
   );
-  const groups = useMemo(() => groupEngineTypes(shownEngines), [shownEngines]);
 
   /** Suggestions the dialog can actually apply, i.e. everything but the rows
    *  the matcher left to a person. */
@@ -96,22 +81,8 @@ export function EngineTypesTable({
     [suggestions],
   );
 
-  // Ids currently rendered as their own row — the primary of every group,
-  // plus each variant only while its group is expanded. "Select all" only
-  // ever touches what's actually visible, so a collapsed variant can't be
-  // bulk-deleted without the admin expanding and seeing it first.
-  const visibleIds = useMemo(() => {
-    const ids: string[] = [];
-    for (const variants of groups) {
-      const key = `${variants[0]!.manufacturer}|${baseModelName(variants[0]!.model).toLowerCase()}`;
-      const primary = variants.find((v) => v.active) ?? variants[0]!;
-      ids.push(primary.id);
-      if (variants.length > 1 && expanded.has(key)) {
-        for (const v of variants) if (v.id !== primary.id) ids.push(v.id);
-      }
-    }
-    return ids;
-  }, [groups, expanded]);
+  // "Select all" only ever touches the rows on screen.
+  const visibleIds = useMemo(() => shownEngines.map((e) => e.id), [shownEngines]);
 
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => {
@@ -143,15 +114,6 @@ export function EngineTypesTable({
       const inactive = new Set(engineTypes.filter((e) => !e.active).map((e) => e.id));
       setSelectedIds((prev) => new Set([...prev].filter((id) => !inactive.has(id))));
     }
-  };
-
-  const toggleExpanded = (key: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
   };
 
   const handleToggle = (e: EngineType) => {
@@ -312,7 +274,7 @@ export function EngineTypesTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {groups.length === 0 ? (
+            {shownEngines.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={labourLinkSupported ? 8 : 7}
@@ -326,31 +288,20 @@ export function EngineTypesTable({
                 </TableCell>
               </TableRow>
             ) : (
-              groups.map((variants) => {
-                const key = `${variants[0]!.manufacturer}|${baseModelName(variants[0]!.model).toLowerCase()}`;
-                const hasVariants = variants.length > 1;
-                const isOpen = expanded.has(key);
-                // Prefer an active row to represent the group; falls back to the first.
-                const primary = variants.find((v) => v.active) ?? variants[0]!;
-                return (
-                  <GroupRows
-                    key={key}
-                    primary={primary}
-                    variants={variants}
-                    hasVariants={hasVariants}
-                    isOpen={isOpen}
-                    onToggle={() => toggleExpanded(key)}
-                    pendingId={pendingId}
-                    onEdit={setEditing}
-                    onToggleActive={handleToggle}
-                    onDelete={handleDelete}
-                    selectedIds={selectedIds}
-                    onToggleSelect={toggleSelected}
-                    labourPackages={labourPackages}
-                    labourLinkSupported={labourLinkSupported}
-                  />
-                );
-              })
+              shownEngines.map((e) => (
+                <EngineRow
+                  key={e.id}
+                  engine={e}
+                  pendingId={pendingId}
+                  onEdit={setEditing}
+                  onToggleActive={handleToggle}
+                  onDelete={handleDelete}
+                  selected={selectedIds.has(e.id)}
+                  onToggleSelect={toggleSelected}
+                  labourPackages={labourPackages}
+                  labourLinkSupported={labourLinkSupported}
+                />
+              ))
             )}
           </TableBody>
         </Table>
@@ -380,97 +331,8 @@ export function EngineTypesTable({
   );
 }
 
-function GroupRows({
-  primary,
-  variants,
-  hasVariants,
-  isOpen,
-  onToggle,
-  pendingId,
-  onEdit,
-  onToggleActive,
-  onDelete,
-  selectedIds,
-  onToggleSelect,
-  labourPackages,
-  labourLinkSupported,
-}: {
-  primary: EngineType;
-  variants: EngineType[];
-  hasVariants: boolean;
-  isOpen: boolean;
-  onToggle: () => void;
-  pendingId: string | null;
-  onEdit: (e: EngineType) => void;
-  onToggleActive: (e: EngineType) => void;
-  onDelete: (e: EngineType) => void;
-  selectedIds: Set<string>;
-  onToggleSelect: (id: string) => void;
-  labourPackages: LabourPackageOption[];
-  labourLinkSupported: boolean;
-}) {
-  return (
-    <>
-      <EngineRow
-        engine={primary}
-        displayModel={baseModelName(primary.model)}
-        pendingId={pendingId}
-        onEdit={onEdit}
-        onToggleActive={onToggleActive}
-        onDelete={onDelete}
-        selected={selectedIds.has(primary.id)}
-        onToggleSelect={onToggleSelect}
-        labourPackages={labourPackages}
-        labourLinkSupported={labourLinkSupported}
-        leading={
-          hasVariants ? (
-            <button
-              type="button"
-              onClick={onToggle}
-              className="mr-1.5 inline-flex align-middle text-muted-foreground hover:text-foreground"
-              title={isOpen ? "Hide filter variants" : "Show filter variants"}
-            >
-              {isOpen ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-            </button>
-          ) : null
-        }
-        trailingBadge={
-          hasVariants ? (
-            <Badge
-              variant="outline"
-              className="ml-2 cursor-pointer text-xs"
-              onClick={onToggle}
-            >
-              {variants.length} filter variants
-            </Badge>
-          ) : null
-        }
-      />
-      {hasVariants &&
-        isOpen &&
-        variants.map((v) => (
-          <EngineRow
-            key={v.id}
-            engine={v}
-            displayModel={v.model}
-            pendingId={pendingId}
-            onEdit={onEdit}
-            onToggleActive={onToggleActive}
-            onDelete={onDelete}
-            selected={selectedIds.has(v.id)}
-            onToggleSelect={onToggleSelect}
-            labourPackages={labourPackages}
-            labourLinkSupported={labourLinkSupported}
-            indented
-          />
-        ))}
-    </>
-  );
-}
-
 function EngineRow({
   engine: e,
-  displayModel,
   pendingId,
   onEdit,
   onToggleActive,
@@ -479,12 +341,8 @@ function EngineRow({
   onToggleSelect,
   labourPackages,
   labourLinkSupported,
-  leading,
-  trailingBadge,
-  indented,
 }: {
   engine: EngineType;
-  displayModel: string;
   pendingId: string | null;
   onEdit: (e: EngineType) => void;
   onToggleActive: (e: EngineType) => void;
@@ -493,10 +351,14 @@ function EngineRow({
   onToggleSelect: (id: string) => void;
   labourPackages: LabourPackageOption[];
   labourLinkSupported: boolean;
-  leading?: ReactNode;
-  trailingBadge?: ReactNode;
-  indented?: boolean;
 }) {
+  const options = e.filter_options ?? [];
+  // Every capacity this engine is filled to: its own, or each option's where a
+  // filter changes it (C12/3406: 37 L with Cat, 38 L with Fleetguard).
+  const capacities =
+    options.length === 0
+      ? [Number(e.oil_capacity_litres)]
+      : [...new Set(options.map((o) => Number(o.oil_capacity_litres ?? e.oil_capacity_litres)))];
   return (
     <TableRow className={!e.active ? "opacity-60" : undefined}>
       <TableCell>
@@ -507,20 +369,38 @@ function EngineRow({
         />
       </TableCell>
       <TableCell className="font-medium">{e.manufacturer}</TableCell>
-      <TableCell className={indented ? "pl-8 text-muted-foreground" : undefined}>
-        {leading}
-        {displayModel}
-        {trailingBadge}
+      <TableCell>{e.model}</TableCell>
+      <TableCell className="text-right tabular-nums">
+        {capacities.map((c) => c.toFixed(2)).join(" / ")}
       </TableCell>
-      <TableCell className="text-right tabular-nums">{Number(e.oil_capacity_litres).toFixed(2)}</TableCell>
       {labourLinkSupported && (
         <TableCell>
-          <LabourPackagePicker
-            engineId={e.id}
-            engineName={`${e.manufacturer} ${e.model}`}
-            value={e.labour_package_id ?? null}
-            packages={labourPackages}
-          />
+          {options.length === 0 ? (
+            <LabourPackagePicker
+              engineId={e.id}
+              engineName={`${e.manufacturer} ${e.model}`}
+              value={e.labour_package_id ?? null}
+              packages={labourPackages}
+            />
+          ) : (
+            // Sold with a choice of filter: one package per option, edited on
+            // the engine's page because each carries its own prices.
+            <Link
+              href={`/settings/pricing/engine-types/${e.id}`}
+              className="block space-y-0.5 text-sm hover:underline"
+              title="Edit this engine's filter options"
+            >
+              {options.map((o) => (
+                <span key={o.id} className="block truncate">
+                  {o.label}
+                  <span className="text-muted-foreground">
+                    {" · "}
+                    {labourPackages.find((p) => p.id === o.package_id)?.name ?? "package missing"}
+                  </span>
+                </span>
+              ))}
+            </Link>
+          )}
         </TableCell>
       )}
       <TableCell>{e.sort_order}</TableCell>

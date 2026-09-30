@@ -77,6 +77,9 @@ function isMissingColumn(
 }
 
 const JOB_0149_COLUMNS = ["oil_tier_premium_waived", "grease_only_fee_waived"] as const;
+// 0150: which filter option an oil change was sold with. No engine has options
+// until that migration, so dropping the column loses nothing.
+const JOB_0150_COLUMNS = ["engine_option_id"] as const;
 const ITEM_0149_COLUMNS = ["oil_container", "auto_fee"] as const;
 
 function omitKeys<T extends Record<string, unknown>>(row: T, keys: readonly string[]): T {
@@ -457,6 +460,7 @@ export const createSalesJob = wrapAction({
         is_dump_truck: input.is_dump_truck,
         dump_truck_surcharge: input.is_dump_truck ? input.dump_truck_surcharge : 0,
         engine_type_id: input.engine_type_id ?? null,
+        engine_option_id: input.engine_option_id ?? null,
         oil_type_id: input.oil_type_id ?? null,
         oil_container: input.oil_container ?? null,
         auto_priced_at: input.auto_priced_at ?? null,
@@ -468,8 +472,12 @@ export const createSalesJob = wrapAction({
     const insertJob = (row: Record<string, unknown>) =>
       supabase.from("sales_jobs").insert(row).select("*").single();
     let { data, error } = await insertJob(jobRow);
-    if (isMissingColumn(error, JOB_0149_COLUMNS)) {
-      ({ data, error } = await insertJob(omitKeys(jobRow, JOB_0149_COLUMNS)));
+    // Either pending migration drops its own columns and tries again; with both
+    // pending the second pass clears the other.
+    for (const pending of [JOB_0150_COLUMNS, JOB_0149_COLUMNS]) {
+      if (!isMissingColumn(error, pending)) continue;
+      for (const k of pending) delete (jobRow as Record<string, unknown>)[k];
+      ({ data, error } = await insertJob(jobRow));
     }
     if (error) throw error;
     if (!data) throw new Error("The job was not saved.");
@@ -685,6 +693,7 @@ export const updateSalesJob = wrapAction({
         is_dump_truck: input.is_dump_truck,
         dump_truck_surcharge: input.is_dump_truck ? input.dump_truck_surcharge : 0,
         engine_type_id: input.engine_type_id ?? null,
+        engine_option_id: input.engine_option_id ?? null,
         oil_type_id: input.oil_type_id ?? null,
         oil_container: input.oil_container ?? null,
         auto_priced_at: input.auto_priced_at ?? null,
@@ -695,8 +704,10 @@ export const updateSalesJob = wrapAction({
     const updateJob = (patch: Record<string, unknown>) =>
       supabase.from("sales_jobs").update(patch).eq("id", input.id).select("*").single();
     let { data, error } = await updateJob(jobPatch);
-    if (isMissingColumn(error, JOB_0149_COLUMNS)) {
-      ({ data, error } = await updateJob(omitKeys(jobPatch, JOB_0149_COLUMNS)));
+    for (const pending of [JOB_0150_COLUMNS, JOB_0149_COLUMNS]) {
+      if (!isMissingColumn(error, pending)) continue;
+      for (const k of pending) delete (jobPatch as Record<string, unknown>)[k];
+      ({ data, error } = await updateJob(jobPatch));
     }
     if (error) throw error;
     if (!data) throw new Error("The job was not saved.");

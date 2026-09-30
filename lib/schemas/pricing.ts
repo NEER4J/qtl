@@ -175,6 +175,35 @@ export const MergeEngineTypesInput = z
 export type MergeEngineTypesInput = z.infer<typeof MergeEngineTypesInput>;
 
 // ============================================================================
+// engine_filter_options — the filter brands an engine is sold with (0150)
+// ============================================================================
+/** Blank means "same as the engine", so it must not coerce to 0. */
+const optionCapacity = z
+  .union([z.literal(""), z.null(), z.coerce.number().positive("Oil capacity must be greater than 0")])
+  .optional()
+  .transform((v) => (v === "" || v == null ? null : v));
+
+export const AddEngineFilterOptionInput = z.object({
+  engine_type_id: z.string().uuid(),
+  package_id: z.string().uuid("Pick a package"),
+  label: z.string().trim().min(1, "Name the option, e.g. With Cat Filter").max(80),
+  oil_capacity_litres: optionCapacity,
+});
+export type AddEngineFilterOptionInput = z.input<typeof AddEngineFilterOptionInput>;
+
+export const UpdateEngineFilterOptionInput = z.object({
+  id: z.string().uuid(),
+  package_id: z.string().uuid("Pick a package"),
+  label: z.string().trim().min(1, "Name the option, e.g. With Cat Filter").max(80),
+  oil_capacity_litres: optionCapacity,
+});
+export type UpdateEngineFilterOptionInput = z.input<typeof UpdateEngineFilterOptionInput>;
+
+export const RemoveEngineFilterOptionInput = z.object({
+  id: z.string().uuid(),
+});
+
+// ============================================================================
 // parts
 // ============================================================================
 const trimmedOrNull = z
@@ -311,6 +340,8 @@ export const DeleteVolumeTierInput = z.object({
 // ============================================================================
 export const UpsertEngineFilterInput = z.object({
   engine_type_id: z.string().uuid(),
+  /** The filter option this filter belongs to, on an engine that has them. */
+  engine_option_id: z.string().uuid().nullable().optional(),
   part_id: z.string().uuid("Pick a part"),
   quantity: z.coerce.number().int().min(1, "Quantity must be at least 1"),
 });

@@ -2,6 +2,7 @@ import { listInventory, listOilInventory } from "@/lib/actions/inventory";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
 import { isActionAllowed } from "@/lib/permissions/check";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { locationsWithStatus, type StockLimit } from "@/lib/utils/stock-limits";
 import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,30 @@ export async function GET() {
   sections.push(`# Inventory — on-hand stock by location`);
   sections.push(`# Exported ${todayISO()}\n`);
 
-  const locNames = inv.locations.map((l) => l.name);
+  // Per location: on hand, then that shop's own min and max (0151). Status
+  // names the shops that are below their minimum or above their maximum.
+  type Row = {
+    qtyByLocation: Record<string, number>;
+    limitsByLocation: Record<string, StockLimit>;
+    total: number;
+  };
+  const locationColumns = (locations: { id: string; name: string }[]) =>
+    locations.flatMap((l) => [l.name, `${l.name} min`, `${l.name} max`]);
+  const locationCells = (row: Row, locations: { id: string; name: string }[]) =>
+    Object.fromEntries(
+      locations.flatMap((l) => [
+        [l.name, row.qtyByLocation[l.id] ?? 0],
+        [`${l.name} min`, row.limitsByLocation[l.id]?.min ?? null],
+        [`${l.name} max`, row.limitsByLocation[l.id]?.max ?? null],
+      ]),
+    );
+  const statusOf = (row: Row, locations: { id: string; name: string }[]) => {
+    const names = (ids: string[]) =>
+      locations.filter((l) => ids.includes(l.id)).map((l) => l.name).join(" / ");
+    const low = names(locationsWithStatus(row, "low"));
+    const over = names(locationsWithStatus(row, "over"));
+    return [low ? `LOW: ${low}` : "", over ? `OVER: ${over}` : ""].filter(Boolean).join("; ");
+  };
 
   sections.push(`## Parts`);
   sections.push(
@@ -34,20 +58,11 @@ export async function GET() {
         brand: p.brand,
         category: p.category,
         description: p.description,
-        ...Object.fromEntries(
-          inv.locations.map((l) => [l.name, p.qtyByLocation[l.id] ?? 0]),
-        ),
+        ...locationCells(p, inv.locations),
         total: p.total,
-        min: p.min_stock_qty,
-        max: p.max_stock_qty,
-        status:
-          p.min_stock_qty != null && p.total < p.min_stock_qty
-            ? "LOW"
-            : p.max_stock_qty != null && p.total > p.max_stock_qty
-              ? "OVER"
-              : "",
+        status: statusOf(p, inv.locations),
       })),
-      ["part_number", "brand", "category", "description", ...locNames, "total", "min", "max", "status"],
+      ["part_number", "brand", "category", "description", ...locationColumns(inv.locations), "total", "status"],
     ),
   );
 
@@ -58,20 +73,11 @@ export async function GET() {
       oil.oils.map((o) => ({
         code: o.code,
         name: o.name,
-        ...Object.fromEntries(
-          oil.locations.map((l) => [l.name, o.qtyByLocation[l.id] ?? 0]),
-        ),
+        ...locationCells(o, oil.locations),
         total: o.total,
-        min: o.min_stock_litres,
-        max: o.max_stock_litres,
-        status:
-          o.min_stock_litres != null && o.total < o.min_stock_litres
-            ? "LOW"
-            : o.max_stock_litres != null && o.total > o.max_stock_litres
-              ? "OVER"
-              : "",
+        status: statusOf(o, oil.locations),
       })),
-      ["code", "name", ...oil.locations.map((l) => l.name), "total", "min", "max", "status"],
+      ["code", "name", ...locationColumns(oil.locations), "total", "status"],
     ),
   );
 

@@ -53,11 +53,20 @@ export function LabourPackagePicker({
   engineName,
   value,
   packages,
+  onChoose,
+  disabled,
 }: {
   engineId: string;
   engineName: string;
   value: string | null;
   packages: LabourPackageOption[];
+  /**
+   * Picking for something other than the engine's own link (a filter option):
+   * the choice is handed back instead of saved, and "Not linked" is not
+   * offered — an option always has a package.
+   */
+  onChoose?: (packageId: string) => void;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -90,6 +99,10 @@ export function LabourPackagePicker({
 
   const choose = (packageId: string | null) => {
     setOpen(false);
+    if (onChoose) {
+      if (packageId) onChoose(packageId);
+      return;
+    }
     startTransition(async () => {
       const res = await setEngineLabourPackage({ id: engineId, labour_package_id: packageId });
       if (!res.ok) toast.error(res.error);
@@ -116,11 +129,11 @@ export function LabourPackagePicker({
           role="combobox"
           size="sm"
           type="button"
-          disabled={pending}
+          disabled={pending || disabled}
           className="w-full justify-between font-normal"
         >
           <span className={cn("truncate", !selected && "text-muted-foreground italic")}>
-            {pending ? "Saving…" : selected ? selected.name : "Not linked"}
+            {pending ? "Saving…" : selected ? selected.name : onChoose ? "Pick a package…" : "Not linked"}
           </span>
           <ChevronsUpDown className="ml-2 size-3.5 shrink-0 opacity-50" />
         </Button>
@@ -138,12 +151,14 @@ export function LabourPackagePicker({
                 No packages match that search.
               </div>
             </CommandEmpty>
-            <CommandGroup>
-              <CommandItem value="__none__" onSelect={() => choose(null)}>
-                <Check className={cn("mr-2 size-4", value === null ? "opacity-100" : "opacity-0")} />
-                <span className="text-muted-foreground italic">Not linked</span>
-              </CommandItem>
-            </CommandGroup>
+            {!onChoose && (
+              <CommandGroup>
+                <CommandItem value="__none__" onSelect={() => choose(null)}>
+                  <Check className={cn("mr-2 size-4", value === null ? "opacity-100" : "opacity-0")} />
+                  <span className="text-muted-foreground italic">Not linked</span>
+                </CommandItem>
+              </CommandGroup>
+            )}
             {suggested.length > 0 && (
               <CommandGroup heading="Likely match">{suggested.map(renderItem)}</CommandGroup>
             )}

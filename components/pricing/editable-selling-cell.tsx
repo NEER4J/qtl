@@ -12,6 +12,8 @@ import { formatMoney } from "@/lib/utils/format";
 
 interface Props {
   engineId: string;
+  /** The filter option this row is, on an engine that has them. */
+  optionId?: string | null;
   oilTypeId: string;
   container: "bulk" | "gallon";
   /** Current effective sell price (override OR cost-up). */
@@ -86,6 +88,7 @@ export function EditableSellingCell(props: Props) {
     startTransition(async () => {
       const res = await upsertEngineSellPrice({
         engine_type_id: props.engineId,
+        engine_option_id: props.optionId ?? null,
         oil_type_id: props.oilTypeId,
         container: props.container,
         sell_price: price,

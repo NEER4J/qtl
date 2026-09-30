@@ -11,6 +11,7 @@ import {
   DeactivateExpenseInput,
   ExpenseInput,
   ListExpensesInput,
+  PayExpensesInput,
   UpdateExpenseInput,
 } from "@/lib/schemas/expenses";
 import type {
@@ -380,6 +381,68 @@ export const addExpensePayment = wrapAction({
     revalidatePath("/expenses");
     revalidatePath("/dashboard");
     return data as ExpensePaymentRow;
+  },
+});
+
+// ----------------------------------------------------------------------------
+// Pay several expenses in full (the list's "Mark as paid")
+//
+// One payment row per expense for whatever it still owes, read here rather
+// than trusted from the browser — a list left open could be showing a balance
+// someone else has since paid. All rows go in with a single insert, so either
+// every selected expense is cleared or none is. Expenses that turn out to be
+// already paid, deactivated or outside the manager's shops are skipped and
+// counted, not failed: the rest of the batch is still what was asked for.
+// ----------------------------------------------------------------------------
+export const payExpenses = wrapAction({
+  schema: PayExpensesInput,
+  roles: ["owner", "co_owner", "accountant", "manager"],
+  handler: async (
+    input,
+    profile,
+  ): Promise<{ paid: number; skipped: number; amount: number }> => {
+    const supabase = await createClient();
+    const ids = [...new Set(input.expense_ids)];
+
+    const { data, error } = await supabase
+      .from("expenses")
+      .select("id, location_id, balance, deactivated_at")
+      .in("id", ids);
+    if (error) throw error;
+
+    type Row = { id: string; location_id: string; balance: number; deactivated_at: string | null };
+    const payable = ((data ?? []) as Row[]).filter(
+      (e) =>
+        !e.deactivated_at &&
+        Number(e.balance) > 0 &&
+        (profile.role !== "manager" || canAccessLocation(profile, e.location_id)),
+    );
+    if (payable.length === 0) {
+      throw new Error("None of the selected expenses has a balance you can pay.");
+    }
+
+    const { error: insErr } = await supabase.from("expense_payments").insert(
+      payable.map((e) => ({
+        expense_id: e.id,
+        paid_on: input.paid_on,
+        amount: Number(e.balance),
+        mode: input.mode,
+        // Blank gets an auto-generated reference per payment (0019).
+        transaction_id: input.transaction_id || null,
+        notes: input.notes || null,
+        created_by: profile.id,
+      })),
+    );
+    if (insErr) throw insErr;
+
+    for (const e of payable) revalidatePath(`/expenses/${e.id}`);
+    revalidatePath("/expenses");
+    revalidatePath("/dashboard");
+    return {
+      paid: payable.length,
+      skipped: ids.length - payable.length,
+      amount: Math.round(payable.reduce((s, e) => s + Number(e.balance), 0) * 100) / 100,
+    };
   },
 });
 

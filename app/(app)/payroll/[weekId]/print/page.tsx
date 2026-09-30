@@ -134,6 +134,16 @@ export default async function PayrollPrintPage({
                   <Td className="text-left font-medium">
                     {e.employee_name}
                     {e.employee_code ? <span className="text-muted-foreground"> ({e.employee_code})</span> : null}
+                    {(e.pay_date || e.cheque_no) && (
+                      <div className="font-normal text-[10px] text-muted-foreground">
+                        {[
+                          e.pay_date ? `Paid ${formatDate(e.pay_date)}` : null,
+                          e.cheque_no ? `Chq #${e.cheque_no}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                    )}
                     {deductionExemptions(e).length > 0 && (
                       <div className="font-normal text-[10px] text-muted-foreground">
                         No {deductionExemptions(e).join(", ")}
@@ -216,6 +226,10 @@ export default async function PayrollPrintPage({
                   <div className="text-right">
                     <p className="font-semibold">Pay statement</p>
                     <p className="text-xs">Pay period: {periodLabel}</p>
+                    {entry.pay_date && (
+                      <p className="text-xs">Pay date: {formatDate(entry.pay_date)}</p>
+                    )}
+                    {entry.cheque_no && <p className="text-xs">Cheque no.: {entry.cheque_no}</p>}
                     <p className="text-xs capitalize">Status: {week.status}</p>
                   </div>
                 </header>

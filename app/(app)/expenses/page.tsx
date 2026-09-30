@@ -11,7 +11,7 @@ import {
   listActiveLocations,
 } from "@/lib/actions/reference";
 import { hiddenColumnsForPage } from "@/lib/permissions/check";
-import { canChooseLocation } from "@/lib/auth/locations";
+import { accessibleLocationIds, canChooseLocation } from "@/lib/auth/locations";
 
 import { ExpensesFilters } from "./expenses-filters";
 import { ExpensesTable } from "./expenses-table";
@@ -50,6 +50,15 @@ export default async function ExpensesListPage({
     profile.role === "manager" ||
     (profile.role === "staff" && profile.can_enter_expenses);
 
+  // Same roles as Record payment on an expense (addExpensePayment); a manager
+  // only for the shops they can reach.
+  const canPay =
+    profile.role === "owner" ||
+    profile.role === "co_owner" ||
+    profile.role === "accountant" ||
+    profile.role === "manager";
+  const payableLocationIds = profile.role === "manager" ? accessibleLocationIds(profile) : null;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -78,6 +87,7 @@ export default async function ExpensesListPage({
         <ul>
           <li><strong>Categories and sub-categories</strong> — every expense gets tagged with a category (Advertisement, Cleaning, Repair, Utility, and so on). You can manage the list under Settings → Expense Categories.</li>
           <li><strong>Balance owing</strong> shows total minus what you&apos;ve paid. The same green / amber / red status tags as on sales.</li>
+          <li><strong>Paying several at once</strong> — tick the unpaid expenses (the box in the header ticks every unpaid one on the page), click <strong>Mark as paid</strong>, and enter the payment date, mode and cheque no. or transaction ID once. Each ticked expense gets a payment for its full balance. For a part payment, open the expense and use Record payment.</li>
           <li><strong>Recurring expenses</strong> (like a monthly radio ad or weekly cleaning contract) can be set up once under Settings → Recurring Expenses. The system then creates the expense lines on schedule.</li>
         </ul>
         <p>
@@ -98,6 +108,8 @@ export default async function ExpensesListPage({
         page={result.page}
         pageSize={result.pageSize}
         hiddenColumns={[...hiddenColumnsForPage(profile, "expenses")]}
+        canPay={canPay}
+        payableLocationIds={payableLocationIds}
       />
     </div>
   );

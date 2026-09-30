@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 
 export default async function OilGridPage() {
   const profile = await requireProfile();
-  const { engines, oilTypes, cells, hstRate } = await getOilChangeGrid();
+  // One row per engine, or per filter option of an engine sold with several.
+  const { rows, oilTypes, cells, hstRate } = await getOilChangeGrid();
   const isOwner = (profile.role === "owner" || profile.role === "co_owner");
   const hstPct = Math.round(hstRate * 1000) / 10;
 
@@ -25,7 +26,7 @@ export default async function OilGridPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Oil-change price grid</h1>
           <p className="text-sm text-muted-foreground">
-            {engines.length} engine{engines.length !== 1 ? "s" : ""} × {oilTypes.length} oil grade{oilTypes.length !== 1 ? "s" : ""}. Bulk / Gallon.{" "}
+            {rows.length} engine{rows.length !== 1 ? "s" : ""} × {oilTypes.length} oil grade{oilTypes.length !== 1 ? "s" : ""}. Bulk / Gallon.{" "}
             <Link href="/pricing/oil-grid/detail" className="underline text-foreground">
               See per-brand filter + labour + grease breakdown
             </Link>
@@ -37,7 +38,7 @@ export default async function OilGridPage() {
       {/* Print-only header */}
       <div className="hidden print:block">
         <h1 className="text-xl font-bold">Oil-change price grid</h1>
-        <p className="text-xs">{engines.length} engines × {oilTypes.length} oil grades · Bulk / Gallon</p>
+        <p className="text-xs">{rows.length} engines × {oilTypes.length} oil grades · Bulk / Gallon</p>
       </div>
 
       <div className="print:hidden">
@@ -56,7 +57,7 @@ export default async function OilGridPage() {
       </PageHelp>
       </div>
 
-      {engines.length === 0 || oilTypes.length === 0 ? (
+      {rows.length === 0 || oilTypes.length === 0 ? (
         <Card>
           <CardContent className="pt-6 pb-6 text-sm text-muted-foreground text-center space-y-3 max-w-2xl mx-auto">
             <p className="text-base font-medium text-foreground">The price grid is empty.</p>
@@ -111,12 +112,12 @@ export default async function OilGridPage() {
                 </tr>
               </thead>
               <tbody>
-                {engines.map((e) => (
-                  <tr key={e.id} className="border-t">
+                {rows.map(({ key, engine: e }) => (
+                  <tr key={key} className="border-t">
                     <td className="p-2 font-medium sticky left-0 bg-background z-10">{e.display_name}</td>
                     <td className="p-2 text-right text-xs text-muted-foreground tabular-nums">{Number(e.oil_capacity_litres).toFixed(1)}L</td>
                     {oilTypes.flatMap((o) => {
-                      const c = cells.get(`${e.id}|${o.id}`);
+                      const c = cells.get(`${key}|${o.id}`);
                       return [
                         <td key={`${o.id}-b`} className="p-1 text-right tabular-nums text-sm border-l">
                           {c?.bulk != null ? formatMoney(c.bulk) : "—"}

@@ -112,6 +112,23 @@ export const AddExpensePaymentInput = z.object({
   notes: z.string().trim().max(500).nullable().optional().or(z.literal("")),
 });
 
+/**
+ * Clear several expenses at once: one payment per expense, each for that
+ * expense's full balance, all carrying the same date, mode and reference (one
+ * cheque or e-transfer often settles a stack of a vendor's invoices).
+ */
+export const PayExpensesInput = z.object({
+  expense_ids: z
+    .array(z.string().uuid())
+    .min(1, "Select at least one expense")
+    .max(200, "Pay up to 200 expenses at a time"),
+  paid_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date is required"),
+  mode: paymentModeSchema,
+  transaction_id: z.string().trim().max(100).nullable().optional().or(z.literal("")),
+  notes: z.string().trim().max(500).nullable().optional().or(z.literal("")),
+});
+export type PayExpensesInput = z.infer<typeof PayExpensesInput>;
+
 // ----------------------------------------------------------------------------
 // List filters
 // ----------------------------------------------------------------------------

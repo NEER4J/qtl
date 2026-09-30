@@ -141,7 +141,7 @@ export default async function OilChangeDetailPage() {
                 {rows.map((r) => {
                   const byBrand = new Map(r.brands.map((b) => [b.brand, b]));
                   return (
-                    <tr key={r.engine.id} className="border-t">
+                    <tr key={r.row_key} className="border-t">
                       <td className="p-2 font-medium sticky left-0 bg-background z-10">
                         {r.engine.manufacturer} {r.engine.model}
                       </td>

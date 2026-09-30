@@ -24,8 +24,11 @@ export default async function EngineTypesPage() {
     engineLabourPackageSupported(),
     suggestEngineLabourPackages(),
   ]);
+  // An engine with filter options gets its packages from them.
   const unlinked = labourLinkSupported
-    ? engineTypes.filter((e) => e.active && !e.labour_package_id).length
+    ? engineTypes.filter(
+        (e) => e.active && !e.labour_package_id && (e.filter_options ?? []).length === 0,
+      ).length
     : 0;
   const autoLinkable = suggestions.filter((s) => s.suggested_package_id != null).length;
 
@@ -53,6 +56,12 @@ export default async function EngineTypesPage() {
             you keep and the duplicate is removed. The kept engine&apos;s prices don&apos;t change.
           </li>
           <li>Changing the oil capacity or filter set recomputes every cell in that row.</li>
+          <li>
+            An engine sold with a choice of filter brand is still <strong>one engine</strong>. Open
+            it and add a <strong>filter option</strong> per brand: each option is a package, and
+            gets its own row and prices on the price lists. The options show in the Labour package
+            column here.
+          </li>
           <li>
             <strong>Labour package</strong> — the package whose <em>Labor charge</em> is this
             engine&apos;s oil-change labour. It&apos;s what the Labour column on the oil-detail

@@ -54,8 +54,9 @@ export function MergeEngineDialog({
   const [targetId, setTargetId] = useState("");
   const [pending, startTransition] = useTransition();
 
-  // Likely matches first: same manufacturer and same base model (the filter
-  // variants of that engine), then the rest of that manufacturer, then others.
+  // Likely matches first: same manufacturer and same base model (the same
+  // engine entered once per filter brand), then the rest of that manufacturer,
+  // then others.
   const { likely, sameMake, others } = useMemo(() => {
     const buckets: Record<"likely" | "sameMake" | "others", EngineType[]> = {
       likely: [],
@@ -118,7 +119,7 @@ export function MergeEngineDialog({
             <SelectContent className="max-h-80">
               {(
                 [
-                  ["Same engine, other filter variants", likely],
+                  ["Same engine, entered per filter brand", likely],
                   [`Other ${source?.manufacturer ?? ""} engines`, sameMake],
                   ["Other manufacturers", others],
                 ] as const

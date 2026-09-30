@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { wrapAction } from "@/lib/actions/_utils";
 import { uuidSchema } from "@/lib/schemas/common";
+import type { StockLimit } from "@/lib/utils/stock-limits";
 
 // ----------------------------------------------------------------------------
 // Inventory = per-location stock count for each catalogue part.
@@ -26,10 +27,8 @@ export interface InventoryPartRow {
   /** location_id -> on-hand qty (0 when no row exists). */
   qtyByLocation: Record<string, number>;
   total: number;
-  /** Reorder point across ALL locations; null = not set. */
-  min_stock_qty: number | null;
-  /** Overstock ceiling across ALL locations; null = not set. */
-  max_stock_qty: number | null;
+  /** location_id -> that shop's min / max. Only locations with one set. */
+  limitsByLocation: Record<string, StockLimit>;
 }
 
 // On-hand stock summary for a single part across all locations. Used to warn
@@ -52,6 +51,14 @@ export async function getPartStockSummary(
 export interface InventoryData {
   locations: InventoryLocation[];
   parts: InventoryPartRow[];
+  /** False until migration 0151 creates the per-location threshold tables. */
+  limits_supported: boolean;
+}
+
+/** "That table isn't there yet" — the thresholds ship in migration 0151. */
+function isMissingRelation(err: unknown): boolean {
+  const code = (err as { code?: string } | null)?.code;
+  return code === "PGRST205" || code === "42P01";
 }
 
 /**
@@ -82,40 +89,28 @@ export async function listInventory(): Promise<InventoryData> {
     part_number: string;
     brand: string;
     description: string | null;
-    min_stock_qty: number | null;
-    max_stock_qty: number | null;
     part_categories: { name: string } | { name: string }[] | null;
   };
+  type LimitRow = {
+    part_id: string;
+    location_id: string;
+    min_qty: number | null;
+    max_qty: number | null;
+  };
 
-  // 848 active parts and counting — page both catalogue and stock past the
-  // 1000-row response cap. min/max columns arrive with migration 0126; fall
-  // back without them for the deploy window where the build is live first
-  // (42703 = undefined_column — same pattern as plates_text in customers).
-  const fetchParts = async (includeLimits: boolean): Promise<PartRow[]> => {
-    const cols = includeLimits
-      ? "id, part_number, brand, description, min_stock_qty, max_stock_qty, part_categories:category_id(name)"
-      : "id, part_number, brand, description, part_categories:category_id(name)";
-    const rows = await fetchAllRows<PartRow>((from, to) =>
+  // 848 active parts and counting — page catalogue, stock and thresholds past
+  // the 1000-row response cap.
+  const [{ data: locs, error: locErr }, parts, stock, limits] = await Promise.all([
+    supabase.from("locations").select("id, name").eq("active", true).order("name"),
+    fetchAllRows<PartRow>((from, to) =>
       supabase
         .from("parts")
         // `category` is a FK now (category_id -> part_categories); pull its name.
-        .select(cols)
+        .select("id, part_number, brand, description, part_categories:category_id(name)")
         .eq("active", true)
         .order("part_number")
         .range(from, to),
-    );
-    return includeLimits
-      ? rows
-      : rows.map((p) => ({ ...p, min_stock_qty: null, max_stock_qty: null }));
-  };
-
-  const [{ data: locs, error: locErr }, parts, stock] = await Promise.all([
-    supabase.from("locations").select("id, name").eq("active", true).order("name"),
-    fetchParts(true).catch((e: { code?: string }) => {
-      if (e?.code !== "42703") throw e;
-      console.warn("[listInventory] min/max columns missing — has migration 0126 run?");
-      return fetchParts(false);
-    }),
+    ),
     fetchAllRows<{ part_id: string; location_id: string; qty: number }>((from, to) =>
       // Deterministic order across pages — without it rows could repeat or
       // vanish between chunks.
@@ -126,12 +121,35 @@ export async function listInventory(): Promise<InventoryData> {
         .order("location_id")
         .range(from, to),
     ),
+    // null = the table isn't there yet (deploy window before migration 0151).
+    fetchAllRows<LimitRow>((from, to) =>
+      supabase
+        .from("part_location_limits")
+        .select("part_id, location_id, min_qty, max_qty")
+        .order("part_id")
+        .order("location_id")
+        .range(from, to),
+    ).catch((e: unknown) => {
+      if (!isMissingRelation(e)) throw e;
+      console.warn("[listInventory] part_location_limits missing — has migration 0151 run?");
+      return null;
+    }),
   ]);
   if (locErr) throw locErr;
 
   const stockMap = new Map<string, number>();
   for (const s of stock) {
     stockMap.set(`${s.part_id}|${s.location_id}`, s.qty as number);
+  }
+
+  const limitsByPart = new Map<string, Record<string, StockLimit>>();
+  for (const l of limits ?? []) {
+    const slot = limitsByPart.get(l.part_id) ?? {};
+    slot[l.location_id] = {
+      min: l.min_qty != null ? Number(l.min_qty) : null,
+      max: l.max_qty != null ? Number(l.max_qty) : null,
+    };
+    limitsByPart.set(l.part_id, slot);
   }
 
   const locations: InventoryLocation[] = (locs ?? []).map((l) => ({
@@ -160,12 +178,11 @@ export async function listInventory(): Promise<InventoryData> {
       description: (p.description as string | null) ?? null,
       qtyByLocation,
       total,
-      min_stock_qty: p.min_stock_qty != null ? Number(p.min_stock_qty) : null,
-      max_stock_qty: p.max_stock_qty != null ? Number(p.max_stock_qty) : null,
+      limitsByLocation: limitsByPart.get(p.id) ?? {},
     };
   });
 
-  return { locations, parts: partsRows };
+  return { locations, parts: partsRows, limits_supported: limits != null };
 }
 
 const SetStockInput = z.object({
@@ -206,15 +223,15 @@ export interface InventoryOilRow {
   /** location_id -> on-hand litres (0 when no row exists). */
   qtyByLocation: Record<string, number>;
   total: number;
-  /** Reorder point in litres across ALL locations; null = not set. */
-  min_stock_litres: number | null;
-  /** Overstock ceiling in litres across ALL locations; null = not set. */
-  max_stock_litres: number | null;
+  /** location_id -> that shop's min / max in litres. Only locations with one set. */
+  limitsByLocation: Record<string, StockLimit>;
 }
 
 export interface OilInventoryData {
   locations: InventoryLocation[];
   oils: InventoryOilRow[];
+  /** False until migration 0151 creates the per-location threshold tables. */
+  limits_supported: boolean;
 }
 
 export async function listOilInventory(): Promise<OilInventoryData> {
@@ -225,40 +242,40 @@ export async function listOilInventory(): Promise<OilInventoryData> {
     code: string;
     name: string;
     is_engine_oil: boolean | null;
-    min_stock_litres: number | null;
-    max_stock_litres: number | null;
   };
 
-  // min/max columns arrive with migration 0126 — same deploy-window fallback
-  // as listInventory above.
-  const fetchOils = async (includeLimits: boolean): Promise<OilRow[]> => {
-    const cols = includeLimits
-      ? "id, code, name, is_engine_oil, min_stock_litres, max_stock_litres"
-      : "id, code, name, is_engine_oil";
-    const { data, error } = await supabase
+  const [
+    { data: locs, error: locErr },
+    { data: oils, error: oilErr },
+    { data: stock, error: stockErr },
+    { data: limits, error: limitErr },
+  ] = await Promise.all([
+    supabase.from("locations").select("id, name").eq("active", true).order("name"),
+    supabase
       .from("oil_types")
-      .select(cols)
+      .select("id, code, name, is_engine_oil")
       .eq("active", true)
-      .order("name");
-    if (error) throw error;
-    const rows = (data ?? []) as unknown as OilRow[];
-    return includeLimits
-      ? rows
-      : rows.map((o) => ({ ...o, min_stock_litres: null, max_stock_litres: null }));
-  };
-
-  const [{ data: locs, error: locErr }, oils, { data: stock, error: stockErr }] =
-    await Promise.all([
-      supabase.from("locations").select("id, name").eq("active", true).order("name"),
-      fetchOils(true).catch((e: { code?: string }) => {
-        if (e?.code !== "42703") throw e;
-        console.warn("[listOilInventory] min/max columns missing — has migration 0126 run?");
-        return fetchOils(false);
-      }),
-      supabase.from("oil_location_stock").select("oil_type_id, location_id, qty"),
-    ]);
+      .order("name"),
+    supabase.from("oil_location_stock").select("oil_type_id, location_id, qty"),
+    supabase
+      .from("oil_location_limits")
+      .select("oil_type_id, location_id, min_litres, max_litres"),
+  ]);
   if (locErr) throw locErr;
+  if (oilErr) throw oilErr;
   if (stockErr) throw stockErr;
+  // Same deploy-window fallback as listInventory: no table, no thresholds.
+  if (limitErr && !isMissingRelation(limitErr)) throw limitErr;
+
+  const limitsByOil = new Map<string, Record<string, StockLimit>>();
+  for (const l of limits ?? []) {
+    const slot = limitsByOil.get(l.oil_type_id as string) ?? {};
+    slot[l.location_id as string] = {
+      min: l.min_litres != null ? Number(l.min_litres) : null,
+      max: l.max_litres != null ? Number(l.max_litres) : null,
+    };
+    limitsByOil.set(l.oil_type_id as string, slot);
+  }
 
   const stockMap = new Map<string, number>();
   for (const s of stock ?? []) {
@@ -270,7 +287,7 @@ export async function listOilInventory(): Promise<OilInventoryData> {
     name: l.name as string,
   }));
 
-  const oilRows: InventoryOilRow[] = (oils ?? []).map((o) => {
+  const oilRows: InventoryOilRow[] = ((oils ?? []) as OilRow[]).map((o) => {
     const qtyByLocation: Record<string, number> = {};
     let total = 0;
     for (const loc of locations) {
@@ -285,12 +302,11 @@ export async function listOilInventory(): Promise<OilInventoryData> {
       is_engine_oil: (o.is_engine_oil as boolean) ?? false,
       qtyByLocation,
       total,
-      min_stock_litres: o.min_stock_litres != null ? Number(o.min_stock_litres) : null,
-      max_stock_litres: o.max_stock_litres != null ? Number(o.max_stock_litres) : null,
+      limitsByLocation: limitsByOil.get(o.id) ?? {},
     };
   });
 
-  return { locations, oils: oilRows };
+  return { locations, oils: oilRows, limits_supported: !limitErr };
 }
 
 const SetOilStockInput = z.object({
@@ -301,60 +317,73 @@ const SetOilStockInput = z.object({
 });
 
 // ----------------------------------------------------------------------------
-// Min / max thresholds — policy, not counts, so owner/co_owner only (matches
-// the parts_write / oil_types_write RLS). NULL clears a threshold.
+// Min / max thresholds, per location (0151) — policy, not counts, so
+// owner/co_owner only (matches the part_location_limits / oil_location_limits
+// RLS). NULL clears a threshold.
 // ----------------------------------------------------------------------------
 const limitValue = z
   .union([z.coerce.number().min(0).max(1_000_000), z.null()])
   .optional()
   .transform((v) => (v == null ? null : v));
 
-const SetPartStockLimitsInput = z
-  .object({ part_id: uuidSchema, min_stock_qty: limitValue, max_stock_qty: limitValue })
-  .refine(
-    (v) => v.min_stock_qty == null || v.max_stock_qty == null || v.min_stock_qty <= v.max_stock_qty,
-    { message: "Minimum can't be above maximum" },
-  );
+const NEEDS_0151 =
+  "Per-location min / max needs migration 0151_stock_limits_per_location.sql — apply it to the database, then try again.";
 
-export const setPartStockLimits = wrapAction({
-  schema: SetPartStockLimitsInput,
+const SetPartLocationLimitsInput = z
+  .object({ part_id: uuidSchema, location_id: uuidSchema, min: limitValue, max: limitValue })
+  .refine((v) => v.min == null || v.max == null || v.min <= v.max, {
+    message: "Minimum can't be above maximum",
+  });
+
+export const setPartLocationLimits = wrapAction({
+  schema: SetPartLocationLimitsInput,
   roles: ["owner", "co_owner"],
-  handler: async (input): Promise<{ ok: true }> => {
+  handler: async (input, profile): Promise<{ ok: true }> => {
     const supabase = await createClient();
-    const { error } = await supabase
-      .from("parts")
-      .update({
-        min_stock_qty: input.min_stock_qty == null ? null : Math.floor(input.min_stock_qty),
-        max_stock_qty: input.max_stock_qty == null ? null : Math.floor(input.max_stock_qty),
-      })
-      .eq("id", input.part_id);
-    if (error) throw error;
+    const { error } = await supabase.from("part_location_limits").upsert(
+      {
+        part_id: input.part_id,
+        location_id: input.location_id,
+        min_qty: input.min == null ? null : Math.floor(input.min),
+        max_qty: input.max == null ? null : Math.floor(input.max),
+        updated_by: profile.id,
+      },
+      { onConflict: "part_id,location_id" },
+    );
+    if (error) {
+      if (isMissingRelation(error)) throw new Error(NEEDS_0151);
+      throw error;
+    }
     revalidatePath("/inventory");
     return { ok: true };
   },
 });
 
-const SetOilStockLimitsInput = z
-  .object({ oil_type_id: uuidSchema, min_stock_litres: limitValue, max_stock_litres: limitValue })
-  .refine(
-    (v) =>
-      v.min_stock_litres == null || v.max_stock_litres == null || v.min_stock_litres <= v.max_stock_litres,
-    { message: "Minimum can't be above maximum" },
-  );
+const SetOilLocationLimitsInput = z
+  .object({ oil_type_id: uuidSchema, location_id: uuidSchema, min: limitValue, max: limitValue })
+  .refine((v) => v.min == null || v.max == null || v.min <= v.max, {
+    message: "Minimum can't be above maximum",
+  });
 
-export const setOilStockLimits = wrapAction({
-  schema: SetOilStockLimitsInput,
+export const setOilLocationLimits = wrapAction({
+  schema: SetOilLocationLimitsInput,
   roles: ["owner", "co_owner"],
-  handler: async (input): Promise<{ ok: true }> => {
+  handler: async (input, profile): Promise<{ ok: true }> => {
     const supabase = await createClient();
-    const { error } = await supabase
-      .from("oil_types")
-      .update({
-        min_stock_litres: input.min_stock_litres,
-        max_stock_litres: input.max_stock_litres,
-      })
-      .eq("id", input.oil_type_id);
-    if (error) throw error;
+    const { error } = await supabase.from("oil_location_limits").upsert(
+      {
+        oil_type_id: input.oil_type_id,
+        location_id: input.location_id,
+        min_litres: input.min,
+        max_litres: input.max,
+        updated_by: profile.id,
+      },
+      { onConflict: "oil_type_id,location_id" },
+    );
+    if (error) {
+      if (isMissingRelation(error)) throw new Error(NEEDS_0151);
+      throw error;
+    }
     revalidatePath("/inventory");
     return { ok: true };
   },

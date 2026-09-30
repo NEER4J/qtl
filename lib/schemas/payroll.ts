@@ -119,6 +119,15 @@ export const PayrollEntryInput = z.object({
   benefit_employee_deduction: moneySchema.default(0),
   benefit_employer_contribution: moneySchema.default(0),
   cheque_amount: moneySchema.default(0),
+  // Cheque number and the date the employee is paid (0152). Both optional: left
+  // out — a tab opened before this shipped — the entry keeps what it has.
+  cheque_no: z.string().trim().max(40).nullable().optional().or(z.literal("")),
+  pay_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date")
+    .nullable()
+    .optional()
+    .or(z.literal("")),
   notes: z.string().trim().max(500).nullable().optional().or(z.literal("")),
 }).merge(DeductionFlags);
 export type PayrollEntryInput = z.infer<typeof PayrollEntryInput>;

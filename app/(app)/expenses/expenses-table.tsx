@@ -1,7 +1,12 @@
+"use client";
+
 import Link from "next/link";
-import { Pencil } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { CreditCard, Pencil } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -11,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PayExpensesDialog } from "@/components/expenses/pay-expenses-dialog";
 import { StatusBadge } from "@/components/sales/status-badge";
 import type { ExpenseRow } from "@/lib/actions/expenses";
 import { formatDate, formatMoney } from "@/lib/utils/format";
@@ -23,6 +29,8 @@ export function ExpensesTable({
   page,
   pageSize,
   hiddenColumns,
+  canPay = false,
+  payableLocationIds = null,
 }: {
   rows: ExpenseRow[];
   total: number;
@@ -30,7 +38,45 @@ export function ExpensesTable({
   pageSize: number;
   /** Per-viewer hidden column keys from profiles.hidden_columns["expenses"]. */
   hiddenColumns?: string[];
+  /** The viewer may record expense payments — shows the select column. */
+  canPay?: boolean;
+  /** Shops they may pay for; null = every shop. */
+  payableLocationIds?: string[] | null;
 }) {
+  const router = useRouter();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [paying, setPaying] = useState(false);
+
+  // Only an expense that still owes something, at a shop the viewer can pay
+  // for, can be ticked.
+  const payableRows = useMemo(
+    () =>
+      canPay
+        ? rows.filter(
+            (r) =>
+              Number(r.balance) > 0 &&
+              (payableLocationIds == null || payableLocationIds.includes(r.location_id)),
+          )
+        : [],
+    [rows, canPay, payableLocationIds],
+  );
+  const payableIds = useMemo(() => new Set(payableRows.map((r) => r.id)), [payableRows]);
+  // The list re-renders with fresh rows after a payment or a page change, so
+  // the selection is read through what is payable now.
+  const selectedRows = payableRows.filter((r) => selectedIds.has(r.id));
+  const selectedBalance = selectedRows.reduce((a, r) => a + Number(r.balance), 0);
+  const allSelected = payableRows.length > 0 && selectedRows.length === payableRows.length;
+
+  const toggleOne = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleAll = () =>
+    setSelectedIds(allSelected ? new Set() : new Set(payableRows.map((r) => r.id)));
+
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const hidden = new Set(hiddenColumns ?? []);
   const show = (key: string) => !hidden.has(key);
@@ -48,17 +94,42 @@ export function ExpensesTable({
     show("balance"),
   ];
   const ALWAYS = 4; // Date, Loc, Status, Actions
-  const visibleCount = ALWAYS + HIDEABLE_CELLS.filter(Boolean).length;
+  const visibleCount = ALWAYS + HIDEABLE_CELLS.filter(Boolean).length + (canPay ? 1 : 0);
 
   const visibleTotal = rows.reduce((a, r) => a + Number(r.total ?? 0), 0);
   const visibleBalance = rows.reduce((a, r) => a + Number(r.balance ?? 0), 0);
 
   return (
     <div className="flex flex-col gap-3">
+      {selectedRows.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+          <span>
+            <strong>{selectedRows.length}</strong> selected ·{" "}
+            <span className="tabular-nums">{formatMoney(selectedBalance)}</span> owing
+          </span>
+          <Button size="sm" onClick={() => setPaying(true)}>
+            <CreditCard className="size-4" /> Mark as paid
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
+
       <div className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
+              {canPay && (
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={allSelected}
+                    disabled={payableRows.length === 0}
+                    onCheckedChange={toggleAll}
+                    aria-label="Select every unpaid expense on this page"
+                  />
+                </TableHead>
+              )}
               <TableHead className="w-28">Date</TableHead>
               {showCategoryCell && <TableHead>Category</TableHead>}
               {show("vendor") && <TableHead>Vendor</TableHead>}
@@ -85,7 +156,18 @@ export function ExpensesTable({
               </TableRow>
             ) : (
               rows.map((r) => (
-                <TableRow key={r.id}>
+                <TableRow key={r.id} data-state={selectedIds.has(r.id) && payableIds.has(r.id) ? "selected" : undefined}>
+                  {canPay && (
+                    <TableCell>
+                      {payableIds.has(r.id) && (
+                        <Checkbox
+                          checked={selectedIds.has(r.id)}
+                          onCheckedChange={() => toggleOne(r.id)}
+                          aria-label={`Select expense ${r.invoice_no ?? formatDate(r.expense_date)}`}
+                        />
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell>{formatDate(r.expense_date)}</TableCell>
                   {showCategoryCell && (
                     <TableCell>
@@ -139,7 +221,7 @@ export function ExpensesTable({
             <TableFooter>
               <TableRow>
                 <TableCell
-                  colSpan={1 + (showCategoryCell ? 1 : 0) + (show("vendor") ? 1 : 0) + (show("invoice_no") ? 1 : 0) + 1}
+                  colSpan={(canPay ? 1 : 0) + 1 + (showCategoryCell ? 1 : 0) + (show("vendor") ? 1 : 0) + (show("invoice_no") ? 1 : 0) + 1}
                   className="text-right text-xs text-muted-foreground"
                 >
                   Page totals
@@ -164,6 +246,20 @@ export function ExpensesTable({
       </div>
 
       {pageCount > 1 && <ListPagination page={page} pageCount={pageCount} total={total} pageSize={pageSize} />}
+
+      <PayExpensesDialog
+        open={paying}
+        onOpenChange={setPaying}
+        expenses={selectedRows.map((r) => ({
+          id: r.id,
+          label: [r.vendor_name ?? r.vendor_name_snapshot ?? r.category_name ?? "Expense", r.invoice_no ? `#${r.invoice_no}` : formatDate(r.expense_date)].join(" · "),
+          balance: Number(r.balance),
+        }))}
+        onPaid={() => {
+          setSelectedIds(new Set());
+          router.refresh();
+        }}
+      />
     </div>
   );
 }

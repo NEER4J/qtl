@@ -387,6 +387,8 @@ export interface SalesJob {
   payment_mode: PaymentMode | null;
   payment_status: PaymentStatus;
   engine_type_id: string | null;
+  /** Filter option the oil change was sold with; absent before migration 0150. */
+  engine_option_id?: string | null;
   oil_type_id: string | null;
   oil_container: 'bulk' | 'gallon' | null;
   auto_priced_at: string | null;
@@ -664,6 +666,9 @@ export interface PayrollEntry {
   apply_vacation: boolean;
   apply_wsib: boolean;
   cheque_amount: number;
+  /** Cheque number and date paid (0152). Absent before that migration. */
+  cheque_no?: string | null;
+  pay_date?: string | null;
   cash_total: number;
   net_pay: number;
   notes: string | null;
@@ -840,8 +845,26 @@ export interface EngineType {
    * applied yet — undefined then, null when applied but unlinked.
    */
   labour_package_id?: string | null;
+  /**
+   * The filter brands this engine is sold with (migration 0150). Only on reads
+   * that join them; empty for an engine sold one way, which uses
+   * `labour_package_id` instead.
+   */
+  filter_options?: EngineFilterOption[];
   created_at: string;
   updated_at: string;
+}
+
+/** One way an engine is sold: a package, named by its filter brand. */
+export interface EngineFilterOption {
+  id: string;
+  engine_type_id: string;
+  package_id: string;
+  /** Shown after the engine name: "With Cat Filter". */
+  label: string;
+  /** Only when this filter changes the fill; null = the engine's capacity. */
+  oil_capacity_litres: number | null;
+  sort_order: number;
 }
 
 export interface VolumeTier {
@@ -908,6 +931,8 @@ export interface Part {
 export interface EngineFilter {
   id: string;
   engine_type_id: string;
+  /** Set when the filter belongs to one filter option of the engine (0150). */
+  engine_option_id?: string | null;
   part_id: string;
   quantity: number;
 }

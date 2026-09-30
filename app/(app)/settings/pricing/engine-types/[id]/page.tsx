@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHelp } from "@/components/help/page-help";
 import { requirePage } from "@/lib/auth/require";
-import { getEngineTypeDetail } from "@/lib/actions/pricing";
+import { getEngineTypeDetail, listLabourPackageOptions } from "@/lib/actions/pricing";
 
 import { EngineDetailHeader } from "./engine-detail-header";
+import { EngineFilterOptionsEditor } from "./engine-filter-options-editor";
 import { EngineFiltersEditor } from "./engine-filters-editor";
 
 export const dynamic = "force-dynamic";
@@ -21,10 +22,13 @@ export default async function EngineTypeDetailPage({
 }) {
   await requirePage("settings_pricing");
   const { id } = await params;
-  const detail = await getEngineTypeDetail(id);
+  const [detail, packages] = await Promise.all([
+    getEngineTypeDetail(id),
+    listLabourPackageOptions(),
+  ]);
   if (!detail) notFound();
 
-  const { engine, filters } = detail;
+  const { engine, filters, options } = detail;
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,17 +69,54 @@ export default async function EngineTypeDetailPage({
             engine instead (its filter items, at the package&apos;s quantities), and only uses the
             filters here when the package lists none. Keep the two in step.
           </li>
+          <li>
+            <strong>Filter options</strong> — for an engine sold with a choice of filter brand
+            (Cat or Fleetguard, say). It stays one engine; each option is a package, and gets its
+            own row and its own prices on the oil-change grid, oil detail, print list and sales
+            form. An engine sold one way has none.
+          </li>
         </ul>
       </PageHelp>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Filters on this engine</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <EngineFiltersEditor engineId={engine.id} filters={filters} />
-        </CardContent>
-      </Card>
+      {detail.options_supported && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Filter options</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EngineFilterOptionsEditor engine={engine} options={options} packages={packages} />
+          </CardContent>
+        </Card>
+      )}
+
+      {options.length === 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Filters on this engine</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EngineFiltersEditor
+              engineId={engine.id}
+              filters={filters.filter((f) => !f.engine_option_id)}
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        options.map((o) => (
+          <Card key={o.id}>
+            <CardHeader>
+              <CardTitle className="text-base">Filters — {o.label}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <EngineFiltersEditor
+                engineId={engine.id}
+                optionId={o.id}
+                filters={filters.filter((f) => f.engine_option_id === o.id)}
+              />
+            </CardContent>
+          </Card>
+        ))
+      )}
     </div>
   );
 }

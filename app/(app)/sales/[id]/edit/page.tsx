@@ -161,6 +161,7 @@ export default async function EditSalesJobPage({
           credit_applied: job.credit_applied?.toString() ?? "0",
           credited_from_job_id: job.credited_from_job_id ?? null,
           engine_type_id: job.engine_type_id ?? "",
+          engine_option_id: job.engine_option_id ?? "",
           oil_type_id: job.oil_type_id ?? "",
           oil_container: job.oil_container ?? "",
           auto_priced_at: job.auto_priced_at,

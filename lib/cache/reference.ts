@@ -23,8 +23,8 @@ import { createClient } from "@/lib/supabase/server";
  *     every signed-in user sees byte-identical rows. Verified at the time of
  *     writing for: locations, service_types, expense_categories,
  *     expense_subcategories, app_settings (0007), oil_types, engine_types,
- *     service_costs (0015), part_categories, part_brands (0020) and
- *     technicians (0065).
+ *     service_costs (0015), part_categories, part_brands (0020),
+ *     technicians (0065) and engine_filter_options (0150).
  *
  *  2. The cached value must be role-independent. Cache the RAW rows, never a
  *     role-filtered projection. This is why `parts` is deliberately absent:
@@ -243,6 +243,34 @@ export const getCachedActiveEngineTypes = cachedReference(
     return data ?? [];
   },
 );
+
+/**
+ * Every engine's filter options (migration 0150) — read by all authenticated
+ * users, like engine_types. A missing table THROWS out of the cached read so
+ * the "not migrated yet" answer is never cached: the wrapper below turns it
+ * into [] per request, and the options appear as soon as the table does.
+ */
+const cachedEngineFilterOptions = cachedReference(
+  "engine-filter-options",
+  REFERENCE_TAGS.pricing,
+  async (db) => {
+    const { data, error } = await db
+      .from("engine_filter_options")
+      .select("id, engine_type_id, package_id, label, oil_capacity_litres, sort_order");
+    if (error) throw error;
+    return data ?? [];
+  },
+);
+
+export async function getCachedEngineFilterOptions() {
+  try {
+    return await cachedEngineFilterOptions();
+  } catch (error) {
+    const code = (error as { code?: string } | null)?.code;
+    if (code === "PGRST205" || code === "42P01") return [];
+    throw error;
+  }
+}
 
 export const getCachedActivePartCategories = cachedReference(
   // v2: the select widened to `*` for cost_bucket (0147). unstable_cache keys on

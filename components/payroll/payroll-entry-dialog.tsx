@@ -112,6 +112,8 @@ export function PayrollEntryDialog({
           benefit_employee_deduction: existing.benefit_employee_deduction,
           benefit_employer_contribution: existing.benefit_employer_contribution,
           cheque_amount: existing.cheque_amount,
+          cheque_no: existing.cheque_no ?? "",
+          pay_date: existing.pay_date ?? "",
           // The stored amounts, even when this user can't see them — so editing
           // hours never recalculates EI/CPP someone typed in.
           ei_employee: Number(existing.ei_employee) || 0,
@@ -145,6 +147,8 @@ export function PayrollEntryDialog({
           benefit_employee_deduction: 0,
           benefit_employer_contribution: 0,
           cheque_amount: 0,
+          cheque_no: "",
+          pay_date: "",
           // A hidden pair is left out, so the server calculates it from the rates.
           ei_employee: hideEmployeeDeductions ? undefined : 0,
           cpp_employee: hideEmployeeDeductions ? undefined : 0,
@@ -479,6 +483,49 @@ export function PayrollEntryDialog({
               <div className="grid grid-cols-2 gap-4">
                 <NumberField name="benefit_employee_deduction" label="Employee deduction ($)" control={form.control} />
                 <NumberField name="benefit_employer_contribution" label="Employer contribution ($)" control={form.control} />
+              </div>
+            </Fieldset>
+
+            <Fieldset legend="Payment">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="pay_date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-1">
+                        Pay date
+                        <InfoTip>
+                          The date the employee is paid for this period. Prints on the pay stub
+                          and the register. Leave blank until it is known.
+                        </InfoTip>
+                      </FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} value={field.value ?? ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="cheque_no"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-1">
+                        Cheque no.
+                        <InfoTip>
+                          The number of the cheque this pay goes out on. Leave blank when paid by
+                          e-transfer, direct deposit or cash.
+                        </InfoTip>
+                      </FormLabel>
+                      <FormControl>
+                        <Input {...field} value={field.value ?? ""} placeholder="e.g. 001245" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
             </Fieldset>
 

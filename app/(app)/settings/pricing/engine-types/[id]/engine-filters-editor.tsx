@@ -34,9 +34,12 @@ import { cn } from "@/lib/utils";
 
 export function EngineFiltersEditor({
   engineId,
+  optionId,
   filters,
 }: {
   engineId: string;
+  /** The filter option these filters belong to, on an engine that has them. */
+  optionId?: string | null;
   filters: EngineFilterRow[];
 }) {
   const [adding, setAdding] = useState(false);
@@ -83,6 +86,7 @@ export function EngineFiltersEditor({
     startSaveTransition(async () => {
       const res = await upsertEngineFilter({
         engine_type_id: engineId,
+        engine_option_id: optionId ?? null,
         part_id: selectedPart.id,
         quantity: qty,
       });
@@ -105,6 +109,7 @@ export function EngineFiltersEditor({
     startSaveTransition(async () => {
       const res = await upsertEngineFilter({
         engine_type_id: engineId,
+        engine_option_id: optionId ?? null,
         part_id: row.part_id,
         quantity: qty,
       });
@@ -142,7 +147,7 @@ export function EngineFiltersEditor({
             {filters.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground py-6">
-                  No filters on this engine yet. Add one below.
+                  No filters here yet. Add one below.
                 </TableCell>
               </TableRow>
             ) : (

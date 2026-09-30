@@ -36,7 +36,7 @@ import { AddExpensePaymentInput } from "@/lib/schemas/expenses";
 import type { PaymentMode } from "@/lib/db/types";
 import { todayISO } from "@/lib/utils/format";
 
-const PAYMENT_MODES: { value: PaymentMode; label: string }[] = [
+export const PAYMENT_MODES: { value: PaymentMode; label: string }[] = [
   { value: "cash", label: "Cash" },
   { value: "cheque", label: "Cheque" },
   { value: "debit", label: "Debit" },

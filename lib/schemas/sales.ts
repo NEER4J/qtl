@@ -142,6 +142,7 @@ export const SalesJobInput = z
       .or(z.literal("")),
 
     engine_type_id: z.string().uuid().nullable().optional(),
+    engine_option_id: z.string().uuid().nullable().optional(),
     oil_type_id: z.string().uuid().nullable().optional(),
     oil_container: z.enum(["bulk", "gallon"]).nullable().optional(),
     auto_priced_at: z.string().nullable().optional(),

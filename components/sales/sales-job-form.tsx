@@ -127,6 +127,8 @@ interface FormValues {
   credited_from_job_id: string | null;
   payment_mode: PaymentMode | "";
   engine_type_id: string;
+  /** The filter option, on an engine sold with a choice of filter brand. */
+  engine_option_id: string;
   oil_type_id: string;
   oil_container: "bulk" | "gallon" | "";
 }
@@ -303,6 +305,7 @@ export function SalesJobForm({
     credited_from_job_id: initial?.credited_from_job_id ?? null,
     payment_mode: initial?.payment_mode ?? "oc",
     engine_type_id: initial?.engine_type_id ?? "",
+    engine_option_id: initial?.engine_option_id ?? "",
     oil_type_id: initial?.oil_type_id ?? "",
     oil_container: initial?.oil_container ?? "",
   };
@@ -445,6 +448,7 @@ export function SalesJobForm({
   // --------------------------------------------------------------------------
   const serviceTypeId = useWatch({ control: form.control, name: "service_type_id" });
   const engineTypeId = useWatch({ control: form.control, name: "engine_type_id" });
+  const engineOptionId = useWatch({ control: form.control, name: "engine_option_id" });
   const oilTypeId = useWatch({ control: form.control, name: "oil_type_id" });
   const oilContainer = useWatch({ control: form.control, name: "oil_container" });
 
@@ -479,16 +483,33 @@ export function SalesJobForm({
 
   const isOilChange = serviceTypes.find((s) => s.id === serviceTypeId)?.code === "OC";
 
+  // An engine sold with a choice of filter brand has one price per option, so
+  // the filter has to be picked too. Most engines have no options.
+  const filterOptions = useMemo(
+    () => engineTypes.find((e) => e.id === engineTypeId)?.filter_options ?? [],
+    [engineTypes, engineTypeId],
+  );
+  // A filter picked for one engine means nothing on another.
+  useEffect(() => {
+    if (engineOptionId && !filterOptions.some((o) => o.id === engineOptionId)) {
+      form.setValue("engine_option_id", "", { shouldDirty: true });
+    }
+  }, [engineOptionId, filterOptions, form]);
+
   useEffect(() => {
     if (!isOilChange) return;
     if (itemsHaveRows) return;
     if (!engineTypeId || !oilTypeId || !oilContainer) return;
+    // No price without the filter, and none for a filter left over from the
+    // engine picked before (the effect above is about to clear it).
+    if (filterOptions.length > 0 && !filterOptions.some((o) => o.id === engineOptionId)) return;
     // Editing a saved job: only re-price once someone changes the engine, oil
     // or container. Opening an old oil-change job used to overwrite its saved
     // sub total with today's catalogue price the moment the page loaded.
     if (
       mode === "edit" &&
       engineTypeId === (initial?.engine_type_id ?? "") &&
+      engineOptionId === (initial?.engine_option_id ?? "") &&
       oilTypeId === (initial?.oil_type_id ?? "") &&
       oilContainer === (initial?.oil_container ?? "")
     ) {
@@ -498,6 +519,7 @@ export function SalesJobForm({
     (async () => {
       const res = await lookupOilChangePrice({
         engine_type_id: engineTypeId,
+        engine_option_id: engineOptionId || null,
         oil_type_id: oilTypeId,
         oil_container: oilContainer as "bulk" | "gallon",
       });
@@ -513,7 +535,7 @@ export function SalesJobForm({
       setLastAutoPrice(formatted);
     })();
     return () => { cancelled = true; };
-  }, [isOilChange, itemsHaveRows, engineTypeId, oilTypeId, oilContainer, appliedSurcharge, form, mode, initial?.engine_type_id, initial?.oil_type_id, initial?.oil_container]);
+  }, [isOilChange, itemsHaveRows, engineTypeId, engineOptionId, filterOptions, oilTypeId, oilContainer, appliedSurcharge, form, mode, initial?.engine_type_id, initial?.engine_option_id, initial?.oil_type_id, initial?.oil_container]);
 
   // --------------------------------------------------------------------------
   // Customer picker sync — billing_name, plate, contact, email auto-fill
@@ -751,6 +773,7 @@ export function SalesJobForm({
         start_time: values.start_time || null,
         end_time: values.end_time || null,
         engine_type_id: values.engine_type_id || null,
+        engine_option_id: values.engine_option_id || null,
         oil_type_id: values.oil_type_id || null,
         oil_container: values.oil_container || null,
         auto_priced_at: stillAutoPriced ? new Date().toISOString() : null,
@@ -789,7 +812,7 @@ export function SalesJobForm({
           "odometer", "service_type_id", "advisor_name",
           "comments", "sub_total", "hst", "total", "paid_amount", "payment_mode",
           "free_grease_applied", "free_grease_override_reason",
-          "engine_type_id", "oil_type_id", "oil_container",
+          "engine_type_id", "engine_option_id", "oil_type_id", "oil_container",
         ]);
         const stray: string[] = [];
         for (const issue of parsed.error.issues) {
@@ -1414,6 +1437,36 @@ export function SalesJobForm({
                       </FormItem>
                     )}
                   />
+                  {filterOptions.length > 0 && (
+                    <FormField
+                      control={form.control}
+                      name="engine_option_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Filter</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger><SelectValue placeholder="Select filter" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {filterOptions.map((o) => (
+                                <SelectItem key={o.id} value={o.id}>
+                                  {o.label}
+                                  {o.oil_capacity_litres != null && ` (${o.oil_capacity_litres}L)`}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {!field.value && (
+                            <p className="text-[10px] text-muted-foreground">
+                              This engine is priced by filter — pick one to fill the sub total.
+                            </p>
+                          )}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                   <FormField
                     control={form.control}
                     name="oil_type_id"

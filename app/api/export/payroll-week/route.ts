@@ -71,6 +71,8 @@ export async function GET(req: Request) {
         }
       : {}),
     exemptions: deductionExemptions(e).join(" / "),
+    pay_date: e.pay_date ?? "",
+    cheque_no: e.cheque_no ?? "",
     cheque_amount: e.cheque_amount,
     cash_total: e.cash_total,
     ...(show("net_pay") ? { net_pay: e.net_pay } : {}),
