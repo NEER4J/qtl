@@ -249,7 +249,7 @@ export const createExpense = wrapAction({
     // their home location. RLS blocks it either way; this keeps the error a
     // sensible default instead of a policy violation.
     const locationId =
-      profile.role === "staff" && !canAccessLocation(profile, input.location_id)
+      (profile.role === "staff" || profile.role === "technician") && !canAccessLocation(profile, input.location_id)
         ? profile.location_id ?? input.location_id
         : input.location_id;
 

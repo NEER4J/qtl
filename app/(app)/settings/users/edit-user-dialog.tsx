@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useTransition } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useState, useTransition } from "react";
+import { useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 
@@ -71,6 +71,7 @@ export function EditUserDialog({
   otherUsers?: UserListRow[];
 }) {
   const [isPending, startTransition] = useTransition();
+  const [tab, setTab] = useState("profile");
 
   const form = useForm<UpdateUserInput>({
     resolver: zodResolver(UpdateUserInput),
@@ -93,6 +94,7 @@ export function EditUserDialog({
 
   useEffect(() => {
     if (user && open) {
+      setTab("profile");
       // The synthetic email for username users shouldn't be shown in the form's
       // Email field. Hide it from the UI when the role uses username login.
       const isUsernameUser = isUsernameRole(user.role) && !!user.username;
@@ -108,7 +110,9 @@ export function EditUserDialog({
         location_id: user.location_id,
         can_enter_expenses: user.can_enter_expenses,
         cross_location: user.cross_location,
-        location_ids: user.location_ids,
+        // The schema needs 2+ entries in Multiple mode; an older one-entry list
+        // would fail a check with no field to show it on and block Save.
+        location_ids: (user.location_ids?.length ?? 0) >= 2 ? user.location_ids : null,
         active: user.active,
         allowed_pages: user.allowed_pages,
         hidden_columns: user.hidden_columns ?? {},
@@ -124,6 +128,15 @@ export function EditUserDialog({
   const showExpensesFlag = role === "staff" || role === "technician";
   const showCrossLocation =
     role === "manager" || role === "supervisor" || role === "staff" || role === "technician" || role === "employee";
+
+  // A failed check on a field the user can't see (the other tab, or one with
+  // no input like location_ids) used to make Save look dead. Say what's wrong
+  // and bring the Profile tab, where nearly every check lives, into view.
+  const onInvalid = (errors: FieldErrors<UpdateUserInput>) => {
+    const first = Object.values(errors).find((e) => e?.message);
+    toast.error(first?.message ? String(first.message) : "Please fix the highlighted fields.");
+    setTab("profile");
+  };
 
   const onSubmit = (values: UpdateUserInput) => {
     startTransition(async () => {
@@ -157,8 +170,8 @@ export function EditUserDialog({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <Tabs defaultValue="profile">
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
+            <Tabs value={tab} onValueChange={setTab}>
               <TabsList>
                 <TabsTrigger value="profile">Profile</TabsTrigger>
                 <TabsTrigger value="permissions">Permissions</TabsTrigger>

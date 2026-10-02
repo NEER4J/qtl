@@ -30,12 +30,25 @@ export async function requireProfile(): Promise<Profile> {
 }
 
 /**
- * Require the user to hold one of the given roles.
+ * Clone roles, mirroring private.current_role() in migration 0074: supervisor
+ * acts as manager and technician as staff. Without this, a role list like
+ * ["owner", "co_owner", "manager", "staff"] rejected supervisors and
+ * technicians even though their Sales page and RLS let them write.
+ */
+const RLS_ROLE_ALIASES: Partial<Record<UserRole, UserRole>> = {
+  supervisor: "manager",
+  technician: "staff",
+};
+
+/**
+ * Require the user to hold one of the given roles (clone roles count as the
+ * role they clone).
  * Throws AuthorizationError (caller can map to 403) if mismatched.
  */
 export async function requireRole(...roles: UserRole[]): Promise<Profile> {
   const profile = await requireProfile();
-  if (!roles.includes(profile.role)) {
+  const alias = RLS_ROLE_ALIASES[profile.role];
+  if (!roles.includes(profile.role) && !(alias && roles.includes(alias))) {
     throw new AuthorizationError(
       `Role ${profile.role} is not permitted (requires ${roles.join(", ")})`,
     );

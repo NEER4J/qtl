@@ -36,16 +36,17 @@ import type {
 } from "@/lib/db/types";
 
 // Owner / co_owner / manager / staff can consciously sell past a stock
-// shortfall. Accountant cannot. `supervisor` is a manager clone at the app
-// layer too (RLS aliases it, but role checks in JS see the literal stored
-// value, so it must be listed explicitly — see 0074).
+// shortfall. Accountant cannot. `supervisor` / `technician` are manager /
+// staff clones at the app layer too (RLS aliases them, but role checks in JS
+// see the literal stored value, so they must be listed explicitly — see 0074).
 function canOverrideStock(profile: Profile): boolean {
   return (
     profile.role === "owner" ||
     profile.role === "co_owner" ||
     profile.role === "manager" ||
     profile.role === "supervisor" ||
-    profile.role === "staff"
+    profile.role === "staff" ||
+    profile.role === "technician"
   );
 }
 
@@ -361,7 +362,7 @@ export const createSalesJob = wrapAction({
     // their home location. RLS blocks it either way; this keeps the error a
     // sensible default instead of a policy violation.
     const locationId =
-      profile.role === "staff" && !canAccessLocation(profile, input.location_id)
+      (profile.role === "staff" || profile.role === "technician") && !canAccessLocation(profile, input.location_id)
         ? profile.location_id ?? input.location_id
         : input.location_id;
 

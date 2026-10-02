@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 
@@ -70,6 +70,7 @@ export function InviteUserDialog({
   otherUsers?: UserListRow[];
 }) {
   const [isPending, startTransition] = useTransition();
+  const [tab, setTab] = useState("profile");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [confirmError, setConfirmError] = useState<string | null>(null);
 
@@ -104,6 +105,15 @@ export function InviteUserDialog({
     form.reset();
     setConfirmPassword("");
     setConfirmError(null);
+  };
+
+  // A failed check on a field the user can't see (the other tab, or one with
+  // no input like location_ids) used to make Save look dead. Say what's wrong
+  // and bring the Profile tab, where nearly every check lives, into view.
+  const onInvalid = (errors: FieldErrors<InviteUserInput>) => {
+    const first = Object.values(errors).find((e) => e?.message);
+    toast.error(first?.message ? String(first.message) : "Please fix the highlighted fields.");
+    setTab("profile");
   };
 
   const onSubmit = (values: InviteUserInput) => {
@@ -151,8 +161,8 @@ export function InviteUserDialog({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <Tabs defaultValue="profile">
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
+            <Tabs value={tab} onValueChange={setTab}>
               <TabsList>
                 <TabsTrigger value="profile">Profile</TabsTrigger>
                 <TabsTrigger value="permissions">Permissions</TabsTrigger>
