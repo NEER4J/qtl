@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AddPaymentDialog } from "@/components/sales/add-payment-dialog";
+import { ReversePaymentButton } from "@/components/sales/reverse-payment-button";
 import { DownloadInvoiceButton } from "@/components/sales/download-invoice-button";
 import { StatusBadge } from "@/components/sales/status-badge";
 import { PageHelp } from "@/components/help/page-help";
@@ -58,6 +59,10 @@ export default async function SalesJobDetailPage({
     ((profile.role === "owner" || profile.role === "co_owner") ||
       profile.role === "accountant" ||
       canAccessLocation(profile, job.location_id));
+
+  // Reversing a payment re-opens the balance — owner / co_owner only (RLS 0153).
+  const canReversePayment =
+    (profile.role === "owner" || profile.role === "co_owner") && !job.deactivated_at;
 
   return (
     <div className="flex flex-col gap-6">
@@ -108,6 +113,7 @@ export default async function SalesJobDetailPage({
           <li><strong>Download PDF</strong> — a branded invoice PDF you can email or print for the customer.</li>
           <li><strong>Edit</strong> — owners, and managers / supervisors / staff at the same shop, can make changes. Every edit is recorded in the audit log so you know who changed what.</li>
           <li><strong>Record payment</strong> — appears when there&apos;s an unpaid balance. You can add partial payments over time; the status moves from Outstanding to Partial to Paid automatically.</li>
+          <li><strong>Reverse</strong> — owners can take back a payment (a bounced cheque, or one posted to the wrong invoice). The invoice goes back to Outstanding or Partial; the reversal is kept in the audit log.</li>
         </ul>
         <p>
           Staff see a read-only version. Deactivated invoices are tagged and hidden from lists and reports, but kept in the system for your records.
@@ -346,6 +352,7 @@ export default async function SalesJobDetailPage({
                   <TableHead>Transaction</TableHead>
                   <TableHead>Notes</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
+                  {canReversePayment && <TableHead className="w-24" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -358,6 +365,14 @@ export default async function SalesJobDetailPage({
                     <TableCell className="text-right tabular-nums">
                       {formatMoney(p.amount)}
                     </TableCell>
+                    {canReversePayment && (
+                      <TableCell className="text-right">
+                        <ReversePaymentButton
+                          paymentId={p.id}
+                          label={`The ${formatMoney(p.amount)} ${PAYMENT_MODE_LABELS[p.mode] ?? p.mode} payment${p.transaction_id ? ` (${p.transaction_id})` : ""}`}
+                        />
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

@@ -23,6 +23,7 @@ import {
   AddSalesPaymentInput,
   DeactivateSalesJobInput,
   ListSalesJobsInput,
+  ReverseSalesPaymentInput,
   SalesJobInput,
   UpdateSalesJobInput,
 } from "@/lib/schemas/sales";
@@ -799,6 +800,63 @@ export const addSalesPayment = wrapAction({
     revalidatePath("/sales");
     revalidatePath("/dashboard");
     return data as SalesPaymentRow;
+  },
+});
+
+// ----------------------------------------------------------------------------
+// Reverse a payment (owner only — also enforced by RLS, 0153)
+// ----------------------------------------------------------------------------
+// A bounced cheque or a payment posted to the wrong invoice. The row is
+// removed; the rollup trigger re-totals the job (back to Partial / Outstanding)
+// and the audit log keeps the removed row.
+export const reverseSalesPayment = wrapAction({
+  schema: ReverseSalesPaymentInput,
+  roles: ["owner", "co_owner"],
+  handler: async (input, profile): Promise<{ id: string }> => {
+    const supabase = await createClient();
+    const { data: payment, error: fetchErr } = await supabase
+      .from("sales_payments")
+      .select("sales_job_id")
+      .eq("id", input.id)
+      .single();
+    if (fetchErr) throw fetchErr;
+
+    const { data: deleted, error } = await supabase
+      .from("sales_payments")
+      .delete()
+      .eq("id", input.id)
+      .select("id");
+    if (error) throw error;
+    // RLS filters silently — a refused delete looks like success with no rows.
+    if (!deleted || deleted.length === 0) {
+      throw new Error("You don't have permission to reverse this payment.");
+    }
+
+    // An overpayment on this job was posted as store credit (0127); re-sync so
+    // the credit drops with the payment.
+    const { data: job, error: jobErr } = await supabase
+      .from("sales_jobs")
+      .select("customer_id, total, credit_applied, invoice_no")
+      .eq("id", payment.sales_job_id)
+      .single();
+    if (jobErr) throw jobErr;
+    if (job?.customer_id) {
+      await syncJobCreditLedger(
+        supabase,
+        payment.sales_job_id,
+        job.customer_id,
+        Number(job.total),
+        Number(job.credit_applied ?? 0),
+        job.invoice_no as string,
+        profile.id,
+      );
+      revalidatePath(`/customers/${job.customer_id}`);
+    }
+
+    revalidatePath(`/sales/${payment.sales_job_id}`);
+    revalidatePath("/sales");
+    revalidatePath("/dashboard");
+    return { id: input.id };
   },
 });
 

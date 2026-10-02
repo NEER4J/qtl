@@ -260,3 +260,7 @@ export type ListSalesJobsInput = z.infer<typeof ListSalesJobsInput>;
 export const DeactivateSalesJobInput = z.object({
   id: z.string().uuid(),
 });
+
+export const ReverseSalesPaymentInput = z.object({
+  id: z.string().uuid(),
+});
