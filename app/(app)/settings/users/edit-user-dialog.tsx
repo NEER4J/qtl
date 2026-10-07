@@ -200,6 +200,15 @@ export function EditUserDialog({
                       <Select
                         onValueChange={(v) => {
                           field.onChange(v);
+                          // Page/action overrides belong to the role they were
+                          // picked under. A stored list beats role defaults
+                          // (effectiveAllowedPageKeys), so carrying one across a
+                          // role change left e.g. an Employee-turned-Staff user
+                          // with no Sales page. Start the new role from its
+                          // defaults; the matrix re-seeds (it's keyed on role).
+                          form.setValue("allowed_pages", null, { shouldDirty: true });
+                          form.setValue("hidden_columns", {}, { shouldDirty: true });
+                          form.setValue("allowed_actions", null, { shouldDirty: true });
                           // Manager & Supervisor default to all-locations;
                           // an explicit multi-location list is cleared so the
                           // two settings can't disagree.
