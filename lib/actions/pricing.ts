@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { requireProfile } from "@/lib/auth/require";
 import { wrapAction } from "@/lib/actions/_utils";
 import type {
@@ -442,7 +443,7 @@ export async function getOilChangeGrid(): Promise<{
     oilTypesRes,
     filtersRes,
     tiersRes,
-    overridesRes,
+    overrideRows,
     settingsRes,
     locksRes,
     filterOptions,
@@ -465,10 +466,11 @@ export async function getOilChangeGrid(): Promise<{
         .from("engine_filters")
         .select("*, parts:part_id(cost, mhsw_fee, service_costs:service_cost_id(cost))"),
       supabase.from("volume_tiers").select("oil_type_id, min_litres, premium"),
-      supabase
-        .from("engine_sell_prices")
-        .select("*")
-        .limit(10000),  // Supabase REST defaults to 1000; we have ~1400+ rows.
+      // ~1,400 rows and growing — past the 1000-row REST cap, which .limit()
+      // can't lift. Page through them (see fetchAllRows).
+      fetchAllRows((from, to) =>
+        supabase.from("engine_sell_prices").select("*").order("id").range(from, to),
+      ),
       supabase.from("app_settings").select("hst_rate").eq("id", 1).single(),
       // Live price locks (oil-detail page). A locked price beats the override
       // here exactly as it does in public.oil_change_price().
@@ -482,7 +484,6 @@ export async function getOilChangeGrid(): Promise<{
   if (oilTypesRes.error) throw oilTypesRes.error;
   if (filtersRes.error) throw filtersRes.error;
   if (tiersRes.error) throw tiersRes.error;
-  if (overridesRes.error) throw overridesRes.error;
   // Migration 0122 not applied yet → no locks exist, so carry on without them.
   if (locksRes.error && !isMissingRelation(locksRes.error)) throw locksRes.error;
   const hstRate = Number(settingsRes.data?.hst_rate ?? 0.13);
@@ -518,7 +519,7 @@ export async function getOilChangeGrid(): Promise<{
     sell_price: number;
   };
   const overrideMap = new Map<string, number>();
-  for (const o of (overridesRes.data ?? []) as OverrideRow[]) {
+  for (const o of overrideRows as OverrideRow[]) {
     overrideMap.set(
       `${engineRowKey(o.engine_type_id, o.engine_option_id)}|${o.oil_type_id}|${o.container}`,
       Number(o.sell_price),
@@ -882,7 +883,7 @@ export async function getOilDetail(
     oilTypesRes,
     filtersRes,
     tiersRes,
-    overridesRes,
+    overrideRows,
     matchEnginePackage,
     locksRes,
     filterOptions,
@@ -908,10 +909,13 @@ export async function getOilDetail(
         .from("engine_filters")
         .select("*, parts:part_id(cost, mhsw_fee, service_costs:service_cost_id(cost))"),
       supabase.from("volume_tiers").select("oil_type_id, min_litres, premium"),
-      supabase
-        .from("engine_sell_prices")
-        .select("*")
-        .limit(10000),  // Supabase REST defaults to 1000; we have ~1400+ rows.
+      // ~1,400 rows and growing — past the 1000-row REST cap, which .limit()
+      // can't lift. Page through them (see fetchAllRows). Reading only the
+      // first 1000 left every override past the cap invisible: those rows
+      // showed the cost-up .99 price and ignored every edit (client 2026-10-10).
+      fetchAllRows((from, to) =>
+        supabase.from("engine_sell_prices").select("*").order("id").range(from, to),
+      ),
       // Package labour + the fuel/grease that package consumes. The Labour
       // column shows the "Labor charge" of the package wired to the engine
       // (engine_types.labour_package_id, set in settings/pricing/engine-types).
@@ -927,7 +931,6 @@ export async function getOilDetail(
   if (oilTypesRes.error) throw oilTypesRes.error;
   if (filtersRes.error) throw filtersRes.error;
   if (tiersRes.error) throw tiersRes.error;
-  if (overridesRes.error) throw overridesRes.error;
   // Migration 0122 not applied yet → the page still renders, the lock UI just
   // reports itself unavailable (lock_supported below).
   const lockSupported = !locksRes.error;
@@ -979,7 +982,7 @@ export async function getOilDetail(
     sell_price: number;
   };
   const overrideMap = new Map<string, { id: string; price: number }>();
-  for (const o of (overridesRes.data ?? []) as OverrideRow[]) {
+  for (const o of overrideRows as OverrideRow[]) {
     overrideMap.set(
       `${engineRowKey(o.engine_type_id, o.engine_option_id)}|${o.oil_type_id}|${o.container}`,
       { id: o.id, price: Number(o.sell_price) },
@@ -2916,13 +2919,15 @@ export interface EngineSellPriceRow {
 
 export async function listEngineSellPrices(): Promise<EngineSellPriceRow[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("engine_sell_prices")
-    .select("*")
-    .order("engine_type_id")
-    .limit(10000);  // Supabase REST defaults to 1000; we have ~1400+ rows.
-  if (error) throw error;
-  return (data ?? []) as EngineSellPriceRow[];
+  // Past the 1000-row REST cap, which .limit() can't lift — page through.
+  return fetchAllRows<EngineSellPriceRow>((from, to) =>
+    supabase
+      .from("engine_sell_prices")
+      .select("*")
+      .order("engine_type_id")
+      .order("id")
+      .range(from, to),
+  );
 }
 
 const UpsertEngineSellPriceInput = z.object({

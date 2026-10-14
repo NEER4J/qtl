@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { wrapAction } from "@/lib/actions/_utils";
 import { uuidSchema } from "@/lib/schemas/common";
 import type { StockLimit } from "@/lib/utils/stock-limits";
@@ -61,26 +62,9 @@ function isMissingRelation(err: unknown): boolean {
   return code === "PGRST205" || code === "42P01";
 }
 
-/**
- * PostgREST caps any single response at 1000 rows, and part_location_stock is
- * past that (parts × locations). The old plain select silently dropped the
- * overflow, so hundreds of stock cells rendered as 0. Page through in chunks.
- */
-async function fetchAllRows<T>(
-  buildQuery: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>,
-): Promise<T[]> {
-  const CHUNK = 1000;
-  const all: T[] = [];
-  for (let from = 0; ; from += CHUNK) {
-    const { data, error } = await buildQuery(from, from + CHUNK - 1);
-    if (error) throw error;
-    const rows = ((data ?? []) as T[]);
-    all.push(...rows);
-    if (rows.length < CHUNK) break;
-  }
-  return all;
-}
-
+// part_location_stock is past the 1000-row REST cap (parts × locations) and
+// used to silently drop the overflow, so hundreds of stock cells rendered as 0
+// — hence fetchAllRows on every table here.
 export async function listInventory(): Promise<InventoryData> {
   const supabase = await createClient();
 
