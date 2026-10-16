@@ -34,7 +34,10 @@ export async function listAuditLog(filter: AuditLogFilter = {}): Promise<AuditLo
 
   let q = supabase
     .from("audit_log")
-    .select("*", { count: "exact" })
+    // "estimated": an exact count re-scans all ~220k rows on every page load
+    // (the read that hit the statement timeout). PostgREST still counts
+    // exactly when the filtered set is small, so filtered views stay precise.
+    .select("*", { count: "estimated" })
     .order("at", { ascending: false })
     .range(from, to);
 

@@ -2,9 +2,31 @@ import "server-only";
 
 import { cache } from "react";
 import { redirect } from "next/navigation";
+import type { JwtPayload } from "@supabase/supabase-js";
 
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/db/types";
+
+/**
+ * The signed-in user's verified JWT claims, or `null`. Cached per request.
+ *
+ * getClaims() checks the token's signature locally against the project's JWKS
+ * (cached in memory for 10 minutes), so it costs no round trip. getUser() asked
+ * the Auth server every time, and the (app) layout and getCurrentProfile() each
+ * called it, so every page paid two serial trips to the database region
+ * before its first query, and every server action paid one.
+ *
+ * Revocation still bites on the next request: a deactivated user fails
+ * `profile.active`, a deleted one has no profile row, and RLS re-verifies the
+ * same token on every query. Middleware has already refreshed an expired
+ * session by the time this runs.
+ */
+export const getAuthClaims = cache(async (): Promise<JwtPayload | null> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getClaims();
+  if (error || !data?.claims?.sub) return null;
+  return data.claims;
+});
 
 /** Every profile column the app reads, except the ones added by a migration
  *  that may not have run yet. Kept as one string so the primary read and the
@@ -17,18 +39,15 @@ const BASE_COLUMNS =
  * Returns `null` if the user isn't signed in or has no profile yet.
  */
 export const getCurrentProfile = cache(async (): Promise<Profile | null> => {
+  const claims = await getAuthClaims();
+  if (!claims) return null;
+  const userId = claims.sub;
+
   const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return null;
-
   const { data, error } = await supabase
     .from("profiles")
     .select(`${BASE_COLUMNS}, allowed_actions`)
-    .eq("id", user.id)
+    .eq("id", userId)
     .maybeSingle();
 
   // `allowed_actions` arrives with migration 0140. If the app is deployed
@@ -46,7 +65,7 @@ export const getCurrentProfile = cache(async (): Promise<Profile | null> => {
     const retry = await supabase
       .from("profiles")
       .select(BASE_COLUMNS)
-      .eq("id", user.id)
+      .eq("id", userId)
       .maybeSingle();
     if (retry.error) {
       console.error("getCurrentProfile:", retry.error.message);

@@ -6,7 +6,6 @@ import { Inter } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { PwaRegister } from "@/components/pwa-register";
 import { APP_CONFIG } from "@/config/app-config";
-import { AuthProvider } from "@/lib/auth/auth-context";
 import { ThemeProvider } from "next-themes";
 
 import "./globals.css";
@@ -49,11 +48,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           enableSystem
           disableTransitionOnChange
         >
-          <AuthProvider>
-            {children}
-            <Toaster />
-            <PwaRegister />
-          </AuthProvider>
+          {children}
+          <Toaster />
+          <PwaRegister />
         </ThemeProvider>
       </body>
     </html>

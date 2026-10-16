@@ -13,7 +13,9 @@ import {
   SearchCustomersInput,
   UpdateCustomerInput,
 } from "@/lib/schemas/customers";
-import type { Customer, SalesJob } from "@/lib/db/types";
+import type { Customer, SalesJob, Vehicle } from "@/lib/db/types";
+import { getCustomerCreditBalance } from "@/lib/actions/customer-credit-ledger";
+import { getCustomerVehicles } from "@/lib/actions/vehicles";
 import { digitsOnly } from "@/lib/utils/phone";
 import { orFilterValue } from "@/lib/utils/parts-search";
 
@@ -548,14 +550,15 @@ export async function getCustomerOutstanding(
   customerId: string,
 ): Promise<CustomerOutstanding> {
   const supabase = await createClient();
+  // Every open invoice, not just the five listed: the count and total are
+  // shown as the customer's whole balance. Shop-wide there are ~140 open.
   const { data, error } = await supabase
     .from("sales_jobs")
     .select("id, invoice_no, job_date, total, outstanding, payment_status")
     .eq("customer_id", customerId)
     .in("payment_status", ["outstanding", "partial"])
     .is("deactivated_at", null)
-    .order("job_date", { ascending: false })
-    .limit(5);
+    .order("job_date", { ascending: false });
   if (error) throw error;
 
   const rows = (data ?? []) as Array<{
@@ -570,8 +573,38 @@ export async function getCustomerOutstanding(
     customer_id: customerId,
     invoice_count: rows.length,
     outstanding_total: rows.reduce((sum, r) => sum + Number(r.outstanding ?? 0), 0),
-    recent: rows,
+    recent: rows.slice(0, 5),
   };
+}
+
+// ----------------------------------------------------------------------------
+// Everything the sales form loads for a picked customer, in one action.
+// Server actions run one at a time per tab, so the four separate calls it used
+// to make (vehicles, credit balance, invoice refs, outstanding) queued behind
+// each other, about one round trip each, and held up any picker opened next.
+// ----------------------------------------------------------------------------
+export interface CustomerSaleContext {
+  customer: Customer | null;
+  vehicles: Vehicle[];
+  creditBalance: number;
+  invoiceRefs: Pick<SalesJob, "id" | "invoice_no" | "job_date">[];
+  outstanding: CustomerOutstanding;
+}
+
+export async function getCustomerSaleContext(
+  customerId: string,
+  /** The job being edited: its own ledger rows don't count as credit. */
+  excludeJobId?: string,
+): Promise<CustomerSaleContext> {
+  const supabase = await createClient();
+  const [customer, vehicles, creditBalance, invoiceRefs, outstanding] = await Promise.all([
+    getCustomer(customerId),
+    getCustomerVehicles(customerId),
+    getCustomerCreditBalance(supabase, customerId, excludeJobId),
+    listCustomerInvoiceRefs(customerId, 30),
+    getCustomerOutstanding(customerId),
+  ]);
+  return { customer, vehicles, creditBalance, invoiceRefs, outstanding };
 }
 
 // ----------------------------------------------------------------------------

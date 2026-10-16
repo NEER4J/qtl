@@ -1,13 +1,9 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/auth/get-profile";
+import { getAuthClaims, getCurrentProfile } from "@/lib/auth/get-profile";
 import { defaultLandingPath } from "@/lib/permissions/registry";
 
 export default async function Home() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  if (!(await getAuthClaims())) redirect("/auth/login");
 
   // Send the signed-in user to a page they can actually reach. Without this,
   // login always pushed to /dashboard, which the (app) layout then bounced

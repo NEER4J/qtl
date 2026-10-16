@@ -8,8 +8,7 @@ import { TopProgressBar } from "@/components/top-progress-bar";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import { getCurrentProfile } from "@/lib/auth/get-profile";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthClaims, getCurrentProfile } from "@/lib/auth/get-profile";
 import { SearchDialog } from "@/components/sidebar/search-dialog";
 import { effectiveAllowedPageKeys, isAdminProfile, isPageAllowed } from "@/lib/permissions/check";
 import {
@@ -18,10 +17,8 @@ import {
 } from "@/lib/permissions/registry";
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  const claims = await getAuthClaims();
+  if (!claims) redirect("/auth/login");
 
   const profile = await getCurrentProfile();
   if (!profile) {
@@ -56,10 +53,10 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   const defaultOpen = cookieStore.get("sidebar_state")?.value === "true";
 
   const userData = {
-    id: user.id,
-    name: profile.full_name || user.email?.split("@")[0] || "User",
-    email: user.email || "",
-    avatar: (user.user_metadata?.avatar_url as string | undefined) || "",
+    id: claims.sub,
+    name: profile.full_name || claims.email?.split("@")[0] || "User",
+    email: claims.email || "",
+    avatar: (claims.user_metadata?.avatar_url as string | undefined) || "",
   };
 
   return (

@@ -5,6 +5,7 @@ import { MapPin } from "lucide-react";
 
 import { Separator } from "@/components/ui/separator";
 import { APP_CONFIG } from "@/config/app-config";
+import { AuthProvider } from "@/lib/auth/auth-context";
 
 export default function Layout({ children }: Readonly<{ children: ReactNode }>) {
   return (
@@ -46,7 +47,12 @@ export default function Layout({ children }: Readonly<{ children: ReactNode }>) 
             </div>
           </div>
         </div>
-        <div className="relative order-1 flex h-full">{children}</div>
+        {/* Only the sign-in screens use the auth context. It used to wrap the
+            whole app, where it read the profile from the browser twice on
+            every full page load for a value no page consumed. */}
+        <div className="relative order-1 flex h-full">
+          <AuthProvider>{children}</AuthProvider>
+        </div>
       </div>
     </main>
   );

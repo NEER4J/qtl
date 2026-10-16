@@ -30,8 +30,12 @@ import {
 import { EmptyDropdownHint } from "@/components/help/empty-state";
 import { InfoTip } from "@/components/help/info-tip";
 import { createSalesJob, updateSalesJob } from "@/lib/actions/sales";
-import { createCustomer, getCustomer, listCustomerInvoiceRefs } from "@/lib/actions/customers";
-import { fetchCustomerCreditBalance } from "@/lib/actions/customer-credits";
+import {
+  createCustomer,
+  getCustomerSaleContext,
+  type CustomerOutstanding,
+  type CustomerSaleContext,
+} from "@/lib/actions/customers";
 import { oilLabel } from "@/lib/utils/oil-labels";
 import { getCustomerVehicles } from "@/lib/actions/vehicles";
 import { VehicleFormDialog } from "@/components/customers/vehicle-form-dialog";
@@ -247,6 +251,27 @@ export function SalesJobForm({
   const [customerInvoices, setCustomerInvoices] = useState<
     Array<{ id: string; invoice_no: string; job_date: string }>
   >([]);
+  const [customerOutstanding, setCustomerOutstanding] = useState<CustomerOutstanding | null>(null);
+
+  // One getCustomerSaleContext request per picked customer, shared by the
+  // vehicle list, the credit/invoice effect, the mount hydration and the
+  // outstanding alert. They used to be five separate actions, and Next runs
+  // actions one at a time, so they queued behind each other.
+  const customerContextRef = useRef<{ id: string; promise: Promise<CustomerSaleContext> } | null>(null);
+  const loadCustomerContext = useCallback(
+    (id: string) => {
+      if (customerContextRef.current?.id !== id) {
+        const promise = getCustomerSaleContext(id, initial?.id);
+        customerContextRef.current = { id, promise };
+        // Never keep a failed request: the next caller retries.
+        promise.catch(() => {
+          if (customerContextRef.current?.promise === promise) customerContextRef.current = null;
+        });
+      }
+      return customerContextRef.current.promise;
+    },
+    [initial?.id],
+  );
 
   // Re-dating a saved invoice is manager/admin only; on a new job everyone
   // still picks the date. Enforced server-side in updateSalesJob.
@@ -546,20 +571,19 @@ export function SalesJobForm({
     if (!customerId) {
       setStoreCreditBalance(0);
       setCustomerInvoices([]);
+      setCustomerOutstanding(null);
       form.setValue("credit_applied", "");
       form.setValue("credited_from_job_id", null);
       return;
     }
     let cancelled = false;
     (async () => {
-      const [balance, history] = await Promise.all([
-        fetchCustomerCreditBalance(customerId, initial?.id),
-        listCustomerInvoiceRefs(customerId, 30),
-      ]);
+      const ctx = await loadCustomerContext(customerId);
       if (cancelled) return;
-      setStoreCreditBalance(balance);
+      setStoreCreditBalance(ctx.creditBalance);
+      setCustomerOutstanding(ctx.outstanding);
       setCustomerInvoices(
-        history
+        ctx.invoiceRefs
           .filter((j) => j.id !== initial?.id)
           .map((j) => ({ id: j.id, invoice_no: j.invoice_no, job_date: j.job_date })),
       );
@@ -567,7 +591,7 @@ export function SalesJobForm({
     return () => {
       cancelled = true;
     };
-  }, [customerId, form, initial?.id]);
+  }, [customerId, form, initial?.id, loadCustomerContext]);
 
   // Hydrate selectedCustomer + vehicles when the form mounts with a
   // customer_id already in `initial` — covers both edit mode AND the
@@ -575,10 +599,7 @@ export function SalesJobForm({
   useEffect(() => {
     if (initial?.customer_id && !selectedCustomer) {
       (async () => {
-        const [c, vs] = await Promise.all([
-          getCustomer(initial.customer_id!),
-          getCustomerVehicles(initial.customer_id!),
-        ]);
+        const { customer: c, vehicles: vs } = await loadCustomerContext(initial.customer_id!);
         if (c) {
           setSelectedCustomer(c);
           // In create mode the form's billing/contact fields default to "" —
@@ -626,6 +647,8 @@ export function SalesJobForm({
 
   // After adding a vehicle inline, refresh the picker and select the new one.
   const handleVehicleSaved = async (v: Vehicle) => {
+    // The shared context now holds an out-of-date vehicle list.
+    customerContextRef.current = null;
     const vs = selectedCustomer
       ? await getCustomerVehicles(selectedCustomer.id)
       : [v];
@@ -664,7 +687,9 @@ export function SalesJobForm({
     form.setValue("free_grease_applied", isFreeGreaseEligible(c));
 
     // Load vehicles for picker
-    const vs = await getCustomerVehicles(c.id);
+    const { vehicles: vs } = await loadCustomerContext(c.id);
+    // Picked someone else while this was loading.
+    if (form.getValues("customer_id") !== c.id) return;
     setCustomerVehicles(vs);
     if (vs.length === 1) applyVehicle(vs[0]);
   };
@@ -871,7 +896,8 @@ export function SalesJobForm({
       }
       toast.success(mode === "create" ? "Job created" : "Job updated");
       router.push(`/sales/${res.data.job.id}`);
-      router.refresh();
+      // No router.refresh(): the action's revalidatePath already cleared the
+      // router cache, so the push renders fresh. A refresh rendered it twice.
     });
   };
 
@@ -970,6 +996,7 @@ export function SalesJobForm({
 
                 <PreviousPendingAlert
                   customerId={customerId ?? null}
+                  outstanding={customerOutstanding}
                   storeCredit={customerId ? storeCreditBalance : 0}
                 />
 

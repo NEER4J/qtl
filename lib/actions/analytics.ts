@@ -2,6 +2,7 @@
 
 
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRowsParallel } from "@/lib/supabase/fetch-all";
 import { addDaysISO, parseDateOnly, todayISO } from "@/lib/utils/tz";
 import { requireProfile } from "@/lib/auth/require";
 import { applyLocationFilter, resolveLocationFilter } from "@/lib/auth/locations";
@@ -61,21 +62,22 @@ export async function getSalesAnalytics(filter: AnalyticsFilter = {}): Promise<S
   const { supabase, locationIds } = await scopedClient(filter);
   const { from, to, label } = defaultRange(filter);
 
-  let q = supabase
-    .from("sales_jobs")
-    .select("id, job_date, billing_name, location_id, total, outstanding, payment_mode, service_type_id, locations:location_id(code, name)")
-    .is("deactivated_at", null)
-    .gte("job_date", from)
-    .lte("job_date", to)
-    .order("job_date");
-  q = applyLocationFilter(q, "location_id", locationIds);
-  if (filter.service_type_id) q = q.eq("service_type_id", filter.service_type_id);
-  if (filter.payment_mode) q = q.eq("payment_mode", filter.payment_mode);
-
-  const { data, error } = await q;
-  if (error) throw error;
   type Row = { id: string; job_date: string; billing_name: string; location_id: string; total: number; outstanding: number; payment_mode: string | null; service_type_id: string; locations: { code: string; name: string } | null };
-  const rows = (data ?? []) as unknown as Row[];
+  // Paged: the default 30 days is ~2,300 jobs, and an unpaged read stops at
+  // PostgREST's 1,000-row cap without an error. The same applies to every
+  // sales_jobs / expenses / payroll read in this file.
+  const rows = await fetchAllRowsParallel<Row>((lo, hi, count) => {
+    let q = supabase
+      .from("sales_jobs")
+      .select("id, job_date, billing_name, location_id, total, outstanding, payment_mode, service_type_id, locations:location_id(code, name)", { count })
+      .is("deactivated_at", null)
+      .gte("job_date", from)
+      .lte("job_date", to);
+    q = applyLocationFilter(q, "location_id", locationIds);
+    if (filter.service_type_id) q = q.eq("service_type_id", filter.service_type_id);
+    if (filter.payment_mode) q = q.eq("payment_mode", filter.payment_mode);
+    return q.order("job_date").order("id").range(lo, hi);
+  });
 
   const total_revenue = rows.reduce((s, r) => s + Number(r.total), 0);
   const total_jobs = rows.length;
@@ -180,20 +182,19 @@ export async function getJobsAnalytics(filter: AnalyticsFilter = {}): Promise<Jo
   const { supabase, locationIds } = await scopedClient(filter);
   const { from, to, label } = defaultRange(filter);
 
-  let q = supabase
-    .from("sales_jobs")
-    .select("id, job_date, start_time, end_time, duration_minutes, bay_no, service_type_id, service_types:service_type_id(code, name)")
-    .is("deactivated_at", null)
-    .gte("job_date", from)
-    .lte("job_date", to);
-  q = applyLocationFilter(q, "location_id", locationIds);
-  if (filter.service_type_id) q = q.eq("service_type_id", filter.service_type_id);
-  if (filter.bay_no) q = q.eq("bay_no", Number(filter.bay_no));
-
-  const { data, error } = await q;
-  if (error) throw error;
   type Row = { id: string; job_date: string; start_time: string | null; end_time: string | null; duration_minutes: number | null; bay_no: number | null; service_type_id: string; service_types: { code: string; name: string } | null };
-  const rows = (data ?? []) as unknown as Row[];
+  const rows = await fetchAllRowsParallel<Row>((lo, hi, count) => {
+    let q = supabase
+      .from("sales_jobs")
+      .select("id, job_date, start_time, end_time, duration_minutes, bay_no, service_type_id, service_types:service_type_id(code, name)", { count })
+      .is("deactivated_at", null)
+      .gte("job_date", from)
+      .lte("job_date", to);
+    q = applyLocationFilter(q, "location_id", locationIds);
+    if (filter.service_type_id) q = q.eq("service_type_id", filter.service_type_id);
+    if (filter.bay_no) q = q.eq("bay_no", Number(filter.bay_no));
+    return q.order("id").range(lo, hi);
+  });
   const withDuration = rows.filter((r) => r.duration_minutes != null && r.duration_minutes > 0);
 
   const total_jobs = rows.length;
@@ -400,16 +401,16 @@ export async function getProductsAnalytics(filter: AnalyticsFilter = {}): Promis
   const { supabase, locationIds } = await scopedClient(filter);
   const { from, to, label } = defaultRange(filter);
 
-  let q = supabase
-    .from("sales_jobs")
-    .select("id, job_date, total, service_type_id, location_id, oil_type_id, engine_type_id, oil_container, service_types:service_type_id(code, name), locations:location_id(name), oil_types:oil_type_id(code, name), engine_types:engine_type_id(manufacturer, model)")
-    .is("deactivated_at", null)
-    .gte("job_date", from)
-    .lte("job_date", to);
-  q = applyLocationFilter(q, "location_id", locationIds);
-
-  const { data, error } = await q;
-  if (error) throw error;
+  const data = await fetchAllRowsParallel<unknown>((lo, hi, count) => {
+    let q = supabase
+      .from("sales_jobs")
+      .select("id, job_date, total, service_type_id, location_id, oil_type_id, engine_type_id, oil_container, service_types:service_type_id(code, name), locations:location_id(name), oil_types:oil_type_id(code, name), engine_types:engine_type_id(manufacturer, model)", { count })
+      .is("deactivated_at", null)
+      .gte("job_date", from)
+      .lte("job_date", to);
+    q = applyLocationFilter(q, "location_id", locationIds);
+    return q.order("id").range(lo, hi);
+  });
   type Row = {
     id: string; job_date: string; total: number;
     service_type_id: string; location_id: string;
@@ -419,7 +420,7 @@ export async function getProductsAnalytics(filter: AnalyticsFilter = {}): Promis
     oil_types: { code: string; name: string } | null;
     engine_types: { manufacturer: string; model: string } | null;
   };
-  const rows = (data ?? []) as unknown as Row[];
+  const rows = data as Row[];
 
   const countMap: Record<string, { code: string; name: string; count: number; total: number }> = {};
   for (const r of rows) {
@@ -530,20 +531,19 @@ export async function getExpenseAnalytics(filter: AnalyticsFilter = {}): Promise
   const { supabase, locationIds } = await scopedClient(filter);
   const { from, to, label } = defaultRange(filter);
 
-  let q = supabase
-    .from("expenses")
-    .select("id, expense_date, total, paid_amount, balance, category_id, vendor_id, vendor_name_snapshot, location_id, expense_categories:category_id(name), locations:location_id(name), vendors:vendor_id(name)")
-    .is("deactivated_at", null)
-    .gte("expense_date", from)
-    .lte("expense_date", to);
-  q = applyLocationFilter(q, "location_id", locationIds);
-  if (filter.category_id) q = q.eq("category_id", filter.category_id);
-  if (filter.vendor_id) q = q.eq("vendor_id", filter.vendor_id);
-
-  const { data, error } = await q;
-  if (error) throw error;
   type Row = { id: string; expense_date: string; total: number; paid_amount: number; balance: number; category_id: string; vendor_id: string | null; vendor_name_snapshot: string | null; location_id: string; expense_categories: { name: string } | null; locations: { name: string } | null; vendors: { name: string } | null };
-  const rows = (data ?? []) as unknown as Row[];
+  const rows = await fetchAllRowsParallel<Row>((lo, hi, count) => {
+    let q = supabase
+      .from("expenses")
+      .select("id, expense_date, total, paid_amount, balance, category_id, vendor_id, vendor_name_snapshot, location_id, expense_categories:category_id(name), locations:location_id(name), vendors:vendor_id(name)", { count })
+      .is("deactivated_at", null)
+      .gte("expense_date", from)
+      .lte("expense_date", to);
+    q = applyLocationFilter(q, "location_id", locationIds);
+    if (filter.category_id) q = q.eq("category_id", filter.category_id);
+    if (filter.vendor_id) q = q.eq("vendor_id", filter.vendor_id);
+    return q.order("id").range(lo, hi);
+  });
 
   const total_expenses = rows.reduce((s, r) => s + Number(r.total), 0);
   const outstanding_payables = rows.reduce((s, r) => s + Number(r.balance), 0);
@@ -636,19 +636,6 @@ export async function getPayrollAnalytics(filter: AnalyticsFilter = {}): Promise
   }
   const { from, to, label } = defaultRange(filter);
 
-  let q = supabase
-    .from("payroll_entries")
-    .select(`
-      id, gross_wages, bonus, misc_extra, ei_employee, cpp_employee, income_tax,
-      benefit_employee_deduction, benefit_employer_contribution, cheque_amount, cash_total, net_pay, employee_id,
-      payroll_weeks!inner(id, week_start, location_id, locations:location_id(name))
-    `)
-    .gte("payroll_weeks.week_start", from)
-    .lte("payroll_weeks.week_start", to);
-  q = applyLocationFilter(q, "payroll_weeks.location_id", locationIds);
-
-  const { data, error } = await q;
-  if (error) throw error;
   type Row = {
     id: string;
     gross_wages: number; bonus: number; misc_extra: number;
@@ -658,7 +645,32 @@ export async function getPayrollAnalytics(filter: AnalyticsFilter = {}): Promise
     employee_id: string;
     payroll_weeks: { id: string; week_start: string; location_id: string; locations: { name: string } | null };
   };
-  const rows = (data ?? []) as unknown as Row[];
+  // The revenue read for "payroll as % of revenue" used to wait for this one.
+  const [rows, salesData] = await Promise.all([
+    fetchAllRowsParallel<Row>((lo, hi, count) => {
+      let q = supabase
+        .from("payroll_entries")
+        .select(`
+          id, gross_wages, bonus, misc_extra, ei_employee, cpp_employee, income_tax,
+          benefit_employee_deduction, benefit_employer_contribution, cheque_amount, cash_total, net_pay, employee_id,
+          payroll_weeks!inner(id, week_start, location_id, locations:location_id(name))
+        `, { count })
+        .gte("payroll_weeks.week_start", from)
+        .lte("payroll_weeks.week_start", to);
+      q = applyLocationFilter(q, "payroll_weeks.location_id", locationIds);
+      return q.order("id").range(lo, hi);
+    }),
+    fetchAllRowsParallel<{ total: number }>((lo, hi, count) => {
+      let q = supabase
+        .from("sales_jobs")
+        .select("total", { count })
+        .is("deactivated_at", null)
+        .gte("job_date", from)
+        .lte("job_date", to);
+      q = applyLocationFilter(q, "location_id", locationIds);
+      return q.order("id").range(lo, hi);
+    }),
+  ]);
 
   const total_cost = rows.reduce((s, r) => s + Number(r.gross_wages) + Number(r.bonus) + Number(r.misc_extra) + Number(r.benefit_employer_contribution), 0);
   const employees = new Set(rows.map((r) => r.employee_id));
@@ -707,15 +719,7 @@ export async function getPayrollAnalytics(filter: AnalyticsFilter = {}): Promise
     .sort((a, b) => a.month.localeCompare(b.month));
 
   // Payroll as % of revenue (over same window)
-  let salesQ = supabase
-    .from("sales_jobs")
-    .select("total")
-    .is("deactivated_at", null)
-    .gte("job_date", from)
-    .lte("job_date", to);
-  salesQ = applyLocationFilter(salesQ, "location_id", locationIds);
-  const { data: salesData } = await salesQ;
-  const revenue = ((salesData ?? []) as { total: number }[]).reduce((s, r) => s + Number(r.total), 0);
+  const revenue = salesData.reduce((s, r) => s + Number(r.total), 0);
   const payroll_vs_revenue_pct = revenue > 0 ? (total_cost / revenue) * 100 : 0;
 
   return {
@@ -749,18 +753,17 @@ export async function getSalesYoy(filter: AnalyticsFilter = {}): Promise<YoyComp
   const priorFrom = shiftYear(from, -1);
   const priorTo = shiftYear(to, -1);
 
-  const runQ = async (f: string, t: string) => {
-    let q = supabase
-      .from("sales_jobs")
-      .select("job_date, total")
-      .is("deactivated_at", null)
-      .gte("job_date", f)
-      .lte("job_date", t);
-    q = applyLocationFilter(q, "location_id", locationIds);
-    const { data, error } = await q;
-    if (error) throw error;
-    return (data ?? []) as { job_date: string; total: number }[];
-  };
+  const runQ = (f: string, t: string) =>
+    fetchAllRowsParallel<{ job_date: string; total: number }>((lo, hi, count) => {
+      let q = supabase
+        .from("sales_jobs")
+        .select("job_date, total", { count })
+        .is("deactivated_at", null)
+        .gte("job_date", f)
+        .lte("job_date", t);
+      q = applyLocationFilter(q, "location_id", locationIds);
+      return q.order("id").range(lo, hi);
+    });
 
   const [current, prior] = await Promise.all([runQ(from, to), runQ(priorFrom, priorTo)]);
 

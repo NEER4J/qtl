@@ -299,7 +299,8 @@ export function ExpenseForm({
       }
       toast.success(mode === "create" ? "Expense recorded" : "Expense updated");
       router.push(`/expenses/${res.data.id}`);
-      router.refresh();
+      // No router.refresh(): the action's revalidatePath already cleared the
+      // router cache, so the push renders fresh. A refresh rendered it twice.
     });
   });
 

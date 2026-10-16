@@ -3,6 +3,7 @@
 import { format, subMonths } from "date-fns";
 
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRowsParallel } from "@/lib/supabase/fetch-all";
 import { requireProfile } from "@/lib/auth/require";
 import { applyLocationFilter, resolveLocationFilter } from "@/lib/auth/locations";
 
@@ -43,30 +44,34 @@ export async function getHstSummary(filter: ReportFilter = {}): Promise<HstSumma
   const supabase = await createClient();
   const { from, to, label } = defaultRange(filter);
 
-  let salesQ = supabase
-    .from("sales_jobs")
-    .select("job_date, sub_total, hst, total, location_id, locations:location_id(name)")
-    .is("deactivated_at", null)
-    .gte("job_date", from)
-    .lte("job_date", to);
-  if (filter.location_id) salesQ = salesQ.eq("location_id", filter.location_id);
-  const { data: salesData, error: salesErr } = await salesQ;
-  if (salesErr) throw salesErr;
-
-  let expQ = supabase
-    .from("expenses")
-    .select("expense_date, sub_total, hst, total, location_id, locations:location_id(name)")
-    .is("deactivated_at", null)
-    .gte("expense_date", from)
-    .lte("expense_date", to);
-  if (filter.location_id) expQ = expQ.eq("location_id", filter.location_id);
-  const { data: expData, error: expErr } = await expQ;
-  if (expErr) throw expErr;
-
   type SaleRow = { job_date: string; hst: number; total: number; location_id: string; locations: { name: string } | null };
   type ExpRow = { expense_date: string; hst: number; total: number; location_id: string; locations: { name: string } | null };
-  const sales = (salesData ?? []) as unknown as SaleRow[];
-  const expenses = (expData ?? []) as unknown as ExpRow[];
+
+  // Paged: a month is ~2,300 jobs and a quarter ~6,000, and an unpaged read
+  // stops at PostgREST's 1,000-row cap without an error, which under-reported
+  // HST collected.
+  const [sales, expenses] = await Promise.all([
+    fetchAllRowsParallel<SaleRow>((lo, hi, count) => {
+      let q = supabase
+        .from("sales_jobs")
+        .select("job_date, sub_total, hst, total, location_id, locations:location_id(name)", { count })
+        .is("deactivated_at", null)
+        .gte("job_date", from)
+        .lte("job_date", to);
+      if (filter.location_id) q = q.eq("location_id", filter.location_id);
+      return q.order("id").range(lo, hi);
+    }),
+    fetchAllRowsParallel<ExpRow>((lo, hi, count) => {
+      let q = supabase
+        .from("expenses")
+        .select("expense_date, sub_total, hst, total, location_id, locations:location_id(name)", { count })
+        .is("deactivated_at", null)
+        .gte("expense_date", from)
+        .lte("expense_date", to);
+      if (filter.location_id) q = q.eq("location_id", filter.location_id);
+      return q.order("id").range(lo, hi);
+    }),
+  ]);
 
   const hst_collected = sales.reduce((s, r) => s + Number(r.hst), 0);
   const hst_paid = expenses.reduce((s, r) => s + Number(r.hst), 0);
@@ -206,41 +211,42 @@ export async function getPnlReport(filter: ReportFilter = {}): Promise<PnlReport
   const { from, to, label } = defaultRange(filter);
   const { ids: locationIds } = resolveLocationFilter(profile, filter.location_id);
 
-  let salesQ = supabase
-    .from("sales_jobs")
-    .select("job_date, total, location_id, locations:location_id(name)")
-    .is("deactivated_at", null)
-    .gte("job_date", from)
-    .lte("job_date", to);
-  salesQ = applyLocationFilter(salesQ, "location_id", locationIds);
-
-  let expQ = supabase
-    .from("expenses")
-    .select("expense_date, total, location_id, locations:location_id(name)")
-    .is("deactivated_at", null)
-    .gte("expense_date", from)
-    .lte("expense_date", to);
-  expQ = applyLocationFilter(expQ, "location_id", locationIds);
-
-  let payQ = supabase
-    .from("payroll_entries")
-    .select("gross_wages, bonus, misc_extra, benefit_employer_contribution, payroll_weeks!inner(week_start, location_id, locations:location_id(name))")
-    .gte("payroll_weeks.week_start", from)
-    .lte("payroll_weeks.week_start", to);
-  payQ = applyLocationFilter(payQ, "payroll_weeks.location_id", locationIds);
-
-  const [salesR, expR, payR] = await Promise.all([salesQ, expQ, payQ]);
-  if (salesR.error) throw salesR.error;
-  if (expR.error) throw expR.error;
-  if (payR.error) throw payR.error;
-
   type SRow = { job_date: string; total: number; location_id: string; locations: { name: string } | null };
   type ERow = { expense_date: string; total: number; location_id: string; locations: { name: string } | null };
   type PRow = { gross_wages: number; bonus: number; misc_extra: number; benefit_employer_contribution: number; payroll_weeks: { week_start: string; location_id: string; locations: { name: string } | null } };
 
-  const sales = (salesR.data ?? []) as unknown as SRow[];
-  const expenses = (expR.data ?? []) as unknown as ERow[];
-  const payroll = (payR.data ?? []) as unknown as PRow[];
+  // Paged past the 1,000-row cap, as in getHstSummary.
+  const [sales, expenses, payroll] = await Promise.all([
+    fetchAllRowsParallel<SRow>((lo, hi, count) => {
+      let q = supabase
+        .from("sales_jobs")
+        .select("job_date, total, location_id, locations:location_id(name)", { count })
+        .is("deactivated_at", null)
+        .gte("job_date", from)
+        .lte("job_date", to);
+      q = applyLocationFilter(q, "location_id", locationIds);
+      return q.order("id").range(lo, hi);
+    }),
+    fetchAllRowsParallel<ERow>((lo, hi, count) => {
+      let q = supabase
+        .from("expenses")
+        .select("expense_date, total, location_id, locations:location_id(name)", { count })
+        .is("deactivated_at", null)
+        .gte("expense_date", from)
+        .lte("expense_date", to);
+      q = applyLocationFilter(q, "location_id", locationIds);
+      return q.order("id").range(lo, hi);
+    }),
+    fetchAllRowsParallel<PRow>((lo, hi, count) => {
+      let q = supabase
+        .from("payroll_entries")
+        .select("gross_wages, bonus, misc_extra, benefit_employer_contribution, payroll_weeks!inner(week_start, location_id, locations:location_id(name))", { count })
+        .gte("payroll_weeks.week_start", from)
+        .lte("payroll_weeks.week_start", to);
+      q = applyLocationFilter(q, "payroll_weeks.location_id", locationIds);
+      return q.order("id").range(lo, hi);
+    }),
+  ]);
 
   const sales_total = sales.reduce((s, r) => s + Number(r.total), 0);
   const expense_total = expenses.reduce((s, r) => s + Number(r.total), 0);
@@ -344,18 +350,21 @@ export async function getCustomerStatement(
     .single();
   if (!cust) return null;
 
-  const { data, error } = await supabase
-    .from("sales_jobs")
-    .select("id, job_date, invoice_no, total, paid_amount, outstanding, payment_status")
-    .eq("customer_id", customerId)
-    .is("deactivated_at", null)
-    .gte("job_date", from)
-    .lte("job_date", to)
-    .order("job_date");
-  if (error) throw error;
-
   type R = { id: string; job_date: string; invoice_no: string; total: number; paid_amount: number; outstanding: number; payment_status: string };
-  const rows = ((data ?? []) as R[]).map((r) => ({
+  // All-time by default, so a fleet account can pass the 1,000-row cap.
+  const data = await fetchAllRowsParallel<R>((lo, hi, count) =>
+    supabase
+      .from("sales_jobs")
+      .select("id, job_date, invoice_no, total, paid_amount, outstanding, payment_status", { count })
+      .eq("customer_id", customerId)
+      .is("deactivated_at", null)
+      .gte("job_date", from)
+      .lte("job_date", to)
+      .order("job_date")
+      .order("id")
+      .range(lo, hi),
+  );
+  const rows = data.map((r) => ({
     ...r,
     total: Number(r.total),
     paid_amount: Number(r.paid_amount),
@@ -407,18 +416,20 @@ export async function getVendorStatement(
     .single();
   if (!vend) return null;
 
-  const { data, error } = await supabase
-    .from("expenses")
-    .select("id, expense_date, invoice_no, total, paid_amount, balance, payment_status")
-    .eq("vendor_id", vendorId)
-    .is("deactivated_at", null)
-    .gte("expense_date", from)
-    .lte("expense_date", to)
-    .order("expense_date");
-  if (error) throw error;
-
   type R = { id: string; expense_date: string; invoice_no: string | null; total: number; paid_amount: number; balance: number; payment_status: string };
-  const rows = ((data ?? []) as R[]).map((r) => ({
+  const data = await fetchAllRowsParallel<R>((lo, hi, count) =>
+    supabase
+      .from("expenses")
+      .select("id, expense_date, invoice_no, total, paid_amount, balance, payment_status", { count })
+      .eq("vendor_id", vendorId)
+      .is("deactivated_at", null)
+      .gte("expense_date", from)
+      .lte("expense_date", to)
+      .order("expense_date")
+      .order("id")
+      .range(lo, hi),
+  );
+  const rows = data.map((r) => ({
     ...r,
     total: Number(r.total),
     paid_amount: Number(r.paid_amount),
@@ -570,12 +581,16 @@ export async function getDailyJobReport(
   // Aggregated parts list (only if any jobs)
   let parts: DailyJobReportPart[] = [];
   if (jobIds.length > 0) {
-    const { data: items, error: itemsErr } = await supabase
-      .from("sales_job_items")
-      // `*` so auto_fee (0149) is read when present without breaking before it.
-      .select("*, parts:part_id(part_number, brand)")
-      .in("sales_job_id", jobIds);
-    if (itemsErr) throw itemsErr;
+    // ~8 lines a job, so a busy day across three shops nears the 1,000-row cap.
+    const items = await fetchAllRowsParallel<unknown>((lo, hi, count) =>
+      supabase
+        .from("sales_job_items")
+        // `*` so auto_fee (0149) is read when present without breaking before it.
+        .select("*, parts:part_id(part_number, brand)", { count })
+        .in("sales_job_id", jobIds)
+        .order("id")
+        .range(lo, hi),
+    );
     type Item = {
       part_id: string | null;
       description: string;
@@ -588,7 +603,7 @@ export async function getDailyJobReport(
         | null;
     };
     const map = new Map<string, DailyJobReportPart>();
-    for (const row of (items ?? []) as unknown as Item[]) {
+    for (const row of items as Item[]) {
       let it = row;
       const partRel = Array.isArray(it.parts) ? it.parts[0] : it.parts;
       // Automatic charges carry a per-job description ("Volume tier premium —

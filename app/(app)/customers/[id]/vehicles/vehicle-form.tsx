@@ -232,7 +232,8 @@ export function VehicleForm({
         onSaved(res.data);
       } else {
         router.push(`/customers/${customerId}`);
-        router.refresh();
+        // No router.refresh(): the action's revalidatePath already cleared the
+        // router cache, so the push renders fresh. A refresh rendered it twice.
       }
     });
   });
