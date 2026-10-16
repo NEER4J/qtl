@@ -923,19 +923,19 @@ function SalesLineItemsTable({
       )}
 
       <div className="flex flex-wrap gap-2">
-        <PartPickerButton onSelect={addPart} cacheKey="sales-parts" />
+        <PartPickerButton onSelect={addPart} preload />
         <PackagePickerButton onSelect={addPackage} />
         {oilTypes.length > 0 && (
           <OilPickerButton oilTypes={oilTypes} oilGroups={oilGroups} onSelect={addOil} />
         )}
-        <TransServicePickerButton onSelect={addTransService} cacheKey="sales-trans" />
+        <TransServicePickerButton onSelect={addTransService} preload />
         <Button type="button" variant="outline" size="sm" onClick={addLabour}>
           <Plus className="size-4" /> Add labour
         </Button>
         <Button type="button" variant="outline" size="sm" onClick={addCustom}>
           <Plus className="size-4" /> Add custom item
         </Button>
-        <PartPickerButton onSelect={addReturn} label="Add return / credit" cacheKey="sales-parts" />
+        <PartPickerButton onSelect={addReturn} label="Add return / credit" preload />
         <PromotionPickerButton onSelect={addPromotion} />
       </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronsUpDown, Cog, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+import { prefetchPreloadedList, usePreloadedList } from "@/hooks/use-preloaded-list";
 import {
   listTransServicesForPicker,
   type TransmissionService,
@@ -43,37 +44,76 @@ export function transServiceLabel(
   return `${s.name}${syn}`;
 }
 
+const SERVICES_URL = "/api/picker/trans-services";
+const SERVICES_MAX_AGE_MS = 60_000;
+
+/** Load the list ahead of the first click (the sales form calls this on mount). */
+export function prefetchPickerTransServices(): void {
+  prefetchPreloadedList(SERVICES_URL, SERVICES_MAX_AGE_MS);
+}
+
 export function TransServicePickerButton({
   onSelect,
   label = "Add Trans & Diff service",
   excludeIds,
-  cacheKey,
+  preload = false,
 }: {
   onSelect: (service: TransmissionService) => void;
   label?: string;
   excludeIds?: ReadonlySet<string>;
-  /** Share results for a minute (useDebouncedSearch). Left off in the package
-   *  editor, where a service edited a moment ago must show fresh. */
-  cacheKey?: string;
+  /** Search the whole list in the browser (sales form). Left off in the
+   *  package editor, where a service edited a moment ago must show fresh. */
+  preload?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   // Debounced like every other picker: this one used to fire a server action on
   // each keystroke, and Next runs those one at a time, so typing "allison"
   // queued seven round trips before the list settled.
-  const { results, searching } = useDebouncedSearch<TransmissionService>({
-    open,
+  const remote = useDebouncedSearch<TransmissionService>({
+    open: open && !preload,
     query: q,
     fetcher: (query) => listTransServicesForPicker(query),
-    cacheKey,
+  });
+  const all = usePreloadedList<TransmissionService[]>(SERVICES_URL, {
+    open: open && preload,
+    maxAgeMs: SERVICES_MAX_AGE_MS,
   });
 
+  // The server matched the query in the name or notes; here every word has to
+  // appear in either, which keeps those hits.
+  const local = useMemo(() => {
+    const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return (all.data ?? []).filter((s) => {
+      const haystack = `${s.name} ${s.notes ?? ""}`.toLowerCase();
+      return words.every((w) => haystack.includes(w));
+    });
+  }, [all.data, q]);
+
+  const results = preload ? local : remote.results;
   const visible = excludeIds ? results.filter((s) => !excludeIds.has(s.id)) : results;
+  const emptyText = preload
+    ? all.data === null
+      ? all.failed
+        ? "Couldn't load the services. Close and reopen to retry."
+        : "Loading services…"
+      : "No matching services."
+    : remote.searching
+      ? "Searching…"
+      : "No matching services.";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" size="sm" role="combobox" aria-expanded={open}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          role="combobox"
+          aria-expanded={open}
+          onPointerEnter={preload ? prefetchPickerTransServices : undefined}
+          onFocus={preload ? prefetchPickerTransServices : undefined}
+        >
           <Cog className="size-4" /> {label}
           <ChevronsUpDown className="size-3.5 opacity-50" />
         </Button>
@@ -93,9 +133,7 @@ export function TransServicePickerButton({
             className="max-h-[300px] overflow-y-auto overscroll-contain"
             onWheel={(e) => e.stopPropagation()}
           >
-            <CommandEmpty>
-              {searching ? "Searching…" : "No matching services."}
-            </CommandEmpty>
+            <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               {visible.map((s) => (
                 <CommandItem

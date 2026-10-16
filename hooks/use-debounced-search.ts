@@ -2,22 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// Opt-in result cache, shared by every picker instance that passes the same
-// `cacheKey` (e.g. the sales form's "Add part" and "Add return" pickers).
-// Reopening a picker then shows its list instantly instead of queueing another
-// server action behind whatever the form is already waiting on.
-//
-// Only for catalogue-style data that is fine a minute stale (packages, parts).
-// Never for results that change as a direct result of what the user just did in
-// this tab — customers (created inline, free-grease offer redeemed), vendors,
-// or an expense's "last buying price".
-const SEARCH_CACHE_TTL_MS = 60_000;
-const searchCache = new Map<string, { at: number; data: unknown[] }>();
-
-function searchCacheKey(cacheKey: string, query: string, deps: readonly unknown[]): string {
-  return `${cacheKey}|${query.trim().toLowerCase()}|${JSON.stringify(deps)}`;
-}
-
 /**
  * Shared search behaviour for every combobox / picker in the app.
  *
@@ -43,7 +27,6 @@ export function useDebouncedSearch<T>({
   fetcher,
   delay = 200,
   deps = [],
-  cacheKey,
 }: {
   /** Only fetch while the popover is open. */
   open: boolean;
@@ -55,11 +38,6 @@ export function useDebouncedSearch<T>({
   delay?: number;
   /** Extra values that should also re-trigger the search (e.g. a category filter). */
   deps?: readonly unknown[];
-  /**
-   * Opt in to the shared result cache under this name (see searchCache above).
-   * Successful responses only; a cached query skips the round trip for 60 s.
-   */
-  cacheKey?: string;
 }): { results: T[]; searching: boolean; reset: () => void } {
   const [results, setResults] = useState<T[]>([]);
   const [searching, setSearching] = useState(false);
@@ -88,16 +66,6 @@ export function useDebouncedSearch<T>({
       return;
     }
 
-    const key = cacheKey ? searchCacheKey(cacheKey, query, deps) : null;
-    const cached = key ? searchCache.get(key) : undefined;
-    if (cached && Date.now() - cached.at < SEARCH_CACHE_TTL_MS) {
-      // Still bump the id so an older in-flight response can't overwrite this.
-      requestIdRef.current += 1;
-      setResults(cached.data as T[]);
-      setSearching(false);
-      return;
-    }
-
     setSearching(true);
 
     // Opening the picker with an empty box is the "show me the first N" case —
@@ -109,7 +77,6 @@ export function useDebouncedSearch<T>({
       void (async () => {
         try {
           const data = await fetcherRef.current(query);
-          if (key) searchCache.set(key, { at: Date.now(), data });
           if (id !== requestIdRef.current) return; // superseded — drop it
           setResults(data);
         } catch {
@@ -123,7 +90,7 @@ export function useDebouncedSearch<T>({
 
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, query, delay, cacheKey, ...deps]);
+  }, [open, query, delay, ...deps]);
 
   return { results, searching, reset };
 }

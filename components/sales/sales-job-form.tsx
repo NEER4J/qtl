@@ -68,7 +68,9 @@ import { todayISO, formatDate, formatMoney } from "@/lib/utils/format";
 import { formatPhone } from "@/lib/utils/phone";
 import { CreatableCombobox } from "@/components/pricing/creatable-combobox";
 
-import { CustomerComboBox } from "./customer-combobox";
+import { CustomerComboBox, prefetchPickerCustomers, type CustomerPick } from "./customer-combobox";
+import { prefetchPickerParts } from "@/components/pricing/part-picker";
+import { prefetchPickerTransServices } from "@/components/pricing/trans-service-picker";
 import { PreviousPendingAlert } from "./previous-pending-alert";
 import {
   SalesLineItems,
@@ -593,6 +595,14 @@ export function SalesJobForm({
     };
   }, [customerId, form, initial?.id, loadCustomerContext]);
 
+  // Load what the pickers search before the first click. Plain GETs, so they
+  // run alongside the form's server actions rather than queueing with them.
+  useEffect(() => {
+    if (!initial?.customer_id) prefetchPickerCustomers();
+    prefetchPickerParts();
+    prefetchPickerTransServices();
+  }, [initial?.customer_id]);
+
   // Hydrate selectedCustomer + vehicles when the form mounts with a
   // customer_id already in `initial` — covers both edit mode AND the
   // "Save & add new job" flow that pre-fills customer_id via querystring.
@@ -656,10 +666,33 @@ export function SalesJobForm({
     applyVehicle(vs.find((x) => x.id === v.id) ?? v);
   };
 
-  const applyCustomer = async (c: Customer) => {
-    setSelectedCustomer(c);
+  const applyCustomer = async (pick: CustomerPick) => {
     setAddingNewCustomer(false);
-    form.setValue("customer_id", c.id);
+    form.setValue("customer_id", pick.id);
+    form.setValue("billing_name", pick.billing_name ?? pick.last_or_company ?? "");
+
+    // The picker only holds what it searches. The full, current row arrives
+    // with the vehicles and credit in the one context request.
+    let ctx: CustomerSaleContext;
+    try {
+      ctx = await loadCustomerContext(pick.id);
+    } catch {
+      if (form.getValues("customer_id") === pick.id) {
+        toast.error("Couldn't load that customer. Please pick them again.");
+        clearCustomer();
+      }
+      return;
+    }
+    // Picked someone else while this was loading.
+    if (form.getValues("customer_id") !== pick.id) return;
+    const c = ctx.customer;
+    if (!c) {
+      toast.error("That customer is no longer available.");
+      clearCustomer();
+      return;
+    }
+
+    setSelectedCustomer(c);
     form.setValue(
       "billing_name",
       c.billing_name ?? c.last_or_company ?? "",
@@ -686,12 +719,9 @@ export function SalesJobForm({
     // Free grease default — checked when eligible
     form.setValue("free_grease_applied", isFreeGreaseEligible(c));
 
-    // Load vehicles for picker
-    const { vehicles: vs } = await loadCustomerContext(c.id);
-    // Picked someone else while this was loading.
-    if (form.getValues("customer_id") !== c.id) return;
-    setCustomerVehicles(vs);
-    if (vs.length === 1) applyVehicle(vs[0]);
+    // Vehicles for the picker
+    setCustomerVehicles(ctx.vehicles);
+    if (ctx.vehicles.length === 1) applyVehicle(ctx.vehicles[0]);
   };
 
   const clearCustomer = () => {

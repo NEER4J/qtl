@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Check, ChevronsUpDown, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -14,9 +14,39 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+import { prefetchPreloadedList, usePreloadedList } from "@/hooks/use-preloaded-list";
 import { searchCustomers } from "@/lib/actions/customers";
 import type { Customer } from "@/lib/db/types";
+import {
+  decodeCustomerPicker,
+  searchCustomerPicker,
+  type CustomerPickerTuple,
+} from "@/lib/utils/customer-picker";
 import { cn } from "@/lib/utils";
+
+// Every active customer is loaded once (app/api/picker/customers) and searched
+// in the browser, so typing never waits on a round trip. The copy is kept for
+// the session and refreshed in the background when a picker opens on one
+// older than this.
+const CUSTOMERS_URL = "/api/picker/customers";
+const CUSTOMERS_MAX_AGE_MS = 60_000;
+const MAX_VISIBLE = 50;
+
+/** Load the list ahead of the first click (the sales form calls this on mount). */
+export function prefetchPickerCustomers(): void {
+  prefetchPreloadedList(CUSTOMERS_URL, CUSTOMERS_MAX_AGE_MS);
+}
+
+/** What a pick hands the form. The full, current customer row comes with the
+ *  customer's sale context (vehicles, credit), never from this list, so a
+ *  stale copy can't offer free grease that was already redeemed. */
+export type CustomerPick = {
+  id: string;
+  billing_name: string | null;
+  last_or_company: string | null;
+};
+
+type Option = CustomerPick & { plates: string[] };
 
 export function CustomerComboBox({
   value,
@@ -30,25 +60,48 @@ export function CustomerComboBox({
   onChange: (id: string | null) => void;
   onCreateNew?: (name: string) => void;
   /** Fires when a concrete customer is picked, so the form can auto-fill details. */
-  onSelectCustomer?: (customer: Customer) => void;
+  onSelectCustomer?: (customer: CustomerPick) => void;
   billingName: string;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const cacheRef = useRef<Map<string, Customer>>(new Map());
+  const [picked, setPicked] = useState<CustomerPick | null>(null);
 
-  const selected = value ? cacheRef.current.get(value) : null;
-
-  const { results, searching } = useDebouncedSearch<Customer>({
+  const list = usePreloadedList<CustomerPickerTuple[]>(CUSTOMERS_URL, {
     open,
+    maxAgeMs: CUSTOMERS_MAX_AGE_MS,
+  });
+  const rows = useMemo(() => (list.data ? decodeCustomerPicker(list.data) : null), [list.data]);
+  const local = useMemo(
+    () => (rows ? searchCustomerPicker(rows, q, MAX_VISIBLE) : []),
+    [rows, q],
+  );
+
+  // The server search covers the two gaps: the list hasn't arrived yet, or it
+  // has no match, e.g. a customer a colleague added after it loaded. Without
+  // the second, the only option left would be "Add new customer", a duplicate.
+  const showLocal = rows !== null && (local.length > 0 || !q.trim());
+  const remote = useDebouncedSearch<Customer>({
+    open: open && !showLocal,
     query: q,
     fetcher: async (query) => {
       const res = await searchCustomers({ q: query, limit: 20 });
-      if (!res.ok) return [];
-      for (const c of res.data) cacheRef.current.set(c.id, c);
-      return res.data;
+      return res.ok ? res.data : [];
     },
   });
+
+  const options: Option[] = showLocal
+    ? local
+    : remote.searching
+      ? []
+      : remote.results.map((c) => ({
+          id: c.id,
+          billing_name: c.billing_name,
+          last_or_company: c.last_or_company,
+          plates: c.license_plates ?? [],
+        }));
+
+  const label = (picked && picked.id === value ? picked.billing_name : null) ?? billingName;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -59,10 +112,10 @@ export function CustomerComboBox({
           aria-expanded={open}
           className="w-full justify-between font-normal"
           type="button"
+          onPointerEnter={prefetchPickerCustomers}
+          onFocus={prefetchPickerCustomers}
         >
-          <span className="truncate">
-            {selected?.billing_name ?? billingName ?? "Search customer…"}
-          </span>
+          <span className="truncate">{label || "Search customer…"}</span>
           <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -75,7 +128,7 @@ export function CustomerComboBox({
           />
           <CommandList>
             <CommandEmpty>
-              {searching ? "Searching…" : "No customer found."}
+              {!showLocal && remote.searching ? "Searching…" : "No customer found."}
             </CommandEmpty>
             {onCreateNew && (
               <CommandGroup>
@@ -99,14 +152,19 @@ export function CustomerComboBox({
               </CommandGroup>
             )}
             <CommandGroup heading="Customers">
-              {results.map((c) => (
+              {options.map((c) => (
                 <CommandItem
                   key={c.id}
                   value={c.id}
                   onSelect={() => {
-                    cacheRef.current.set(c.id, c);
+                    const pick = {
+                      id: c.id,
+                      billing_name: c.billing_name,
+                      last_or_company: c.last_or_company,
+                    };
+                    setPicked(pick);
                     onChange(c.id);
-                    onSelectCustomer?.(c);
+                    onSelectCustomer?.(pick);
                     setOpen(false);
                   }}
                 >
@@ -118,9 +176,9 @@ export function CustomerComboBox({
                   />
                   <div className="flex flex-1 flex-col overflow-hidden">
                     <span className="truncate font-medium">{c.billing_name}</span>
-                    {c.license_plates?.length ? (
+                    {c.plates.length ? (
                       <span className="truncate text-xs text-muted-foreground font-mono">
-                        {c.license_plates.slice(0, 3).join(", ")}
+                        {c.plates.slice(0, 3).join(", ")}
                       </span>
                     ) : null}
                   </div>

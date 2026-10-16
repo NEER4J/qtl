@@ -4,7 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
-import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { fetchAllRows, fetchAllRowsParallel } from "@/lib/supabase/fetch-all";
 import { requireProfile } from "@/lib/auth/require";
 import { wrapAction } from "@/lib/actions/_utils";
 import type {
@@ -1663,6 +1663,15 @@ export type PartForPicker = Part & {
   customer_supplies: number;
 };
 
+type PickerPartRow = PartJoinRow & { service_costs: { cost: number } | null };
+
+function getPickerSettings() {
+  return getCachedAppSettings().catch(() => null) as Promise<{
+    counter_premium?: number | null;
+    customer_supplies_labour?: number | null;
+  } | null>;
+}
+
 export async function listPartsForPicker(q?: string): Promise<PartForPicker[]> {
   const supabase = await createClient();
   let query = supabase
@@ -1679,18 +1688,41 @@ export async function listPartsForPicker(q?: string): Promise<PartForPicker[]> {
   ]);
   // Settings come from the cross-request cache (updatePricingSettings
   // revalidates it), so each picker search is one database round trip.
-  const [partsRes, settings] = await Promise.all([
-    query,
-    getCachedAppSettings().catch(() => null) as Promise<{
-      counter_premium?: number | null;
-      customer_supplies_labour?: number | null;
-    } | null>,
-  ]);
+  const [partsRes, settings] = await Promise.all([query, getPickerSettings()]);
   if (partsRes.error) throw partsRes.error;
+  return toPartsForPicker((partsRes.data ?? []) as unknown as PickerPartRow[], settings);
+}
+
+/**
+ * Every active part, priced exactly as listPartsForPicker prices them, for the
+ * sales form to search in the browser (app/api/picker/parts). ~870 rows, so
+ * it is paged past the 1,000-row cap ahead of time.
+ */
+export async function listAllPartsForPicker(): Promise<PartForPicker[]> {
+  const supabase = await createClient();
+  const [rows, settings] = await Promise.all([
+    fetchAllRowsParallel<PickerPartRow>((from, to, count) =>
+      supabase
+        .from("parts")
+        .select(`${PART_SELECT}, service_costs:service_cost_id(cost)`, { count })
+        .eq("active", true)
+        .order("brand")
+        .order("part_number")
+        .order("id")
+        .range(from, to),
+    ),
+    getPickerSettings(),
+  ]);
+  return toPartsForPicker(rows, settings);
+}
+
+function toPartsForPicker(
+  rows: PickerPartRow[],
+  settings: Awaited<ReturnType<typeof getPickerSettings>>,
+): PartForPicker[] {
   const counterPremium = Number(settings?.counter_premium ?? 10);
   const customerSuppliesLabour = Number(settings?.customer_supplies_labour ?? 20);
-  type Row = PartJoinRow & { service_costs: { cost: number } | null };
-  return ((partsRes.data ?? []) as unknown as Row[]).map((row) => {
+  return rows.map((row) => {
     const part = normalizePartPricing(mergePartCategory(row));
     const svcCost = Number(row.service_costs?.cost ?? 0);
     // The ONLY surface that zeroes With Service for a bundled part: the job's
