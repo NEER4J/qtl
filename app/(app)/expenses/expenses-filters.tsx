@@ -4,6 +4,7 @@ import { useCallback, useMemo, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useLiveSearchParam } from "@/hooks/use-live-search-param";
+import { useDateCommit } from "@/hooks/use-date-commit";
 import { Loader2, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,7 @@ export function ExpensesFilters({
     if (key === "category_id") next.delete("subcategory_id");
     push(next);
   };
+  const setDateField = useDateCommit(setField);
 
   const clearAll = () => startTransition(() => router.push("/expenses"));
   const hasFilters = Array.from(params.keys()).some((k) => k !== "page");
@@ -88,7 +90,7 @@ export function ExpensesFilters({
           type="date"
           className="h-9 w-36"
           defaultValue={initial.from ?? ""}
-          onChange={(e) => setField("from", e.target.value)}
+          onChange={(e) => setDateField("from", e.target.value)}
         />
       </div>
       <div className="flex flex-col gap-1">
@@ -97,7 +99,7 @@ export function ExpensesFilters({
           type="date"
           className="h-9 w-36"
           defaultValue={initial.to ?? ""}
-          onChange={(e) => setField("to", e.target.value)}
+          onChange={(e) => setDateField("to", e.target.value)}
         />
       </div>
 

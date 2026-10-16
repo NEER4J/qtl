@@ -30,7 +30,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
  */
 export function useLiveSearchParam({
   param = "q",
-  delay = 350,
+  // 250 rather than the old 350: with the functions next to the database a
+  // search is one round trip, so the wait was mostly this timer.
+  delay = 250,
   extraResets = ["page"],
 }: {
   /** Query-string key to drive. */

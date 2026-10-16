@@ -23,7 +23,9 @@ export default async function PartsAdminPage({
   const status: "active" | "inactive" = sp.status === "inactive" ? "inactive" : "active";
 
   const [parts, serviceCosts, categories, brands, settings] = await Promise.all([
-    listAllParts({ category_id: sp.category_id, brand: sp.brand, q: sp.q, status }),
+    // The whole tab: search, category and brand filter in the browser
+    // (parts-table.tsx), so typing never waits on a server render.
+    listAllParts({ status }),
     listAllServiceCosts(),
     listPartCategories(),
     listPartBrands(),
@@ -38,14 +40,13 @@ export default async function PartsAdminPage({
       <div className="print:hidden">
         <h1 className="text-2xl font-semibold tracking-tight">Parts catalogue</h1>
         <p className="text-sm text-muted-foreground">
-          {parts.length} part{parts.length === 1 ? "" : "s"} {sp.q || sp.category_id || sp.brand ? "(filtered)" : "total"}
+          {parts.length} part{parts.length === 1 ? "" : "s"} total
         </p>
       </div>
 
       {/* Print-only header */}
       <div className="hidden print:block">
         <h1 className="text-xl font-bold">Parts price list</h1>
-        <p className="text-xs">{parts.length} parts{sp.q || sp.category_id || sp.brand ? " (filtered)" : ""}</p>
       </div>
 
       <div className="print:hidden">

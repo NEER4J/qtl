@@ -3,6 +3,8 @@
 import { useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { useDateCommit } from "@/hooks/use-date-commit";
+
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -34,6 +36,7 @@ export function DailyReportFilters({
     else next.set(key, value);
     startTransition(() => router.push(`/reports/daily?${next.toString()}`));
   };
+  const setDateField = useDateCommit(setField);
 
   return (
     <div className="flex flex-wrap items-end gap-3">
@@ -43,7 +46,7 @@ export function DailyReportFilters({
           type="date"
           className="h-9 w-40"
           defaultValue={initial.date}
-          onChange={(e) => setField("date", e.target.value)}
+          onChange={(e) => setDateField("date", e.target.value)}
           disabled={isPending}
         />
       </div>

@@ -4,6 +4,7 @@ import { useCallback, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useLiveSearchParam } from "@/hooks/use-live-search-param";
+import { useDateCommit } from "@/hooks/use-date-commit";
 import { Loader2, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ export function SalesFilters({
     else next.set(key, value);
     push(next);
   };
+  const setDateField = useDateCommit(setField);
 
   const clearAll = () => {
     startTransition(() => router.push("/sales"));
@@ -79,7 +81,7 @@ export function SalesFilters({
           type="date"
           className="h-9 w-36"
           defaultValue={initial.from ?? ""}
-          onChange={(e) => setField("from", e.target.value)}
+          onChange={(e) => setDateField("from", e.target.value)}
         />
       </div>
       <div className="flex flex-col gap-1">
@@ -88,7 +90,7 @@ export function SalesFilters({
           type="date"
           className="h-9 w-36"
           defaultValue={initial.to ?? ""}
-          onChange={(e) => setField("to", e.target.value)}
+          onChange={(e) => setDateField("to", e.target.value)}
         />
       </div>
 

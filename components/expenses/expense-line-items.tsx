@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+import { prefetchPreloadedList, usePreloadedList } from "@/hooks/use-preloaded-list";
 import {
   Table,
   TableBody,
@@ -23,10 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  listPartsForExpensePicker,
-  type ExpensePartPickerRow,
-} from "@/lib/actions/expenses";
+import type { ExpensePartPickerRow } from "@/lib/actions/expenses";
 import {
   PromotionPickerButton,
   promotionLabel,
@@ -147,6 +144,17 @@ function OilPickerButton({
   );
 }
 
+// The catalogue with last buying prices, loaded once and searched in the
+// browser. Saving an expense changes a last buying price, so expense-form.tsx
+// drops this copy (invalidatePreloadedList) and the next open loads it fresh.
+export const EXPENSE_PARTS_URL = "/api/picker/expense-parts";
+const EXPENSE_PARTS_MAX_AGE_MS = 60_000;
+const MAX_VISIBLE_PARTS = 200;
+
+function prefetchExpenseParts() {
+  prefetchPreloadedList(EXPENSE_PARTS_URL, EXPENSE_PARTS_MAX_AGE_MS);
+}
+
 function PartsCatalogPicker({
   onPick,
 }: {
@@ -154,11 +162,36 @@ function PartsCatalogPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const { results, searching } = useDebouncedSearch<ExpensePartPickerRow>({
+  const catalogue = usePreloadedList<ExpensePartPickerRow[]>(EXPENSE_PARTS_URL, {
     open,
-    query: q,
-    fetcher: (query) => listPartsForExpensePicker(query),
+    maxAgeMs: EXPENSE_PARTS_MAX_AGE_MS,
   });
+  const indexed = useMemo(
+    () =>
+      (catalogue.data ?? []).map((part) => ({
+        part,
+        haystack: `${part.part_number} ${part.description ?? ""} ${part.brand}`.toLowerCase(),
+      })),
+    [catalogue.data],
+  );
+  // listPartsForExpensePicker's rule: every word in the part #, description or
+  // brand, in brand / part # order.
+  const results = useMemo(() => {
+    const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const out: ExpensePartPickerRow[] = [];
+    for (const row of indexed) {
+      if (!words.every((w) => row.haystack.includes(w))) continue;
+      out.push(row.part);
+      if (out.length === MAX_VISIBLE_PARTS) break;
+    }
+    return out;
+  }, [indexed, q]);
+  const emptyText =
+    catalogue.data === null
+      ? catalogue.failed
+        ? "Couldn't load the catalogue. Close and reopen to retry."
+        : "Loading parts…"
+      : "No matching parts.";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -169,6 +202,8 @@ function PartsCatalogPicker({
           size="sm"
           role="combobox"
           aria-expanded={open}
+          onPointerEnter={prefetchExpenseParts}
+          onFocus={prefetchExpenseParts}
         >
           <Package className="size-4" /> Add part from catalog
           <ChevronsUpDown className="size-3.5 opacity-50" />
@@ -182,7 +217,7 @@ function PartsCatalogPicker({
             onValueChange={setQ}
           />
           <CommandList className="max-h-[360px]">
-            <CommandEmpty>{searching ? "Searching…" : "No matching parts."}</CommandEmpty>
+            <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               <div className="px-2 pt-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground grid grid-cols-[1fr_auto] gap-2">
                 <span>Part</span>

@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { useLiveSearchParam } from "@/hooks/use-live-search-param";
 import { Download, Loader2, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -85,24 +84,53 @@ export function PartsTable({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const [isFiltering, startFilterTransition] = useTransition();
-  // Search is live and URL-driven; the selects apply the moment they change.
-  // Nothing here waits for a submit any more.
-  const { value: q, setValue: setQ, searching } = useLiveSearchParam();
-  const categoryId = searchParams.get("category_id") ?? "";
-  const brand = searchParams.get("brand") ?? "";
+  // Every part on this tab is already here, so search, category and brand
+  // filter in the browser: no server render per keystroke. The URL still
+  // follows through history.replaceState (Next keeps useSearchParams in step
+  // without a request), so the CSV export and a reload see the same filters.
+  const [q, setQ] = useState(() => searchParams.get("q") ?? "");
+  const [categoryId, setCategoryId] = useState(() => searchParams.get("category_id") ?? "");
+  const [brand, setBrand] = useState(() => searchParams.get("brand") ?? "");
 
-  const setFilter = (key: string, value: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value) params.set(key, value);
-    else params.delete(key);
+  const syncUrl = (patch: Record<string, string>) => {
+    const params = new URLSearchParams(window.location.search);
+    for (const [key, value] of Object.entries(patch)) {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    }
     params.delete("page");
-    startFilterTransition(() => router.replace(`?${params.toString()}`, { scroll: false }));
+    const qs = params.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  };
+
+  const setFilter = (key: "q" | "category_id" | "brand", value: string) => {
+    if (key === "q") setQ(value);
+    else if (key === "category_id") setCategoryId(value);
+    else setBrand(value);
+    syncUrl({ [key]: key === "q" ? value.trim() : value });
   };
 
   const onClear = () => {
     setQ("");
-    startFilterTransition(() => router.push("?"));
+    setCategoryId("");
+    setBrand("");
+    syncUrl({ q: "", category_id: "", brand: "" });
   };
+
+  // listAllParts' rules, so the export (filtered on the server) matches the
+  // screen: the search anywhere in the part number or description, exact
+  // category and brand.
+  const visibleParts = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return parts.filter(
+      (p) =>
+        (!categoryId || p.category_id === categoryId) &&
+        (!brand || p.brand === brand) &&
+        (!term ||
+          p.part_number.toLowerCase().includes(term) ||
+          (p.description ?? "").toLowerCase().includes(term)),
+    );
+  }, [parts, q, categoryId, brand]);
 
   const setStatusFilter = (s: "active" | "inactive") => {
     const params = new URLSearchParams(searchParams.toString());
@@ -146,10 +174,10 @@ export function PartsTable({
           <Input
             placeholder="Search part number or description…"
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => setFilter("q", e.target.value)}
             className="w-full pr-8"
           />
-          {(isFiltering || searching) && (
+          {isFiltering && (
             <Loader2 className="absolute right-2.5 top-2.5 size-4 animate-spin text-muted-foreground" />
           )}
         </div>
@@ -208,6 +236,11 @@ export function PartsTable({
             {s === "active" ? "Active" : "Inactive"}
           </Button>
         ))}
+        {filtersActive && (
+          <span className="ml-2 text-sm text-muted-foreground">
+            {visibleParts.length} of {parts.length}
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-2">
           <Button asChild size="sm" variant="outline">
             {/* Exports what's on screen — same q/category/brand/status filters. */}
@@ -218,6 +251,11 @@ export function PartsTable({
           <PrintButton />
         </div>
       </div>
+
+      {/* Under the page's print-only title: what is actually printed. */}
+      <p className="hidden print:block text-xs">
+        {visibleParts.length} parts{filtersActive ? " (filtered)" : ""}
+      </p>
 
       <div className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto print:max-h-none print:overflow-visible print:border-0">
         <Table>
@@ -239,14 +277,14 @@ export function PartsTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {parts.length === 0 ? (
+            {visibleParts.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={13} className="text-center text-muted-foreground py-8">
                   {filtersActive ? "No parts match your filter." : "No parts yet. Click New part to add one."}
                 </TableCell>
               </TableRow>
             ) : (
-              parts.map((p) => (
+              visibleParts.map((p) => (
                 <TableRow
                   key={p.id}
                   // content-visibility lets the browser skip layout/paint for

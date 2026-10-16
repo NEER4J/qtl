@@ -353,27 +353,28 @@ export async function listParts(filter?: {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  let q = supabase
-    .from("parts")
-    .select(`${PART_SELECT}, service_costs:service_cost_id(name)`)
-    .eq("active", true)
-    .order("brand")
-    .order("part_number")
-    .limit(2000);
+  type Row = PartJoinRow & { service_costs: { name: string } | null };
+  // Paged past the 1,000-row cap, as in listAllParts.
+  const data = await fetchAllRowsParallel<Row>((from, to, count) => {
+    let q = supabase
+      .from("parts")
+      .select(`${PART_SELECT}, service_costs:service_cost_id(name)`, { count })
+      .eq("active", true)
+      .order("brand")
+      .order("part_number")
+      .order("id");
 
-  if (filter?.category_id) q = q.eq("category_id", filter.category_id);
-  if (filter?.brand) q = q.eq("brand", filter.brand);
-  // Shared safe search (delimiter-proof, also covers brand) — mirrors
-  // getAllFilterSellPrices; the old raw `.or()` missed brand and broke on
-  // PostgREST delimiters , . : ( ). (client 2026-06-30 — search "not working".)
-  q = applyPartsSearch(q, filter?.q, ["part_number", "description", "brand"]);
-
-  const { data, error } = await q;
-  if (error) throw error;
+    if (filter?.category_id) q = q.eq("category_id", filter.category_id);
+    if (filter?.brand) q = q.eq("brand", filter.brand);
+    // Shared safe search (delimiter-proof, also covers brand) — mirrors
+    // getAllFilterSellPrices; the old raw `.or()` missed brand and broke on
+    // PostgREST delimiters , . : ( ). (client 2026-06-30 — search "not working".)
+    q = applyPartsSearch(q, filter?.q, ["part_number", "description", "brand"]);
+    return q.range(from, to);
+  });
 
   const hideCost = (profile.role !== "owner" && profile.role !== "co_owner");
-  type Row = PartJoinRow & { service_costs: { name: string } | null };
-  return ((data ?? []) as unknown as Row[]).map((r) => {
+  return data.map((r) => {
     const merged = mergePartCategory(r);
     const row: PriceListRow = {
       ...normalizePartPricing(merged),
@@ -664,6 +665,8 @@ export interface FilterSellPriceRow {
   part_number: string;
   brand: string;
   category: string;
+  /** For the page's category filter, which matches in the browser. */
+  category_id: string | null;
   description: string | null;
   list_price: number;
   cost: number;
@@ -699,35 +702,6 @@ export async function getAllFilterSellPrices(filter?: {
 }> {
   const supabase = await createClient();
 
-  const [partsRes, settingsRes] = await Promise.all([
-    (() => {
-      let q = supabase
-        .from("parts")
-        .select(`${PART_SELECT}, service_costs:service_cost_id(name, cost)`)
-        .eq("active", true)
-        .order("brand")
-        .order("part_number")
-        .limit(2000);
-      if (filter?.category_id) q = q.eq("category_id", filter.category_id);
-      if (filter?.brand) q = q.eq("brand", filter.brand);
-      q = applyPartsSearch(q, filter?.q, [
-        "part_number",
-        "description",
-        "brand",
-      ]);
-      return q;
-    })(),
-    supabase
-      .from("app_settings")
-      .select("counter_premium, customer_supplies_labour, price_list_effective_date")
-      .eq("id", 1)
-      .single(),
-  ]);
-  if (partsRes.error) throw partsRes.error;
-  const counterPremium = Number(settingsRes.data?.counter_premium ?? 10);
-  const customerSuppliesLabour = Number(settingsRes.data?.customer_supplies_labour ?? 20);
-  const effectiveDate = settingsRes.data?.price_list_effective_date ?? null;
-
   type Row = PartJoinRow & {
     service_costs: { name: string; cost: number } | null;
     without_service_price: number | null;
@@ -735,7 +709,36 @@ export async function getAllFilterSellPrices(filter?: {
     over_counter_price: number | null;
     in_package: boolean;
   };
-  const rows: FilterSellPriceRow[] = ((partsRes.data ?? []) as unknown as Row[]).map((r) => {
+  const [partRows, settingsRes] = await Promise.all([
+    // Paged past the 1,000-row cap, as in listAllParts.
+    fetchAllRowsParallel<Row>((from, to, count) => {
+      let q = supabase
+        .from("parts")
+        .select(`${PART_SELECT}, service_costs:service_cost_id(name, cost)`, { count })
+        .eq("active", true)
+        .order("brand")
+        .order("part_number")
+        .order("id");
+      if (filter?.category_id) q = q.eq("category_id", filter.category_id);
+      if (filter?.brand) q = q.eq("brand", filter.brand);
+      q = applyPartsSearch(q, filter?.q, [
+        "part_number",
+        "description",
+        "brand",
+      ]);
+      return q.range(from, to);
+    }),
+    supabase
+      .from("app_settings")
+      .select("counter_premium, customer_supplies_labour, price_list_effective_date")
+      .eq("id", 1)
+      .single(),
+  ]);
+  const counterPremium = Number(settingsRes.data?.counter_premium ?? 10);
+  const customerSuppliesLabour = Number(settingsRes.data?.customer_supplies_labour ?? 20);
+  const effectiveDate = settingsRes.data?.price_list_effective_date ?? null;
+
+  const rows: FilterSellPriceRow[] = partRows.map((r) => {
     const merged = mergePartCategory(r);
     const part = normalizePartPricing(merged);
     const svcCost = Number(r.service_costs?.cost ?? 0);
@@ -757,6 +760,7 @@ export async function getAllFilterSellPrices(filter?: {
       part_number: part.part_number,
       brand: part.brand,
       category: part.category,
+      category_id: part.category_id ?? null,
       description: part.description,
       list_price: Number(part.list_price),
       cost: Number(part.cost),
@@ -1581,26 +1585,28 @@ export async function listAllParts(filter?: {
   status?: "all" | "active" | "inactive";
 }): Promise<AdminPartRow[]> {
   const supabase = await createClient();
-  let query = supabase
-    .from("parts")
-    .select(`${PART_SELECT}, service_costs:service_cost_id(name)`)
-    .order("brand")
-    .order("part_number")
-    .limit(2000);
-
-  if (filter?.status === "active") query = query.eq("active", true);
-  else if (filter?.status === "inactive") query = query.eq("active", false);
-  if (filter?.category_id) query = query.eq("category_id", filter.category_id);
-  if (filter?.brand) query = query.eq("brand", filter.brand);
-  if (filter?.q) {
-    const term = `%${filter.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
-    query = query.or(`part_number.ilike.${term},description.ilike.${term}`);
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
   type Row = PartJoinRow & { service_costs: { name: string } | null };
-  return ((data ?? []) as unknown as Row[]).map((r) => {
+  // Paged: `.limit(2000)` never lifted PostgREST's 1,000-row cap, and the
+  // catalogue is already ~870 parts.
+  const data = await fetchAllRowsParallel<Row>((from, to, count) => {
+    let query = supabase
+      .from("parts")
+      .select(`${PART_SELECT}, service_costs:service_cost_id(name)`, { count })
+      .order("brand")
+      .order("part_number")
+      .order("id");
+
+    if (filter?.status === "active") query = query.eq("active", true);
+    else if (filter?.status === "inactive") query = query.eq("active", false);
+    if (filter?.category_id) query = query.eq("category_id", filter.category_id);
+    if (filter?.brand) query = query.eq("brand", filter.brand);
+    if (filter?.q) {
+      const term = `%${filter.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+      query = query.or(`part_number.ilike.${term},description.ilike.${term}`);
+    }
+    return query.range(from, to);
+  });
+  return data.map((r) => {
     const merged = mergePartCategory(r);
     return {
       ...normalizePartPricing(merged),

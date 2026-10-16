@@ -38,9 +38,11 @@ import type {
 } from "@/lib/db/types";
 import { todayISO } from "@/lib/utils/format";
 
+import { invalidatePreloadedList } from "@/hooks/use-preloaded-list";
 import { VendorComboBox } from "./vendor-combobox";
 import { CreateVendorDialog } from "./create-vendor-dialog";
 import {
+  EXPENSE_PARTS_URL,
   ExpenseLineItems,
   lineItemsSubTotal,
   type ExpenseLineItem,
@@ -298,6 +300,8 @@ export function ExpenseForm({
         return;
       }
       toast.success(mode === "create" ? "Expense recorded" : "Expense updated");
+      // The parts picker's last buying prices may have just changed.
+      invalidatePreloadedList(EXPENSE_PARTS_URL);
       router.push(`/expenses/${res.data.id}`);
       // No router.refresh(): the action's revalidatePath already cleared the
       // router cache, so the push renders fresh. A refresh rendered it twice.

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRowsParallel } from "@/lib/supabase/fetch-all";
 import { wrapAction } from "@/lib/actions/_utils";
 import { applyPartsSearch } from "@/lib/utils/parts-search";
 import { canAccessLocation } from "@/lib/auth/locations";
@@ -494,6 +495,10 @@ export interface ExpensePartPickerRow {
   last_buying_date: string | null;
 }
 
+type ExpensePartRow = Part & {
+  part_categories: { name: string; unit_of_measure: UnitOfMeasure } | null;
+};
+
 export async function listPartsForExpensePicker(
   q?: string,
 ): Promise<ExpensePartPickerRow[]> {
@@ -516,37 +521,67 @@ export async function listPartsForExpensePicker(
   const { data: parts, error: partsErr } = await partsQuery;
   if (partsErr) throw partsErr;
 
-  type PartRow = Part & {
-    part_categories: { name: string; unit_of_measure: UnitOfMeasure } | null;
-  };
-  const partRows = (parts ?? []) as unknown as PartRow[];
-  const ids = partRows.map((p) => p.id);
-  if (ids.length === 0) return [];
+  const partRows = (parts ?? []) as unknown as ExpensePartRow[];
+  if (partRows.length === 0) return [];
+  const lastByPart = await lastBuyingPrices(supabase, partRows.map((p) => p.id));
+  return partRows.map((p) => toExpensePickerRow(p, lastByPart));
+}
 
-  // Pull every prior expense line that references one of these parts, ordered
-  // newest-first by the parent expense_date. Dedupe to one row per part_id in JS.
-  const { data: items, error: itemsErr } = await supabase
-    .from("expense_items")
-    .select(
-      "part_id, unit_cost, created_at, expenses:expense_id!inner(expense_date, deactivated_at)",
-    )
-    .in("part_id", ids)
-    .is("expenses.deactivated_at", null)
-    .order("expense_date", { foreignTable: "expenses", ascending: false })
-    .order("created_at", { ascending: false });
-  if (itemsErr) throw itemsErr;
+/**
+ * Every active part with its last buying price, for the expense form to search
+ * in the browser (app/api/picker/expense-parts). Both reads run together and
+ * are paged past the 1,000-row cap.
+ */
+export async function listAllPartsForExpensePicker(): Promise<ExpensePartPickerRow[]> {
+  const supabase = await createClient();
+  const [partRows, lastByPart] = await Promise.all([
+    fetchAllRowsParallel<ExpensePartRow>((from, to, count) =>
+      supabase
+        .from("parts")
+        .select("*, part_categories:category_id(name, unit_of_measure)", { count })
+        .eq("active", true)
+        .order("brand")
+        .order("part_number")
+        .order("id")
+        .range(from, to),
+    ),
+    lastBuyingPrices(supabase, null),
+  ]);
+  return partRows.map((p) => toExpensePickerRow(p, lastByPart));
+}
 
+/**
+ * Newest active expense line per part (`partIds` null = every part). Ordered
+ * by when the line was entered, newest first, and deduped to one per part.
+ * The old per-search read also asked to order by the parent's expense_date,
+ * but that option orders the embedded row, not these, so it never applied.
+ */
+async function lastBuyingPrices(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  partIds: string[] | null,
+): Promise<Map<string, { unit_cost: number; date: string | null }>> {
   type ItemRow = {
     part_id: string;
     unit_cost: number;
-    created_at: string;
     expenses:
       | { expense_date: string | null }
       | { expense_date: string | null }[]
       | null;
   };
+  const items = await fetchAllRowsParallel<ItemRow>((from, to, count) => {
+    let q = supabase
+      .from("expense_items")
+      .select("part_id, unit_cost, expenses:expense_id!inner(expense_date, deactivated_at)", { count })
+      .is("expenses.deactivated_at", null);
+    q = partIds ? q.in("part_id", partIds) : q.not("part_id", "is", null);
+    return q
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to);
+  });
+
   const lastByPart = new Map<string, { unit_cost: number; date: string | null }>();
-  for (const row of (items ?? []) as ItemRow[]) {
+  for (const row of items) {
     if (lastByPart.has(row.part_id)) continue;
     const exp = Array.isArray(row.expenses) ? row.expenses[0] : row.expenses;
     lastByPart.set(row.part_id, {
@@ -554,19 +589,23 @@ export async function listPartsForExpensePicker(
       date: exp?.expense_date ?? null,
     });
   }
+  return lastByPart;
+}
 
-  return partRows.map((p) => {
-    const last = lastByPart.get(p.id);
-    return {
-      id: p.id,
-      part_number: p.part_number,
-      brand: p.brand,
-      description: p.description ?? null,
-      category: p.part_categories?.name ?? "",
-      unit_of_measure: p.part_categories?.unit_of_measure ?? "pcs",
-      cost: Number(p.cost) || 0,
-      last_buying_price: last?.unit_cost ?? null,
-      last_buying_date: last?.date ?? null,
-    };
-  });
+function toExpensePickerRow(
+  p: ExpensePartRow,
+  lastByPart: Map<string, { unit_cost: number; date: string | null }>,
+): ExpensePartPickerRow {
+  const last = lastByPart.get(p.id);
+  return {
+    id: p.id,
+    part_number: p.part_number,
+    brand: p.brand,
+    description: p.description ?? null,
+    category: p.part_categories?.name ?? "",
+    unit_of_measure: p.part_categories?.unit_of_measure ?? "pcs",
+    cost: Number(p.cost) || 0,
+    last_buying_price: last?.unit_cost ?? null,
+    last_buying_date: last?.date ?? null,
+  };
 }

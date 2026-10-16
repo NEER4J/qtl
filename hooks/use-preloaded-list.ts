@@ -14,10 +14,14 @@ import { useEffect, useState } from "react";
 type Entry = { at: number; data: unknown };
 const store = new Map<string, Entry>();
 const inflight = new Map<string, Promise<unknown>>();
+// Bumped by invalidatePreloadedList, so a load that started before the write
+// can't put the old copy back when it lands.
+const generation = new Map<string, number>();
 
 export function loadPreloadedList<T>(url: string): Promise<T> {
   let p = inflight.get(url);
   if (!p) {
+    const gen = generation.get(url) ?? 0;
     p = fetch(url, { cache: "no-store" })
       .then((res) => {
         // An expired session redirects to the login page, whose HTML fails
@@ -26,13 +30,22 @@ export function loadPreloadedList<T>(url: string): Promise<T> {
         return res.json();
       })
       .then((data) => {
-        store.set(url, { at: Date.now(), data });
+        if ((generation.get(url) ?? 0) === gen) store.set(url, { at: Date.now(), data });
         return data;
       })
-      .finally(() => inflight.delete(url));
+      .finally(() => {
+        if (inflight.get(url) === p) inflight.delete(url);
+      });
     inflight.set(url, p);
   }
   return p as Promise<T>;
+}
+
+/** Forget a list after a write that changes it, so the next open loads it fresh. */
+export function invalidatePreloadedList(url: string): void {
+  generation.set(url, (generation.get(url) ?? 0) + 1);
+  store.delete(url);
+  inflight.delete(url);
 }
 
 /** Warm a list ahead of use (form mount, hover). Never throws. */

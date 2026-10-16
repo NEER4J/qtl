@@ -1,7 +1,14 @@
 import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import {
+  LiveFilterClear,
+  LiveFilterCount,
+  LiveFilterInput,
+  LiveFilterProvider,
+  LiveFilterRows,
+  LiveFilterSelect,
+} from "@/components/live-filter";
 import { PageHelp } from "@/components/help/page-help";
 import {
   Table,
@@ -33,26 +40,29 @@ function TierPrice({ value, fixed }: { value: number | null; fixed: boolean }) {
   );
 }
 
-export default async function AllFilterPricePage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string>>;
-}) {
+export default async function AllFilterPricePage() {
   const profile = await requireProfile();
-  const sp = await searchParams;
   const showCost = (profile.role === "owner" || profile.role === "co_owner");
 
+  // The whole list; the filter bar narrows it in the browser (LiveFilter*),
+  // where it used to submit a form that reloaded the page.
   const [{ rows, counter_premium, customer_supplies_labour, effective_date }, categories] =
-    await Promise.all([
-      getAllFilterSellPrices({
-        category_id: sp.category_id,
-        brand: sp.brand,
-        q: sp.q,
-      }),
-      listPartCategories(),
-    ]);
+    await Promise.all([getAllFilterSellPrices(), listPartCategories()]);
 
   return (
+    <LiveFilterProvider
+      // getAllFilterSellPrices' rules: every word in the part #, description or
+      // brand; category exact. Brand now ignores case ("fram" finds FRAM).
+      filters={{ q: "words", brand: "contains", category_id: "equals" }}
+      rows={rows.map((r) => ({
+        key: r.id,
+        text: {
+          q: `${r.part_number} ${r.description ?? ""} ${r.brand}`,
+          brand: r.brand,
+          category_id: r.category_id,
+        },
+      }))}
+    >
     <div className="flex flex-col gap-6">
       {/* Wide table — print in landscape with the chrome hidden. */}
       <style>{"@media print { @page { size: landscape; margin: 0.4in; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }"}</style>
@@ -61,7 +71,7 @@ export default async function AllFilterPricePage({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">All filter sell price</h1>
           <p className="text-sm text-muted-foreground">
-            {rows.length} filters · {effective_date ? `Effective ${formatDate(effective_date)}` : "Effective date not set"}
+            <LiveFilterCount /> filters · {effective_date ? `Effective ${formatDate(effective_date)}` : "Effective date not set"}
           </p>
         </div>
         <PrintButton />
@@ -71,7 +81,7 @@ export default async function AllFilterPricePage({
       <div className="hidden print:block">
         <h1 className="text-xl font-bold">All filter sell price</h1>
         <p className="text-xs">
-          {rows.length} filters · {effective_date ? `Effective ${formatDate(effective_date)}` : "Effective date not set"}
+          <LiveFilterCount /> filters · {effective_date ? `Effective ${formatDate(effective_date)}` : "Effective date not set"}
         </p>
       </div>
 
@@ -108,39 +118,27 @@ export default async function AllFilterPricePage({
       </PageHelp>
       </div>
 
-      <form className="flex flex-wrap gap-3 items-center print:hidden">
-        <Input name="q" defaultValue={sp.q ?? ""} placeholder="Search part # or description" className="w-[280px]" />
-        <Input name="brand" defaultValue={sp.brand ?? ""} placeholder="Brand" className="w-[160px]" />
-        <select
+      <div className="flex flex-wrap gap-3 items-center print:hidden">
+        <LiveFilterInput name="q" placeholder="Search part #, description or brand" className="w-[280px]" />
+        <LiveFilterInput name="brand" placeholder="Brand" className="w-[160px]" />
+        <LiveFilterSelect
           name="category_id"
-          defaultValue={sp.category_id ?? ""}
           className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs"
         >
           <option value="">All categories</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
-        </select>
-        <button type="submit" className="h-9 px-3 rounded-md border bg-primary text-primary-foreground text-sm">
-          Apply
-        </button>
-        {(sp.q || sp.brand || sp.category_id) && (
-          <Link href="/pricing/all-filter-price" className="text-sm underline text-muted-foreground">
-            Clear
-          </Link>
-        )}
-      </form>
+        </LiveFilterSelect>
+        <LiveFilterClear className="text-sm underline text-muted-foreground">Clear</LiveFilterClear>
+      </div>
 
       <Card className="print:shadow-none print:border-0">
         <CardContent className="p-0 max-h-[calc(100vh-220px)] overflow-auto print:max-h-none print:overflow-visible">
           {rows.length === 0 ? (
             <div className="p-8 text-sm text-muted-foreground text-center space-y-3">
-              <p className="font-medium text-foreground">
-                {(sp.q || sp.brand) ? "No filters match your search." : "No filters added yet."}
-              </p>
-              {(sp.q || sp.brand) ? (
-                <p>Try clearing the filters above.</p>
-              ) : showCost ? (
+              <p className="font-medium text-foreground">No filters added yet.</p>
+              {showCost ? (
                 <p>
                   Add filters from the{" "}
                   <Link href="/settings/pricing/parts" className="underline">pricing catalogue</Link>.
@@ -167,8 +165,18 @@ export default async function AllFilterPricePage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r) => (
-                  <TableRow key={r.id}>
+                <LiveFilterRows
+                  empty={
+                    <TableRow>
+                      <TableCell colSpan={showCost ? 11 : 8} className="py-8 text-center text-sm text-muted-foreground">
+                        No filters match your search. Clear the filters above to see the full list.
+                      </TableCell>
+                    </TableRow>
+                  }
+                  items={rows.map((r) => ({
+                    key: r.id,
+                    node: (
+                  <TableRow>
                     <TableCell className="text-sm">{r.category}</TableCell>
                     <TableCell className="text-sm">{r.brand}</TableCell>
                     <TableCell className="font-mono text-sm">{r.part_number}</TableCell>
@@ -213,12 +221,15 @@ export default async function AllFilterPricePage({
                       )}
                     </TableCell>
                   </TableRow>
-                ))}
+                    ),
+                  }))}
+                />
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
     </div>
+    </LiveFilterProvider>
   );
 }
