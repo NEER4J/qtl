@@ -78,23 +78,20 @@ const styles = StyleSheet.create({
   field: { width: "50%", paddingVertical: 2, paddingRight: 4 },
   fieldFull: { width: "100%", paddingVertical: 2 },
 
-  // Phone strip
-  phoneRow: { flexDirection: "row", marginTop: 4 },
-  phoneCell: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: LINE,
-    padding: 4,
-    minHeight: 28,
-    marginRight: 4,
+  // Phones — one row each. Three side-by-side boxes in a third of the page
+  // were ~55pt wide, narrower than a formatted number, so it ran outside.
+  phoneBox: { borderWidth: 1, borderColor: LINE, marginTop: 4 },
+  phoneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: LINE,
   },
-  phoneCellLast: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: LINE,
-    padding: 4,
-    minHeight: 28,
-  },
+  phoneRowLast: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4, paddingVertical: 2 },
+  phoneLabel: { width: 46, fontSize: 7, color: MUTED, textTransform: "uppercase" },
+  phoneValue: { flex: 1, fontSize: 9 },
 
   // ----- Section table headers
   sectionTable: { borderWidth: 1, borderColor: LINE, marginBottom: 6 },
@@ -336,18 +333,18 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
                 {job.billing_address}
               </Text>
             ) : null}
-            <View style={styles.phoneRow}>
-              <View style={styles.phoneCell}>
-                <Text style={styles.cellLabel}>Business</Text>
-                <Text style={styles.cellValue}>{job.business_phone ?? ""}</Text>
+            <View style={styles.phoneBox}>
+              <View style={styles.phoneRow}>
+                <Text style={styles.phoneLabel}>Business</Text>
+                <Text style={styles.phoneValue}>{job.business_phone ?? ""}</Text>
               </View>
-              <View style={styles.phoneCell}>
-                <Text style={styles.cellLabel}>Other</Text>
-                <Text style={styles.cellValue}>{job.alt_phone ?? ""}</Text>
+              <View style={styles.phoneRow}>
+                <Text style={styles.phoneLabel}>Other</Text>
+                <Text style={styles.phoneValue}>{job.alt_phone ?? ""}</Text>
               </View>
-              <View style={styles.phoneCellLast}>
-                <Text style={styles.cellLabel}>Cell</Text>
-                <Text style={styles.cellValue}>{job.contact_no ?? ""}</Text>
+              <View style={styles.phoneRowLast}>
+                <Text style={styles.phoneLabel}>Cell</Text>
+                <Text style={styles.phoneValue}>{job.contact_no ?? ""}</Text>
               </View>
             </View>
           </View>

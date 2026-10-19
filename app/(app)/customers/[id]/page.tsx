@@ -18,6 +18,7 @@ import { CustomerForm } from "@/components/customers/customer-form";
 import { StatusBadge } from "@/components/sales/status-badge";
 import {
   getCustomer,
+  getCustomerRenameLinks,
   getCustomerSalesHistory,
 } from "@/lib/actions/customers";
 import { fetchCustomerCreditBalance } from "@/lib/actions/customer-credits";
@@ -27,6 +28,7 @@ import { isFreeOilChangeEligible } from "@/lib/utils/free-oil-change";
 import { formatDate, formatMoney } from "@/lib/utils/format";
 
 import { GrantFreeOilChangeButton } from "./grant-free-oil-change-button";
+import { MoveVehiclesButton } from "./move-vehicles-button";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +45,7 @@ export default async function CustomerDetailPage({
     fetchCustomerCreditBalance(id),
   ]);
   if (!customer) notFound();
+  const renameLinks = await getCustomerRenameLinks(customer);
 
   const totalSpent = jobs.reduce((s, j) => s + j.total, 0);
   const totalOutstanding = jobs.reduce((s, j) => s + j.outstanding, 0);
@@ -90,6 +93,37 @@ export default async function CustomerDetailPage({
           </Button>
         </div>
       </div>
+
+      {/* A rename keeps the old record for its history (0155). */}
+      {renameLinks.renamedTo && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+          <span>
+            Renamed to{" "}
+            <Link href={`/customers/${renameLinks.renamedTo.id}`} className="font-medium underline">
+              {renameLinks.renamedTo.name}
+            </Link>
+            . This record keeps the invoices and history made under {displayName}; new jobs go on{" "}
+            {renameLinks.renamedTo.name}.
+          </span>
+          {vehicles.length > 0 && (
+            <MoveVehiclesButton
+              fromCustomerId={customer.id}
+              toCustomerId={renameLinks.renamedTo.id}
+              toName={renameLinks.renamedTo.name}
+              vehicles={vehicles}
+            />
+          )}
+        </div>
+      )}
+      {renameLinks.renamedFrom && (
+        <div className="rounded-md border bg-muted/40 px-4 py-3 text-sm">
+          Formerly{" "}
+          <Link href={`/customers/${renameLinks.renamedFrom.id}`} className="font-medium underline">
+            {renameLinks.renamedFrom.name}
+          </Link>{" "}
+          — invoices and history from before the rename are on that record.
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Stat label="Total jobs" value={String(jobs.length)} />

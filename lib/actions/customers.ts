@@ -10,6 +10,8 @@ import {
   CreateCustomerInput,
   ListCustomersInput,
   MergeCustomersInput,
+  MoveCustomerVehiclesInput,
+  RenameCustomerInput,
   SearchCustomersInput,
   UpdateCustomerInput,
 } from "@/lib/schemas/customers";
@@ -510,7 +512,10 @@ export const updateCustomer = wrapAction({
       ),
     );
 
-    const payload = customerWritablePayload(input);
+    // The form never sends the free oil-change date — only grantFreeOilChange
+    // sets it — so writing the parsed value (null) wiped the grant on save.
+    const { free_oil_change_until: _foc, ...payload } = customerWritablePayload(input);
+    void _foc;
 
     const { data, error } = await supabase
       .from("customers")
@@ -528,6 +533,115 @@ export const updateCustomer = wrapAction({
     return data as Customer;
   },
 });
+
+// ----------------------------------------------------------------------------
+// Rename — a new customer record, linked to the old (0155)
+//
+// Old invoices, sales and history keep the name they were made with; the new
+// record carries the new name from the next job on. rename_customer copies
+// the customer, moves the chosen vehicles (and store credit) and retires the
+// old record in one transaction; then the form's other edits land on the new
+// record, so the old one stays exactly as it was.
+// ----------------------------------------------------------------------------
+export const renameCustomer = wrapAction({
+  schema: RenameCustomerInput,
+  roles: ["owner", "co_owner", "manager", "staff"],
+  handler: async (input, profile): Promise<Customer> => {
+    const supabase = await createClient();
+    const newName = (input.billing_name ?? input.last_or_company ?? "").trim();
+
+    const { data: newId, error: rpcErr } = await supabase.rpc("rename_customer", {
+      p_customer: input.id,
+      p_name: newName,
+      p_vehicle_ids: input.vehicle_ids,
+      p_move_credit: input.move_credit,
+    });
+    if (rpcErr) {
+      if (rpcErr.code === "PGRST202" || rpcErr.code === "42883") {
+        throw new Error("Renaming needs database migration 0155 — ask your admin to apply it.");
+      }
+      if (rpcErr.code === "23505") {
+        throw new Error(`Another active customer is already called ${newName}. Merge or rename that one first.`);
+      }
+      throw rpcErr;
+    }
+
+    const plates = Array.from(
+      new Set(input.license_plates.map((p) => p.trim().toUpperCase()).filter((p) => p.length > 0)),
+    );
+    // Same fields an edit writes, minus the code (the new record has its own)
+    // and the free oil-change date (copied across by the rename).
+    const { code: _code, free_oil_change_until: _foc, ...payload } = customerWritablePayload(input);
+    void _code; void _foc;
+    const { data, error } = await supabase
+      .from("customers")
+      .update({ ...payload, license_plates: plates, updated_by: profile.id })
+      .eq("id", newId as string)
+      .select("*")
+      .single();
+    if (error) throw error;
+
+    revalidatePath("/customers");
+    revalidatePath(`/customers/${input.id}`);
+    revalidatePath(`/customers/${newId}`);
+    return data as Customer;
+  },
+});
+
+// Vehicles left on the old record after a rename can follow later.
+export const moveCustomerVehicles = wrapAction({
+  schema: MoveCustomerVehiclesInput,
+  roles: ["owner", "co_owner", "manager", "staff"],
+  handler: async (input, profile): Promise<{ moved: number }> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("vehicles")
+      .update({ customer_id: input.to_customer_id, updated_by: profile.id })
+      .eq("customer_id", input.from_customer_id)
+      .in("id", input.vehicle_ids)
+      .select("id");
+    if (error) throw error;
+    revalidatePath(`/customers/${input.from_customer_id}`);
+    revalidatePath(`/customers/${input.to_customer_id}`);
+    return { moved: data?.length ?? 0 };
+  },
+});
+
+export interface CustomerRenameLinks {
+  /** The record this customer replaced (its old name). */
+  renamedFrom: { id: string; name: string } | null;
+  /** The record that replaced this customer (its new name). */
+  renamedTo: { id: string; name: string } | null;
+}
+
+/** Both ends of a rename, for the customer page. */
+export async function getCustomerRenameLinks(customer: Customer): Promise<CustomerRenameLinks> {
+  const supabase = await createClient();
+  type Row = { id: string; billing_name: string | null; last_or_company: string | null };
+  const nameOf = (c: Row) => c.billing_name ?? c.last_or_company ?? "(no name)";
+  const [from, to] = await Promise.all([
+    customer.renamed_from_id
+      ? supabase
+          .from("customers")
+          .select("id, billing_name, last_or_company")
+          .eq("id", customer.renamed_from_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    supabase
+      .from("customers")
+      .select("id, billing_name, last_or_company")
+      .eq("renamed_from_id", customer.id)
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  // Before 0155 there is no renamed_from_id column: no links, not an error.
+  const fromRow = from.error ? null : (from.data as Row | null);
+  const toRow = to.error ? null : (to.data as Row | null);
+  return {
+    renamedFrom: fromRow ? { id: fromRow.id, name: nameOf(fromRow) } : null,
+    renamedTo: toRow ? { id: toRow.id, name: nameOf(toRow) } : null,
+  };
+}
 
 // ----------------------------------------------------------------------------
 // Outstanding for a given customer (used by the previous-pending alert

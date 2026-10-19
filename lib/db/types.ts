@@ -168,6 +168,8 @@ export interface Customer {
   home_location_id: string | null;
   notes: string | null;
   active: boolean;
+  /** The record this one replaced when the customer was renamed (0155). */
+  renamed_from_id?: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;

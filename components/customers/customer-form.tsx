@@ -40,6 +40,7 @@ import {
 import {
   checkCustomerNameExists,
   createCustomer,
+  renameCustomer,
   updateCustomer,
 } from "@/lib/actions/customers";
 import {
@@ -52,6 +53,7 @@ import { postalPlaceholder } from "@/lib/data/regions";
 import type { Customer, Vehicle } from "@/lib/db/types";
 import type { StagedVehicleInput } from "@/app/(app)/customers/[id]/vehicles/vehicle-form";
 
+import { RenameCustomerDialog } from "./rename-customer-dialog";
 import { VehicleFormDialog } from "./vehicle-form-dialog";
 
 const NO_PAY_METHOD = "__none__";
@@ -294,6 +296,35 @@ export function CustomerForm({
     setVehicles(initialVehicles);
   }, [initialVehicles]);
 
+  // A name change on a saved customer waits here for the rename dialog.
+  const [renameDraft, setRenameDraft] = useState<CreateCustomerInput | null>(null);
+  const currentName = (customer?.billing_name ?? customer?.last_or_company ?? "").trim();
+  // What the name field was loaded with (valuesFromCustomer) — the rename test
+  // compares against this, so saving an untouched name is never a rename.
+  const loadedName = (customer?.last_or_company ?? customer?.billing_name ?? "").trim();
+
+  const confirmRename = (vehicleIds: string[], moveCredit: boolean) => {
+    if (!customer || !renameDraft) return;
+    startTransition(async () => {
+      const res = await renameCustomer({
+        ...renameDraft,
+        id: customer.id,
+        vehicle_ids: vehicleIds,
+        move_credit: moveCredit,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setRenameDraft(null);
+      toast.success(`Renamed — new jobs will use ${res.data.billing_name ?? "the new name"}`, {
+        description: `Past invoices stay under ${currentName}.`,
+      });
+      onSaved?.(res.data);
+      router.push(`/customers/${res.data.id}`);
+    });
+  };
+
   const refreshVehicles = async () => {
     if (!customer) return;
     const vs = await getCustomerVehicles(customer.id);
@@ -383,6 +414,15 @@ export function CustomerForm({
         const path = issue.path[issue.path.length - 1]?.toString();
         if (path) form.setError(path as keyof FormValues, { message: issue.message });
       }
+      return;
+    }
+
+    // Changing the name starts a new linked customer, so old invoices and
+    // history keep the old name — confirm which vehicles move first. A change
+    // of capitals only is just an edit.
+    const newName = (parsed.data.last_or_company ?? "").trim();
+    if (mode === "edit" && loadedName && newName && newName.toLowerCase() !== loadedName.toLowerCase()) {
+      setRenameDraft(parsed.data);
       return;
     }
 
@@ -1194,6 +1234,21 @@ export function CustomerForm({
           </Button>
         </div>
       </form>
+
+      {customer && (
+        <RenameCustomerDialog
+          open={renameDraft !== null}
+          onOpenChange={(open) => {
+            if (!open && !isPending) setRenameDraft(null);
+          }}
+          customerId={customer.id}
+          oldName={currentName}
+          newName={(renameDraft?.last_or_company ?? "").trim()}
+          vehicles={vehicles}
+          pending={isPending}
+          onConfirm={confirmRename}
+        />
+      )}
 
       {/* Live (DB) vehicle dialog — edit mode */}
       {customer && vehicleDialog && (vehicleDialog.mode === "create" || vehicleDialog.mode === "edit") && (

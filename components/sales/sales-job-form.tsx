@@ -50,7 +50,7 @@ import {
   type AutoFeeWaivers,
   type AutoLineContext,
 } from "@/lib/utils/sales-auto-lines";
-import { lookupOilChangePrice } from "@/lib/actions/pricing";
+import { lookupOilChangePrice, type GreasePartOption } from "@/lib/actions/pricing";
 import { SalesJobInput } from "@/lib/schemas/sales";
 import type {
   Customer,
@@ -166,6 +166,8 @@ export interface SalesJobFormProps {
   greaseOnlyFee?: number;
   /** Part categories with their cost bucket — tells a grease line from a filter. */
   partCategories?: { id: string; name: string; cost_bucket?: string | null }[];
+  /** Grease parts the free-grease offer can draw, the usual one first. */
+  greaseParts?: GreasePartOption[];
   /** Force location to this value (staff role). */
   lockedLocationId?: string | null;
   /** Existing line items (edit mode). */
@@ -198,13 +200,36 @@ const JOB_DATE_EDIT_ROLES: ReadonlySet<UserRole> = new Set([
 const NO_OIL_GROUPS: OilGroup[] = [];
 const NO_TIERS: VolumeTierRow[] = [];
 const NO_CATEGORIES: { id: string; name: string; cost_bucket?: string | null }[] = [];
+const NO_GREASE_PARTS: GreasePartOption[] = [];
 
-/** Description for the $0 line item that represents the free-grease offer. */
+/** Description prefix for the $0 line item that represents the free-grease offer. */
 const FREE_GREASE_LINE_DESC = "Free Grease (offer)";
 
-/** A line is the free-grease offer line when it's a non-catalog $0 row with our label. */
+/** The free-grease offer line — a $0 row carrying our label. */
 function isFreeGreaseLine(it: LineItem): boolean {
-  return it.part_id == null && it.description === FREE_GREASE_LINE_DESC;
+  return it.description.startsWith(FREE_GREASE_LINE_DESC);
+}
+
+/**
+ * The offer as a line: the grease part itself at $0, so the grease comes off
+ * inventory and its quantity can be set like any other part. Without a grease
+ * part in the catalogue it falls back to a plain $0 line.
+ */
+function freeGreaseLine(part: GreasePartOption | undefined, quantity?: number): LineItem {
+  if (!part) {
+    return newLineItem({ description: FREE_GREASE_LINE_DESC, quantity: 1, unit_price: 0, is_taxable: false });
+  }
+  return newLineItem({
+    part_id: part.id,
+    description: `${FREE_GREASE_LINE_DESC} — ${part.brand} ${part.part_number}${
+      part.description ? ` ${part.description}` : ""
+    }`,
+    quantity: quantity ?? part.usual_qty,
+    unit_price: 0,
+    is_taxable: false,
+    unit_of_measure: part.unit_of_measure,
+    part_category_id: part.category_id,
+  });
 }
 
 export function SalesJobForm({
@@ -221,6 +246,7 @@ export function SalesJobForm({
   volumeTiers = NO_TIERS,
   greaseOnlyFee = 0,
   partCategories = NO_CATEGORIES,
+  greaseParts = NO_GREASE_PARTS,
   lockedLocationId,
   initialItems,
   currentUserRole,
@@ -237,6 +263,11 @@ export function SalesJobForm({
     initial?.auto_priced_at && initial?.sub_total ? initial.sub_total : null,
   );
   const [lineItems, setLineItems] = useState<LineItem[]>(initialItems ?? []);
+  // Which grease the free-grease offer gives: the saved line's part on edit,
+  // otherwise the shop's usual grease.
+  const [freeGreasePartId, setFreeGreasePartId] = useState<string>(
+    () => initialItems?.find(isFreeGreaseLine)?.part_id ?? greaseParts[0]?.id ?? "",
+  );
   // Charges staff took over on this job (edited or deleted the automatic line).
   const [autoWaived, setAutoWaived] = useState<AutoFeeWaivers>({
     oil_tier_premium: initial?.oil_tier_premium_waived ?? false,
@@ -317,7 +348,9 @@ export function SalesJobForm({
     contact_no: initial?.contact_no ?? "",
     email: initial?.email ?? "",
     odometer: initial?.odometer ?? "",
-    service_type_id: initial?.service_type_id ?? serviceTypes[0]?.id ?? "",
+    // No default service: the first in the list is Free Grease, so every new
+    // job used to start as a free-grease visit (client 2026-10-19).
+    service_type_id: initial?.service_type_id ?? "",
     advisor_name: initial?.advisor_name ?? "",
     is_dump_truck: initial?.is_dump_truck ?? false,
     free_grease_applied: initial?.free_grease_applied ?? false,
@@ -650,7 +683,8 @@ export function SalesJobForm({
     form.setValue("vehicle_model", v?.model ?? "");
     form.setValue("engine_size", v?.engine_size ?? "");
     form.setValue("unit_no", v?.unit_number ?? "");
-    if (v?.mileage != null) form.setValue("odometer", String(v.mileage));
+    // The odometer is read off the truck on every visit — the vehicle's saved
+    // mileage is an average, not today's reading, so it is never copied in.
     // Dump trucks pre-tick the surcharge box (still un-tickable per job).
     if (v) setDumpTruck(v.is_dump_truck ?? false);
   };
@@ -664,6 +698,19 @@ export function SalesJobForm({
       : [v];
     setCustomerVehicles(vs);
     applyVehicle(vs.find((x) => x.id === v.id) ?? v);
+  };
+
+  /** Take the free-grease line off the job (a different or no customer). */
+  const dropFreeGrease = () => {
+    setLineItems((prev) =>
+      prev.some(isFreeGreaseLine)
+        ? reconcileAutoLines(
+            prev.filter((it) => !isFreeGreaseLine(it)),
+            autoLineContext(autoWaived, false),
+            newLineItem,
+          )
+        : prev,
+    );
   };
 
   const applyCustomer = async (pick: CustomerPick) => {
@@ -716,8 +763,10 @@ export function SalesJobForm({
     // Pull default pay method
     if (c.default_pay_method) form.setValue("payment_mode", c.default_pay_method);
 
-    // Free grease default — checked when eligible
-    form.setValue("free_grease_applied", isFreeGreaseEligible(c));
+    // Free grease starts unticked — staff tick it when the customer takes it.
+    form.setValue("free_grease_applied", false);
+    form.setValue("free_grease_override_reason", "");
+    dropFreeGrease();
 
     // Vehicles for the picker
     setCustomerVehicles(ctx.vehicles);
@@ -737,6 +786,7 @@ export function SalesJobForm({
     form.setValue("email", "");
     form.setValue("free_grease_applied", false);
     form.setValue("free_grease_override_reason", "");
+    dropFreeGrease();
     setDumpTruck(false);
   };
 
@@ -1111,28 +1161,35 @@ export function SalesJobForm({
                     until={selectedCustomer.free_grease_until!}
                     applied={form.watch("free_grease_applied")}
                     overrideReason={form.watch("free_grease_override_reason")}
+                    greaseParts={greaseParts}
+                    greasePartId={freeGreasePartId}
                     onChangeApplied={(v) => {
                       form.setValue("free_grease_applied", v);
                       // Reflect the offer as a real $0 line item rather than a
-                      // hidden flag: the grease shows on the job/invoice, and a
-                      // free-only job is a tangible $0 line (not an empty,
-                      // bogus-outstanding invoice).
+                      // hidden flag: the grease shows on the job/invoice and
+                      // comes off inventory, and a free-only job is a tangible
+                      // $0 line (not an empty, bogus-outstanding invoice).
                       // Through the reconcile, with the NEW tick: a free-grease
                       // redemption never carries the grease-only fee.
                       const without = lineItems.filter((it) => !isFreeGreaseLine(it));
+                      const part = greaseParts.find((g) => g.id === freeGreasePartId) ?? greaseParts[0];
                       handleLineItemsChange(
-                        v
-                          ? [
-                              ...without,
-                              newLineItem({
-                                description: FREE_GREASE_LINE_DESC,
-                                quantity: 1,
-                                unit_price: 0,
-                                is_taxable: false,
-                              }),
-                            ]
-                          : without,
+                        v ? [...without, freeGreaseLine(part)] : without,
                         { freeGrease: v },
+                      );
+                    }}
+                    onChangeGreasePart={(id) => {
+                      setFreeGreasePartId(id);
+                      const current = lineItems.find(isFreeGreaseLine);
+                      const part = greaseParts.find((g) => g.id === id);
+                      if (!current || !part) return;
+                      // Swap the grease, keeping the quantity staff set.
+                      handleLineItemsChange(
+                        lineItems.map((it) =>
+                          it === current
+                            ? { ...freeGreaseLine(part, Number(current.quantity) || undefined), key: it.key }
+                            : it,
+                        ),
                       );
                     }}
                     onChangeReason={(v) => form.setValue("free_grease_override_reason", v)}
@@ -1398,7 +1455,7 @@ export function SalesJobForm({
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue />
+                            <SelectValue placeholder="Select service" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -2113,13 +2170,19 @@ function FreeGreaseBanner({
   until,
   applied,
   overrideReason,
+  greaseParts,
+  greasePartId,
   onChangeApplied,
+  onChangeGreasePart,
   onChangeReason,
 }: {
   until: string;
   applied: boolean;
   overrideReason: string;
+  greaseParts: GreasePartOption[];
+  greasePartId: string;
   onChangeApplied: (v: boolean) => void;
+  onChangeGreasePart: (id: string) => void;
   onChangeReason: (v: string) => void;
 }) {
   return (
@@ -2136,15 +2199,32 @@ function FreeGreaseBanner({
             Apply free-grease offer (eligible until {formatDate(until)})
           </label>
           <p className="mt-1 text-xs text-emerald-800/80 dark:text-emerald-300/70">
-            Customer is in their first 30 days. When applied, the grease line is invoiced at $0.
-            If you uncheck, leave a quick reason so the override is auditable.
+            Customer is in their first 30 days. Tick to add the grease at $0 — set the
+            quantity on its line; it comes off inventory like any other part.
           </p>
+          {greaseParts.length > 1 && (
+            <div className="mt-2 max-w-sm">
+              <Select value={greasePartId} onValueChange={onChangeGreasePart}>
+                <SelectTrigger className="bg-background">
+                  <SelectValue placeholder="Pick the grease" />
+                </SelectTrigger>
+                <SelectContent>
+                  {greaseParts.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>
+                      {g.brand} {g.part_number}
+                      {g.description ? ` — ${g.description}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {!applied && (
             <Textarea
               rows={2}
               value={overrideReason}
               onChange={(e) => onChangeReason(e.target.value)}
-              placeholder="Reason for not applying (e.g. customer declined, offer already redeemed)"
+              placeholder="Not giving it this visit? Optional reason (e.g. customer declined)"
               className="mt-2"
             />
           )}

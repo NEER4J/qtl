@@ -1629,6 +1629,71 @@ export async function listPartCategories(): Promise<PartCategoryOption[]> {
   return (await getCachedActivePartCategories()) as PartCategoryOption[];
 }
 
+/** An active part in a Grease category — what a free-grease line can draw. */
+export type GreasePartOption = Pick<
+  Part,
+  "id" | "brand" | "part_number" | "description" | "unit_of_measure" | "category_id" | "is_taxable"
+> & {
+  /** The quantity the packages use for it most often (e.g. 0.8 kg a truck). */
+  usual_qty: number;
+};
+
+/**
+ * Grease parts for the free-grease offer, the shop's usual grease first: the
+ * one the part packages use most. The offer line is a real catalog line at $0
+ * so the grease comes off inventory like any other part.
+ */
+export async function listGreaseParts(): Promise<GreasePartOption[]> {
+  const categories = (await getCachedActivePartCategories()) as PartCategoryOption[];
+  // The unit lives on the category (kg for Grease), not the part.
+  const unitByCategory = new Map(
+    categories.filter((c) => c.cost_bucket === "grease").map((c) => [c.id, c.unit_of_measure]),
+  );
+  if (unitByCategory.size === 0) return [];
+
+  const supabase = await createClient();
+  const { data: parts, error } = await supabase
+    .from("parts")
+    .select("id, brand, part_number, description, category_id, is_taxable")
+    .eq("active", true)
+    .in("category_id", [...unitByCategory.keys()])
+    .order("brand")
+    .order("part_number");
+  if (error) throw error;
+  const rows = ((parts ?? []) as Omit<GreasePartOption, "usual_qty" | "unit_of_measure">[]).map(
+    (p) => ({ ...p, unit_of_measure: unitByCategory.get(p.category_id)! }),
+  );
+  if (rows.length === 0) return [];
+
+  const { data: uses, error: usesErr } = await supabase
+    .from("part_package_items")
+    .select("part_id, quantity")
+    .in("part_id", rows.map((p) => p.id));
+  if (usesErr) throw usesErr;
+
+  // Per part: how many packages use it, and its most common quantity.
+  const usage = new Map<string, { count: number; qtys: Map<number, number> }>();
+  for (const u of (uses ?? []) as { part_id: string; quantity: number }[]) {
+    const slot = usage.get(u.part_id) ?? { count: 0, qtys: new Map() };
+    slot.count += 1;
+    const q = Number(u.quantity);
+    if (q > 0) slot.qtys.set(q, (slot.qtys.get(q) ?? 0) + 1);
+    usage.set(u.part_id, slot);
+  }
+  const usualQty = (id: string) => {
+    let best = 1;
+    let seen = 0;
+    for (const [q, n] of usage.get(id)?.qtys ?? []) {
+      if (n > seen) [best, seen] = [q, n];
+    }
+    return best;
+  };
+
+  return rows
+    .map((p) => ({ ...p, usual_qty: usualQty(p.id) }))
+    .sort((a, b) => (usage.get(b.id)?.count ?? 0) - (usage.get(a.id)?.count ?? 0));
+}
+
 export async function listPartBrands(): Promise<string[]> {
   return await getCachedActivePartBrands();
 }

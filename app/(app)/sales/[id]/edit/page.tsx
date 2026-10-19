@@ -13,6 +13,7 @@ import {
 } from "@/lib/actions/reference";
 import {
   listEngineTypes,
+  listGreaseParts,
   listOilGroups,
   listOilTypes,
   listPartCategories,
@@ -54,6 +55,7 @@ export default async function EditSalesJobPage({
     technicians,
     volumeTiers,
     partCategories,
+    greaseParts,
   ] = await Promise.all([
     listActiveLocations(),
     listActiveServiceTypes(),
@@ -65,6 +67,8 @@ export default async function EditSalesJobPage({
     // For the automatic tier premium and grease-only fee on the job.
     listVolumeTiers(),
     listPartCategories(),
+    // What the free-grease offer gives, so it comes off inventory.
+    listGreaseParts(),
   ]);
 
   return (
@@ -96,6 +100,7 @@ export default async function EditSalesJobPage({
         volumeTiers={volumeTiers}
         greaseOnlyFee={Number(settings.grease_only_fee ?? 0)}
         partCategories={partCategories}
+        greaseParts={greaseParts}
         currentUserRole={profile.role}
         initialItems={job.items.map((it) => ({
           key: it.id,

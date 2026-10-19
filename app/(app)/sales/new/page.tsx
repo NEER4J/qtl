@@ -13,6 +13,7 @@ import {
 } from "@/lib/actions/reference";
 import {
   listEngineTypes,
+  listGreaseParts,
   listOilGroups,
   listOilTypes,
   listPartCategories,
@@ -46,6 +47,7 @@ export default async function NewSalesJobPage({
     technicians,
     volumeTiers,
     partCategories,
+    greaseParts,
   ] = await Promise.all([
     listActiveLocations(),
     listActiveServiceTypes(),
@@ -57,6 +59,8 @@ export default async function NewSalesJobPage({
     // For the automatic tier premium and grease-only fee on the job.
     listVolumeTiers(),
     listPartCategories(),
+    // What the free-grease offer gives, so it comes off inventory.
+    listGreaseParts(),
   ]);
 
   // Lock the location only when there is genuinely no choice. A staff member
@@ -111,6 +115,7 @@ export default async function NewSalesJobPage({
         volumeTiers={volumeTiers}
         greaseOnlyFee={Number(settings.grease_only_fee ?? 0)}
         partCategories={partCategories}
+        greaseParts={greaseParts}
         lockedLocationId={lockedLocationId}
         currentUserRole={profile.role}
         initial={

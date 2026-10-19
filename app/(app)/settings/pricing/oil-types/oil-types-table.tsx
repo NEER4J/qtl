@@ -148,6 +148,16 @@ export function OilTypesTable({
                     <Badge variant={oil.active ? "default" : "secondary"}>
                       {oil.active ? "Active" : "Inactive"}
                     </Badge>
+                    {/* Oil detail and the oil-change grid list engine oils
+                        only — a grade left unticked silently drops off them. */}
+                    {!oil.is_engine_oil && (
+                      <span
+                        className="mt-1 block text-[10px] text-muted-foreground"
+                        title="Not on Oil detail or the oil-change grid. Edit and tick Engine oil to show it there."
+                      >
+                        Other fluid
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">

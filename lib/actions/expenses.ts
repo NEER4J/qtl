@@ -357,6 +357,41 @@ export const updateExpense = wrapAction({
 });
 
 // ----------------------------------------------------------------------------
+// The expense's own Payment date / mode / Transaction (shown under Details and
+// on the vendor statement) follow its latest payment. The rollup trigger only
+// re-totals paid_amount, so a payment recorded after the expense was saved —
+// one at a time or from the list's "Mark as paid" — left them blank.
+// ----------------------------------------------------------------------------
+async function syncExpensePaymentDetails(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  expenseIds: string[],
+): Promise<void> {
+  if (expenseIds.length === 0) return;
+  const { data, error } = await supabase
+    .from("expense_payments")
+    .select("expense_id, paid_on, mode, transaction_id")
+    .in("expense_id", expenseIds)
+    .order("paid_on", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  type Pay = { expense_id: string; paid_on: string; mode: PaymentMode; transaction_id: string | null };
+  const latest = new Map<string, Pay>();
+  for (const p of (data ?? []) as Pay[]) if (!latest.has(p.expense_id)) latest.set(p.expense_id, p);
+
+  const results = await Promise.all(
+    [...latest.values()].map((p) =>
+      supabase
+        .from("expenses")
+        .update({ payment_date: p.paid_on, payment_mode: p.mode, transaction_id: p.transaction_id })
+        .eq("id", p.expense_id),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw failed.error;
+}
+
+// ----------------------------------------------------------------------------
 // Add partial payment
 // ----------------------------------------------------------------------------
 export const addExpensePayment = wrapAction({
@@ -378,6 +413,7 @@ export const addExpensePayment = wrapAction({
       .select("*")
       .single();
     if (error) throw error;
+    await syncExpensePaymentDetails(supabase, [input.expense_id]);
     revalidatePath(`/expenses/${input.expense_id}`);
     revalidatePath("/expenses");
     revalidatePath("/dashboard");
@@ -435,6 +471,7 @@ export const payExpenses = wrapAction({
       })),
     );
     if (insErr) throw insErr;
+    await syncExpensePaymentDetails(supabase, payable.map((e) => e.id));
 
     for (const e of payable) revalidatePath(`/expenses/${e.id}`);
     revalidatePath("/expenses");

@@ -155,6 +155,22 @@ export const UpdateCustomerInput = CreateCustomerInput.extend({
   id: z.string().uuid(),
 });
 
+/**
+ * A name change starts a new linked customer (0155): the form's full details
+ * plus which vehicles and whether the store credit move to it.
+ */
+export const RenameCustomerInput = UpdateCustomerInput.extend({
+  vehicle_ids: z.array(z.string().uuid()).default([]),
+  move_credit: z.coerce.boolean().default(false),
+});
+export type RenameCustomerInput = z.infer<typeof RenameCustomerInput>;
+
+export const MoveCustomerVehiclesInput = z.object({
+  from_customer_id: z.string().uuid(),
+  to_customer_id: z.string().uuid(),
+  vehicle_ids: z.array(z.string().uuid()).min(1, "Pick at least one vehicle"),
+});
+
 export const SearchCustomersInput = z.object({
   q: z.string().trim().max(100).default(""),
   limit: z.coerce.number().int().min(1).max(50).default(20),
