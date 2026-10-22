@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
@@ -21,11 +22,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { UppercaseInput } from "@/components/ui/uppercase-input";
 import {
   createVehicle,
+  getVehicle,
+  getVehicleOwner,
   getVehicleStats,
   markVehicleContacted,
   updateVehicle,
+  type VehicleOwner,
   type VehicleStats,
 } from "@/lib/actions/vehicles";
+import { moveCustomerVehicles } from "@/lib/actions/customers";
 import { CreateVehicleInput } from "@/lib/schemas/vehicles";
 import type { Vehicle } from "@/lib/db/types";
 import { formatDate, formatMoney } from "@/lib/utils/format";
@@ -100,6 +105,47 @@ export function VehicleForm({
     vehicle?.last_contacted_at ?? null,
   );
   const router = useRouter();
+
+  // The vehicle that already has this plate / VIN, and whose it is — said up
+  // front, with a way to bring it over (client 2026-10-22: "it says it exists
+  // but we can't see it anywhere").
+  const [taken, setTaken] = useState<VehicleOwner | null>(null);
+  const checkTaken = async () => {
+    const plate = form.getValues("license_plate").trim();
+    const vin = form.getValues("vin").trim();
+    if (!plate && !vin) return setTaken(null);
+    const res = await getVehicleOwner({
+      license_plate: plate || undefined,
+      vin: vin || undefined,
+      except_id: vehicle?.id,
+    });
+    setTaken(res.ok ? res.data : null);
+  };
+  const takenHere = taken != null && taken.customer_id === customerId;
+
+  /** Bring the existing vehicle over to this customer (or just use it). */
+  const bringOverTaken = () => {
+    if (!taken || !customerId) return;
+    startTransition(async () => {
+      if (!takenHere) {
+        if (!taken.customer_id) return;
+        const moved = await moveCustomerVehicles({
+          from_customer_id: taken.customer_id,
+          to_customer_id: customerId,
+          vehicle_ids: [taken.vehicle_id],
+        });
+        if (!moved.ok) {
+          toast.error(moved.error);
+          return;
+        }
+        toast.success(`${taken.license_plate} moved here. Its past invoices stay with ${taken.customer_name}.`);
+      }
+      const v = await getVehicle(taken.vehicle_id);
+      setTaken(null);
+      if (onSaved && v) onSaved(v);
+      else router.push(`/customers/${customerId}`);
+    });
+  };
 
   // Pull stats when editing an existing vehicle.
   useEffect(() => {
@@ -225,6 +271,7 @@ export function VehicleForm({
             form.setError(k as keyof FormValues, { message: msgs[0] });
           }
         }
+        void checkTaken();
         return;
       }
       toast.success(vehicle ? "Vehicle updated" : "Vehicle added");
@@ -300,6 +347,37 @@ export function VehicleForm({
           </section>
         )}
 
+        {taken && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+            <span>
+              {taken.field === "vin" ? "This VIN" : "This plate"} is already on{" "}
+              <span className="font-mono">{taken.license_plate}</span>
+              {takenHere ? (
+                <>, one of this customer&apos;s vehicles.</>
+              ) : (
+                <>
+                  , a vehicle of{" "}
+                  {taken.customer_id ? (
+                    <Link href={`/customers/${taken.customer_id}`} target="_blank" className="font-medium underline">
+                      {taken.customer_name}
+                    </Link>
+                  ) : (
+                    taken.customer_name
+                  )}
+                  .
+                </>
+              )}
+            </span>
+            {/* Only when adding to a saved customer: a new customer's staged
+                vehicles have nowhere to move to yet. */}
+            {customerId && !isStaging && !vehicle && (
+              <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={bringOverTaken}>
+                {takenHere ? "Use this vehicle" : "Move it to this customer"}
+              </Button>
+            )}
+          </div>
+        )}
+
         <section className="grid gap-3 md:grid-cols-4">
           <FormField
             control={form.control}
@@ -307,7 +385,16 @@ export function VehicleForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>License plate *</FormLabel>
-                <FormControl><UppercaseInput maxLength={15} {...field} /></FormControl>
+                <FormControl>
+                  <UppercaseInput
+                    maxLength={15}
+                    {...field}
+                    onBlur={() => {
+                      field.onBlur();
+                      void checkTaken();
+                    }}
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -318,7 +405,16 @@ export function VehicleForm({
             render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>VIN</FormLabel>
-                <FormControl><UppercaseInput maxLength={40} {...field} /></FormControl>
+                <FormControl>
+                  <UppercaseInput
+                    maxLength={40}
+                    {...field}
+                    onBlur={() => {
+                      field.onBlur();
+                      void checkTaken();
+                    }}
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

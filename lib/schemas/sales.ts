@@ -258,6 +258,9 @@ export const ListSalesJobsInput = z.object({
   // Invoices list order (client 2026-10-22 — "sort by invoice number"). The
   // invoice sort is by the number, not the text (0161).
   sort: z.enum(["date_desc", "date_asc", "invoice_asc", "invoice_desc"]).catch("date_desc").default("date_desc"),
+  // "missing" = jobs saved without a vehicle, so they can be found and fixed
+  // (client 2026-10-22). New jobs can't be saved without one any more.
+  vehicle: z.enum(["missing"]).optional().catch(undefined),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(25),
 });

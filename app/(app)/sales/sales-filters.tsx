@@ -182,6 +182,22 @@ export function SalesFilters({
         </Select>
       </div>
 
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-muted-foreground">Vehicle</label>
+        <Select
+          defaultValue={initial.vehicle ?? ALL}
+          onValueChange={(v) => setField("vehicle", v)}
+        >
+          <SelectTrigger className="h-9 w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>All</SelectItem>
+            <SelectItem value="missing">No vehicle</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       {hasFilters && (
         <Button variant="ghost" size="sm" onClick={clearAll}>
           <X className="size-4" /> Clear

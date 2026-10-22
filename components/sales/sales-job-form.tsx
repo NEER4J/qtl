@@ -1370,6 +1370,12 @@ export function SalesJobForm({
                       <Plus className="size-4" /> Add vehicle
                     </Button>
                   </div>
+                  {mode === "edit" && !selectedVehicle && (
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      This job was saved without a vehicle. Pick or add one, then save. A plate that&apos;s
+                      on another customer can be moved here from Add vehicle.
+                    </p>
+                  )}
                 </FormItem>
 
                 <VehicleFormDialog

@@ -6,6 +6,7 @@ import { wrapAction } from "@/lib/actions/_utils";
 import {
   CreateVehicleInput,
   DeactivateVehicleInput,
+  FindVehicleOwnerInput,
   SearchVehiclesInput,
   UpdateVehicleInput,
 } from "@/lib/schemas/vehicles";
@@ -13,14 +14,96 @@ import { createClient } from "@/lib/supabase/server";
 import { orFilterValue } from "@/lib/utils/parts-search";
 import type { SalesJob, Vehicle } from "@/lib/db/types";
 
-// Map a 23505 (unique violation) coming back from the vehicles table into
-// the right field error so the form highlights the offending column.
+type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
+
+// Which unique index a 23505 from the vehicles table came from.
 function uniqueErrorToField(message: string | null | undefined): string | null {
   if (!message) return null;
   if (message.includes("vehicles_plate_active_uniq")) return "license_plate";
   if (message.includes("vehicles_vin_active_uniq")) return "vin";
   return null;
 }
+
+/** The active vehicle holding a plate or VIN, and the customer it's on. */
+export interface VehicleOwner {
+  vehicle_id: string;
+  license_plate: string;
+  /** Which of the two matched. */
+  field: "license_plate" | "vin";
+  customer_id: string | null;
+  customer_name: string;
+}
+
+async function findVehicleOwner(
+  supabase: SupabaseServer,
+  field: "license_plate" | "vin",
+  value: string,
+  exceptId?: string,
+): Promise<VehicleOwner | null> {
+  const v = value.trim();
+  if (!v) return null;
+  // Same match as the unique index: case-insensitive, whole value.
+  let query = supabase
+    .from("vehicles")
+    .select("id, license_plate, customer_id, customers:customer_id(billing_name, last_or_company)")
+    .is("deactivated_at", null)
+    .ilike(field, v.replace(/[\\%_]/g, (m) => `\\${m}`))
+    .limit(1);
+  if (exceptId) query = query.neq("id", exceptId);
+  const { data, error } = await query;
+  if (error) throw error;
+  type Row = {
+    id: string;
+    license_plate: string;
+    customer_id: string | null;
+    customers: { billing_name: string | null; last_or_company: string | null } | { billing_name: string | null; last_or_company: string | null }[] | null;
+  };
+  const row = (data as Row[] | null)?.[0];
+  if (!row) return null;
+  const c = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+  return {
+    vehicle_id: row.id,
+    license_plate: row.license_plate,
+    field,
+    customer_id: row.customer_id,
+    customer_name: c?.billing_name ?? c?.last_or_company ?? "another customer",
+  };
+}
+
+/**
+ * A plate or VIN that's already taken, said in words: whose vehicle has it.
+ * Before (client 2026-10-22) the form only said "Duplicate value", so staff
+ * couldn't find the truck that was blocking them.
+ */
+async function duplicateVehicleError(
+  supabase: SupabaseServer,
+  field: "license_plate" | "vin",
+  value: string,
+  exceptId?: string,
+): Promise<Error> {
+  const owner = await findVehicleOwner(supabase, field, value, exceptId).catch(() => null);
+  const what = field === "license_plate" ? `Plate ${value.toUpperCase()}` : `VIN ${value.toUpperCase()}`;
+  // A plain Error (no PG code) so wrapAction shows this message as it is.
+  return new Error(
+    owner
+      ? `${what} is already on a vehicle of ${owner.customer_name}.`
+      : `${what} is already on another vehicle.`,
+  );
+}
+
+/** Whose vehicle has this plate (or, failing that, this VIN) — null if none. */
+export const getVehicleOwner = wrapAction({
+  schema: FindVehicleOwnerInput,
+  handler: async (input): Promise<VehicleOwner | null> => {
+    const supabase = await createClient();
+    if (input.license_plate) {
+      const byPlate = await findVehicleOwner(supabase, "license_plate", input.license_plate, input.except_id);
+      if (byPlate) return byPlate;
+    }
+    if (input.vin) return findVehicleOwner(supabase, "vin", input.vin, input.except_id);
+    return null;
+  },
+});
 
 // ----------------------------------------------------------------------------
 // List by customer (vehicles tab on /customers/[id])
@@ -95,15 +178,8 @@ export const createVehicle = wrapAction({
       .select("*");
     if (error) {
       const field = uniqueErrorToField(error.message);
-      if (field) {
-        // Throwing a typed shape would be cleaner; mapError just returns a
-        // generic 23505 string. Augment by re-raising with field hint.
-        throw Object.assign(new Error(
-          field === "license_plate"
-            ? "A vehicle with this license plate already exists."
-            : "A vehicle with this VIN already exists.",
-        ), { code: "23505", field });
-      }
+      if (field === "license_plate") throw await duplicateVehicleError(supabase, field, input.license_plate);
+      if (field === "vin" && input.vin) throw await duplicateVehicleError(supabase, field, input.vin);
       throw error;
     }
     // Deliberately avoid .single() on the insert read-back: if a policy or
@@ -143,13 +219,8 @@ export const updateVehicle = wrapAction({
       .single();
     if (error) {
       const field = uniqueErrorToField(error.message);
-      if (field) {
-        throw Object.assign(new Error(
-          field === "license_plate"
-            ? "A vehicle with this license plate already exists."
-            : "A vehicle with this VIN already exists.",
-        ), { code: "23505", field });
-      }
+      if (field === "license_plate") throw await duplicateVehicleError(supabase, field, rest.license_plate, id);
+      if (field === "vin" && rest.vin) throw await duplicateVehicleError(supabase, field, rest.vin, id);
       throw error;
     }
     revalidatePath(`/customers/${input.customer_id}`);

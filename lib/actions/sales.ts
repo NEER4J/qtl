@@ -181,6 +181,7 @@ export async function listSalesJobs(
   if (input.location_id) query = query.eq("location_id", input.location_id);
   if (input.service_type_id) query = query.eq("service_type_id", input.service_type_id);
   if (input.payment_status) query = query.eq("payment_status", input.payment_status);
+  if (input.vehicle === "missing") query = query.is("vehicle_id", null);
   if (input.q) {
     const term = `%${input.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
     // One column when the user picked one: a single trigram index lookup

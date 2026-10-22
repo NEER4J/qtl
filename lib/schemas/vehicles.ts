@@ -62,6 +62,14 @@ export type UpdateVehicleInput = z.infer<typeof UpdateVehicleInput>;
 
 export const DeactivateVehicleInput = z.object({ id: z.string().uuid() });
 
+/** Whose vehicle already holds this plate or VIN (both unique company-wide). */
+export const FindVehicleOwnerInput = z.object({
+  license_plate: z.string().trim().max(15).optional(),
+  vin: z.string().trim().max(40).optional(),
+  /** The vehicle being edited, which may keep its own plate. */
+  except_id: z.string().uuid().optional(),
+});
+
 export const SearchVehiclesInput = z.object({
   q: z.string().trim().max(40).default(""),
   customer_id: z.string().uuid().nullable().optional(),
