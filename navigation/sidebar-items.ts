@@ -122,10 +122,10 @@ export const sidebarItems: NavGroup[] = [
         ],
       },
       {
-        // Parts / pricing CATALOGUE shortcuts. These pages live under
-        // /settings/pricing, whose registry entry is Admin-only — so the whole
-        // tile disappears for everyone else via the registry lookup. Distinct
-        // from the Pricing menu above, which is the price SHEETS.
+        // Parts / pricing CATALOGUE shortcuts. Each sheet has its own
+        // registry key (Admin-only by default), so the menu shows exactly the
+        // sheets a user was granted. Distinct from the Pricing menu above,
+        // which is the price SHEETS.
         title: "Pricing Catalogue",
         url: "/settings/pricing",
         icon: Package,
@@ -202,6 +202,8 @@ export const sidebarItems: NavGroup[] = [
           { title: "HST Summary", url: "/reports/hst" },
           { title: "P&L", url: "/reports/pnl" },
           { title: "Outstanding Invoices", url: "/reports/outstanding" },
+          { title: "Customer statement", url: "/reports/customer-statement" },
+          { title: "Mileage", url: "/reports/mileage" },
         ],
       },
     ],
@@ -290,9 +292,9 @@ export function filterSidebar(
     hidden_columns: {},
   });
 
-  // `pageKeyForRequestPath` (not `pageKeyForPath`) so sub-item URLs resolve to
-  // their parent page: /analytics/sales → analytics, /settings/pricing/parts →
-  // settings_pricing, /payroll/employees → payroll.
+  // `pageKeyForRequestPath` (not `pageKeyForPath`) so a URL resolves to its
+  // most specific registered page: /settings/pricing/parts →
+  // settings_pricing_parts, /sales/new → sales.
   const passes = (url: string, roles: UserRole[] | undefined): boolean => {
     const key = pageKeyForRequestPath(url);
     if (key) return allowed.has(key);
