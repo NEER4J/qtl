@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, FileDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/pricing/print-button";
@@ -10,6 +10,7 @@ import { getAppSettings } from "@/lib/actions/reference";
 import { formatDate, formatMoney } from "@/lib/utils/format";
 import { hiddenColumnsForPage } from "@/lib/permissions/check";
 import { deductionExemptions } from "@/lib/utils/payroll-flags";
+import { payrollDeductions, payrollGross } from "@/lib/utils/payroll-math";
 
 export const dynamic = "force-dynamic";
 
@@ -54,10 +55,8 @@ export default async function PayrollPrintPage({
   const sum = (fn: (e: (typeof week.entries)[number]) => number) =>
     week.entries.reduce((s, e) => s + fn(e), 0);
 
-  const grossOf = (e: (typeof week.entries)[number]) =>
-    e.gross_wages + e.overtime_wages + e.bonus + e.holiday_pay + e.misc_extra;
-  const deductionsOf = (e: (typeof week.entries)[number]) =>
-    e.ei_employee + e.cpp_employee + e.cpp_employee2 + e.income_tax + e.benefit_employee_deduction;
+  const grossOf = payrollGross;
+  const deductionsOf = payrollDeductions;
 
   return (
     <div className="flex flex-col gap-6">
@@ -82,6 +81,13 @@ export default async function PayrollPrintPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {mode === "stubs" && (
+            <Button asChild variant="outline" size="sm">
+              <a href={`/api/payroll/${week.id}/stubs`} target="_blank" rel="noopener">
+                <FileDown className="size-4" /> PDF
+              </a>
+            </Button>
+          )}
           <Button asChild variant="outline" size="sm">
             <Link href={`/payroll/${week.id}/print?mode=${mode === "register" ? "stubs" : "register"}`}>
               {mode === "register" ? "Switch to pay stubs" : "Switch to register"}
@@ -103,6 +109,7 @@ export default async function PayrollPrintPage({
             <p className="text-xs">
               Pay period: {periodLabel} · Status: {week.status}
               {week.period_weeks === 2 ? " · Bi-weekly" : ""}
+              {week.pay_date ? ` · Pay date: ${formatDate(week.pay_date)}` : ""}
             </p>
           </header>
 
@@ -116,6 +123,7 @@ export default async function PayrollPrintPage({
                 {show("overtime") && <Th>OT hrs</Th>}
                 {show("gross") && <Th>Gross</Th>}
                 {show("holiday_vacation") && <Th>Holiday</Th>}
+                {show("phone_allowance") && <Th>Phone</Th>}
                 {show("ei_cpp") && <Th>EI</Th>}
                 {show("ei_cpp") && <Th>CPP</Th>}
                 {show("ei_cpp") && <Th>CPP2</Th>}
@@ -165,6 +173,7 @@ export default async function PayrollPrintPage({
                       )}
                     </Td>
                   )}
+                  {show("phone_allowance") && <Td>{formatMoney(e.phone_allowance)}</Td>}
                   {show("ei_cpp") && <Td>{formatMoney(e.ei_employee)}</Td>}
                   {show("ei_cpp") && <Td>{formatMoney(e.cpp_employee)}</Td>}
                   {show("ei_cpp") && <Td>{formatMoney(e.cpp_employee2)}</Td>}
@@ -185,6 +194,7 @@ export default async function PayrollPrintPage({
                 {show("overtime") && <Td>{sum((e) => e.overtime_hours)}</Td>}
                 {show("gross") && <Td>{formatMoney(sum(grossOf))}</Td>}
                 {show("holiday_vacation") && <Td>{formatMoney(sum((e) => e.holiday_pay))}</Td>}
+                {show("phone_allowance") && <Td>{formatMoney(sum((e) => e.phone_allowance))}</Td>}
                 {show("ei_cpp") && <Td>{formatMoney(sum((e) => e.ei_employee))}</Td>}
                 {show("ei_cpp") && <Td>{formatMoney(sum((e) => e.cpp_employee))}</Td>}
                 {show("ei_cpp") && <Td>{formatMoney(sum((e) => e.cpp_employee2))}</Td>}
@@ -209,6 +219,8 @@ export default async function PayrollPrintPage({
           {week.entries.map((entry, i) => {
             const payments = week.payments.filter((p) => p.employee_id === entry.employee_id);
             const paid = payments.reduce((s, p) => s + p.amount, 0);
+            // The entry's own pay date, else the week's (0158).
+            const payDate = entry.pay_date || week.pay_date;
             return (
               <section
                 key={entry.id}
@@ -226,11 +238,13 @@ export default async function PayrollPrintPage({
                   <div className="text-right">
                     <p className="font-semibold">Pay statement</p>
                     <p className="text-xs">Pay period: {periodLabel}</p>
-                    {entry.pay_date && (
-                      <p className="text-xs">Pay date: {formatDate(entry.pay_date)}</p>
-                    )}
+                    {payDate && <p className="text-xs">Pay date: {formatDate(payDate)}</p>}
                     {entry.cheque_no && <p className="text-xs">Cheque no.: {entry.cheque_no}</p>}
-                    <p className="text-xs capitalize">Status: {week.status}</p>
+                    {/* The employee keeps this — "draft" on it reads as "not
+                        final" (client 2026-10-20). */}
+                    {week.status !== "draft" && (
+                      <p className="text-xs capitalize">Status: {week.status}</p>
+                    )}
                   </div>
                 </header>
 
@@ -271,6 +285,9 @@ export default async function PayrollPrintPage({
                           />
                         )}
                         {entry.bonus > 0 && <StubRow label="Bonus" value={entry.bonus} />}
+                        {show("phone_allowance") && entry.phone_allowance > 0 && (
+                          <StubRow label="Phone allowance" value={entry.phone_allowance} />
+                        )}
                         {entry.misc_extra > 0 && <StubRow label="Other taxable extras" value={entry.misc_extra} />}
                         {show("gross") && (
                           <StubRow label="Gross earnings" value={grossOf(entry)} bold border />

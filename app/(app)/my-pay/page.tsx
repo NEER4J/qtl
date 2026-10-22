@@ -16,6 +16,7 @@ import { PrintButton } from "@/components/pricing/print-button";
 import { requireProfile } from "@/lib/auth/require";
 import { getMyPay } from "@/lib/actions/payroll";
 import { formatDate, formatMoney } from "@/lib/utils/format";
+import { payrollDeductions, payrollGross } from "@/lib/utils/payroll-math";
 
 export const dynamic = "force-dynamic";
 
@@ -31,14 +32,8 @@ export default async function MyPayPage() {
 
   const totals = rows.reduce(
     (acc, r) => {
-      const gross =
-        r.gross_wages + r.overtime_wages + r.bonus + r.holiday_pay + r.misc_extra;
-      const deductions =
-        r.ei_employee +
-        r.cpp_employee +
-        r.cpp_employee2 +
-        r.income_tax +
-        r.benefit_employee_deduction;
+      const gross = payrollGross(r);
+      const deductions = payrollDeductions(r);
       return {
         gross: acc.gross + gross,
         deductions: acc.deductions + deductions,
@@ -74,7 +69,8 @@ export default async function MyPayPage() {
           and what&apos;s been paid out. These are your own records only.
         </p>
         <ul>
-          <li><strong>Gross</strong> — regular + overtime + bonus + holiday + extras.</li>
+          <li><strong>Gross</strong> — regular + overtime + bonus + holiday + phone allowance + extras.</li>
+          <li><strong>Pay date</strong> shows under the week once your manager has set it.</li>
           <li><strong>Deductions</strong> — EI, CPP, income tax, and any benefit deductions.</li>
           <li><strong>Net pay</strong> — what you take home after deductions.</li>
           <li>If something looks off, talk to your manager — they manage the numbers.</li>
@@ -119,19 +115,23 @@ export default async function MyPayPage() {
                   </TableHeader>
                   <TableBody>
                     {rows.map((r) => {
-                      const gross =
-                        r.gross_wages + r.overtime_wages + r.bonus + r.holiday_pay + r.misc_extra;
-                      const deductions =
-                        r.ei_employee +
-                        r.cpp_employee +
-                        r.cpp_employee2 +
-                        r.income_tax +
-                        r.benefit_employee_deduction;
+                      const gross = payrollGross(r);
+                      const deductions = payrollDeductions(r);
                       return (
                         <TableRow key={r.week_id}>
                           <TableCell>
                             <span className="font-medium">{formatDate(r.week_start)}</span>
                             <span className="text-muted-foreground text-xs"> → {formatDate(r.week_end)}</span>
+                            {(r.pay_date || r.cheque_no) && (
+                              <div className="text-xs text-muted-foreground">
+                                {[
+                                  r.pay_date ? `Paid ${formatDate(r.pay_date)}` : null,
+                                  r.cheque_no ? `Chq #${r.cheque_no}` : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {r.location_name ?? "—"}

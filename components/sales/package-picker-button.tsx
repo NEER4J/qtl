@@ -43,6 +43,12 @@ function loadPackages(): Promise<PartPackageWithItems[]> {
   return inflight;
 }
 
+/** The active packages, from the cache when it is fresh. */
+export function getPickerPackages(): Promise<PartPackageWithItems[]> {
+  if (cached && Date.now() - cached.at < REFRESH_AFTER_MS) return Promise.resolve(cached.data);
+  return loadPackages();
+}
+
 /** Warm the cache ahead of the click (hover / focus). Never throws. */
 function prefetchPackages() {
   if (cached && Date.now() - cached.at < REFRESH_AFTER_MS) return;

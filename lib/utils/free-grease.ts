@@ -1,17 +1,28 @@
 // Item #15 — free grease offer eligibility check.
-// Pure function (callable from client + server). Lives outside `lib/actions/*`
+// Pure functions (callable from client + server). Live outside `lib/actions/*`
 // because actions modules are `"use server"` and can only export async fns.
 
-import { toISODate } from "./tz";
+import { addDaysISO, toISODate } from "./tz";
 
-export function isFreeGreaseEligible(
-  customer: { free_grease_until: string | null } | null | undefined,
+/** Days a vehicle's free-grease offer stays open after it is added. */
+export const FREE_GREASE_DAYS = 30;
+
+/** Last day (YYYY-MM-DD, Ontario) of a vehicle's free-grease offer. */
+export function vehicleFreeGreaseUntil(vehicle: { created_at: string }): string {
+  return addDaysISO(toISODate(new Date(vehicle.created_at)), FREE_GREASE_DAYS);
+}
+
+/**
+ * The offer is per vehicle (client 2026-10-20): every vehicle — a new
+ * customer's or an existing customer's new truck — gets free grease once in
+ * its first 30 days. `usedVehicleIds` are vehicles that already redeemed it.
+ * Dates compare as Ontario YYYY-MM-DD strings and the whole last day counts.
+ */
+export function isVehicleFreeGreaseEligible(
+  vehicle: { id: string; created_at: string } | null | undefined,
+  usedVehicleIds: ReadonlySet<string>,
   asOf: Date = new Date(),
 ): boolean {
-  if (!customer?.free_grease_until) return false;
-  // free_grease_until is YYYY-MM-DD and the whole day counts. Compared as
-  // strings against Ontario's date: building a Date from the bare string
-  // parsed it in the runtime's zone, so on the UTC server the offer expired
-  // at 8 PM Ontario time on its own last day.
-  return toISODate(asOf) <= customer.free_grease_until;
+  if (!vehicle || usedVehicleIds.has(vehicle.id)) return false;
+  return toISODate(asOf) <= vehicleFreeGreaseUntil(vehicle);
 }

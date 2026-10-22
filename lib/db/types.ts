@@ -440,6 +440,8 @@ export interface SalesJobItem {
   oil_container?: "bulk" | "gallon" | null;
   /** A line the sales form adds itself (0149). */
   auto_fee?: "oil_tier_premium" | "grease_only_fee" | null;
+  /** Oil beyond the engine's capacity, at the retail rate (0157). */
+  is_extra_oil?: boolean;
   created_at: string;
   created_by: string | null;
 }
@@ -579,6 +581,18 @@ export interface Employee {
   apply_income_tax: boolean;
   apply_vacation: boolean;
   apply_wsib: boolean;
+  // Vacation override + pay defaults (0158, client 2026-10-20). Absent until
+  // that migration runs; null = no default. vacation_pay_rate is a fraction
+  // (0.06 = 6%), null = the shop rate in app_settings.
+  vacation_pay_rate?: number | null;
+  default_hours?: number | null;
+  default_overtime_hours?: number | null;
+  default_bonus?: number | null;
+  default_phone_allowance?: number | null;
+  default_misc_extra?: number | null;
+  default_income_tax?: number | null;
+  default_benefit_employee_deduction?: number | null;
+  default_benefit_employer_contribution?: number | null;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -620,6 +634,9 @@ export interface PayrollWeek {
   /** 1 = weekly (Sun–Sat), 2 = bi-weekly. */
   period_weeks: number;
   status: PayrollWeekStatus;
+  /** Default pay date for everyone on the week (0158); an entry's own
+   *  pay_date wins. Absent before that migration. */
+  pay_date?: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -644,8 +661,14 @@ export interface PayrollEntry {
   holiday_rate: number;
   holiday_pay: number;
   vacation_pay: number;
+  /** Vacation rate (fraction) vacation_pay was worked out at (0158). Null on
+   *  older entries; absent before that migration. */
+  vacation_rate?: number | null;
   bonus: number;
   misc_extra: number;
+  /** Phone allowance (0158) — taxable and insurable, counts in gross and net
+   *  but not the vacation base. Absent before that migration: read as 0. */
+  phone_allowance?: number;
   insurable_earnings: number;
   // Employee statutory deductions
   ei_employee: number;
@@ -701,6 +724,9 @@ export interface PayrollPayment {
   notes: string | null;
   created_at: string;
   created_by: string | null;
+  /** Edit tracking (0158). Absent before that migration. */
+  updated_at?: string;
+  updated_by?: string | null;
 }
 
 // ============================================================================
@@ -802,6 +828,9 @@ export interface OilGroup {
   /** highest_cost mode: highest member gallon cost PER LITRE. A gallon line
    *  charges this × the oil's own litres_per_gallon. NULL = not set, fall back. */
   gallon_price_per_litre?: number | null;
+  /** Price per litre for oil sold beyond an engine's capacity (0157). NULL =
+   *  not set: extra oil stays at the group rate. Absent before 0157. */
+  retail_price_per_litre?: number | null;
   active: boolean;
   sort_order: number;
   created_at: string;

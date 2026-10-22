@@ -10,10 +10,17 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { cn } from "@/lib/utils";
 import { getAuthClaims, getCurrentProfile } from "@/lib/auth/get-profile";
 import { SearchDialog } from "@/components/sidebar/search-dialog";
-import { effectiveAllowedPageKeys, isAdminProfile, isPageAllowed } from "@/lib/permissions/check";
+import { ViewOnlyBanner } from "@/components/view-only-banner";
+import {
+  canUpdatePage,
+  effectiveAllowedPageKeys,
+  isAdminProfile,
+  isPageAllowed,
+} from "@/lib/permissions/check";
 import {
   PAGE_REGISTRY,
   pageKeyForRequestPath,
+  roleCanUpdatePage,
 } from "@/lib/permissions/registry";
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
@@ -32,9 +39,9 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   // owner is subject to it now (so the Settings section is blocked for owner).
   // The `x-pathname` header is set by middleware (lib/supabase/proxy.ts) so we
   // can identify which registered page the current URL belongs to.
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  const pageKey = pageKeyForRequestPath(pathname);
   if (!isAdminProfile(profile)) {
-    const pathname = (await headers()).get("x-pathname") ?? "";
-    const pageKey = pageKeyForRequestPath(pathname);
     if (pageKey && !isPageAllowed(profile, pageKey)) {
       // Send the user somewhere they ARE allowed. /dashboard is the usual
       // landing pad, but if it's been revoked we fall back to the first page
@@ -48,6 +55,12 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
       redirect(fallback ?? "/auth/login?error=no_access");
     }
   }
+
+  // Pages where the role could change things but an admin switched this
+  // person's Update off — the banner picks the current one from the URL.
+  const viewOnlyPages = PAGE_REGISTRY.filter(
+    (p) => roleCanUpdatePage(profile.role, p.key) && !canUpdatePage(profile, p.key),
+  ).map((p) => p.key);
 
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value === "true";
@@ -98,7 +111,10 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
             </div>
           </div>
         </header>
-        <div className="h-full min-w-0 p-4 md:p-6">{children}</div>
+        <div className="h-full min-w-0 p-4 md:p-6">
+          <ViewOnlyBanner viewOnlyPages={viewOnlyPages} />
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );

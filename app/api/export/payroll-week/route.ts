@@ -1,8 +1,9 @@
 import { getPayrollWeek } from "@/lib/actions/payroll";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
-import { hiddenColumnsForPage } from "@/lib/permissions/check";
+import { hiddenColumnsForPage, isPageAllowed } from "@/lib/permissions/check";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
 import { deductionExemptions } from "@/lib/utils/payroll-flags";
+import { payrollGross } from "@/lib/utils/payroll-math";
 import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,11 @@ export async function GET(req: Request) {
   if (!profile || profile.role === "portal_customer") {
     return new Response("Unauthorized", { status: 401 });
   }
+  // Outside the (app) layout's page gate, as above: RLS alone lets a manager
+  // read their shop's payroll.
+  if (!isPageAllowed(profile, "payroll")) {
+    return new Response("You don't have access to Payroll.", { status: 403 });
+  }
 
   const weekId = new URL(req.url).searchParams.get("week_id");
   if (!weekId) return new Response("week_id is required", { status: 400 });
@@ -32,6 +38,7 @@ export async function GET(req: Request) {
   sections.push(`# Payroll — ${week.location_name}`);
   sections.push(`# Pay period,${week.week_start},to,${week.week_end}`);
   sections.push(`# Status,${week.status}`);
+  if (week.pay_date) sections.push(`# Pay date,${week.pay_date}`);
   sections.push(`# Exported,${todayISO()}\n`);
 
   const entryRows = week.entries.map((e) => ({
@@ -42,13 +49,7 @@ export async function GET(req: Request) {
     ...(show("overtime")
       ? { overtime_hours: e.overtime_hours, overtime_rate: e.overtime_rate }
       : {}),
-    ...(show("gross")
-      ? {
-          gross: (
-            e.gross_wages + e.overtime_wages + e.bonus + e.holiday_pay + e.misc_extra
-          ).toFixed(2),
-        }
-      : {}),
+    ...(show("gross") ? { gross: payrollGross(e).toFixed(2) } : {}),
     ...(show("holiday_vacation")
       ? {
           holiday_hours: e.holiday_hours,
@@ -56,12 +57,20 @@ export async function GET(req: Request) {
           holiday_pay: e.holiday_pay,
         }
       : {}),
+    bonus: e.bonus,
+    ...(show("phone_allowance") ? { phone_allowance: e.phone_allowance } : {}),
+    misc_extra: e.misc_extra,
     ...(show("ei_cpp")
       ? { ei: e.ei_employee, cpp: e.cpp_employee, cpp2: e.cpp_employee2 }
       : {}),
     ...(show("income_tax") ? { income_tax: e.income_tax } : {}),
     benefit_deduction: e.benefit_employee_deduction,
-    ...(show("holiday_vacation") ? { vacation_accrued: e.vacation_pay } : {}),
+    ...(show("holiday_vacation")
+      ? {
+          vacation_accrued: e.vacation_pay,
+          vacation_rate_pct: e.vacation_rate == null ? "" : Math.round(e.vacation_rate * 10000) / 100,
+        }
+      : {}),
     ...(show("benefits")
       ? {
           employer_ei: e.ei_employer,
@@ -71,7 +80,7 @@ export async function GET(req: Request) {
         }
       : {}),
     exemptions: deductionExemptions(e).join(" / "),
-    pay_date: e.pay_date ?? "",
+    pay_date: e.pay_date || week.pay_date || "",
     cheque_no: e.cheque_no ?? "",
     cheque_amount: e.cheque_amount,
     cash_total: e.cash_total,

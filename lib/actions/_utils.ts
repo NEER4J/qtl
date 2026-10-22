@@ -5,6 +5,8 @@ import type { PostgrestError } from "@supabase/supabase-js";
 
 import { AuthorizationError, requireProfile, requireRole } from "@/lib/auth/require";
 import type { Profile, UserRole } from "@/lib/db/types";
+import { canUpdatePage } from "@/lib/permissions/check";
+import { pageByKey } from "@/lib/permissions/registry";
 
 /**
  * Thrown when a save would consume more of a part/oil than is on hand at the
@@ -36,6 +38,14 @@ export interface WrapActionOptions<
 > {
   schema: S;
   roles?: UserRole[];
+  /**
+   * The page(s) this write changes. The caller needs the Update right on at
+   * least one of them (lib/permissions/check.ts canUpdatePage) — so an admin
+   * can make a page view-only for one person (client 2026-10-20). Several
+   * pages when one write serves more than one, e.g. a customer added from the
+   * sales form. Leave out for reads.
+   */
+  page?: string | readonly string[];
   handler: (input: z.infer<S>, profile: Profile) => Promise<Output>;
 }
 
@@ -63,6 +73,7 @@ export function wrapAction<
 >({
   schema,
   roles,
+  page,
   handler,
 }: WrapActionOptions<S, Output>) {
   return async (rawInput: unknown): Promise<ActionResult<Output>> => {
@@ -76,6 +87,18 @@ export function wrapAction<
         return { ok: false, error: err.message, code: "forbidden" };
       }
       throw err;
+    }
+
+    if (page) {
+      const pages = typeof page === "string" ? [page] : page;
+      if (!pages.some((p) => canUpdatePage(profile, p))) {
+        const label = pageByKey(pages[0]!)?.label ?? "this page";
+        return {
+          ok: false,
+          error: `You have view-only access to ${label}. Ask an admin to turn on Update for you.`,
+          code: "forbidden",
+        };
+      }
     }
 
     let parsed: z.infer<S>;

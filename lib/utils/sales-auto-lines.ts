@@ -39,6 +39,8 @@ export interface AutoLineItem {
   oil_container?: "bulk" | "gallon" | null;
   transmission_service_id?: string | null;
   auto_fee?: AutoFee | null;
+  /** Oil beyond the engine's capacity, sold at the retail rate (0157). */
+  is_extra_oil?: boolean;
 }
 
 export interface AutoLineContext {
@@ -58,7 +60,8 @@ const fmtLitres = (n: number) => `${Number(n.toFixed(2))} L`;
 /**
  * Litres of each oil on the job that the tier is priced on: standalone oil
  * lines only. Package oil is priced by its package, returns and customer-
- * supplied oil aren't sold, and a gallon line counts jugs × that oil's jug size.
+ * supplied oil aren't sold, extra oil past the engine's capacity is a retail
+ * sale, and a gallon line counts jugs × that oil's jug size.
  * A saved line from before 0149 has no container and counts as litres, which is
  * what it was.
  */
@@ -69,6 +72,7 @@ export function oilLitresByType(
   const out = new Map<string, number>();
   for (const it of items) {
     if (!it.oil_type_id || it.package_group || it.auto_fee || it.is_customer_supplied) continue;
+    if (it.is_extra_oil) continue;
     if (Number(it.unit_price) < 0) continue;
     const qty = Number(it.quantity) || 0;
     if (qty <= 0) continue;
@@ -99,6 +103,79 @@ export function tierPremiumFor(
   }
   if (amount <= 0) return null;
   return { amount: round2(amount), description: `Volume tier premium — ${parts.join("; ")}` };
+}
+
+/** What the oil change on this job holds, and what oil beyond it costs. */
+export interface ExtraOilRule {
+  oilTypeId: string;
+  /** Litres the engine holds — the oil change and its tier are priced on this. */
+  capacity: number;
+  /** The oil group's retail $/L for oil beyond the capacity. */
+  retailRate: number;
+  /** Description for the extra-oil line. */
+  description: string;
+}
+
+/**
+ * Extra oil is a retail sale (client 2026-10-20). Bulk litres of the
+ * oil-change oil beyond the engine's capacity move to ONE "Extra oil" line at
+ * the retail rate, which the tier premium doesn't count. Litres only ever move
+ * out of the regular lines (trimmed from the last one back), so a staff edit to
+ * the extra line sticks and nothing bounces back and forth. Gallon lines are
+ * left alone: their quantity is jugs, not litres.
+ */
+export function splitExtraOil<T extends AutoLineItem>(
+  items: readonly T[],
+  rule: ExtraOilRule | null,
+  makeLine: (partial: Partial<T>) => T,
+): T[] {
+  if (!rule || !(rule.capacity > 0)) return [...items];
+  const isRegular = (it: T) =>
+    it.oil_type_id === rule.oilTypeId &&
+    !it.package_group &&
+    !it.auto_fee &&
+    !it.is_extra_oil &&
+    !it.is_customer_supplied &&
+    it.oil_container !== "gallon" &&
+    Number(it.unit_price) >= 0;
+  const regularLitres = items.filter(isRegular).reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+  const moved = round2(regularLitres - rule.capacity);
+  if (moved <= 0) return [...items];
+
+  let over = moved;
+  let taxable = true;
+  const next: (T | null)[] = [...items];
+  for (let i = next.length - 1; i >= 0 && over > 0; i--) {
+    const it = next[i]!;
+    if (!isRegular(it)) continue;
+    taxable = it.is_taxable;
+    const qty = Number(it.quantity) || 0;
+    const take = Math.min(qty, over);
+    over = round2(over - take);
+    const left = round2(qty - take);
+    next[i] = left > 0 ? { ...it, quantity: left } : null;
+  }
+  const kept = next.filter((it): it is T => it != null);
+
+  const extra = kept.find((it) => it.is_extra_oil && it.oil_type_id === rule.oilTypeId);
+  if (extra) {
+    return kept.map((it) =>
+      it === extra ? { ...it, quantity: round2((Number(it.quantity) || 0) + moved) } : it,
+    );
+  }
+  return [
+    ...kept,
+    makeLine({
+      part_id: null,
+      description: rule.description,
+      quantity: moved,
+      unit_price: round2(rule.retailRate),
+      is_taxable: taxable,
+      oil_type_id: rule.oilTypeId,
+      oil_container: "bulk",
+      is_extra_oil: true,
+    } as Partial<T>),
+  ];
 }
 
 /**

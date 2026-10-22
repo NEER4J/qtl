@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { InfoTip } from "@/components/help/info-tip";
 import {
   Select,
   SelectContent,
@@ -55,7 +56,44 @@ type FormValues = {
   apply_income_tax: boolean;
   apply_vacation: boolean;
   apply_wsib: boolean;
+  // Pay defaults (0158, client 2026-10-20) — pre-fill a NEW payroll entry.
+  // Text so a box can be left blank (= no default), not forced to 0.
+  default_hours: string;
+  default_overtime_hours: string;
+  default_bonus: string;
+  default_phone_allowance: string;
+  default_misc_extra: string;
+  default_income_tax: string;
+  default_benefit_employee_deduction: string;
+  default_benefit_employer_contribution: string;
+  /** Percent as typed (6 = 6%); blank = the shop rate. Saved as a fraction. */
+  vacation_pct: string;
 };
+
+type DefaultKey =
+  | "default_hours"
+  | "default_overtime_hours"
+  | "default_bonus"
+  | "default_phone_allowance"
+  | "default_misc_extra"
+  | "default_income_tax"
+  | "default_benefit_employee_deduction"
+  | "default_benefit_employer_contribution";
+
+const DEFAULT_KEYS: DefaultKey[] = [
+  "default_hours",
+  "default_overtime_hours",
+  "default_bonus",
+  "default_phone_allowance",
+  "default_misc_extra",
+  "default_income_tax",
+  "default_benefit_employee_deduction",
+  "default_benefit_employer_contribution",
+];
+
+/** Fraction → percent text (0.06 → "6"); null → blank. */
+const toPct = (rate: number | null | undefined) =>
+  rate == null ? "" : String(Math.round(Number(rate) * 10000) / 100);
 
 const blank: FormValues = {
   full_name: "",
@@ -74,6 +112,15 @@ const blank: FormValues = {
   apply_income_tax: true,
   apply_vacation: true,
   apply_wsib: true,
+  default_hours: "",
+  default_overtime_hours: "",
+  default_bonus: "",
+  default_phone_allowance: "",
+  default_misc_extra: "",
+  default_income_tax: "",
+  default_benefit_employee_deduction: "",
+  default_benefit_employer_contribution: "",
+  vacation_pct: "",
 };
 
 export function EmployeeFormDialog({
@@ -83,6 +130,7 @@ export function EmployeeFormDialog({
   employee,
   locations,
   profiles,
+  shopVacationRate,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -90,6 +138,8 @@ export function EmployeeFormDialog({
   employee?: Employee;
   locations: Location[];
   profiles: LinkableProfile[];
+  /** app_settings.vacation_pay_rate (fraction), shown as the blank-override hint. */
+  shopVacationRate: number;
 }) {
   const [isPending, startTransition] = useTransition();
   const form = useForm<FormValues>({ defaultValues: blank });
@@ -115,12 +165,32 @@ export function EmployeeFormDialog({
             apply_income_tax: employee.apply_income_tax ?? true,
             apply_vacation: employee.apply_vacation ?? true,
             apply_wsib: employee.apply_wsib ?? true,
-          }
+            ...Object.fromEntries(
+              DEFAULT_KEYS.map((k) => [k, employee[k] == null ? "" : String(employee[k])]),
+            ),
+            vacation_pct: toPct(employee.vacation_pay_rate),
+          } as FormValues
         : blank,
     );
   }, [open, mode, employee, form]);
 
   const onSubmit = form.handleSubmit((values) => {
+    // Blank = no default / the shop rate. Checked here because this form
+    // isn't schema-resolved and the server's message is only "fix the fields".
+    const optional = (v: string) => (v.trim() === "" ? null : Number(v));
+    const defaults = Object.fromEntries(DEFAULT_KEYS.map((k) => [k, optional(values[k])])) as Record<
+      DefaultKey,
+      number | null
+    >;
+    if (Object.values(defaults).some((v) => v !== null && (!Number.isFinite(v) || v < 0))) {
+      toast.error("Pay defaults must be 0 or more (or left blank).");
+      return;
+    }
+    const vacationPct = optional(values.vacation_pct);
+    if (vacationPct !== null && (!Number.isFinite(vacationPct) || vacationPct < 0 || vacationPct > 100)) {
+      toast.error("Vacation % must be between 0 and 100 (or blank for the shop rate).");
+      return;
+    }
     startTransition(async () => {
       const payload = {
         full_name: values.full_name.trim(),
@@ -139,6 +209,8 @@ export function EmployeeFormDialog({
         apply_income_tax: values.apply_income_tax,
         apply_vacation: values.apply_vacation,
         apply_wsib: values.apply_wsib,
+        ...defaults,
+        vacation_pay_rate: vacationPct === null ? null : Math.round(vacationPct * 100) / 10000,
       };
       const res =
         mode === "create"
@@ -320,7 +392,67 @@ export function EmployeeFormDialog({
 
             <fieldset className="rounded-md border p-3">
               <legend className="px-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Payroll defaults
+                Pay defaults
+              </legend>
+              <div className="grid grid-cols-2 gap-3">
+                <DefaultNumber name="default_hours" label="Hours per period" step="0.25" control={form.control} />
+                <DefaultNumber name="default_overtime_hours" label="Overtime hours" step="0.25" control={form.control} />
+                <DefaultNumber name="default_bonus" label="Bonus ($)" control={form.control} />
+                <DefaultNumber
+                  name="default_phone_allowance"
+                  label="Phone allowance ($)"
+                  control={form.control}
+                  tip="Taxable and insurable — counts in gross pay, EI, CPP and WSIB, but not vacation pay."
+                />
+                <DefaultNumber name="default_misc_extra" label="Misc extra ($)" control={form.control} />
+                <DefaultNumber name="default_income_tax" label="Income tax ($)" control={form.control} />
+                <DefaultNumber
+                  name="default_benefit_employee_deduction"
+                  label="Benefits — employee ($)"
+                  control={form.control}
+                />
+                <DefaultNumber
+                  name="default_benefit_employer_contribution"
+                  label="Benefits — employer ($)"
+                  control={form.control}
+                />
+                <FormField
+                  control={form.control}
+                  name="vacation_pct"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel className="flex items-center gap-1">
+                        Vacation % override
+                        <InfoTip>
+                          Vacation pay rate for this person only — e.g. 6 for someone with five
+                          years&apos; service. Blank uses the shop rate set on the Payroll page.
+                        </InfoTip>
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          placeholder={`Blank = use the shop setting ${toPct(shopVacationRate)}%`}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Picking this person on a <strong>new</strong> payroll entry fills in these amounts,
+                the hourly rate above, and the vacation % — change any of them for a single week on
+                the entry. Leave a box blank for no default. Entries already saved are not changed.
+              </p>
+            </fieldset>
+
+            <fieldset className="rounded-md border p-3">
+              <legend className="px-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Deductions that apply
               </legend>
               <div className="grid grid-cols-2 gap-x-6">
                 <DefaultSwitch name="apply_ei" label="EI" control={form.control} />
@@ -369,6 +501,40 @@ export function EmployeeFormDialog({
         </Form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** One pay-default amount; blank means "no default". */
+function DefaultNumber({
+  name,
+  label,
+  control,
+  step = "0.01",
+  tip,
+}: {
+  name: DefaultKey;
+  label: string;
+  control: ReturnType<typeof useForm<FormValues>>["control"];
+  step?: string;
+  tip?: string;
+}) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel className="flex items-center gap-1">
+            {label}
+            {tip ? <InfoTip>{tip}</InfoTip> : null}
+          </FormLabel>
+          <FormControl>
+            <Input type="number" min="0" step={step} placeholder="—" {...field} />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
   );
 }
 

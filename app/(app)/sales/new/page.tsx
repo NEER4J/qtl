@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { PageHelp } from "@/components/help/page-help";
 import { SalesJobForm } from "@/components/sales/sales-job-form";
 import { requireProfile } from "@/lib/auth/require";
+import { canUpdatePage } from "@/lib/permissions/check";
 import {
   getAppSettings,
   listActiveLocations,
@@ -33,6 +34,8 @@ export default async function NewSalesJobPage({
   if (profile.role === "accountant" || profile.role === "employee") {
     redirect("/sales");
   }
+  // View-only on Sales: nothing to save here (createSalesJob refuses it too).
+  if (!canUpdatePage(profile, "sales")) redirect("/sales");
 
   const { customer_id: preselectCustomerId, vehicle_id: preselectVehicleId } =
     await searchParams;

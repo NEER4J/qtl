@@ -26,10 +26,13 @@ export function EmployeesTable({
   rows,
   locations,
   profiles,
+  shopVacationRate,
 }: {
   rows: EmployeeWithLinks[];
   locations: Location[];
   profiles: LinkableProfile[];
+  /** app_settings.vacation_pay_rate (fraction). */
+  shopVacationRate: number;
 }) {
   const [editing, setEditing] = useState<EmployeeWithLinks | null>(null);
   const [creating, setCreating] = useState(false);
@@ -97,6 +100,12 @@ export function EmployeesTable({
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {Number(e.default_hourly_rate) > 0 ? formatMoney(e.default_hourly_rate) : "—"}
+                    {/* Only an override is worth a line — everyone else is on the shop rate. */}
+                    {e.vacation_pay_rate != null && (
+                      <div className="text-xs text-muted-foreground">
+                        Vacation {Math.round(Number(e.vacation_pay_rate) * 10000) / 100}%
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{e.location_name ?? "—"}</TableCell>
                   <TableCell className="text-muted-foreground">
@@ -135,6 +144,7 @@ export function EmployeesTable({
         mode="create"
         locations={locations}
         profiles={profiles}
+        shopVacationRate={shopVacationRate}
       />
       <EmployeeFormDialog
         open={editing !== null}
@@ -143,6 +153,7 @@ export function EmployeesTable({
         employee={editing ?? undefined}
         locations={locations}
         profiles={profiles}
+        shopVacationRate={shopVacationRate}
       />
     </>
   );

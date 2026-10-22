@@ -1,9 +1,22 @@
 import { getCustomerStatement } from "@/lib/actions/reports";
+import { requireProfile } from "@/lib/auth/require";
+import { isPageAllowed } from "@/lib/permissions/check";
+import { pageKeyForRequestPath } from "@/lib/permissions/registry";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  // API routes sit outside the (app) layout's page gate. Linked from the
+  // customer page and the statement report, so either grant opens it.
+  const profile = await requireProfile();
+  if (
+    !isPageAllowed(profile, "customers") &&
+    !isPageAllowed(profile, pageKeyForRequestPath("/reports/customer-statement") ?? "reports")
+  ) {
+    return new Response("You don't have access to customer statements.", { status: 403 });
+  }
+
   const url = new URL(req.url);
   const customerId = url.searchParams.get("customer_id");
   if (!customerId) return new Response("customer_id required", { status: 400 });

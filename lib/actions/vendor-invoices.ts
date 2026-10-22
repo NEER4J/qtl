@@ -50,6 +50,7 @@ export async function getVendorInvoice(id: string): Promise<{
 
 export const createVendorInvoice = wrapAction({
   schema: CreateVendorInvoiceInput,
+  page: "vendors",
   roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<VendorInvoice> => {
     const supabase = await createClient();
@@ -97,6 +98,7 @@ export const createVendorInvoice = wrapAction({
 
 export const recordVendorInvoicePayment = wrapAction({
   schema: RecordVendorInvoicePaymentInput,
+  page: "vendors",
   roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<VendorInvoice> => {
     const supabase = await createClient();

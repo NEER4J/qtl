@@ -7,7 +7,7 @@ import { PartCategoriesTable } from "./part-categories-table";
 export const dynamic = "force-dynamic";
 
 export default async function PartCategoriesPage() {
-  await requirePage("settings_pricing");
+  await requirePage("settings_pricing_categories");
   const categories = await listAllPartCategories();
 
   return (

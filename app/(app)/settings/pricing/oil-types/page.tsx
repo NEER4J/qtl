@@ -7,7 +7,7 @@ import { OilTypesTable } from "./oil-types-table";
 export const dynamic = "force-dynamic";
 
 export default async function OilTypesPage() {
-  await requirePage("settings_pricing");
+  await requirePage("settings_pricing_oil_types");
   const [oilTypes, oilGroups] = await Promise.all([listAllOilTypes(), listAllOilGroups()]);
 
   return (

@@ -43,6 +43,7 @@ export const PAGE_REGISTRY: PageDef[] = [
   { key: "invoices", label: "Invoices", group: "Operations", path: "/invoices", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
   { key: "expenses", label: "Expenses", group: "Operations", path: "/expenses", defaultRoles: ["owner", "co_owner", "accountant"] },
   { key: "payroll", label: "Payroll", group: "Operations", path: "/payroll", defaultRoles: ["owner", "co_owner", "accountant"] },
+  { key: "payroll_employees", label: "Payroll — Employees", group: "Operations", path: "/payroll/employees", defaultRoles: ["owner", "co_owner", "accountant"] },
 
   // Catalog & directory
   { key: "customers", label: "Customers", group: "Catalog", path: "/customers", defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "staff", "technician"] },
@@ -74,8 +75,20 @@ export const PAGE_REGISTRY: PageDef[] = [
   // Accounting keeps Analytics — Payroll (its one ✓ in this group).
   { key: "analytics", label: "Analytics", group: "Insights", path: "/analytics", defaultRoles: ["owner", "co_owner"] },
   { key: "analytics_payroll", label: "Analytics — Payroll", group: "Insights", path: "/analytics/payroll", defaultRoles: ["owner", "co_owner", "accountant"] },
+  // Every analytics / report sheet has its own key (client 2026-10-20 — "lots
+  // of things are missing"). Before, they all rode on the parent key; see
+  // PAGE_FAMILIES for how older saved overrides carry over.
+  { key: "analytics_sales", label: "Analytics — Sales", group: "Insights", path: "/analytics/sales", defaultRoles: ["owner", "co_owner"] },
+  { key: "analytics_jobs", label: "Analytics — Jobs", group: "Insights", path: "/analytics/jobs", defaultRoles: ["owner", "co_owner"] },
+  { key: "analytics_products", label: "Analytics — Products", group: "Insights", path: "/analytics/products", defaultRoles: ["owner", "co_owner"] },
+  { key: "analytics_expenses", label: "Analytics — Expenses", group: "Insights", path: "/analytics/expenses", defaultRoles: ["owner", "co_owner"] },
   { key: "reports", label: "Reports", group: "Insights", path: "/reports", defaultRoles: ["owner", "co_owner"] },
   { key: "reports_hst", label: "Reports — HST", group: "Insights", path: "/reports/hst", defaultRoles: ["owner", "co_owner"] },
+  { key: "reports_daily", label: "Reports — Daily", group: "Insights", path: "/reports/daily", defaultRoles: ["owner", "co_owner"] },
+  { key: "reports_outstanding", label: "Reports — Outstanding", group: "Insights", path: "/reports/outstanding", defaultRoles: ["owner", "co_owner"] },
+  { key: "reports_pnl", label: "Reports — Profit & loss", group: "Insights", path: "/reports/pnl", defaultRoles: ["owner", "co_owner"] },
+  { key: "reports_customer_statement", label: "Reports — Customer statement", group: "Insights", path: "/reports/customer-statement", defaultRoles: ["owner", "co_owner"] },
+  { key: "reports_mileage", label: "Reports — Mileage", group: "Insights", path: "/reports/mileage", defaultRoles: ["owner", "co_owner"] },
 
   // Settings
   // Matrix: every Settings row (incl. Audit Log) is ✗ by default for everyone
@@ -91,11 +104,54 @@ export const PAGE_REGISTRY: PageDef[] = [
   { key: "settings_services", label: "Service Types", group: "Settings", path: "/settings/services", defaultRoles: ["co_owner"] },
   { key: "settings_technicians", label: "Technicians", group: "Settings", path: "/settings/technicians", defaultRoles: ["co_owner"] },
   { key: "settings_pricing", label: "Pricing Catalogue", group: "Settings", path: "/settings/pricing", defaultRoles: ["co_owner"] },
+  // Each catalogue sheet is its own page (client 2026-10-20 — "Parts is not
+  // in permissions"). They all used to resolve to `settings_pricing`.
+  { key: "settings_pricing_parts", label: "Pricing Catalogue — Parts", group: "Settings", path: "/settings/pricing/parts", defaultRoles: ["co_owner"] },
+  { key: "settings_pricing_packages", label: "Pricing Catalogue — Packages", group: "Settings", path: "/settings/pricing/packages", defaultRoles: ["co_owner"] },
+  { key: "settings_pricing_categories", label: "Pricing Catalogue — Part categories", group: "Settings", path: "/settings/pricing/categories", defaultRoles: ["co_owner"] },
+  { key: "settings_pricing_brands", label: "Pricing Catalogue — Part brands", group: "Settings", path: "/settings/pricing/brands", defaultRoles: ["co_owner"] },
+  { key: "settings_pricing_oil_types", label: "Pricing Catalogue — Oil types", group: "Settings", path: "/settings/pricing/oil-types", defaultRoles: ["co_owner"] },
+  { key: "settings_pricing_oil_groups", label: "Pricing Catalogue — Oil groups", group: "Settings", path: "/settings/pricing/oil-groups", defaultRoles: ["co_owner"] },
+  { key: "settings_pricing_engine_types", label: "Pricing Catalogue — Engine types", group: "Settings", path: "/settings/pricing/engine-types", defaultRoles: ["co_owner"] },
+  { key: "settings_pricing_service_costs", label: "Pricing Catalogue — Labour / service costs", group: "Settings", path: "/settings/pricing/service-costs", defaultRoles: ["co_owner"] },
+  { key: "settings_pricing_volume_tiers", label: "Pricing Catalogue — Volume tiers", group: "Settings", path: "/settings/pricing/volume-tiers", defaultRoles: ["co_owner"] },
+  { key: "settings_pricing_price_history", label: "Pricing Catalogue — Price history", group: "Settings", path: "/settings/pricing/price-history", defaultRoles: ["co_owner"] },
   { key: "settings_promotions", label: "Promotions", group: "Settings", path: "/settings/promotions", defaultRoles: ["co_owner"] },
   { key: "settings_recurring", label: "Recurring Expenses", group: "Settings", path: "/settings/recurring-expenses", defaultRoles: ["co_owner"] },
   { key: "settings_statutory", label: "Statutory Rates", group: "Settings", path: "/settings/statutory-rates", defaultRoles: ["co_owner"] },
   { key: "settings_ip_access", label: "IP Access", group: "Settings", path: "/settings/ip-access", defaultRoles: ["co_owner"] },
   { key: "settings_audit_log", label: "Audit Log", group: "Settings", path: "/settings/audit-log", defaultRoles: ["co_owner"] },
+];
+
+/**
+ * Pages split out of a parent key after per-user overrides were already saved.
+ * A saved override that grants the parent but names none of its children was
+ * written when the parent still covered them, so it carries over: "role" fills
+ * the children from the role's defaults (the Pricing menu, whose Oil detail is
+ * owner-only), "all" grants every child (they were all one page before).
+ */
+export const PAGE_FAMILIES: { parent: string; fill: "role" | "all"; children: string[] }[] = [
+  {
+    parent: "pricing",
+    fill: "role",
+    children: ["pricing_filters", "pricing_all_filter_price", "pricing_oil_grid", "pricing_oil_detail", "pricing_print_list", "pricing_trans_diff"],
+  },
+  {
+    parent: "settings_pricing",
+    fill: "all",
+    children: PAGE_REGISTRY.filter((p) => p.key.startsWith("settings_pricing_")).map((p) => p.key),
+  },
+  {
+    parent: "analytics",
+    fill: "all",
+    children: ["analytics_sales", "analytics_jobs", "analytics_products", "analytics_expenses"],
+  },
+  {
+    parent: "reports",
+    fill: "all",
+    children: ["reports_daily", "reports_outstanding", "reports_pnl", "reports_customer_statement", "reports_mileage"],
+  },
+  { parent: "payroll", fill: "all", children: ["payroll_employees"] },
 ];
 
 const PAGE_KEY_BY_PATH = new Map(PAGE_REGISTRY.map((p) => [p.path, p.key]));
@@ -111,7 +167,7 @@ export function pageByKey(key: string): PageDef | null {
 /**
  * Match a request URL (which may include dynamic segments and sub-paths) to
  * the most-specific registered page. `/sales/123/edit` → `sales`,
- * `/settings/pricing/parts` → `settings_pricing` (the longest prefix wins).
+ * `/settings/pricing/parts/x` → `settings_pricing_parts` (the longest prefix wins).
  * Returns null for paths that aren't registered (utility routes etc.) — those
  * are intentionally not permission-gated.
  */
@@ -175,6 +231,8 @@ export const COLUMN_REGISTRY: PageColumns[] = [
       { key: "paid", label: "Paid" },
       { key: "outstanding", label: "Outstanding" },
       { key: "payment_status", label: "Payment status" },
+      { key: "payment_method", label: "Payment method", hint: "With the card on file for card payments." },
+      { key: "credit", label: "Store credit" },
     ],
   },
   {
@@ -216,6 +274,7 @@ export const COLUMN_REGISTRY: PageColumns[] = [
       { key: "income_tax", label: "Income tax" },
       { key: "benefits", label: "Employer remit (EI/CPP/WSIB)" },
       { key: "net_pay", label: "Net pay" },
+      { key: "phone_allowance", label: "Phone allowance" },
     ],
   },
 ];
@@ -249,6 +308,58 @@ export interface ActionDef {
   /** Human hint describing what revoking this action achieves. */
   hint?: string;
   defaultRoles: UserRole[];
+  /** The page's Update right (UPDATE_ROLES) rather than an extra action. */
+  isUpdate?: boolean;
+}
+
+// ----------------------------------------------------------------------------
+// Update rights — View / Update per page (client 2026-10-20)
+// ----------------------------------------------------------------------------
+// Opening a page is View (the page allowlist above). Changing anything on it is
+// Update: one `<page>.update` action per page that has anything to change.
+//
+// RESTRICT-ONLY: the roles listed are the ones whose server actions and
+// database policies already allow writes there. Update starts on for them and
+// an admin can switch it off to make a page view-only for one person; it can
+// never let a role write where the database would refuse it. Clone roles are
+// listed with their originals (supervisor = manager, technician = staff).
+const WRITE_FIELD: UserRole[] = ["owner", "co_owner", "manager", "supervisor", "staff", "technician"];
+const ADMIN_ONLY: UserRole[] = ["owner", "co_owner"];
+
+export const UPDATE_ROLES: Record<string, UserRole[]> = {
+  sales: [...WRITE_FIELD, "accountant"],
+  customers: WRITE_FIELD,
+  expenses: [...WRITE_FIELD, "accountant"],
+  payroll: ["owner", "co_owner", "manager", "supervisor", "accountant"],
+  payroll_employees: ["owner", "co_owner", "manager", "supervisor", "accountant"],
+  vendors: ["owner", "co_owner", "manager", "supervisor", "accountant"],
+  inventory: ["owner", "co_owner", "manager", "supervisor"],
+  pricing_oil_grid: ADMIN_ONLY,
+  pricing_oil_detail: ADMIN_ONLY,
+  pricing_trans_diff: ADMIN_ONLY,
+  settings_users: ADMIN_ONLY,
+  settings_locations: ADMIN_ONLY,
+  settings_categories: ADMIN_ONLY,
+  settings_services: ADMIN_ONLY,
+  settings_technicians: ADMIN_ONLY,
+  settings_pricing: ADMIN_ONLY,
+  settings_pricing_parts: ADMIN_ONLY,
+  settings_pricing_packages: ADMIN_ONLY,
+  settings_pricing_categories: ADMIN_ONLY,
+  settings_pricing_brands: ADMIN_ONLY,
+  settings_pricing_oil_types: ADMIN_ONLY,
+  settings_pricing_oil_groups: ADMIN_ONLY,
+  settings_pricing_engine_types: ADMIN_ONLY,
+  settings_pricing_service_costs: ADMIN_ONLY,
+  settings_pricing_volume_tiers: ADMIN_ONLY,
+  settings_promotions: ADMIN_ONLY,
+  settings_recurring: ["owner", "co_owner", "manager", "supervisor"],
+  settings_statutory: ADMIN_ONLY,
+  settings_ip_access: ADMIN_ONLY,
+};
+
+export function updateActionKey(pageKey: string): string {
+  return `${pageKey}.update`;
 }
 
 export const ACTION_REGISTRY: ActionDef[] = [
@@ -266,14 +377,30 @@ export const ACTION_REGISTRY: ActionDef[] = [
     hint: "Download on-hand part and oil stock for every location as a spreadsheet.",
     defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "technician"],
   },
+  ...Object.entries(UPDATE_ROLES).map(
+    ([pageKey, roles]): ActionDef => ({
+      key: updateActionKey(pageKey),
+      label: "Update",
+      pageKey,
+      hint: "Add, change and delete on this page. Off = view only.",
+      defaultRoles: roles,
+      isUpdate: true,
+    }),
+  ),
 ];
 
 const ACTION_BY_KEY = new Map(ACTION_REGISTRY.map((a) => [a.key, a]));
 export function actionByKey(key: string): ActionDef | null {
   return ACTION_BY_KEY.get(key) ?? null;
 }
+/** A page's extra actions (exports …) — its Update right is not among them. */
 export function actionsForPage(pageKey: string): ActionDef[] {
-  return ACTION_REGISTRY.filter((a) => a.pageKey === pageKey);
+  return ACTION_REGISTRY.filter((a) => a.pageKey === pageKey && !a.isUpdate);
+}
+
+/** True when this role's actions can change anything on the page at all. */
+export function roleCanUpdatePage(role: UserRole, pageKey: string): boolean {
+  return UPDATE_ROLES[pageKey]?.includes(role) ?? false;
 }
 
 // ----------------------------------------------------------------------------

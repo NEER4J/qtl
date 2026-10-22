@@ -7,7 +7,7 @@ import { PartBrandsTable } from "./part-brands-table";
 export const dynamic = "force-dynamic";
 
 export default async function PartBrandsPage() {
-  await requirePage("settings_pricing");
+  await requirePage("settings_pricing_brands");
   const brands = await listAllPartBrands();
 
   return (

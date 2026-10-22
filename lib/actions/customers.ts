@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { requireProfile } from "@/lib/auth/require";
+import { fetchAllRowsParallel } from "@/lib/supabase/fetch-all";
 import { daysFromTodayISO } from "@/lib/utils/tz";
 import { wrapAction } from "@/lib/actions/_utils";
 import {
@@ -77,6 +80,16 @@ function customerWritablePayload(input: z.infer<typeof CreateCustomerInput>) {
     contact_method: input.contact_method,
     customer_type: input.customer_type,
     card_number: input.card_number,
+    // The form always sent these, but they were never written (client
+    // 2026-10-20: card expiry shows with card payments in Sales). The CVV is
+    // deliberately still not stored — card rules forbid keeping it.
+    card_expiry: input.card_expiry,
+    mailing_address_1: input.mailing_address_1,
+    mailing_address_2: input.mailing_address_2,
+    mailing_city: input.mailing_city,
+    mailing_province: input.mailing_province,
+    mailing_country: input.mailing_country,
+    mailing_postal_code: input.mailing_postal_code,
     default_pay_method: input.default_pay_method ?? null,
     cod_required: input.cod_required,
     labour_discount_pct: input.labour_discount_pct,
@@ -94,6 +107,7 @@ function customerWritablePayload(input: z.infer<typeof CreateCustomerInput>) {
 // Item #29 — owner/manager grants a 30-day free oil-change offer.
 export const grantFreeOilChange = wrapAction({
   schema: z.object({ customer_id: z.string().uuid() }),
+  page: "customers",
   roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<Customer> => {
     const supabase = await createClient();
@@ -154,7 +168,9 @@ async function plateMatchIds(supabase: SupabaseServer, q: string): Promise<strin
   const { data, error } = await supabase
     .from("vehicles")
     .select("customer_id")
-    .ilike("license_plate", `%${q.replace(/[%_]/g, (m) => `\\${m}`)}%`)
+    // A VIN finds its customer too (client 2026-10-20). Quoted: a comma or
+    // bracket in the search ("Smith, J.") would break the filter.
+    .or(`license_plate.ilike.${orFilterValue(q)},vin.ilike.${orFilterValue(q)}`)
     .is("deactivated_at", null)
     .limit(PLATE_MATCH_CAP);
   if (error) throw error;
@@ -295,6 +311,7 @@ export async function listCustomersForExport(rawQ?: string): Promise<CustomerLis
 // ----------------------------------------------------------------------------
 export const mergeCustomers = wrapAction({
   schema: MergeCustomersInput,
+  page: "customers",
   roles: ["owner", "co_owner"],
   handler: async ({ target_id, source_ids }): Promise<{ merged: number }> => {
     const supabase = await createClient();
@@ -315,6 +332,7 @@ export const mergeCustomers = wrapAction({
 // ----------------------------------------------------------------------------
 export const toggleCustomerActive = wrapAction({
   schema: z.object({ id: z.string().uuid(), active: z.boolean() }),
+  page: "customers",
   roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<Customer> => {
     const supabase = await createClient();
@@ -378,7 +396,7 @@ export const searchCustomers = wrapAction({
       supabase
         .from("vehicles")
         .select("customer_id")
-        .ilike("license_plate", term)
+        .or(`license_plate.ilike.${term},vin.ilike.${term}`)
         .is("deactivated_at", null)
         .limit(input.limit),
     ]);
@@ -416,6 +434,7 @@ export const searchCustomers = wrapAction({
 // ----------------------------------------------------------------------------
 export const createCustomer = wrapAction({
   schema: CreateCustomerInput,
+  page: ["customers", "sales"],
   roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input, profile): Promise<Customer> => {
     const supabase = await createClient();
@@ -501,6 +520,7 @@ export const createCustomer = wrapAction({
 // ----------------------------------------------------------------------------
 export const updateCustomer = wrapAction({
   schema: UpdateCustomerInput,
+  page: "customers",
   roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input, profile): Promise<Customer> => {
     const supabase = await createClient();
@@ -545,6 +565,7 @@ export const updateCustomer = wrapAction({
 // ----------------------------------------------------------------------------
 export const renameCustomer = wrapAction({
   schema: RenameCustomerInput,
+  page: "customers",
   roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input, profile): Promise<Customer> => {
     const supabase = await createClient();
@@ -591,6 +612,7 @@ export const renameCustomer = wrapAction({
 // Vehicles left on the old record after a rename can follow later.
 export const moveCustomerVehicles = wrapAction({
   schema: MoveCustomerVehiclesInput,
+  page: "customers",
   roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input, profile): Promise<{ moved: number }> => {
     const supabase = await createClient();
@@ -703,6 +725,8 @@ export interface CustomerSaleContext {
   creditBalance: number;
   invoiceRefs: Pick<SalesJob, "id" | "invoice_no" | "job_date">[];
   outstanding: CustomerOutstanding;
+  /** Vehicles that already had their free grease (lib/utils/free-grease.ts). */
+  freeGreaseUsedVehicleIds: string[];
 }
 
 export async function getCustomerSaleContext(
@@ -711,14 +735,51 @@ export async function getCustomerSaleContext(
   excludeJobId?: string,
 ): Promise<CustomerSaleContext> {
   const supabase = await createClient();
-  const [customer, vehicles, creditBalance, invoiceRefs, outstanding] = await Promise.all([
-    getCustomer(customerId),
-    getCustomerVehicles(customerId),
-    getCustomerCreditBalance(supabase, customerId, excludeJobId),
-    listCustomerInvoiceRefs(customerId, 30),
-    getCustomerOutstanding(customerId),
-  ]);
-  return { customer, vehicles, creditBalance, invoiceRefs, outstanding };
+  const vehiclesPromise = getCustomerVehicles(customerId);
+  const [customer, vehicles, creditBalance, invoiceRefs, outstanding, freeGreaseUsedVehicleIds] =
+    await Promise.all([
+      getCustomer(customerId),
+      vehiclesPromise,
+      getCustomerCreditBalance(supabase, customerId, excludeJobId),
+      listCustomerInvoiceRefs(customerId, 30),
+      getCustomerOutstanding(customerId),
+      vehiclesPromise.then((vs) => listFreeGreaseUsedVehicleIds(vs.map((v) => v.id), excludeJobId)),
+    ]);
+  return { customer, vehicles, creditBalance, invoiceRefs, outstanding, freeGreaseUsedVehicleIds };
+}
+
+const FREE_GREASE_ID_BATCH = 150;
+
+/**
+ * Which of these vehicles already redeemed free grease — by vehicle, not
+ * customer, so a truck moved to a renamed customer keeps its history. The job
+ * being edited doesn't count against its own vehicle.
+ *
+ * Read past row security: a redemption at another shop still counts, and a
+ * shop's staff can't see that shop's jobs. Only the vehicle ids leave here.
+ */
+export async function listFreeGreaseUsedVehicleIds(
+  vehicleIds: string[],
+  excludeJobId?: string,
+): Promise<string[]> {
+  if (vehicleIds.length === 0) return [];
+  await requireProfile();
+  const admin = createAdminClient();
+  const used = new Set<string>();
+  // Batches keep the id list inside the URL for a large fleet.
+  for (let i = 0; i < vehicleIds.length; i += FREE_GREASE_ID_BATCH) {
+    let query = admin
+      .from("sales_jobs")
+      .select("vehicle_id")
+      .in("vehicle_id", vehicleIds.slice(i, i + FREE_GREASE_ID_BATCH))
+      .eq("free_grease_applied", true)
+      .is("deactivated_at", null);
+    if (excludeJobId) query = query.neq("id", excludeJobId);
+    const { data, error } = await query;
+    if (error) throw error;
+    for (const r of (data ?? []) as { vehicle_id: string }[]) used.add(r.vehicle_id);
+  }
+  return [...used];
 }
 
 // ----------------------------------------------------------------------------
@@ -750,6 +811,36 @@ export async function getCustomerSalesHistory(
     .limit(limit);
   if (error) throw error;
   return (data ?? []) as SalesJob[];
+}
+
+/**
+ * Lifetime totals for the customer page tiles, over EVERY job — they were
+ * summed from the 50-row history above, so a fleet's "Total spent" and
+ * "Outstanding" stopped at its last 50 invoices (client 2026-10-20). Paged:
+ * PostgREST has no aggregates enabled here and caps a read at 1,000 rows.
+ * Outstanding counts what is owed only; a return's negative balance is store
+ * credit, shown in its own tile.
+ */
+export async function getCustomerJobTotals(
+  customerId: string,
+): Promise<{ job_count: number; total_spent: number; outstanding: number }> {
+  const supabase = await createClient();
+  const rows = await fetchAllRowsParallel<{ total: number; outstanding: number }>((from, to, count) =>
+    supabase
+      .from("sales_jobs")
+      .select("id, total, outstanding", { count })
+      .eq("customer_id", customerId)
+      .is("deactivated_at", null)
+      .order("id")
+      .range(from, to),
+  );
+  let spent = 0;
+  let owing = 0;
+  for (const r of rows) {
+    spent += Math.round(Number(r.total) * 100);
+    if (Number(r.outstanding) > 0) owing += Math.round(Number(r.outstanding) * 100);
+  }
+  return { job_count: rows.length, total_spent: spent / 100, outstanding: owing / 100 };
 }
 
 /** Slim invoice references for the sales form's "credit from invoice" list —

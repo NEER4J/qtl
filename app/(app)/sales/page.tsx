@@ -6,7 +6,7 @@ import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { listSalesJobs } from "@/lib/actions/sales";
 import { listActiveLocations, listActiveServiceTypes } from "@/lib/actions/reference";
-import { hiddenColumnsForPage } from "@/lib/permissions/check";
+import { hiddenColumnsForPage, canUpdatePage } from "@/lib/permissions/check";
 import { canChooseLocation } from "@/lib/auth/locations";
 
 import { SalesFilters } from "./sales-filters";
@@ -35,11 +35,18 @@ export default async function SalesListPage({
     listActiveLocations(),
     listActiveServiceTypes(),
   ]);
+  const hiddenSales = hiddenColumnsForPage(profile, "sales");
+  // A hidden Payment column means the card on file stays on the server.
+  const rows = hiddenSales.has("payment_method")
+    ? result.rows.map((r) => ({ ...r, customer_card_number: null, customer_card_expiry: null }))
+    : result.rows;
 
   // Anyone who can reach more than one shop gets the location column /
   // filter — all-locations roles and Multiple-mode users alike.
   const showLocationFilter = canChooseLocation(profile);
-  const canCreate = profile.role !== "accountant";
+  const canCreate =
+    (profile.role !== "accountant") &&
+    canUpdatePage(profile, "sales");
 
   return (
     <div className="flex flex-col gap-6">
@@ -84,11 +91,12 @@ export default async function SalesListPage({
       />
 
       <SalesTable
-        rows={result.rows}
+        rows={rows}
         total={result.total}
         page={result.page}
         pageSize={result.pageSize}
-        hiddenColumns={[...hiddenColumnsForPage(profile, "sales")]}
+        hiddenColumns={[...hiddenSales]}
+        params={singleParams}
       />
     </div>
   );

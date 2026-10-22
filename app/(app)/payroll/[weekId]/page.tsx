@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, Plus, CreditCard, Pencil } from "lucide-react";
+import { ChevronLeft, Plus, CreditCard, Pencil, FileDown } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,8 +17,11 @@ import {
 import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { getPayrollWeek } from "@/lib/actions/payroll";
+import { getAppSettings } from "@/lib/actions/reference";
 import { formatDate, formatMoney } from "@/lib/utils/format";
-import { hiddenColumnsForPage } from "@/lib/permissions/check";
+import { payrollDeductions, payrollGross } from "@/lib/utils/payroll-math";
+import { paymentModeLabel } from "@/lib/utils/payment-modes";
+import { hiddenColumnsForPage, canUpdatePage } from "@/lib/permissions/check";
 import { deductionExemptions } from "@/lib/utils/payroll-flags";
 import { canAccessLocation } from "@/lib/auth/locations";
 import { PayrollEntryDialog } from "@/components/payroll/payroll-entry-dialog";
@@ -48,8 +51,9 @@ export default async function PayrollWeekPage({
 }) {
   const profile = await requireProfile();
   const { weekId } = await params;
-  const week = await getPayrollWeek(weekId);
+  const [week, settings] = await Promise.all([getPayrollWeek(weekId), getAppSettings()]);
   if (!week) notFound();
+  const shopVacationRate = Number(settings.vacation_pay_rate ?? 0.04);
 
   // Per-viewer column hides from profiles.hidden_columns["payroll"].
   const hidden = hiddenColumnsForPage(profile, "payroll");
@@ -64,6 +68,7 @@ export default async function PayrollWeekPage({
     (show("overtime") ? 1 : 0) +
     (show("gross") ? 1 : 0) +
     (show("holiday_vacation") ? 2 : 0) + // Holiday + Vac
+    (show("phone_allowance") ? 1 : 0) +
     (show("ei_cpp") ? 3 : 0) + // EI, CPP, CPP2
     (show("income_tax") ? 1 : 0) +
     (show("benefits") ? 3 : 0) + // Er EI, Er CPP, WSIB
@@ -73,30 +78,15 @@ export default async function PayrollWeekPage({
   // 0134). Approved and paid weeks stay correctable — a wrong hour count found
   // after payday used to be permanent. Every change is audited.
   const canEdit =
-    (profile.role === "owner" || profile.role === "co_owner" || profile.role === "accountant") ||
-    (profile.role === "manager" && canAccessLocation(profile, week.location_id));
+    ((profile.role === "owner" || profile.role === "co_owner" || profile.role === "accountant") ||
+    (profile.role === "manager" && canAccessLocation(profile, week.location_id))) &&
+    canUpdatePage(profile, "payroll");
   const isDraft = week.status === "draft";
 
-  const totalGross = week.entries.reduce(
-    (s, e) =>
-      s
-      + e.gross_wages
-      + e.overtime_wages
-      + e.bonus
-      + e.holiday_pay
-      + e.misc_extra,
-    0,
-  );
-  const totalDeductions = week.entries.reduce(
-    (s, e) =>
-      s
-      + e.ei_employee
-      + e.cpp_employee
-      + e.cpp_employee2
-      + e.income_tax
-      + e.benefit_employee_deduction,
-    0,
-  );
+  // Gross counts bonus + phone allowance too (client 2026-10-20) — the same
+  // payrollGross the register, CSV, stubs and My Pay use.
+  const totalGross = week.entries.reduce((s, e) => s + payrollGross(e), 0);
+  const totalDeductions = week.entries.reduce((s, e) => s + payrollDeductions(e), 0);
   const totalNet = week.entries.reduce((s, e) => s + e.net_pay, 0);
   const totalCash = week.entries.reduce((s, e) => s + e.cash_total, 0);
   const totalEmployerRemittance = week.entries.reduce(
@@ -137,6 +127,7 @@ export default async function PayrollWeekPage({
           </div>
           <p className="text-sm text-muted-foreground">
             {week.location_name} · {week.entries.length} employee{week.entries.length !== 1 ? "s" : ""}
+            {week.pay_date ? ` · Pay date ${formatDate(week.pay_date)}` : ""}
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2 print:hidden">
@@ -149,6 +140,7 @@ export default async function PayrollWeekPage({
                   location_id: week.location_id,
                   week_start: week.week_start,
                   period_weeks: week.period_weeks,
+                  pay_date: week.pay_date,
                   notes: week.notes,
                 }}
               >
@@ -179,11 +171,11 @@ export default async function PayrollWeekPage({
         <PageHelp id="payroll-detail">
           <p>The weekly workflow:</p>
           <ol>
-            <li><strong>Add entries</strong> — one per employee working this week. Fill in hours, rate, bonus, extras and benefits, then type this period&apos;s income tax, EI and CPP from your payroll calculator (the employer side fills in as you type; <strong>Estimate from rates</strong> gives a starting point). Vacation pay and WSIB are calculated for you.</li>
+            <li><strong>Add entries</strong> — one per employee working this week. Picking the employee fills in their hourly rate and the pay defaults saved on <Link href="/payroll/employees" className="underline">Payroll → Employees</Link> (hours, overtime, bonus, phone allowance, extras, income tax, benefits, vacation %) — adjust anything that differs this period. Then type this period&apos;s EI and CPP from your payroll calculator (the employer side fills in as you type; <strong>Estimate from rates</strong> gives a starting point). Vacation pay and WSIB are calculated for you.</li>
             <li><strong>Daily cash</strong> — for management employees, click the &quot;Cash&quot; button to log cash paid on each day. The total rolls up into the cash column. Days already logged can be corrected or removed from that same dialog.</li>
             <li><strong>Approve</strong> — signs the numbers off once hours are final.</li>
-            <li><strong>Pay date</strong> and <strong>Cheque no.</strong> — set on each entry (Add entry / Edit). They show under the employee&apos;s name here and print on the pay stub and the register.</li>
-            <li><strong>Record payment</strong> — log the money actually going out (cheque, e-transfer, cash) with its reference, including part payments.</li>
+            <li><strong>Pay date</strong> — set once for the whole week with <strong>Edit week</strong>; it prints on every pay stub. An entry&apos;s own <strong>Pay date</strong> and <strong>Cheque no.</strong> (Add entry / Edit) override it for that person and show under their name here.</li>
+            <li><strong>Record payment</strong> — log the money actually going out (cheque, e-transfer, cash, debit, card) with its reference, including part payments. Every field of a payment can be edited afterwards; leaving the reference blank keeps the one it has.</li>
             <li><strong>Mark as paid</strong> — closes the week. From here on it counts in the payroll analytics.</li>
           </ol>
           <p>
@@ -201,8 +193,14 @@ export default async function PayrollWeekPage({
             employee&apos;s name in the table and on their pay stub.
           </p>
           <p>
+            <strong>Phone allowance</strong> is taxable and insurable: it counts in gross pay, EI,
+            CPP and WSIB, but not in vacation pay.
+          </p>
+          <p>
             <strong>Print</strong> (top right) gives you the payroll register for the whole week,
-            one pay stub per employee, or the same data as a CSV.
+            the pay stubs as a PDF (one page per employee, with year-to-date totals), the
+            printable stub sheet, or the same data as a CSV. <strong>Stub</strong> on an entry
+            opens just that person&apos;s PDF stub.
           </p>
           <p>
             The stat boxes at the top show Gross, Deductions, Net, Cash, Employer remittance, and
@@ -231,6 +229,8 @@ export default async function PayrollWeekPage({
               weekStart={week.week_start}
               hideEmployeeDeductions={!show("ei_cpp")}
               hideEmployerDeductions={!show("benefits")}
+              shopVacationRate={shopVacationRate}
+              takenEmployeeIds={week.entries.map((e) => e.employee_id)}
             >
               <Button size="sm" className="print:hidden">
                 <Plus className="size-4" /> Add entry
@@ -258,6 +258,7 @@ export default async function PayrollWeekPage({
                   {show("overtime") && <TableHead className="text-right">OT hrs</TableHead>}
                   {show("gross") && <TableHead className="text-right">Gross</TableHead>}
                   {show("holiday_vacation") && <TableHead className="text-right">Holiday</TableHead>}
+                  {show("phone_allowance") && <TableHead className="text-right">Phone</TableHead>}
                   {show("ei_cpp") && <TableHead className="text-right">EI</TableHead>}
                   {show("ei_cpp") && <TableHead className="text-right">CPP</TableHead>}
                   {show("ei_cpp") && <TableHead className="text-right">CPP2</TableHead>}
@@ -306,11 +307,12 @@ export default async function PayrollWeekPage({
                       </TableCell>
                       {show("hours") && <TableCell className="text-right tabular-nums">{entry.hours}</TableCell>}
                       {show("overtime") && <TableCell className="text-right tabular-nums text-muted-foreground">{entry.overtime_hours || "—"}</TableCell>}
-                      {/* Gross carries holiday pay, the same way the Gross stat
-                          box, the printed register, the CSV export and My Pay
-                          all count it. The Holiday column beside it breaks the
-                          same dollars out; it is not a second amount. */}
-                      {show("gross") && <TableCell className="text-right tabular-nums">{formatMoney(entry.gross_wages + entry.overtime_wages + entry.bonus + entry.holiday_pay + entry.misc_extra)}</TableCell>}
+                      {/* Gross carries holiday pay, bonus and phone allowance,
+                          the same way the Gross stat box, the printed register,
+                          the CSV export, the stubs and My Pay all count it. The
+                          Holiday and Phone columns beside it break the same
+                          dollars out; they are not extra amounts. */}
+                      {show("gross") && <TableCell className="text-right tabular-nums">{formatMoney(payrollGross(entry))}</TableCell>}
                       {show("holiday_vacation") && (
                         <TableCell className="text-right tabular-nums text-muted-foreground">
                           {entry.holiday_pay ? (
@@ -325,6 +327,11 @@ export default async function PayrollWeekPage({
                           ) : (
                             "—"
                           )}
+                        </TableCell>
+                      )}
+                      {show("phone_allowance") && (
+                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                          {entry.phone_allowance ? formatMoney(entry.phone_allowance) : "—"}
                         </TableCell>
                       )}
                       {show("ei_cpp") && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.ei_employee)}</TableCell>}
@@ -345,11 +352,24 @@ export default async function PayrollWeekPage({
                               weekStart={week.week_start}
                               hideEmployeeDeductions={!show("ei_cpp")}
                               hideEmployerDeductions={!show("benefits")}
+                              shopVacationRate={shopVacationRate}
                               existing={entry}
                             >
                               <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">Edit</Button>
                             </PayrollEntryDialog>
                           )}
+                          {/* A plain link, so the browser opens the PDF itself —
+                              a window opened after an await is a blocked pop-up. */}
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" asChild>
+                            <a
+                              href={`/api/payroll/${week.id}/stubs?entry=${entry.id}`}
+                              target="_blank"
+                              rel="noopener"
+                              title={`Pay stub for ${entry.employee_name} (PDF)`}
+                            >
+                              <FileDown className="size-3.5" /> Stub
+                            </a>
+                          </Button>
                           {entry.employee_payroll_type === "management" && canEdit && (
                             <CashDailyDialog
                               entryId={entry.id}
@@ -415,6 +435,7 @@ export default async function PayrollWeekPage({
                   <TableHead>Employee</TableHead>
                   <TableHead>Mode</TableHead>
                   <TableHead>Reference</TableHead>
+                  <TableHead>Notes</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead className="print:hidden" />
                 </TableRow>
@@ -426,8 +447,11 @@ export default async function PayrollWeekPage({
                     <TableRow key={p.id}>
                       <TableCell>{formatDate(p.paid_on)}</TableCell>
                       <TableCell>{emp?.employee_name ?? "—"}</TableCell>
-                      <TableCell className="capitalize">{p.mode}</TableCell>
+                      <TableCell>{paymentModeLabel(p.mode)}</TableCell>
                       <TableCell className="font-mono text-xs">{p.transaction_id ?? "—"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-56 whitespace-pre-wrap">
+                        {p.notes || "—"}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums font-medium">{formatMoney(p.amount)}</TableCell>
                       <TableCell className="print:hidden">
                         <div className="flex gap-1 justify-end">
@@ -449,7 +473,7 @@ export default async function PayrollWeekPage({
                   );
                 })}
                 <TableRow className="border-t font-semibold">
-                  <TableCell colSpan={4}>Total paid</TableCell>
+                  <TableCell colSpan={5}>Total paid</TableCell>
                   <TableCell className="text-right tabular-nums">{formatMoney(totalPaid)}</TableCell>
                   <TableCell className="print:hidden" />
                 </TableRow>

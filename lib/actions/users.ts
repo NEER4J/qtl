@@ -93,6 +93,7 @@ function profileWriteError(error: { code?: string; message?: string }): unknown 
 // ----------------------------------------------------------------------------
 export const inviteUser = wrapAction({
   schema: InviteUserInput,
+  page: "settings_users",
   roles: ["owner", "co_owner"],
   handler: async (
     input,
@@ -209,6 +210,7 @@ export const inviteUser = wrapAction({
 // ----------------------------------------------------------------------------
 export const updateUser = wrapAction({
   schema: UpdateUserInput,
+  page: "settings_users",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<Profile> => {
     const admin = createAdminClient();
@@ -267,6 +269,7 @@ export const updateUser = wrapAction({
 // ----------------------------------------------------------------------------
 export const updateUserPermissions = wrapAction({
   schema: UpdateUserPermissionsInput,
+  page: "settings_users",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<Profile> => {
     const supabase = await createClient();
@@ -295,6 +298,7 @@ export const updateUserPermissions = wrapAction({
 // ----------------------------------------------------------------------------
 export const applyDefaultPermissions = wrapAction({
   schema: ApplyDefaultPermissionsInput,
+  page: "settings_users",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ affected: number }> => {
     const supabase = await createClient();
@@ -315,6 +319,7 @@ export const applyDefaultPermissions = wrapAction({
 // ----------------------------------------------------------------------------
 export const toggleUserActive = wrapAction({
   schema: ToggleUserActive,
+  page: "settings_users",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<Profile> => {
     const supabase = await createClient();
@@ -340,6 +345,7 @@ import { z } from "zod";
 
 export const deleteUser = wrapAction({
   schema: z.object({ id: z.string().uuid() }),
+  page: "settings_users",
   roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<{ deleted: true }> => {
     if (input.id === profile.id) {
@@ -383,6 +389,7 @@ export const deleteUser = wrapAction({
 // ----------------------------------------------------------------------------
 export const bulkUserAction = wrapAction({
   schema: BulkUserAction,
+  page: "settings_users",
   roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<{ affected: number }> => {
     if (input.ids.includes(profile.id)) {
@@ -435,6 +442,7 @@ export const bulkUserAction = wrapAction({
 // ----------------------------------------------------------------------------
 export const setUserPassword = wrapAction({
   schema: SetUserPasswordInput,
+  page: "settings_users",
   roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<{ updated: true }> => {
     const admin = createAdminClient();
@@ -488,6 +496,7 @@ export interface StoredCredential {
 // ----------------------------------------------------------------------------
 export const sendPasswordResetEmail = wrapAction({
   schema: SendPasswordResetInput,
+  page: "settings_users",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ email: string }> => {
     const admin = createAdminClient();

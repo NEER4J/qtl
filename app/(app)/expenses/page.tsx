@@ -10,7 +10,7 @@ import {
   listActiveExpenseSubcategories,
   listActiveLocations,
 } from "@/lib/actions/reference";
-import { hiddenColumnsForPage } from "@/lib/permissions/check";
+import { hiddenColumnsForPage, canUpdatePage } from "@/lib/permissions/check";
 import { accessibleLocationIds, canChooseLocation } from "@/lib/auth/locations";
 
 import { ExpensesFilters } from "./expenses-filters";
@@ -45,18 +45,22 @@ export default async function ExpensesListPage({
   const showLocationFilter = canChooseLocation(profile);
 
   const canCreate =
-    (profile.role === "owner" || profile.role === "co_owner") ||
+
+    ((profile.role === "owner" || profile.role === "co_owner") ||
     profile.role === "accountant" ||
     profile.role === "manager" ||
-    (profile.role === "staff" && profile.can_enter_expenses);
+    (profile.role === "staff" && profile.can_enter_expenses)) &&
+
+    canUpdatePage(profile, "expenses");
 
   // Same roles as Record payment on an expense (addExpensePayment); a manager
   // only for the shops they can reach.
   const canPay =
-    profile.role === "owner" ||
+    (profile.role === "owner" ||
     profile.role === "co_owner" ||
     profile.role === "accountant" ||
-    profile.role === "manager";
+    profile.role === "manager") &&
+    canUpdatePage(profile, "expenses");
   const payableLocationIds = profile.role === "manager" ? accessibleLocationIds(profile) : null;
 
   return (

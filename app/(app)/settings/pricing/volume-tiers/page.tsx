@@ -11,7 +11,7 @@ import { VolumeTiersByOil } from "./volume-tiers-by-oil";
 export const dynamic = "force-dynamic";
 
 export default async function VolumeTiersPage() {
-  await requirePage("settings_pricing");
+  await requirePage("settings_pricing_volume_tiers");
   const [oilTypes, tiers] = await Promise.all([listAllOilTypes(), listVolumeTiers()]);
 
   const tiersByOil = new Map<string, typeof tiers>();

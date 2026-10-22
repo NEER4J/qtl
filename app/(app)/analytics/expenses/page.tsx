@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { PageHelp } from "@/components/help/page-help";
 import { SimpleBar, SimpleLine, SimplePie, StackedBar } from "@/components/analytics/charts";
-import { requireProfile } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { getExpenseAnalytics } from "@/lib/actions/analytics";
 import { listActiveLocations } from "@/lib/actions/reference";
 import { formatMoney } from "@/lib/utils/format";
@@ -14,7 +14,7 @@ export default async function ExpenseAnalyticsPage({
 }: {
   searchParams: Promise<Record<string, string>>;
 }) {
-  const profile = await requireProfile();
+  const profile = await requirePage("analytics_expenses");
   const sp = await searchParams;
 
   const [data, locations] = await Promise.all([

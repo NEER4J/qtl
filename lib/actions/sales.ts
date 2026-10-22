@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { toISODate, todayISO } from "@/lib/utils/tz";
+import { isCardMode } from "@/lib/utils/payment-modes";
 import { InsufficientStockError, wrapAction } from "@/lib/actions/_utils";
 import { AuthorizationError } from "@/lib/auth/require";
 import { canAccessLocation } from "@/lib/auth/locations";
@@ -83,6 +84,9 @@ const JOB_0149_COLUMNS = ["oil_tier_premium_waived", "grease_only_fee_waived"] a
 // until that migration, so dropping the column loses nothing.
 const JOB_0150_COLUMNS = ["engine_option_id"] as const;
 const ITEM_0149_COLUMNS = ["oil_container", "auto_fee"] as const;
+// 0157: oil beyond the engine's capacity. Before it, such a line saves as a
+// plain oil line — still priced and stocked right, just not flagged.
+const ITEM_0157_COLUMNS = ["is_extra_oil"] as const;
 
 function omitKeys<T extends Record<string, unknown>>(row: T, keys: readonly string[]): T {
   const out: Record<string, unknown> = { ...row };
@@ -129,6 +133,11 @@ export interface SalesJobRow extends SalesJob {
   location_code: string | null;
   service_type_code: string | null;
   invoice_pdf_path: string | null;
+  /** How the job was paid: each tender in the payment ledger. */
+  payments: { mode: PaymentMode; amount: number }[];
+  /** The customer's card on file, for card payments. */
+  customer_card_number: string | null;
+  customer_card_expiry: string | null;
 }
 
 export interface ListSalesJobsResult {
@@ -147,16 +156,25 @@ export async function listSalesJobs(
   const from = (input.page - 1) * input.pageSize;
   const to = from + input.pageSize - 1;
 
+  // Built afresh per attempt: the builder's methods add to one request.
+  const buildQuery = (invoiceAsText: boolean) => {
   let query = supabase
     .from("sales_jobs")
     .select(
-      "*, locations:location_id(code), service_types:service_type_id(code)",
+      "*, locations:location_id(code), service_types:service_type_id(code), sales_payments(mode, amount), customer:customer_id(card_number, card_expiry)",
       { count: "exact" },
     )
-    .is("deactivated_at", null)
-    .order("job_date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .range(from, to);
+    .is("deactivated_at", null);
+  if (input.sort === "invoice_asc" || input.sort === "invoice_desc") {
+    const ascending = input.sort === "invoice_asc";
+    // invoice_no_num (0161) is the number; numbers that aren't plain digits
+    // ("INV-000003") come after the numbered ones either way.
+    if (!invoiceAsText) query = query.order("invoice_no_num", { ascending, nullsFirst: false });
+    query = query.order("invoice_no", { ascending });
+  } else {
+    query = query.order("job_date", { ascending: input.sort === "date_asc" });
+  }
+  query = query.order("created_at", { ascending: input.sort === "date_asc" }).range(from, to);
 
   if (input.from) query = query.gte("job_date", input.from);
   if (input.to) query = query.lte("job_date", input.to);
@@ -165,30 +183,64 @@ export async function listSalesJobs(
   if (input.payment_status) query = query.eq("payment_status", input.payment_status);
   if (input.q) {
     const term = `%${input.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
-    query = query.or(
-      `invoice_no.ilike.${term},billing_name.ilike.${term},license_plate.ilike.${term}`,
-    );
+    // One column when the user picked one: a single trigram index lookup
+    // instead of an OR across all of them.
+    const column = {
+      invoice: "invoice_no",
+      customer: "billing_name",
+      plate: "license_plate",
+      vin: "vin",
+    }[input.field as string];
+    if (column) {
+      query = query.ilike(column, term);
+    } else if (input.field === "phone") {
+      // Phone numbers are stored formatted ("416-524-7281"): match the digits
+      // typed with anything (or nothing) between them.
+      const digits = input.q.replace(/\D/g, "");
+      if (digits) query = query.filter("contact_no", "imatch", digits.split("").join("\\D*"));
+    } else {
+      query = query.or(
+        `invoice_no.ilike.${term},billing_name.ilike.${term},license_plate.ilike.${term},vin.ilike.${term}`,
+      );
+    }
   }
 
-  const { data, error, count } = await query;
+  return query;
+  };
+
+  let { data, error, count } = await buildQuery(false);
+  // Before 0161 there is no invoice_no_num: sort the invoice numbers as text.
+  if (isMissingColumn(error, ["invoice_no_num"])) ({ data, error, count } = await buildQuery(true));
   if (error) throw error;
 
+  type CardJoin = { card_number: string | null; card_expiry: string | null };
   type JoinedRow = SalesJob & {
     invoice_pdf_path?: string | null;
     locations: { code: string | null } | { code: string | null }[] | null;
     service_types: { code: string | null } | { code: string | null }[] | null;
+    sales_payments: { mode: PaymentMode; amount: number }[] | null;
+    customer: CardJoin | CardJoin[] | null;
   };
 
   const rows: SalesJobRow[] = (data as JoinedRow[] | null ?? []).map((r) => {
     const loc = Array.isArray(r.locations) ? r.locations[0] : r.locations;
     const svc = Array.isArray(r.service_types) ? r.service_types[0] : r.service_types;
-    const { locations: _l, service_types: _s, invoice_pdf_path, ...rest } = r;
-    void _l; void _s;
+    const card = Array.isArray(r.customer) ? r.customer[0] : r.customer;
+    const { locations: _l, service_types: _s, sales_payments, customer: _c, invoice_pdf_path, ...rest } = r;
+    void _l; void _s; void _c;
+    const payments = (sales_payments ?? []).map((p) => ({ mode: p.mode, amount: Number(p.amount) }));
+    // The card on file goes out only for a job paid by card — the one place
+    // the list shows it. Legacy jobs carry their tender in payment_mode.
+    const paidByCard =
+      payments.length > 0 ? payments.some((p) => isCardMode(p.mode)) : isCardMode(rest.payment_mode);
     return {
       ...(rest as SalesJob),
       location_code: loc?.code ?? null,
       service_type_code: svc?.code ?? null,
       invoice_pdf_path: invoice_pdf_path ?? null,
+      payments,
+      customer_card_number: paidByCard ? card?.card_number ?? null : null,
+      customer_card_expiry: paidByCard ? card?.card_expiry ?? null : null,
     };
   });
 
@@ -211,6 +263,11 @@ export interface SalesJobDetail extends SalesJob {
   /** Display name of whoever last updated the job (updated_by). */
   updated_by_name: string | null;
   customer_license_plates: string[] | null;
+  /** The customer's card on file, for card payments. */
+  customer_card_number: string | null;
+  customer_card_expiry: string | null;
+  /** The vehicle's "Printed comments (Invoice)" — printed on the invoice. */
+  vehicle_printed_comments: string | null;
   credited_from_invoice_no: string | null;
   payments: SalesPaymentRow[];
   items: SalesJobItemRow[];
@@ -246,7 +303,7 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
     supabase
       .from("sales_jobs")
       .select(
-        "*, locations:location_id(code, name, address, phone, email, invoice_name, fax, hst_number), service_types:service_type_id(code, name), customers:customer_id(license_plates), credited_from:credited_from_job_id(invoice_no)",
+        "*, locations:location_id(code, name, address, phone, email, invoice_name, fax, hst_number), service_types:service_type_id(code, name), customers:customer_id(license_plates, card_number, card_expiry), vehicles:vehicle_id(printed_comments), credited_from:credited_from_job_id(invoice_no)",
       )
       .eq("id", id)
       .maybeSingle(),
@@ -281,19 +338,26 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
     fax: string | null;
     hst_number: string | null;
   };
+  type CustomerJoin = {
+    license_plates: string[] | null;
+    card_number: string | null;
+    card_expiry: string | null;
+  };
   type JoinedRow = SalesJob & {
     locations: LocJoin | LocJoin[] | null;
     service_types: { code: string | null; name: string | null } | { code: string | null; name: string | null }[] | null;
-    customers: { license_plates: string[] | null } | { license_plates: string[] | null }[] | null;
+    customers: CustomerJoin | CustomerJoin[] | null;
+    vehicles: { printed_comments: string | null } | { printed_comments: string | null }[] | null;
     credited_from: { invoice_no: string | null } | { invoice_no: string | null }[] | null;
   };
-  const j = job as JoinedRow;
+  const j = job as unknown as JoinedRow;
   const loc = Array.isArray(j.locations) ? j.locations[0] : j.locations;
   const svc = Array.isArray(j.service_types) ? j.service_types[0] : j.service_types;
   const cust = Array.isArray(j.customers) ? j.customers[0] : j.customers;
+  const veh = Array.isArray(j.vehicles) ? j.vehicles[0] : j.vehicles;
   const creditedFrom = Array.isArray(j.credited_from) ? j.credited_from[0] : j.credited_from;
-  const { locations: _l, service_types: _s, customers: _c, credited_from: _cf, ...rest } = j;
-  void _l; void _s; void _c; void _cf;
+  const { locations: _l, service_types: _s, customers: _c, vehicles: _v, credited_from: _cf, ...rest } = j;
+  void _l; void _s; void _c; void _v; void _cf;
 
   type ItemJoined = SalesJobItem & {
     parts: {
@@ -341,6 +405,9 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
     location_hst_number: loc?.hst_number ?? null,
     service_type_name: svc?.name ?? null,
     customer_license_plates: cust?.license_plates ?? null,
+    customer_card_number: cust?.card_number ?? null,
+    customer_card_expiry: cust?.card_expiry ?? null,
+    vehicle_printed_comments: veh?.printed_comments ?? null,
     credited_from_invoice_no: creditedFrom?.invoice_no ?? null,
     updated_by_name: updatedByName,
     payments: (payments ?? []) as SalesPaymentRow[],
@@ -353,6 +420,7 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
 // ----------------------------------------------------------------------------
 export const createSalesJob = wrapAction({
   schema: SalesJobInput,
+  page: "sales",
   roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input, profile): Promise<SaveSalesJobResult> => {
     // Staff MUST write to their own location. Enforce server-side even though
@@ -368,6 +436,21 @@ export const createSalesJob = wrapAction({
         : input.location_id;
 
     const supabase = await createClient();
+
+    // A job is always for a customer's vehicle (client 2026-10-19). The form
+    // checks first; this catches a stale tab or a direct call. Saved jobs from
+    // before the rule stay editable — only new ones are held to it.
+    if (!input.customer_id) throw new Error("Pick a customer before saving the job.");
+    if (!input.vehicle_id) throw new Error("Pick or add a vehicle before saving the job.");
+    const { data: vehicle, error: vehicleErr } = await supabase
+      .from("vehicles")
+      .select("customer_id")
+      .eq("id", input.vehicle_id)
+      .maybeSingle();
+    if (vehicleErr) throw vehicleErr;
+    if (!vehicle || vehicle.customer_id !== input.customer_id) {
+      throw new Error("That vehicle isn't on this customer's account — pick one of their vehicles.");
+    }
 
     // Block the sale before anything is written if it needs more of a part or
     // oil grade than this location has on hand (client 2026-07-23). No old
@@ -520,21 +603,9 @@ export const createSalesJob = wrapAction({
       profile.id,
     );
 
-    // Free-grease "one-shot" rule: once a customer redeems the offer on a job,
-    // clear free_grease_until so the next sales-form lookup treats them as
-    // ineligible. The 30-day window is enforced separately via
-    // isFreeGreaseEligible(); this just retires the offer after one use.
-    if (input.free_grease_applied && input.customer_id) {
-      const { error: clearErr } = await supabase
-        .from("customers")
-        .update({ free_grease_until: null, updated_by: profile.id })
-        .eq("id", input.customer_id);
-      if (clearErr) {
-        // Don't fail the whole save — the job is on the books either way.
-        // Log so the issue surfaces on the next dashboard render.
-        console.error("[free-grease-clear]", clearErr);
-      }
-    }
+    // Free grease is once per vehicle (lib/utils/free-grease.ts): this job's
+    // free_grease_applied + vehicle_id is the redemption record, so there is
+    // nothing to retire on the customer.
 
     revalidatePath("/sales");
     revalidatePath("/dashboard");
@@ -548,6 +619,7 @@ export const createSalesJob = wrapAction({
 // ----------------------------------------------------------------------------
 export const updateSalesJob = wrapAction({
   schema: UpdateSalesJobInput,
+  page: "sales",
   roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input, profile): Promise<SaveSalesJobResult> => {
     const supabase = await createClient();
@@ -732,18 +804,6 @@ export const updateSalesJob = wrapAction({
       profile.id,
     );
 
-    // Free-grease "one-shot" rule on edit too: if the job is toggled into
-    // free-grease-applied during an edit, retire the offer on the customer.
-    if (input.free_grease_applied && input.customer_id) {
-      const { error: clearErr } = await supabase
-        .from("customers")
-        .update({ free_grease_until: null, updated_by: profile.id })
-        .eq("id", input.customer_id);
-      if (clearErr) {
-        console.error("[free-grease-clear]", clearErr);
-      }
-    }
-
     revalidatePath("/sales");
     revalidatePath(`/sales/${input.id}`);
     revalidatePath("/dashboard");
@@ -757,6 +817,7 @@ export const updateSalesJob = wrapAction({
 // ----------------------------------------------------------------------------
 export const addSalesPayment = wrapAction({
   schema: AddSalesPaymentInput,
+  page: "sales",
   roles: ["owner", "co_owner", "manager", "staff", "accountant"],
   handler: async (input, profile): Promise<SalesPaymentRow> => {
     const supabase = await createClient();
@@ -811,6 +872,7 @@ export const addSalesPayment = wrapAction({
 // and the audit log keeps the removed row.
 export const reverseSalesPayment = wrapAction({
   schema: ReverseSalesPaymentInput,
+  page: "sales",
   roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<{ id: string }> => {
     const supabase = await createClient();
@@ -865,6 +927,7 @@ export const reverseSalesPayment = wrapAction({
 // ----------------------------------------------------------------------------
 export const deactivateSalesJob = wrapAction({
   schema: DeactivateSalesJobInput,
+  page: "sales",
   roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<{ id: string }> => {
     const supabase = await createClient();
@@ -914,6 +977,7 @@ async function replaceJobItems(
         is_customer_supplied?: boolean;
         oil_container?: "bulk" | "gallon" | null;
         auto_fee?: "oil_tier_premium" | "grease_only_fee" | null;
+        is_extra_oil?: boolean;
       }[]
     | undefined,
   userId: string,
@@ -958,14 +1022,17 @@ async function replaceJobItems(
     // an item count, and the stock trigger scales gallon lines by jug size.
     oil_container: it.oil_type_id && !it.package_group ? it.oil_container ?? null : null,
     auto_fee: it.auto_fee ?? null,
+    is_extra_oil: it.is_extra_oil ?? false,
     position: idx,
     created_by: userId,
   }));
-  let { error: insErr } = await supabase.from("sales_job_items").insert(rows);
-  if (isMissingColumn(insErr, ITEM_0149_COLUMNS)) {
-    ({ error: insErr } = await supabase
-      .from("sales_job_items")
-      .insert(rows.map((r) => omitKeys(r, ITEM_0149_COLUMNS))));
+  let pending = rows;
+  let { error: insErr } = await supabase.from("sales_job_items").insert(pending);
+  // Each pending migration drops its own columns and tries again.
+  for (const cols of [ITEM_0157_COLUMNS, ITEM_0149_COLUMNS]) {
+    if (!isMissingColumn(insErr, cols)) continue;
+    pending = pending.map((r) => omitKeys(r, cols));
+    ({ error: insErr } = await supabase.from("sales_job_items").insert(pending));
   }
   if (insErr) throw insErr;
 }

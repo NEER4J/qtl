@@ -24,7 +24,7 @@ export default async function PnlReportPage({
   searchParams: Promise<Record<string, string>>;
 }) {
   // /reports/pnl resolves to the `reports` registry key.
-  const profile = await requirePage("reports");
+  const profile = await requirePage("reports_pnl");
   const sp = await searchParams;
 
   const [data, locations] = await Promise.all([

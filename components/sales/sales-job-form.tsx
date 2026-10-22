@@ -37,18 +37,20 @@ import {
   type CustomerSaleContext,
 } from "@/lib/actions/customers";
 import { oilLabel } from "@/lib/utils/oil-labels";
-import { getCustomerVehicles } from "@/lib/actions/vehicles";
+import { createVehicle, getCustomerVehicles, searchVehicles } from "@/lib/actions/vehicles";
 import { VehicleFormDialog } from "@/components/customers/vehicle-form-dialog";
-import { isFreeGreaseEligible } from "@/lib/utils/free-grease";
+import { isVehicleFreeGreaseEligible, vehicleFreeGreaseUntil } from "@/lib/utils/free-grease";
 import { isFreeOilChangeEligible } from "@/lib/utils/free-oil-change";
 import { costBucketFor } from "@/lib/utils/cost-bucket";
 import type { VolumeTierRow } from "@/lib/utils/oil-tier";
 import {
   autoCharges,
   reconcileAutoLines,
+  splitExtraOil,
   type AutoFee,
   type AutoFeeWaivers,
   type AutoLineContext,
+  type ExtraOilRule,
 } from "@/lib/utils/sales-auto-lines";
 import { lookupOilChangePrice, type GreasePartOption } from "@/lib/actions/pricing";
 import { SalesJobInput } from "@/lib/schemas/sales";
@@ -58,6 +60,7 @@ import type {
   Location,
   OilGroup,
   OilType,
+  PartPackageWithItems,
   PaymentMode,
   ServiceType,
   Technician,
@@ -71,12 +74,15 @@ import { CreatableCombobox } from "@/components/pricing/creatable-combobox";
 import { CustomerComboBox, prefetchPickerCustomers, type CustomerPick } from "./customer-combobox";
 import { prefetchPickerParts } from "@/components/pricing/part-picker";
 import { prefetchPickerTransServices } from "@/components/pricing/trans-service-picker";
+import { getPickerPackages } from "./package-picker-button";
 import { PreviousPendingAlert } from "./previous-pending-alert";
 import {
   SalesLineItems,
   lineItemsSubTotal,
   lineItemsTaxableSubTotal,
   newLineItem,
+  oilLineItem,
+  packageLineItems,
   type LineItem,
 } from "./sales-line-items";
 
@@ -202,6 +208,37 @@ const NO_TIERS: VolumeTierRow[] = [];
 const NO_CATEGORIES: { id: string; name: string; cost_bucket?: string | null }[] = [];
 const NO_GREASE_PARTS: GreasePartOption[] = [];
 
+/** Package names compare like the server's engine → package fallback. */
+const normPackageName = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+
+/** One string for an oil change's engine, filter, oil and container picks. */
+const ocPickKey = (...picks: (string | null | undefined)[]) => picks.map((p) => p ?? "").join("|");
+
+/**
+ * The package an oil change brings in — same link as the Oil detail page: the
+ * filter option's package, else the engine's linked package, else a package
+ * named after the engine.
+ */
+function linkedPackage(
+  pkgs: readonly PartPackageWithItems[],
+  engine: { labour_package_id?: string | null; manufacturer: string; model: string },
+  option: { package_id?: string | null } | null,
+): PartPackageWithItems | null {
+  const linkedId = option?.package_id ?? engine.labour_package_id ?? null;
+  return (
+    (linkedId ? pkgs.find((p) => p.id === linkedId) : undefined) ??
+    pkgs.find((p) => normPackageName(p.name) === normPackageName(`${engine.manufacturer} ${engine.model}`)) ??
+    null
+  );
+}
+
+/** Oil the shop sells on this line: not a package's, a fee, a return or the customer's own. */
+const isSoldOil = (it: LineItem) =>
+  !it.package_group && !it.auto_fee && !it.is_customer_supplied && Number(it.unit_price) >= 0;
+
+/** A standalone oil line at the regular rate (not extra oil). */
+const isPlainOilLine = (it: LineItem) => Boolean(it.oil_type_id) && !it.is_extra_oil && isSoldOil(it);
+
 /** Description prefix for the $0 line item that represents the free-grease offer. */
 const FREE_GREASE_LINE_DESC = "Free Grease (offer)";
 
@@ -281,6 +318,8 @@ export function SalesJobForm({
     { id: string; mode: PaymentMode; amount: string }[]
   >([]);
   const [storeCreditBalance, setStoreCreditBalance] = useState(0);
+  // The customer's vehicles that already had their free grease.
+  const [freeGreaseUsedIds, setFreeGreaseUsedIds] = useState<ReadonlySet<string>>(() => new Set());
   const [customerInvoices, setCustomerInvoices] = useState<
     Array<{ id: string; invoice_no: string; job_date: string }>
   >([]);
@@ -405,16 +444,39 @@ export function SalesJobForm({
     [oilTypes, volumeTiers, greaseOnlyFee, bucketByCategory],
   );
 
+  // The oil change's extra-oil rule, set further down once the engine and oil
+  // picks are read; a ref so the handler below always sees the current one.
+  const extraOilRuleRef = useRef<ExtraOilRule | null>(null);
+  // A quantity box is mid-edit: extra oil is settled when it loses focus.
+  const splitPendingRef = useRef(false);
+
   /** Every staff change to the lines goes through here. */
   const handleLineItemsChange = useCallback(
-    (next: LineItem[], opts?: { waive?: AutoFee; freeGrease?: boolean }) => {
+    (next: LineItem[], opts?: { waive?: AutoFee; freeGrease?: boolean; typing?: boolean }) => {
       const waived = opts?.waive ? { ...autoWaived, [opts.waive]: true } : autoWaived;
       if (opts?.waive) setAutoWaived(waived);
       const ctx = autoLineContext(waived, opts?.freeGrease ?? Boolean(freeGreaseApplied));
-      setLineItems(reconcileAutoLines(next, ctx, newLineItem));
+      // Oil past the engine's capacity moves to a retail line first, so the
+      // tier premium is then worked out on the capacity alone. Not while a
+      // quantity is being typed: "405" on the way to "45" would move 365 L,
+      // and litres never move back.
+      splitPendingRef.current = Boolean(opts?.typing);
+      const split = opts?.typing ? next : splitExtraOil(next, extraOilRuleRef.current, newLineItem);
+      setLineItems(reconcileAutoLines(split, ctx, newLineItem));
     },
     [autoWaived, autoLineContext, freeGreaseApplied],
   );
+
+  // Latest lines and handler, for async work that finishes after a render.
+  const lineItemsRef = useRef(lineItems);
+  lineItemsRef.current = lineItems;
+  const handleLineItemsChangeRef = useRef(handleLineItemsChange);
+  handleLineItemsChangeRef.current = handleLineItemsChange;
+
+  /** A typed quantity is done (its box lost focus): settle the extra oil. */
+  const settleTypedQuantity = () => {
+    if (splitPendingRef.current) handleLineItemsChange(lineItemsRef.current);
+  };
 
   /** "Add it back" for a charge staff took over. */
   const restoreAutoCharge = (kind: AutoFee) => {
@@ -549,6 +611,37 @@ export function SalesJobForm({
     () => engineTypes.find((e) => e.id === engineTypeId)?.filter_options ?? [],
     [engineTypes, engineTypeId],
   );
+  // Extra oil is a retail sale (client 2026-10-20): on an oil change with a
+  // bulk container, litres past the engine's capacity go on an "Extra oil"
+  // line at the oil group's retail price. No retail price set = no split.
+  // A saved job opened with its oil-change picks as they were saved.
+  const ocPicksAsSaved =
+    mode === "edit" &&
+    ocPickKey(engineTypeId, engineOptionId, oilTypeId, oilContainer) ===
+      ocPickKey(initial?.engine_type_id, initial?.engine_option_id, initial?.oil_type_id, initial?.oil_container);
+  // A job saved before the retail rule keeps its bulk-rate litres until
+  // someone changes its oil-change picks — editing a line mustn't re-price it.
+  const savedWithExtraOil = Boolean(initialItems?.some((it) => it.is_extra_oil));
+  const extraOilRule = useMemo<ExtraOilRule | null>(() => {
+    if (!isOilChange || !engineTypeId || !oilTypeId || oilContainer !== "bulk") return null;
+    if (ocPicksAsSaved && !savedWithExtraOil) return null;
+    const engine = engineTypes.find((e) => e.id === engineTypeId);
+    const oil = oilTypes.find((o) => o.id === oilTypeId);
+    const group = oil?.oil_group_id ? oilGroups.find((g) => g.id === oil.oil_group_id) : undefined;
+    const retail = Number(group?.retail_price_per_litre);
+    if (!engine || !oil || !(retail > 0)) return null;
+    const option = filterOptions.find((o) => o.id === engineOptionId);
+    const capacity = Number(option?.oil_capacity_litres ?? engine.oil_capacity_litres) || 0;
+    if (!(capacity > 0)) return null;
+    return {
+      oilTypeId: oil.id,
+      capacity,
+      retailRate: retail,
+      description: `Extra oil (retail) — ${oilLabel(oil)}`,
+    };
+  }, [isOilChange, engineTypeId, engineOptionId, oilTypeId, oilContainer, engineTypes, oilTypes, oilGroups, filterOptions, ocPicksAsSaved, savedWithExtraOil]);
+  extraOilRuleRef.current = extraOilRule;
+
   // A filter picked for one engine means nothing on another.
   useEffect(() => {
     if (engineOptionId && !filterOptions.some((o) => o.id === engineOptionId)) {
@@ -583,7 +676,9 @@ export function SalesJobForm({
         oil_type_id: oilTypeId,
         oil_container: oilContainer as "bulk" | "gallon",
       });
-      if (cancelled || !res.ok) return;
+      // Lines arrived meanwhile (the oil change adds its own): they set the
+      // sub total, so a late catalogue price must not overwrite it.
+      if (cancelled || !res.ok || lineItemsRef.current.length > 0) return;
       if (res.data.sub_total == null) {
         toast.warning("No catalog price found for that engine + oil combo.");
         return;
@@ -598,12 +693,107 @@ export function SalesJobForm({
   }, [isOilChange, itemsHaveRows, engineTypeId, engineOptionId, filterOptions, oilTypeId, oilContainer, appliedSurcharge, form, mode, initial?.engine_type_id, initial?.engine_option_id, initial?.oil_type_id, initial?.oil_container]);
 
   // --------------------------------------------------------------------------
+  // Oil change → line items. Picking the engine (and filter), oil and container
+  // adds the engine's package and the oil at its capacity, so staff don't pick
+  // them again under Line items (client 2026-10-19); the tier premium follows
+  // through the reconcile. A new pick swaps the lines it added, and a package
+  // or oil already on the job isn't doubled.
+  // --------------------------------------------------------------------------
+  const ocAutoKeysRef = useRef<Set<string>>(new Set());
+  const [ocAutoNote, setOcAutoNote] = useState<string | null>(null);
+  // The picks the lines were last added for. A saved job starts at its own
+  // picks, so opening it adds nothing, and a refresh that only hands the form
+  // new lists doesn't swap (and undo) the lines either.
+  const ocAppliedRef = useRef<string | null>(
+    mode === "edit"
+      ? ocPickKey(initial?.engine_type_id, initial?.engine_option_id, initial?.oil_type_id, initial?.oil_container)
+      : null,
+  );
+  // A saved job's own oil-change lines are found the first time its picks change.
+  const ocSeededRef = useRef(mode !== "edit");
+  useEffect(() => {
+    if (!isOilChange || !engineTypeId || !oilTypeId || !oilContainer) return;
+    if (filterOptions.length > 0 && !filterOptions.some((o) => o.id === engineOptionId)) return;
+    const pickKey = ocPickKey(engineTypeId, engineOptionId, oilTypeId, oilContainer);
+    if (pickKey === ocAppliedRef.current) return;
+    const engine = engineTypes.find((e) => e.id === engineTypeId);
+    const oil = oilTypes.find((o) => o.id === oilTypeId);
+    if (!engine || !oil) return;
+    const option = filterOptions.find((o) => o.id === engineOptionId) ?? null;
+    const container = oilContainer as "bulk" | "gallon";
+
+    let cancelled = false;
+    (async () => {
+      let pkgs: PartPackageWithItems[] = [];
+      try {
+        pkgs = await getPickerPackages();
+      } catch {
+        pkgs = [];
+      }
+      if (cancelled) return;
+      const pkg = linkedPackage(pkgs, engine, option);
+
+      if (!ocSeededRef.current) {
+        // First change on a saved job: the package of its saved engine and its
+        // saved oil line are what this swap replaces.
+        ocSeededRef.current = true;
+        const savedEngine = engineTypes.find((e) => e.id === initial?.engine_type_id);
+        const savedOption =
+          savedEngine?.filter_options?.find((o) => o.id === initial?.engine_option_id) ?? null;
+        const savedPkg = savedEngine ? linkedPackage(pkgs, savedEngine, savedOption) : null;
+        ocAutoKeysRef.current = new Set(
+          lineItemsRef.current
+            .filter(
+              (it) =>
+                (savedPkg != null && it.package_label === savedPkg.name) ||
+                (it.oil_type_id === initial?.oil_type_id && isPlainOilLine(it)),
+            )
+            .map((it) => it.key),
+        );
+      }
+
+      const kept = lineItemsRef.current.filter((it) => !ocAutoKeysRef.current.has(it.key));
+      const added: LineItem[] = [];
+      if (pkg && !kept.some((it) => it.package_label === pkg.name)) added.push(...packageLineItems(pkg));
+      // Extra oil doesn't count as the oil change's oil — it's litres past capacity.
+      const hasOil = [...kept, ...added].some((it) => it.oil_type_id === oil.id && !it.is_extra_oil);
+      // Extra litres already on the job go with the new oil, and back onto a
+      // retail line when the new oil has a retail rate.
+      const extras = hasOil ? [] : kept.filter((it) => it.is_extra_oil && isSoldOil(it));
+      const carried = extras.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+      const capacity = Number(option?.oil_capacity_litres ?? engine.oil_capacity_litres) || 0;
+      const litres = capacity + carried;
+      const jug = Number(oil.litres_per_gallon);
+      const qty = container === "gallon" ? (jug > 0 ? Math.ceil(litres / jug) : litres) : litres;
+      if (qty > 0 && !hasOil) added.push(oilLineItem(oilTypes, oilGroups, oil, container, qty));
+      ocAutoKeysRef.current = new Set(added.map((it) => it.key));
+      ocAppliedRef.current = pickKey;
+
+      setOcAutoNote(
+        added.length === 0
+          ? null
+          : [
+              pkg ? pkg.name : "No package is linked to this engine",
+              qty > 0 && !hasOil ? `${oilLabel(oil)} × ${qty} ${container === "gallon" ? "gal" : "L"}` : null,
+            ]
+              .filter(Boolean)
+              .join(" + "),
+      );
+      handleLineItemsChangeRef.current([...kept.filter((it) => !extras.includes(it)), ...added]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOilChange, engineTypeId, engineOptionId, filterOptions, oilTypeId, oilContainer, engineTypes, oilTypes, oilGroups, initial?.engine_type_id, initial?.engine_option_id, initial?.oil_type_id]);
+
+  // --------------------------------------------------------------------------
   // Customer picker sync — billing_name, plate, contact, email auto-fill
   // --------------------------------------------------------------------------
   const customerId = useWatch({ control: form.control, name: "customer_id" });
 
   useEffect(() => {
     if (!customerId) {
+      setFreeGreaseUsedIds(new Set());
       setStoreCreditBalance(0);
       setCustomerInvoices([]);
       setCustomerOutstanding(null);
@@ -615,6 +805,7 @@ export function SalesJobForm({
     (async () => {
       const ctx = await loadCustomerContext(customerId);
       if (cancelled) return;
+      setFreeGreaseUsedIds(new Set(ctx.freeGreaseUsedVehicleIds ?? []));
       setStoreCreditBalance(ctx.creditBalance);
       setCustomerOutstanding(ctx.outstanding);
       setCustomerInvoices(
@@ -674,6 +865,12 @@ export function SalesJobForm({
   }, []);
 
   const applyVehicle = (v: Vehicle | null) => {
+    // The free-grease offer belongs to one vehicle: a different truck starts
+    // unticked, without the other one's grease line.
+    if (v?.id !== selectedVehicle?.id && form.getValues("free_grease_applied")) {
+      form.setValue("free_grease_applied", false);
+      dropFreeGrease();
+    }
     setSelectedVehicle(v);
     form.setValue("vehicle_id", v?.id ?? null);
     form.setValue("license_plate", v?.license_plate ?? "");
@@ -804,17 +1001,54 @@ export function SalesJobForm({
   // Submit
   // --------------------------------------------------------------------------
   const onSubmit = form.handleSubmit((values) => {
+    // ⌘/Ctrl+Enter straight from a quantity box: if that moves litres to the
+    // extra-oil line, show the settled lines before anything is saved.
+    if (splitPendingRef.current) {
+      const settled = splitExtraOil(lineItems, extraOilRuleRef.current, newLineItem);
+      if (settled.length !== lineItems.length || settled.some((it, i) => it !== lineItems[i])) {
+        handleLineItemsChange(lineItems);
+        toast.info("Oil past the engine's capacity moved to the extra-oil line — check it, then save again.");
+        return;
+      }
+      splitPendingRef.current = false;
+    }
     if (addingNewCustomer && !values.billing_name.trim()) {
       form.setError("billing_name", { message: "Billing name is required" });
       return;
     }
+    // A new job is always for a customer's vehicle (client 2026-10-19). A new
+    // customer's plate becomes their vehicle when the job saves.
+    if (mode === "create") {
+      if (!values.customer_id && !addingNewCustomer) {
+        toast.error("Pick a customer or add a new one before saving.");
+        return;
+      }
+      if (addingNewCustomer && !values.license_plate.trim()) {
+        form.setError("license_plate", { message: "License plate is required — the job needs a vehicle" });
+        return;
+      }
+      if (!addingNewCustomer && !values.vehicle_id) {
+        toast.error("Pick or add a vehicle before saving.");
+        return;
+      }
+    }
 
     startTransition(async () => {
       let customerIdToUse = values.customer_id;
+      let vehicleIdToUse = values.vehicle_id ?? null;
       const platePicked = (values.license_plate || "").trim().toUpperCase();
 
       // Step 1 — create the customer first if we're adding new.
       if (addingNewCustomer) {
+        // A plate already on file belongs to that customer: stop before a new
+        // customer is made who could never get the vehicle.
+        const taken = await searchVehicles({ q: platePicked, limit: 20 });
+        if (taken.ok && taken.data.some((v) => v.license_plate.toUpperCase() === platePicked)) {
+          form.setError("license_plate", {
+            message: "This plate is already on another customer's vehicle — search the plate under Customer and pick them.",
+          });
+          return;
+        }
         const custRes = await createCustomer({
           billing_name: values.billing_name,
           last_or_company: values.billing_name.toUpperCase(),
@@ -844,6 +1078,19 @@ export function SalesJobForm({
         setSelectedCustomer(custRes.data);
         setAddingNewCustomer(false);
         form.setValue("customer_id", custRes.data.id);
+
+        // The plate typed for the new customer becomes their vehicle.
+        const vehRes = await createVehicle({ customer_id: custRes.data.id, license_plate: platePicked });
+        if (!vehRes.ok) {
+          setCustomerVehicles([]);
+          toast.error(`Customer saved, but the vehicle couldn't be added: ${vehRes.error}`, {
+            description: "Pick or add a vehicle, then save again.",
+          });
+          return;
+        }
+        setCustomerVehicles([vehRes.data]);
+        applyVehicle(vehRes.data);
+        vehicleIdToUse = vehRes.data.id;
       }
 
       // Step 2 — validate and submit the sales-job with the (possibly
@@ -864,7 +1111,7 @@ export function SalesJobForm({
       const payload = {
         ...values,
         customer_id: customerIdToUse,
-        vehicle_id: values.vehicle_id ?? null,
+        vehicle_id: vehicleIdToUse,
         bay_no: values.bay_no === "" ? null : Number(values.bay_no),
         odometer: values.odometer === "" ? null : Number(values.odometer),
         vehicle_year: values.vehicle_year === "" ? null : Number(values.vehicle_year),
@@ -903,6 +1150,7 @@ export function SalesJobForm({
           merged_unit_price: it.merged_unit_price ?? null,
           is_customer_supplied: it.is_customer_supplied ?? false,
           auto_fee: it.auto_fee ?? null,
+          is_extra_oil: it.is_extra_oil ?? false,
         })),
       };
 
@@ -1156,9 +1404,10 @@ export function SalesJobForm({
                 </div>
 
                 {/* Free grease banner — item #15 */}
-                {isFreeGreaseEligible(selectedCustomer) && (
+                {/* Free grease is per vehicle: once, in its first 30 days. */}
+                {selectedVehicle && isVehicleFreeGreaseEligible(selectedVehicle, freeGreaseUsedIds) && (
                   <FreeGreaseBanner
-                    until={selectedCustomer.free_grease_until!}
+                    until={vehicleFreeGreaseUntil(selectedVehicle)}
                     applied={form.watch("free_grease_applied")}
                     overrideReason={form.watch("free_grease_override_reason")}
                     greaseParts={greaseParts}
@@ -1272,7 +1521,7 @@ export function SalesJobForm({
                   name="license_plate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>License plate</FormLabel>
+                      <FormLabel>License plate *</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
@@ -1740,12 +1989,19 @@ export function SalesJobForm({
                 </span>
               )}
             </div>
-            <SalesLineItems
-              items={lineItems}
-              onChange={handleLineItemsChange}
-              oilTypes={oilTypes}
-              oilGroups={oilGroups}
-            />
+            {ocAutoNote && lineItems.some((it) => ocAutoKeysRef.current.has(it.key)) && (
+              <p className="text-xs text-muted-foreground">
+                Added from the oil change: {ocAutoNote}. Change the engine or oil above to swap them.
+              </p>
+            )}
+            <div onBlur={settleTypedQuantity}>
+              <SalesLineItems
+                items={lineItems}
+                onChange={handleLineItemsChange}
+                oilTypes={oilTypes}
+                oilGroups={oilGroups}
+              />
+            </div>
             {waivedCharges.map((c) => (
               <p key={c.kind} className="text-xs text-muted-foreground">
                 {c.kind === "oil_tier_premium" ? "Volume tier premium" : "Grease-only fee"} (
@@ -2199,8 +2455,8 @@ function FreeGreaseBanner({
             Apply free-grease offer (eligible until {formatDate(until)})
           </label>
           <p className="mt-1 text-xs text-emerald-800/80 dark:text-emerald-300/70">
-            Customer is in their first 30 days. Tick to add the grease at $0 — set the
-            quantity on its line; it comes off inventory like any other part.
+            This vehicle&apos;s first 30 days — free grease once. Tick to add the grease at
+            $0; set the quantity on its line. It comes off inventory like any other part.
           </p>
           {greaseParts.length > 1 && (
             <div className="mt-2 max-w-sm">

@@ -22,6 +22,7 @@ import {
 import { listActiveTechnicians } from "@/lib/actions/technicians";
 import { formatDate } from "@/lib/utils/format";
 import { canAccessLocation } from "@/lib/auth/locations";
+import { canUpdatePage } from "@/lib/permissions/check";
 
 export const dynamic = "force-dynamic";
 
@@ -32,20 +33,10 @@ export default async function EditSalesJobPage({
 }) {
   const profile = await requireProfile();
   const { id } = await params;
-  const job = await getSalesJob(id);
-  if (!job) notFound();
-
-  // Owner / co_owner edit anything; manager / supervisor / staff / technician
-  // edit jobs at their own location (RLS enforces the write either way).
-  const canEdit =
-    profile.role === "owner" ||
-    profile.role === "co_owner" ||
-    (["manager", "supervisor", "staff", "technician"].includes(profile.role) &&
-      canAccessLocation(profile, job.location_id));
-  if (!canEdit) redirect(`/sales/${id}`);
-  if (job.deactivated_at) redirect(`/sales/${id}`);
-
+  // The job and every list the form needs in one go — the lists used to wait
+  // for the job to load first (perf, 2026-10-20).
   const [
+    job,
     locations,
     serviceTypes,
     settings,
@@ -57,6 +48,7 @@ export default async function EditSalesJobPage({
     partCategories,
     greaseParts,
   ] = await Promise.all([
+    getSalesJob(id),
     listActiveLocations(),
     listActiveServiceTypes(),
     getAppSettings(),
@@ -70,6 +62,18 @@ export default async function EditSalesJobPage({
     // What the free-grease offer gives, so it comes off inventory.
     listGreaseParts(),
   ]);
+  if (!job) notFound();
+
+  // Owner / co_owner edit anything; manager / supervisor / staff / technician
+  // edit jobs at their own location (RLS enforces the write either way).
+  const canEdit =
+    (profile.role === "owner" ||
+    profile.role === "co_owner" ||
+    (["manager", "supervisor", "staff", "technician"].includes(profile.role) &&
+      canAccessLocation(profile, job.location_id))) &&
+    canUpdatePage(profile, "sales");
+  if (!canEdit) redirect(`/sales/${id}`);
+  if (job.deactivated_at) redirect(`/sales/${id}`);
 
   return (
     <div className="flex flex-col gap-4">
@@ -121,6 +125,7 @@ export default async function EditSalesJobPage({
           is_customer_supplied: it.is_customer_supplied ?? false,
           part_category_id: it.part_category_id ?? null,
           auto_fee: it.auto_fee ?? null,
+          is_extra_oil: it.is_extra_oil ?? false,
         }))}
         initial={{
           id: job.id,

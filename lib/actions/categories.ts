@@ -40,6 +40,7 @@ const UpdateCategoryInput = CategoryInput.extend({ id: z.string().uuid() });
 
 export const createExpenseCategory = wrapAction({
   schema: CategoryInput,
+  page: "settings_categories",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<ExpenseCategory> => {
     const supabase = await createClient();
@@ -57,6 +58,7 @@ export const createExpenseCategory = wrapAction({
 
 export const updateExpenseCategory = wrapAction({
   schema: UpdateCategoryInput,
+  page: "settings_categories",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<ExpenseCategory> => {
     const supabase = await createClient();
@@ -75,6 +77,7 @@ export const updateExpenseCategory = wrapAction({
 
 export const toggleCategoryActive = wrapAction({
   schema: z.object({ id: z.string().uuid(), active: z.boolean() }),
+  page: "settings_categories",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<ExpenseCategory> => {
     const supabase = await createClient();
@@ -102,6 +105,7 @@ const UpdateSubcategoryInput = SubcategoryInput.extend({ id: z.string().uuid() }
 
 export const createExpenseSubcategory = wrapAction({
   schema: SubcategoryInput,
+  page: "settings_categories",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<ExpenseSubcategory> => {
     const supabase = await createClient();
@@ -119,6 +123,7 @@ export const createExpenseSubcategory = wrapAction({
 
 export const updateExpenseSubcategory = wrapAction({
   schema: UpdateSubcategoryInput,
+  page: "settings_categories",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<ExpenseSubcategory> => {
     const supabase = await createClient();
@@ -137,6 +142,7 @@ export const updateExpenseSubcategory = wrapAction({
 
 export const toggleSubcategoryActive = wrapAction({
   schema: z.object({ id: z.string().uuid(), active: z.boolean() }),
+  page: "settings_categories",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<ExpenseSubcategory> => {
     const supabase = await createClient();

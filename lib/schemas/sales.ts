@@ -30,6 +30,8 @@ export const SalesJobItemInput = z.object({
   oil_container: z.enum(["bulk", "gallon"]).nullable().optional(),
   // A line the form adds itself: the volume tier premium / grease-only fee (0149).
   auto_fee: z.enum(["oil_tier_premium", "grease_only_fee"]).nullable().optional(),
+  // Oil beyond the engine's capacity, sold at the retail rate (0157).
+  is_extra_oil: z.coerce.boolean().default(false),
 })
   .refine((it) => !(it.part_id && it.oil_type_id), {
     message: "A line can't be both a catalog part and an oil item",
@@ -249,9 +251,18 @@ export const ListSalesJobsInput = z.object({
   service_type_id: z.string().uuid().optional(),
   payment_status: paymentStatusSchema.optional(),
   q: z.string().trim().max(100).optional(),
+  // Which column the search looks in (client 2026-10-20 — pick a field, or
+  // click a column header, to make it faster). "all" = invoice, customer,
+  // plate and VIN together.
+  field: z.enum(["all", "invoice", "customer", "plate", "vin", "phone"]).catch("all").default("all"),
+  // Invoices list order (client 2026-10-22 — "sort by invoice number"). The
+  // invoice sort is by the number, not the text (0161).
+  sort: z.enum(["date_desc", "date_asc", "invoice_asc", "invoice_desc"]).catch("date_desc").default("date_desc"),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(25),
 });
+export type SalesSearchField = z.infer<typeof ListSalesJobsInput>["field"];
+export type SalesListSort = z.infer<typeof ListSalesJobsInput>["sort"];
 export type ListSalesJobsInput = z.infer<typeof ListSalesJobsInput>;
 
 // ----------------------------------------------------------------------------

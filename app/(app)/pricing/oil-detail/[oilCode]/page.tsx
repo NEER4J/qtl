@@ -19,6 +19,7 @@ import { requireProfile } from "@/lib/auth/require";
 import { getOilDetail } from "@/lib/actions/pricing";
 import { formatMoney } from "@/lib/utils/format";
 import { oilLabel } from "@/lib/utils/oil-labels";
+import { canUpdatePage } from "@/lib/permissions/check";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,9 @@ export default async function OilDetailPage({
   if (!data) notFound();
 
   const showCost = (profile.role === "owner" || profile.role === "co_owner") || profile.role === "accountant";
-  const canEdit = (profile.role === "owner" || profile.role === "co_owner");
+  const canEdit =
+    ((profile.role === "owner" || profile.role === "co_owner")) &&
+    canUpdatePage(profile, "pricing_oil_detail");
   const isLocked = data.lock?.is_live ?? false;
 
   const pct = (n: number | null) => n == null ? "—" : `${(n * 100).toFixed(1)}%`;
@@ -200,6 +203,33 @@ export default async function OilDetailPage({
       </PageHelp>
       </div>
 
+      {data.price_group && (
+        <div className="rounded-md border px-3 py-2 text-sm text-muted-foreground print:hidden">
+          Priced by the <strong className="text-foreground">{data.price_group.name}</strong> oil
+          group:{" "}
+          {data.price_group.anchor == null ? (
+            <>Selling is the Computed price at the group&apos;s rate, the same for every grade in the group.</>
+          ) : data.price_group.anchor.code === data.oil_type.code ? (
+            <>
+              this is the group&apos;s highest-cost grade, so its Computed price is the Selling for
+              every {data.price_group.name} grade.
+            </>
+          ) : (
+            <>
+              Selling follows the group&apos;s highest-cost grade,{" "}
+              <Link
+                href={`/pricing/oil-detail/${encodeURIComponent(data.price_group.anchor.code)}?container=${container}`}
+                className="font-medium text-foreground underline"
+              >
+                {data.price_group.anchor.name}
+              </Link>{" "}
+              — the same price on every engine.
+            </>
+          )}{" "}
+          <Link href="/settings/pricing/oil-groups" className="underline">Edit oil groups</Link>.
+        </div>
+      )}
+
       {isLocked && (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
           Prices on this page are <strong>locked until {data.lock!.lock_until}</strong> —{" "}
@@ -352,6 +382,13 @@ export default async function OilDetailPage({
                         title={`Locked until ${data.lock?.lock_until}`}
                       >
                         {formatMoney(r.locked_price)}
+                      </span>
+                    ) : data.price_group ? (
+                      <span
+                        className="tabular-nums font-semibold"
+                        title={`Priced by the ${data.price_group.name} oil group — edit the group to change it`}
+                      >
+                        {r.selling != null ? formatMoney(r.selling) : "—"}
                       </span>
                     ) : canEdit ? (
                       <EditableSellingCell

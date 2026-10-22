@@ -51,6 +51,7 @@ export default async function InvoicesListPage({
         </p>
         <ul>
           <li><strong>Filters</strong> by date, location, and payment status. Bookmarkable — the filters travel in the URL.</li>
+          <li><strong>Sort</strong> by clicking the <strong>Date</strong> or <strong>Invoice #</strong> heading; click again to flip the order. Invoice numbers sort as numbers, so each shop&apos;s invoices line up in order.</li>
           <li><strong>PDF</strong> column shows whether a generated or uploaded PDF is on file. Use the download button to fetch the latest copy.</li>
           <li>Invoice numbers and totals match what you printed for the customer. Edits to a saved job update the invoice.</li>
         </ul>
@@ -66,6 +67,7 @@ export default async function InvoicesListPage({
         total={result.total}
         page={result.page}
         pageSize={result.pageSize}
+        params={singleParams}
       />
     </div>
   );

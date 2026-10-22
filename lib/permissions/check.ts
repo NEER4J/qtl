@@ -1,11 +1,15 @@
 import type { Profile, UserRole } from "@/lib/db/types";
 import {
   ACTION_REGISTRY,
+  PAGE_FAMILIES,
   PAGE_REGISTRY,
+  UPDATE_ROLES,
   actionByKey,
   defaultAllowedActionsForRole,
   defaultAllowedPagesForRole,
   pageKeyForPath,
+  roleCanUpdatePage,
+  updateActionKey,
 } from "./registry";
 
 // ----------------------------------------------------------------------------
@@ -26,35 +30,58 @@ type ProfileSubset =
   | null
   | undefined;
 
-// Registry keys for the Pricing sub-pages, which were added AFTER the first
-// `allowed_pages` overrides were saved. See applyLegacyPricingInheritance().
-const PRICING_SUBPAGE_KEYS = PAGE_REGISTRY.filter(
-  (p) => p.key !== "pricing" && p.path.startsWith("/pricing/"),
-).map((p) => p.key);
+/**
+ * Saved with every permissions-matrix save, in both `allowed_pages` and
+ * `allowed_actions`, since sheets got their own keys and pages got Update rights
+ * (client 2026-10-20). It tells a deliberate "all off" apart from an override
+ * written before either existed — only the latter gets the fill-ins below. Not a
+ * page or an action: the expanders drop it, so nothing else ever sees it.
+ */
+export const PERMISSIONS_MARKER = "perm:v2";
 
 /**
- * Back-compat shim for per-user overrides saved before the Pricing sub-pages
- * existed as their own registry keys.
+ * Back-compat for per-user overrides saved before a page was split into its own
+ * sub-pages (PAGE_FAMILIES): Pricing's sheets, the Pricing Catalogue's sheets,
+ * the analytics and report sheets, payroll employees.
  *
- * Such an override grants `pricing` and — because the keys did not exist when
- * it was written — none of the sub-pages. Read literally, that would strip the
- * entire Pricing menu's contents from every user with a custom allowlist the
- * moment this code deploys. So: when an override grants Pricing but mentions
- * no sub-page at all, we treat the sub-pages as unspecified and fall back to
- * the role's defaults for them (which is where "Oil detail is owner-only" now
- * lives).
- *
- * The shim stops firing as soon as the override names any sub-page — i.e.
- * after migration 0140 backfills it, or after an admin next saves that user in
- * the permissions matrix. It deliberately does NOT grant sub-pages to someone
- * whose override withholds `pricing` itself.
+ * Such an override grants the parent and — because the child keys did not
+ * exist when it was written — none of the children. Read literally, that would
+ * strip those sheets from every user with a custom allowlist the moment the
+ * split deploys. So: when an override grants a parent but names none of its
+ * children, the children are filled in (from the role defaults or all of them,
+ * per family). It never grants children to someone whose override withholds
+ * the parent itself, and it stops for good once an admin saves that user in the
+ * permissions matrix: the matrix runs the same expansion first (so nothing is
+ * lost on save) and writes PERMISSIONS_MARKER, after which a sheet left
+ * unticked stays off.
  */
-function applyLegacyPricingInheritance(allowed: Set<string>, role: UserRole): Set<string> {
-  if (!allowed.has("pricing")) return allowed;
-  if (PRICING_SUBPAGE_KEYS.some((k) => allowed.has(k))) return allowed;
+export function expandSavedPages(stored: Iterable<string>, role: UserRole): Set<string> {
+  const allowed = new Set(stored);
+  if (allowed.delete(PERMISSIONS_MARKER)) return allowed;
   const roleDefaults = new Set(defaultAllowedPagesForRole(role));
-  for (const k of PRICING_SUBPAGE_KEYS) {
-    if (roleDefaults.has(k)) allowed.add(k);
+  for (const family of PAGE_FAMILIES) {
+    if (!allowed.has(family.parent)) continue;
+    if (family.children.some((k) => allowed.has(k))) continue;
+    for (const k of family.children) {
+      if (family.fill === "all" || roleDefaults.has(k)) allowed.add(k);
+    }
+  }
+  return allowed;
+}
+
+/**
+ * Same idea for Update rights: an action override saved before they existed
+ * names no `<page>.update` key, and must not turn every page view-only, so the
+ * role's default Update rights apply to it. A matrix save carries the marker
+ * and is read as written — every Update switched off means view only.
+ */
+export function expandSavedActions(stored: Iterable<string>, role: UserRole): Set<string> {
+  const allowed = new Set(stored);
+  if (allowed.delete(PERMISSIONS_MARKER)) return allowed;
+  const updateKeys = ACTION_REGISTRY.filter((a) => a.isUpdate).map((a) => a.key);
+  if (updateKeys.some((k) => allowed.has(k))) return allowed;
+  for (const a of ACTION_REGISTRY) {
+    if (a.isUpdate && a.defaultRoles.includes(role)) allowed.add(a.key);
   }
   return allowed;
 }
@@ -85,7 +112,7 @@ export function effectiveAllowedPageKeys(profile: ProfileSubset): Set<string> {
   // now, so an explicit grant actually takes effect.
   const stored = profile.allowed_pages;
   if (!stored) return new Set(defaultAllowedPagesForRole(profile.role));
-  return applyLegacyPricingInheritance(new Set(stored), profile.role);
+  return expandSavedPages(stored, profile.role);
 }
 
 /** The "Admin": co_owner has unrestricted access to every page and column. */
@@ -141,7 +168,7 @@ export function effectiveAllowedActionKeys(profile: ProfileSubset): Set<string> 
   // holding an older/partial profile shape still resolve to role defaults
   // rather than silently losing every action.
   const stored = profile.allowed_actions;
-  return new Set(stored ?? defaultAllowedActionsForRole(profile.role));
+  return stored ? expandSavedActions(stored, profile.role) : new Set(defaultAllowedActionsForRole(profile.role));
 }
 
 export function isActionAllowed(profile: ProfileSubset, actionKey: string): boolean {
@@ -153,6 +180,19 @@ export function isActionAllowed(profile: ProfileSubset, actionKey: string): bool
   if (!action) return false;
   if (!isPageAllowed(profile, action.pageKey)) return false;
   return effectiveAllowedActionKeys(profile).has(actionKey);
+}
+
+/**
+ * Can this person change things on the page? View (the page) plus its Update
+ * right. Restrict-only: a role that can't write there never can, whatever the
+ * switch says. Pages with nothing to change answer with View alone.
+ */
+export function canUpdatePage(profile: ProfileSubset, pageKey: string): boolean {
+  if (!profile) return false;
+  if (isAdminProfile(profile)) return true;
+  if (!UPDATE_ROLES[pageKey]) return isPageAllowed(profile, pageKey);
+  if (!roleCanUpdatePage(profile.role, pageKey)) return false;
+  return isActionAllowed(profile, updateActionKey(pageKey));
 }
 
 // ----------------------------------------------------------------------------

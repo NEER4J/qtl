@@ -45,6 +45,7 @@ export async function listActivePromotions(): Promise<Promotion[]> {
 
 export const createPromotion = wrapAction({
   schema: CreatePromotionInput,
+  page: "settings_promotions",
   roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<Promotion> => {
     const supabase = await createClient();
@@ -61,6 +62,7 @@ export const createPromotion = wrapAction({
 
 export const updatePromotion = wrapAction({
   schema: UpdatePromotionInput,
+  page: "settings_promotions",
   roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }, profile): Promise<Promotion> => {
     const supabase = await createClient();
@@ -78,6 +80,7 @@ export const updatePromotion = wrapAction({
 
 export const togglePromotionActive = wrapAction({
   schema: TogglePromotionActiveInput,
+  page: "settings_promotions",
   roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<Promotion> => {
     const supabase = await createClient();

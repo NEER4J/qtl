@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { PageHelp } from "@/components/help/page-help";
 import { SimpleBar, SimpleLine } from "@/components/analytics/charts";
-import { requireProfile } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { getDeckAnalytics, getJobsAnalytics } from "@/lib/actions/analytics";
 import { listActiveLocations } from "@/lib/actions/reference";
 import { listAllTechnicians } from "@/lib/actions/technicians";
@@ -16,7 +16,7 @@ export default async function JobsAnalyticsPage({
 }: {
   searchParams: Promise<Record<string, string>>;
 }) {
-  const profile = await requireProfile();
+  const profile = await requirePage("analytics_jobs");
   const sp = await searchParams;
 
   const filter = {

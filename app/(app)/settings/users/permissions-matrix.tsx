@@ -18,11 +18,15 @@ import {
   ACTION_REGISTRY,
   PAGE_GROUPS,
   PAGE_REGISTRY,
+  UPDATE_ROLES,
   actionsForPage,
   columnsForPage,
   defaultAllowedActionsForRole,
   defaultAllowedPagesForRole,
+  roleCanUpdatePage,
+  updateActionKey,
 } from "@/lib/permissions/registry";
+import { PERMISSIONS_MARKER, expandSavedActions, expandSavedPages } from "@/lib/permissions/check";
 import type { UserRole } from "@/lib/db/types";
 
 import type { UserListRow } from "@/lib/actions/users";
@@ -44,7 +48,9 @@ interface Props {
 const PAGES_WITH_COLUMNS = new Set(
   PAGE_REGISTRY.filter((p) => columnsForPage(p.key).length > 0).map((p) => p.key),
 );
-const PAGES_WITH_ACTIONS = new Set(ACTION_REGISTRY.map((a) => a.pageKey));
+// Extra actions (exports …) get the detail panel; a page's Update right sits on
+// its own row instead.
+const PAGES_WITH_ACTIONS = new Set(ACTION_REGISTRY.filter((a) => !a.isUpdate).map((a) => a.pageKey));
 /** Pages the right-hand panel has something to show for. */
 const PAGES_WITH_DETAIL = new Set([...PAGES_WITH_COLUMNS, ...PAGES_WITH_ACTIONS]);
 
@@ -60,8 +66,11 @@ export function PermissionsMatrix({
   // user's allowlist regardless of role, so no page is locked in this UI. Role
   // defaults still seed the "Apply default" button and the +/- divergence hint.
 
+  // A saved override is read the way the checks read it (expandSavedPages):
+  // sheets split out of a page it grants start ticked, so saving the user
+  // again never takes away access they have today.
   const initialAllowed = useMemo<string[]>(
-    () => allowedPages ?? defaultAllowedPagesForRole(role),
+    () => (allowedPages ? [...expandSavedPages(allowedPages, role)] : defaultAllowedPagesForRole(role)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -77,7 +86,7 @@ export function PermissionsMatrix({
   // Lazy initialiser: seeded once on mount, like `allowed` above. The dialogs
   // re-key the component per user + role so it re-seeds when either changes.
   const [actions, setActions] = useState<Set<string>>(
-    () => new Set(allowedActions ?? defaultAllowedActionsForRole(role)),
+    () => (allowedActions ? expandSavedActions(allowedActions, role) : new Set(defaultAllowedActionsForRole(role))),
   );
   // "Role default" only holds when BOTH axes are untouched — a custom action
   // list with default pages is still a custom permission set, and emitting
@@ -118,14 +127,17 @@ export function PermissionsMatrix({
     setHidden(nextHidden);
     setActions(nextActions);
     setUsingRoleDefault(nextUsingDefault);
+    // A custom set is saved with the marker so it's read exactly as ticked:
+    // without it the checks would treat an unticked sheet or an all-off Update
+    // column as an old override and fill them back in (expandSavedPages).
     onChange({
-      allowed_pages: nextUsingDefault ? null : Array.from(normalizedAllowed),
+      allowed_pages: nextUsingDefault ? null : [PERMISSIONS_MARKER, ...normalizedAllowed],
       hidden_columns: Object.fromEntries(
         Object.entries(nextHidden)
           .filter(([, v]) => v.size > 0)
           .map(([k, v]) => [k, Array.from(v)]),
       ),
-      allowed_actions: nextUsingDefault ? null : Array.from(nextActions),
+      allowed_actions: nextUsingDefault ? null : [PERMISSIONS_MARKER, ...nextActions],
     });
   };
 
@@ -172,19 +184,32 @@ export function PermissionsMatrix({
     if (!src) return;
     // Copy the source user's full allowlist verbatim — every page is grantable
     // to any role, so there's nothing to filter out.
-    const srcAllowed = src.allowed_pages ?? defaultAllowedPagesForRole(src.role);
-    const nextAllowed = new Set(srcAllowed);
+    const nextAllowed = src.allowed_pages
+      ? expandSavedPages(src.allowed_pages, src.role)
+      : new Set(defaultAllowedPagesForRole(src.role));
     const nextHidden: Record<string, Set<string>> = {};
     for (const [k, v] of Object.entries(src.hidden_columns ?? {})) {
       nextHidden[k] = new Set(v);
     }
-    const nextActions = new Set(
-      src.allowed_actions ?? defaultAllowedActionsForRole(src.role),
-    );
+    const nextActions = src.allowed_actions
+      ? expandSavedActions(src.allowed_actions, src.role)
+      : new Set(defaultAllowedActionsForRole(src.role));
+    // Update on a page the source's role can never change says nothing about
+    // this user — keep this role's own default there rather than copying a
+    // "no" that would leave them view only.
+    const ownDefaults = new Set(defaultAllowedActionsForRole(role));
+    for (const pageKey of Object.keys(UPDATE_ROLES)) {
+      if (roleCanUpdatePage(src.role, pageKey)) continue;
+      const key = updateActionKey(pageKey);
+      if (ownDefaults.has(key)) nextActions.add(key);
+      else nextActions.delete(key);
+    }
     commit(
       nextAllowed,
       nextHidden,
-      src.allowed_pages === null && src.allowed_actions === null,
+      // "Role default" saves null, which means THIS user's role — only the
+      // same thing as the source's when the roles match.
+      src.role === role && src.allowed_pages === null && src.allowed_actions === null,
       nextActions,
     );
   };
@@ -234,7 +259,14 @@ export function PermissionsMatrix({
   // registry — "x/24 pages".
   const totalPages = grantableKeys.length;
   const hiddenColumnTotal = Object.values(hidden).reduce((acc, s) => acc + s.size, 0);
-  const revokedActionTotal = ACTION_REGISTRY.filter((a) => !actions.has(a.key)).length;
+  const revokedActionTotal = ACTION_REGISTRY.filter((a) => !a.isUpdate && !actions.has(a.key)).length;
+  // Pages this user can open and their role could change, set to view only.
+  const viewOnlyTotal = PAGE_REGISTRY.filter(
+    (p) =>
+      allowed.has(p.key) &&
+      roleCanUpdatePage(role, p.key) &&
+      !actions.has(updateActionKey(p.key)),
+  ).length;
   const hasCopySource = !!otherUsers && otherUsers.length > 0;
 
   return (
@@ -260,6 +292,11 @@ export function PermissionsMatrix({
           {revokedActionTotal > 0 && (
             <span className="text-muted-foreground">
               · {revokedActionTotal} action{revokedActionTotal === 1 ? "" : "s"} off
+            </span>
+          )}
+          {viewOnlyTotal > 0 && (
+            <span className="text-muted-foreground">
+              · {viewOnlyTotal} page{viewOnlyTotal === 1 ? "" : "s"} view only
             </span>
           )}
         </div>
@@ -319,8 +356,10 @@ export function PermissionsMatrix({
       <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(260px,320px)_1fr]">
         {/* Pages list */}
         <div className="rounded-lg border bg-card overflow-hidden">
-          <div className="border-b bg-muted/30 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Pages
+          <div className="flex items-center gap-2 border-b bg-muted/30 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="w-4 text-center" title="Can open the page">View</span>
+            <span className="flex-1">Page</span>
+            <span title="Can add, change and delete there">Update</span>
           </div>
           <div className="max-h-[560px] overflow-y-auto">
             {PAGE_GROUPS.map((group) => {
@@ -415,6 +454,22 @@ export function PermissionsMatrix({
                                 <Ban className="size-3" />
                                 {offActions}
                               </span>
+                            )}
+                            {UPDATE_ROLES[p.key] && (
+                              <UpdateToggle
+                                checked={isOn && actions.has(updateActionKey(p.key))}
+                                disabled={!isOn || !roleCanUpdatePage(role, p.key)}
+                                title={
+                                  !roleCanUpdatePage(role, p.key)
+                                    ? "This role can't change anything on this page."
+                                    : !isOn
+                                      ? "Turn the page on first."
+                                      : actions.has(updateActionKey(p.key))
+                                        ? "Can add, change and delete here. Untick for view only."
+                                        : "View only. Tick to allow changes."
+                                }
+                                onToggle={() => toggleAction(updateActionKey(p.key))}
+                              />
                             )}
                             {hasColumns && (
                               <ChevronRight
@@ -616,5 +671,35 @@ function ColumnDetail({
         </>
       )}
     </div>
+  );
+}
+
+/** The Update switch on a page row: changes allowed, or view only. */
+function UpdateToggle({
+  checked,
+  disabled,
+  title,
+  onToggle,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  title: string;
+  onToggle: () => void;
+}) {
+  return (
+    <span
+      title={title}
+      // The row itself focuses the page in the detail panel; the switch must not.
+      onClick={(e) => e.stopPropagation()}
+      className="inline-flex items-center"
+    >
+      <Checkbox
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onToggle}
+        aria-label="Update"
+        className="size-4 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+      />
+    </span>
   );
 }

@@ -38,6 +38,7 @@ export function CustomersTable({
   hiddenColumns,
   canMerge = false,
   canExport = false,
+  canEdit = true,
 }: {
   rows: CustomerListRow[];
   total: number;
@@ -53,6 +54,9 @@ export function CustomersTable({
    * directory — /api/export/customers enforces the same check server-side.
    */
   canExport?: boolean;
+  /** The customers page's Update right — off hides adding, editing and
+   *  deactivating (the server refuses them too). */
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   // Search runs on the SERVER now. The list is paginated, so filtering the
@@ -91,7 +95,7 @@ export function CustomersTable({
             <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
           )}
           <Input
-            placeholder="Search by name, plate, phone…"
+            placeholder="Search by name, plate, VIN, phone…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-8"
@@ -119,9 +123,11 @@ export function CustomersTable({
               </a>
             </Button>
           )}
-          <Button onClick={() => setCreating(true)}>
-            <Plus className="size-4" /> New customer
-          </Button>
+          {canEdit && (
+            <Button onClick={() => setCreating(true)}>
+              <Plus className="size-4" /> New customer
+            </Button>
+          )}
         </div>
       </div>
 
@@ -187,17 +193,21 @@ export function CustomersTable({
                       >
                         <History className="size-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => setEditing(c)}>
-                        <Pencil className="size-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={isPending}
-                        onClick={() => handleToggle(c)}
-                      >
-                        {c.active ? "Deactivate" : "Reactivate"}
-                      </Button>
+                      {canEdit && (
+                        <>
+                          <Button variant="ghost" size="icon" onClick={() => setEditing(c)}>
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isPending}
+                            onClick={() => handleToggle(c)}
+                          >
+                            {c.active ? "Deactivate" : "Reactivate"}
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

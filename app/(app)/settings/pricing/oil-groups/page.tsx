@@ -7,7 +7,7 @@ import { OilGroupsTable } from "./oil-groups-table";
 export const dynamic = "force-dynamic";
 
 export default async function OilGroupsPage() {
-  await requirePage("settings_pricing");
+  await requirePage("settings_pricing_oil_groups");
   const [groups, oilTypes] = await Promise.all([listAllOilGroups(), listAllOilTypes()]);
 
   // listAllOilGroups returns [] both when the table is missing and when nobody

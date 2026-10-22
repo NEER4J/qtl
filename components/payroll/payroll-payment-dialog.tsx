@@ -23,6 +23,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -33,15 +34,20 @@ import {
 import { PayrollPaymentInput } from "@/lib/schemas/payroll";
 import { addPayrollPayment, updatePayrollPayment } from "@/lib/actions/payroll";
 import { todayISO } from "@/lib/utils/format";
-import type { PayrollPayment } from "@/lib/db/types";
+import { PAYMENT_MODE_LABELS } from "@/lib/utils/payment-modes";
+import type { PaymentMode, PayrollPayment } from "@/lib/db/types";
 
-const PAYMENT_MODES = [
-  { value: "cheque", label: "Cheque" },
-  { value: "etransfer", label: "E-Transfer" },
-  { value: "cash", label: "Cash" },
-  { value: "debit", label: "Debit" },
-  { value: "visa", label: "Visa" },
-  { value: "mastercard", label: "Mastercard" },
+// Every way money can go out to an employee. "oc" (on account) is a sales
+// tender with no meaning for wages, so it is only offered back on a payment
+// that already has it.
+const PAYROLL_MODES: PaymentMode[] = [
+  "cheque",
+  "etransfer",
+  "cash",
+  "debit",
+  "visa",
+  "mastercard",
+  "credit_card",
 ];
 
 interface Props {
@@ -67,9 +73,8 @@ export function PayrollPaymentDialog({ weekId, employees, existing, children }: 
     notes: "",
   };
 
-  const form = useForm<PayrollPaymentInput>({
-    resolver: zodResolver(PayrollPaymentInput),
-    defaultValues: existing
+  const valuesFor = (): PayrollPaymentInput =>
+    existing
       ? {
           payroll_week_id: weekId,
           employee_id: existing.employee_id,
@@ -79,8 +84,22 @@ export function PayrollPaymentDialog({ weekId, employees, existing, children }: 
           transaction_id: existing.transaction_id ?? "",
           notes: existing.notes ?? "",
         }
-      : blank,
+      : blank;
+
+  const form = useForm<PayrollPaymentInput>({
+    resolver: zodResolver(PayrollPaymentInput),
+    defaultValues: valuesFor(),
   });
+
+  // Every open starts from the payment as it is NOW (client 2026-10-20 —
+  // values set once at mount reopened stale after a save + refresh).
+  function onOpenChange(next: boolean) {
+    if (next) form.reset(valuesFor());
+    setOpen(next);
+  }
+
+  const modes =
+    existing && !PAYROLL_MODES.includes(existing.mode) ? [...PAYROLL_MODES, existing.mode] : PAYROLL_MODES;
 
   async function onSubmit(values: PayrollPaymentInput) {
     const result = existing
@@ -97,7 +116,7 @@ export function PayrollPaymentDialog({ weekId, employees, existing, children }: 
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
@@ -160,8 +179,8 @@ export function PayrollPaymentDialog({ weekId, employees, existing, children }: 
                       <SelectTrigger><SelectValue /></SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {PAYMENT_MODES.map((m) => (
-                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                      {modes.map((m) => (
+                        <SelectItem key={m} value={m}>{PAYMENT_MODE_LABELS[m]}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -175,7 +194,35 @@ export function PayrollPaymentDialog({ weekId, employees, existing, children }: 
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Reference / transaction ID</FormLabel>
-                  <FormControl><Input {...field} value={field.value ?? ""} placeholder="Auto-generated if blank" /></FormControl>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      value={field.value ?? ""}
+                      placeholder={
+                        existing?.transaction_id
+                          ? `Blank keeps ${existing.transaction_id}`
+                          : "Auto-generated if blank"
+                      }
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes (optional)</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      rows={2}
+                      {...field}
+                      value={field.value ?? ""}
+                      placeholder="e.g. part payment, advance, bank memo"
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

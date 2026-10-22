@@ -30,7 +30,7 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 export default async function PriceHistoryPage() {
-  await requirePage("settings_pricing");
+  await requirePage("settings_pricing_price_history");
   const rows = await listPriceHistory(500);
 
   return (

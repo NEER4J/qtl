@@ -23,6 +23,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { InfoTip } from "@/components/help/info-tip";
 import {
   Select,
   SelectContent,
@@ -74,7 +75,7 @@ function formatHuman(ymd: string): string {
  *  payments attached, and none of that needs to cross to the client. */
 type EditableWeek = Pick<
   PayrollWeek,
-  "id" | "location_id" | "week_start" | "period_weeks" | "notes"
+  "id" | "location_id" | "week_start" | "period_weeks" | "pay_date" | "notes"
 >;
 
 interface Props {
@@ -98,17 +99,28 @@ export function WeekFormDialog({ week, children }: Props) {
     listActiveLocations().then(setLocations).catch(() => {});
   }, []);
 
-  const form = useForm<PayrollWeekInput>({
-    resolver: zodResolver(PayrollWeekInput),
-    defaultValues: week
+  const valuesFor = (): PayrollWeekInput =>
+    week
       ? {
           location_id: week.location_id,
           week_start: week.week_start,
           period_weeks: week.period_weeks,
+          pay_date: week.pay_date ?? "",
           notes: week.notes ?? "",
         }
-      : { location_id: "", week_start: "", period_weeks: 1, notes: "" },
+      : { location_id: "", week_start: "", period_weeks: 1, pay_date: "", notes: "" };
+
+  const form = useForm<PayrollWeekInput>({
+    resolver: zodResolver(PayrollWeekInput),
+    defaultValues: valuesFor(),
   });
+
+  // Start every open from the week as it is now — values set once at mount
+  // went stale after a save + refresh.
+  function onOpenChange(next: boolean) {
+    if (next) form.reset(valuesFor());
+    setOpen(next);
+  }
 
   async function onSubmit(values: PayrollWeekInput) {
     const result = week
@@ -125,7 +137,7 @@ export function WeekFormDialog({ week, children }: Props) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
@@ -221,6 +233,25 @@ export function WeekFormDialog({ week, children }: Props) {
                   </FormItem>
                 );
               }}
+            />
+            <FormField
+              control={form.control}
+              name="pay_date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-1">
+                    Pay date (optional)
+                    <InfoTip>
+                      The day everyone on this week is paid. Prints on every pay stub. An
+                      entry&apos;s own pay date, if set, wins for that person.
+                    </InfoTip>
+                  </FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} value={field.value ?? ""} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
             <FormField
               control={form.control}

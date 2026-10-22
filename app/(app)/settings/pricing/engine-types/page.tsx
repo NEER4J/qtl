@@ -12,7 +12,7 @@ import { EngineTypesTable } from "./engine-types-table";
 export const dynamic = "force-dynamic";
 
 export default async function EngineTypesPage() {
-  await requirePage("settings_pricing");
+  await requirePage("settings_pricing_engine_types");
   // Proposals for the unlinked engines, so the admin can accept them in one
   // pass instead of hunting 42 rows through a picker. Fetched alongside the
   // rest rather than after them: it re-reads the engines itself and returns []

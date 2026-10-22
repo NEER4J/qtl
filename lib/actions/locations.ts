@@ -24,6 +24,7 @@ export async function listLocations(): Promise<Location[]> {
 
 export const createLocation = wrapAction({
   schema: CreateLocationInput,
+  page: "settings_locations",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<Location> => {
     const supabase = await createClient();
@@ -51,6 +52,7 @@ export const createLocation = wrapAction({
 
 export const updateLocation = wrapAction({
   schema: UpdateLocationInput,
+  page: "settings_locations",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<Location> => {
     const supabase = await createClient();
@@ -79,6 +81,7 @@ export const updateLocation = wrapAction({
 
 export const toggleLocationActive = wrapAction({
   schema: ToggleLocationActive,
+  page: "settings_locations",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<Location> => {
     const supabase = await createClient();

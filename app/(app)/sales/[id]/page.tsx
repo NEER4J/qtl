@@ -16,27 +16,18 @@ import {
 } from "@/components/ui/table";
 import { AddPaymentDialog } from "@/components/sales/add-payment-dialog";
 import { ReversePaymentButton } from "@/components/sales/reverse-payment-button";
-import { DownloadInvoiceButton } from "@/components/sales/download-invoice-button";
+import { InvoiceActions } from "@/components/sales/invoice-actions";
 import { StatusBadge } from "@/components/sales/status-badge";
 import { PageHelp } from "@/components/help/page-help";
 import { requireProfile } from "@/lib/auth/require";
 import { getSalesJob } from "@/lib/actions/sales";
 import { formatDate, formatMoney } from "@/lib/utils/format";
-import { buildDisplayRows } from "@/lib/utils/sales-display";
+import { OIL_TIER_GROUP, buildDisplayRows, foldOilTier } from "@/lib/utils/sales-display";
 import { canAccessLocation } from "@/lib/auth/locations";
+import { PAYMENT_MODE_LABELS, formatCardOnFile, isCardMode } from "@/lib/utils/payment-modes";
+import { canUpdatePage } from "@/lib/permissions/check";
 
 export const dynamic = "force-dynamic";
-
-const PAYMENT_MODE_LABELS: Record<string, string> = {
-  cash: "Cash",
-  cheque: "Cheque",
-  debit: "Debit",
-  visa: "Visa",
-  mastercard: "Mastercard",
-  etransfer: "E-Transfer",
-  credit_card: "Credit Card",
-  oc: "Outstanding",
-};
 
 export default async function SalesJobDetailPage({
   params,
@@ -49,20 +40,30 @@ export default async function SalesJobDetailPage({
   if (!job) notFound();
 
   const canEdit =
-    profile.role === "owner" ||
+
+    (profile.role === "owner" ||
     profile.role === "co_owner" ||
     (["manager", "supervisor", "staff", "technician"].includes(profile.role) &&
-      canAccessLocation(profile, job.location_id));
+      canAccessLocation(profile, job.location_id))) &&
+
+    canUpdatePage(profile, "sales");
 
   const canAddPayment =
-    profile.role !== "employee" &&
+
+    (profile.role !== "employee" &&
     ((profile.role === "owner" || profile.role === "co_owner") ||
       profile.role === "accountant" ||
-      canAccessLocation(profile, job.location_id));
+      canAccessLocation(profile, job.location_id))) &&
+
+    canUpdatePage(profile, "sales");
+
+  // The customer's card on file, shown against card payments.
+  const cardOnFile = formatCardOnFile(job.customer_card_number, job.customer_card_expiry);
 
   // Reversing a payment re-opens the balance — owner / co_owner only (RLS 0153).
   const canReversePayment =
-    (profile.role === "owner" || profile.role === "co_owner") && !job.deactivated_at;
+    ((profile.role === "owner" || profile.role === "co_owner") && !job.deactivated_at) &&
+    canUpdatePage(profile, "sales");
 
   return (
     <div className="flex flex-col gap-6">
@@ -95,8 +96,16 @@ export default async function SalesJobDetailPage({
             </p>
           )}
         </div>
-        <div className="flex gap-2">
-          <DownloadInvoiceButton jobId={job.id} invoiceNo={job.invoice_no} />
+        <div className="flex flex-wrap justify-end gap-2">
+          <InvoiceActions
+            jobId={job.id}
+            invoiceNo={job.invoice_no}
+            customerEmail={job.email}
+            billingName={job.billing_name}
+            jobDate={job.job_date}
+            total={job.total}
+            shopName={[job.location_invoice_name || "Quick Truck Lube", job.location_name].filter(Boolean).join(" ")}
+          />
           {canEdit && !job.deactivated_at && (
             <Button asChild variant="outline">
               <Link href={`/sales/${job.id}/edit`}>
@@ -110,7 +119,8 @@ export default async function SalesJobDetailPage({
       <PageHelp id="sales-detail">
         <p>The full invoice. From here you can:</p>
         <ul>
-          <li><strong>Download PDF</strong> — a branded invoice PDF you can email or print for the customer.</li>
+          <li><strong>Print</strong> / <strong>Download PDF</strong> — the branded invoice, printed straight away or saved as a file.</li>
+          <li><strong>Email</strong> — opens your email app with the invoice message written and a 30-day link to the PDF. Send it to the customer&apos;s email or type any other address.</li>
           <li><strong>Edit</strong> — owners, and managers / supervisors / staff at the same shop, can make changes. Every edit is recorded in the audit log so you know who changed what.</li>
           <li><strong>Record payment</strong> — appears when there&apos;s an unpaid balance. You can add partial payments over time; the status moves from Outstanding to Partial to Paid automatically.</li>
           <li><strong>Reverse</strong> — owners can take back a payment (a bounced cheque, or one posted to the wrong invoice). The invoice goes back to Outstanding or Partial; the reversal is kept in the audit log.</li>
@@ -126,14 +136,32 @@ export default async function SalesJobDetailPage({
             <CardTitle>Customer</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4 text-sm">
-            <Field label="Billing name" value={job.billing_name} />
-            <Field label="License plate" value={job.license_plate} mono />
+            <Field
+              label="Billing name"
+              value={job.billing_name}
+              href={job.customer_id ? `/customers/${job.customer_id}` : undefined}
+            />
+            <Field
+              label="License plate"
+              value={job.license_plate}
+              mono
+              href={
+                job.customer_id && job.vehicle_id
+                  ? `/customers/${job.customer_id}/vehicles/${job.vehicle_id}/history`
+                  : undefined
+              }
+            />
             <Field label="Contact" value={job.contact_no} />
             <Field label="Email" value={job.email} />
           <Field label="Odometer" value={job.odometer?.toLocaleString() ?? null} />
           <Field label="Carrier" value={job.carrier_name} />
           {job.credited_from_invoice_no && (
-            <Field label="Credit against" value={job.credited_from_invoice_no} mono />
+            <Field
+              label="Credit against"
+              value={job.credited_from_invoice_no}
+              mono
+              href={job.credited_from_job_id ? `/sales/${job.credited_from_job_id}` : undefined}
+            />
           )}
             {job.free_grease_applied && (
               <Field label="Free grease" value="Applied" />
@@ -189,7 +217,7 @@ export default async function SalesJobDetailPage({
           <Field label="Batch" value={job.batch_id} mono />
           <Field
             label="Payment mode"
-            value={job.payment_mode ? PAYMENT_MODE_LABELS[job.payment_mode] : null}
+            value={job.payment_mode ? PAYMENT_MODE_LABELS[job.payment_mode] ?? job.payment_mode : null}
           />
         </CardContent>
         {job.comments && (
@@ -218,12 +246,14 @@ export default async function SalesJobDetailPage({
               </TableHeader>
               <TableBody>
                 {buildDisplayRows(
-                  job.items,
+                  // An oil and its tier premium show as one line.
+                  foldOilTier(job.items),
                   (it) => Number(it.line_total ?? 0),
                   (it) => it.is_taxable === true,
                   (it) => it.package_label ?? "Package",
                 ).map((row) => {
                   if (row.type === "package") {
+                    const oilWithTier = row.key.startsWith(OIL_TIER_GROUP);
                     const mergedSaved = row.items.reduce(
                       (s, m) =>
                         s +
@@ -238,14 +268,20 @@ export default async function SalesJobDetailPage({
                           <TableCell>
                             <div className="font-medium">{row.label}</div>
                             <div className="text-xs text-muted-foreground">
-                              Package · {row.items.length} item
-                              {row.items.length === 1 ? "" : "s"}
-                              {mergedSaved > 0 &&
-                                ` · merged, saved ${formatMoney(mergedSaved)}`}
+                              {oilWithTier ? (
+                                "Oil with its volume tier premium"
+                              ) : (
+                                <>
+                                  Package · {row.items.length} item
+                                  {row.items.length === 1 ? "" : "s"}
+                                  {mergedSaved > 0 &&
+                                    ` · merged, saved ${formatMoney(mergedSaved)}`}
+                                </>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-muted-foreground">
-                            1
+                            {oilWithTier ? Number(row.items[0]!.quantity) : 1}
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-muted-foreground">
                             —
@@ -359,7 +395,12 @@ export default async function SalesJobDetailPage({
                 {job.payments.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell>{formatDate(p.paid_on)}</TableCell>
-                    <TableCell>{PAYMENT_MODE_LABELS[p.mode] ?? p.mode}</TableCell>
+                    <TableCell>
+                      {PAYMENT_MODE_LABELS[p.mode] ?? p.mode}
+                      {isCardMode(p.mode) && cardOnFile && (
+                        <div className="font-mono text-xs text-muted-foreground">{cardOnFile}</div>
+                      )}
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{p.transaction_id ?? "—"}</TableCell>
                     <TableCell className="max-w-xs truncate">{p.notes ?? "—"}</TableCell>
                     <TableCell className="text-right tabular-nums">
@@ -388,15 +429,26 @@ function Field({
   label,
   value,
   mono,
+  href,
 }: {
   label: string;
   value: string | null | undefined;
   mono?: boolean;
+  /** Opens the record the value refers to (customer, vehicle, invoice). */
+  href?: string;
 }) {
   return (
     <div>
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={mono ? "font-mono" : undefined}>{value || "—"}</div>
+      <div className={mono ? "font-mono" : undefined}>
+        {value && href ? (
+          <Link href={href} className="underline-offset-2 hover:underline">
+            {value}
+          </Link>
+        ) : (
+          value || "—"
+        )}
+      </div>
     </div>
   );
 }

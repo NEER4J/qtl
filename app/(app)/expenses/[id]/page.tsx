@@ -19,6 +19,7 @@ import { requireProfile } from "@/lib/auth/require";
 import { getExpense } from "@/lib/actions/expenses";
 import { formatDate, formatMoney, formatUnitCost } from "@/lib/utils/format";
 import { canAccessLocation } from "@/lib/auth/locations";
+import { canUpdatePage } from "@/lib/permissions/check";
 
 export const dynamic = "force-dynamic";
 
@@ -44,14 +45,20 @@ export default async function ExpenseDetailPage({
   if (!exp) notFound();
 
   const canEdit =
-    (profile.role === "owner" || profile.role === "co_owner") ||
+
+    ((profile.role === "owner" || profile.role === "co_owner") ||
     profile.role === "accountant" ||
-    (profile.role === "manager" && canAccessLocation(profile, exp.location_id));
+    (profile.role === "manager" && canAccessLocation(profile, exp.location_id))) &&
+
+    canUpdatePage(profile, "expenses");
 
   const canAddPayment =
-    (profile.role === "owner" || profile.role === "co_owner") ||
+
+    ((profile.role === "owner" || profile.role === "co_owner") ||
     profile.role === "accountant" ||
-    (profile.role === "manager" && canAccessLocation(profile, exp.location_id));
+    (profile.role === "manager" && canAccessLocation(profile, exp.location_id))) &&
+
+    canUpdatePage(profile, "expenses");
 
   return (
     <div className="flex flex-col gap-6">

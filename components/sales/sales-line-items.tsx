@@ -83,6 +83,8 @@ export interface LineItem {
   /** A line the form adds and keeps up to date itself — the volume tier premium
    *  or the grease-only fee (lib/utils/sales-auto-lines.ts). */
   auto_fee?: AutoFee | null;
+  /** Oil beyond the engine's capacity, at the retail rate (splitExtraOil). */
+  is_extra_oil?: boolean;
 }
 
 export function newLineItem(partial: Partial<LineItem> = {}): LineItem {
@@ -107,6 +109,7 @@ export function newLineItem(partial: Partial<LineItem> = {}): LineItem {
     transmission_service_id: null,
     merged_unit_price: null,
     auto_fee: null,
+    is_extra_oil: false,
     ...partial,
   };
 }
@@ -199,6 +202,133 @@ export function lineItemsTaxableSubTotal(items: LineItem[]): number {
 }
 
 /**
+ * A package as job lines, one per item plus its labour, sharing one group id
+ * so the package collapses to a single display line. `mergeItemIds` are items
+ * that duplicate something already on the job: kept visible, billed at $0.
+ */
+export function packageLineItems(
+  pkg: PartPackageWithItems,
+  // Items to bring in as merged duplicates: kept visible but billed at $0,
+  // with the waived price recorded for the "merged / saved" indicator.
+  mergeItemIds: ReadonlySet<string> = new Set(),
+): LineItem[] {
+  const locked = isPartPackageLocked(pkg);
+  // One group id per expansion so the whole package collapses to one line,
+  // and adding the same package twice stays as two independent lines.
+  const groupId = newGroupId();
+  const rows: LineItem[] = [];
+  for (const it of pkg.items) {
+    let price: number;
+    let description: string;
+    let isTaxable: boolean;
+    let unitOfMeasure: LineItem["unit_of_measure"];
+    let categoryId: string | null = null;
+    let oilTypeId: string | null = null;
+    let oilContainer: "bulk" | "gallon" | null = null;
+    let transId: string | null = null;
+    if (it.oil_type_id && it.oil_type) {
+      price = locked
+        ? effectiveLockedPriceForItem(it)
+        : effectiveCatalogPriceForItem(it);
+      const litres = Number(it.litres ?? 0);
+      description = `${oilLabel(it.oil_type)}${
+        it.oil_container ? ` (${it.oil_container})` : ""
+      }${litres ? ` × ${litres}L` : ""}`;
+      isTaxable = it.oil_type.is_taxable;
+      unitOfMeasure = "ltr";
+      oilTypeId = it.oil_type_id;
+      oilContainer = it.oil_container ?? null;
+    } else if (it.transmission_service_id && it.transmission_service) {
+      price = locked
+        ? effectiveLockedPriceForItem(it)
+        : effectiveCatalogPriceForItem(it);
+      const s = it.transmission_service;
+      const syn =
+        s.service_kind === "coolant_flush" ? "" : s.is_synthetic ? " (Syn)" : " (Reg)";
+      description = `${s.name}${syn}`;
+      isTaxable = true; // services are HST-taxable
+      unitOfMeasure = null;
+      transId = it.transmission_service_id;
+    } else if (it.part) {
+      price = locked
+        ? effectiveLockedPriceForItem(it)
+        : effectiveCatalogPriceForItem(it);
+      description = `${it.part.brand} ${it.part.part_number}${
+        it.part.description ? ` — ${it.part.description}` : ""
+      }`;
+      isTaxable = it.part.is_taxable;
+      unitOfMeasure = it.part.unit_of_measure;
+      categoryId = it.part.category_id ?? null;
+    } else {
+      continue;
+    }
+    const basePrice = Number.isFinite(price) ? price : 0;
+    const merged = mergeItemIds.has(it.id);
+    rows.push(
+      newLineItem({
+        part_id: it.part_id ?? null,
+        description,
+        quantity: Number(it.quantity) || 1,
+        // Merged duplicates are billed at $0; their waived price is kept for
+        // the indicator.
+        unit_price: merged ? 0 : basePrice,
+        merged_unit_price: merged ? basePrice : null,
+        is_taxable: merged ? false : isTaxable,
+        unit_of_measure: unitOfMeasure,
+        package_label: pkg.name,
+        package_group: groupId,
+        part_category_id: categoryId,
+        oil_type_id: oilTypeId,
+        oil_container: oilContainer,
+        transmission_service_id: transId,
+      }),
+    );
+  }
+
+  // Labor line — added once per package, regardless of duplicates.
+  const laborSell = locked
+    ? Number(pkg.labor_locked_selling_price ?? pkg.labor_selling_price) || 0
+    : Number(pkg.labor_selling_price) || 0;
+  if (laborSell > 0) {
+    rows.push(
+      newLineItem({
+        part_id: null,
+        description: pkg.labor_description ?? "Labor",
+        quantity: 1,
+        unit_price: laborSell,
+        is_taxable: true,
+        unit_of_measure: null,
+        package_label: pkg.name,
+        package_group: groupId,
+      }),
+    );
+  }
+  return rows;
+}
+
+/** A standalone oil line: qty in litres (bulk) or containers (gallon), at the
+ *  grade's base rate — see oilLineRate for the rule. */
+export function oilLineItem(
+  oilTypes: OilType[],
+  oilGroups: OilGroup[],
+  oil: OilType,
+  container: OilContainer,
+  quantity: number,
+): LineItem {
+  const qty = Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+  return newLineItem({
+    part_id: null,
+    description: `${oilLabel(oil)} (${container})`,
+    quantity: qty,
+    unit_price: oilLineRate(oilTypes, oil, container, oilGroups),
+    is_taxable: oil.is_taxable,
+    unit_of_measure: "ltr",
+    oil_type_id: oil.id,
+    oil_container: container,
+  });
+}
+
+/**
  * One overlap between an item already on the job and an item inside the package
  * the user just dropped — same part category, same oil, or same Trans & Diff
  * service. Used to offer "Merge" (drop the duplicate) vs "Add separately".
@@ -246,7 +376,8 @@ function SalesLineItemsTable({
   items: LineItem[];
   /** `waive` says staff just took over an automatic charge (edited or deleted
    *  it), so the form must stop managing that charge on this job. */
-  onChange: (items: LineItem[], opts?: { waive?: AutoFee }) => void;
+  /** `typing`: a quantity box is mid-edit — the form settles extra oil on blur. */
+  onChange: (items: LineItem[], opts?: { waive?: AutoFee; typing?: boolean }) => void;
   /** Oil grades — pickable as standalone oil line items. */
   oilTypes?: OilType[];
   oilGroups?: OilGroup[];
@@ -257,7 +388,7 @@ function SalesLineItemsTable({
   // guard is set on confirm and reset only when a new dialog is opened.
   const addingRef = useRef(false);
 
-  const update = (key: string, patch: Partial<LineItem>) => {
+  const update = (key: string, patch: Partial<LineItem>, typing = false) => {
     const target = items.find((it) => it.key === key);
     // Changing an automatic line's amount, quantity or wording makes it a normal
     // line the staff member owns — the form stops recalculating it.
@@ -268,7 +399,7 @@ function SalesLineItemsTable({
       items.map((it) =>
         it.key === key ? { ...it, ...patch, ...(takesOver ? { auto_fee: null } : {}) } : it,
       ),
-      takesOver ? { waive: target!.auto_fee! } : undefined,
+      takesOver || typing ? { waive: takesOver ? target!.auto_fee! : undefined, typing } : undefined,
     );
   };
   const remove = (key: string) => {
@@ -318,23 +449,8 @@ function SalesLineItemsTable({
    *  (gallon) chosen in the picker, price is the matching per-unit rate — both
    *  still editable in the row. The rate comes from the BASE grade; see
    *  oilLineRate for the rule. */
-  const addOil = (oil: OilType, container: OilContainer, quantity: number) => {
-    const rate = oilLineRate(oilTypes, oil, container, oilGroups);
-    const qty = Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
-    onChange([
-      ...items,
-      newLineItem({
-        part_id: null,
-        description: `${oilLabel(oil)} (${container})`,
-        quantity: qty,
-        unit_price: rate,
-        is_taxable: oil.is_taxable,
-        unit_of_measure: "ltr",
-        oil_type_id: oil.id,
-        oil_container: container,
-      }),
-    ]);
-  };
+  const addOil = (oil: OilType, container: OilContainer, quantity: number) =>
+    onChange([...items, oilLineItem(oilTypes, oilGroups, oil, container, quantity)]);
 
   const lineFromPart = (p: Part, unitPriceOverride?: number): LineItem => {
     const base = unitPriceOverride ?? (Number(p.list_price) || 0);
@@ -445,105 +561,6 @@ function SalesLineItemsTable({
     });
   };
 
-  const buildPackageRows = (
-    pkg: PartPackageWithItems,
-    // Items to bring in as merged duplicates: kept visible but billed at $0,
-    // with the waived price recorded for the "merged / saved" indicator.
-    mergeItemIds: Set<string>,
-  ): LineItem[] => {
-    const locked = isPartPackageLocked(pkg);
-    // One group id per expansion so the whole package collapses to one line,
-    // and adding the same package twice stays as two independent lines.
-    const groupId = newGroupId();
-    const rows: LineItem[] = [];
-    for (const it of pkg.items) {
-      let price: number;
-      let description: string;
-      let isTaxable: boolean;
-      let unitOfMeasure: LineItem["unit_of_measure"];
-      let categoryId: string | null = null;
-      let oilTypeId: string | null = null;
-      let oilContainer: "bulk" | "gallon" | null = null;
-      let transId: string | null = null;
-      if (it.oil_type_id && it.oil_type) {
-        price = locked
-          ? effectiveLockedPriceForItem(it)
-          : effectiveCatalogPriceForItem(it);
-        const litres = Number(it.litres ?? 0);
-        description = `${oilLabel(it.oil_type)}${
-          it.oil_container ? ` (${it.oil_container})` : ""
-        }${litres ? ` × ${litres}L` : ""}`;
-        isTaxable = it.oil_type.is_taxable;
-        unitOfMeasure = "ltr";
-        oilTypeId = it.oil_type_id;
-        oilContainer = it.oil_container ?? null;
-      } else if (it.transmission_service_id && it.transmission_service) {
-        price = locked
-          ? effectiveLockedPriceForItem(it)
-          : effectiveCatalogPriceForItem(it);
-        const s = it.transmission_service;
-        const syn =
-          s.service_kind === "coolant_flush" ? "" : s.is_synthetic ? " (Syn)" : " (Reg)";
-        description = `${s.name}${syn}`;
-        isTaxable = true; // services are HST-taxable
-        unitOfMeasure = null;
-        transId = it.transmission_service_id;
-      } else if (it.part) {
-        price = locked
-          ? effectiveLockedPriceForItem(it)
-          : effectiveCatalogPriceForItem(it);
-        description = `${it.part.brand} ${it.part.part_number}${
-          it.part.description ? ` — ${it.part.description}` : ""
-        }`;
-        isTaxable = it.part.is_taxable;
-        unitOfMeasure = it.part.unit_of_measure;
-        categoryId = it.part.category_id ?? null;
-      } else {
-        continue;
-      }
-      const basePrice = Number.isFinite(price) ? price : 0;
-      const merged = mergeItemIds.has(it.id);
-      rows.push(
-        newLineItem({
-          part_id: it.part_id ?? null,
-          description,
-          quantity: Number(it.quantity) || 1,
-          // Merged duplicates are billed at $0; their waived price is kept for
-          // the indicator.
-          unit_price: merged ? 0 : basePrice,
-          merged_unit_price: merged ? basePrice : null,
-          is_taxable: merged ? false : isTaxable,
-          unit_of_measure: unitOfMeasure,
-          package_label: pkg.name,
-          package_group: groupId,
-          part_category_id: categoryId,
-          oil_type_id: oilTypeId,
-          oil_container: oilContainer,
-          transmission_service_id: transId,
-        }),
-      );
-    }
-
-    // Labor line — added once per package, regardless of duplicates.
-    const laborSell = locked
-      ? Number(pkg.labor_locked_selling_price ?? pkg.labor_selling_price) || 0
-      : Number(pkg.labor_selling_price) || 0;
-    if (laborSell > 0) {
-      rows.push(
-        newLineItem({
-          part_id: null,
-          description: pkg.labor_description ?? "Labor",
-          quantity: 1,
-          unit_price: laborSell,
-          is_taxable: true,
-          unit_of_measure: null,
-          package_label: pkg.name,
-          package_group: groupId,
-        }),
-      );
-    }
-    return rows;
-  };
 
   /**
    * Find items in `pkg` that duplicate something already on the job — by part
@@ -593,7 +610,7 @@ function SalesLineItemsTable({
       setPending({ kind: "package", pkg, overlaps });
       return;
     }
-    onChange([...items, ...buildPackageRows(pkg, new Set())]);
+    onChange([...items, ...packageLineItems(pkg)]);
   };
 
   const bumpExisting = (key: string, delta: number) =>
@@ -615,7 +632,7 @@ function SalesLineItemsTable({
     if (addingRef.current) return;
     addingRef.current = true;
     const mergeIds = new Set<string>(pending.overlaps.map((o) => o.pkgItemId));
-    onChange([...items, ...buildPackageRows(pending.pkg, mergeIds)]);
+    onChange([...items, ...packageLineItems(pending.pkg, mergeIds)]);
     setPending(null);
   };
 
@@ -626,7 +643,7 @@ function SalesLineItemsTable({
     if (!pending || pending.kind !== "package") return;
     if (addingRef.current) return;
     addingRef.current = true;
-    onChange([...items, ...buildPackageRows(pending.pkg, new Set())]);
+    onChange([...items, ...packageLineItems(pending.pkg)]);
     setPending(null);
   };
 
@@ -685,9 +702,14 @@ function SalesLineItemsTable({
             <p className="text-[10px] text-muted-foreground mt-1">
               Added automatically
               {it.auto_fee === "oil_tier_premium"
-                ? " from the oil on this job (Volume tiers)"
+                ? " from the oil on this job (Volume tiers) — the job and invoice show it with the oil as one line"
                 : " — grease-only job (Pricing defaults)"}
               . Edit or delete it to set it by hand.
+            </p>
+          )}
+          {it.is_extra_oil && (
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Oil beyond the engine&apos;s capacity — retail price, not counted toward the tier.
             </p>
           )}
           {(it.part_id || cs) && (
@@ -708,7 +730,7 @@ function SalesLineItemsTable({
               step="0.01"
               min="0.01"
               value={String(it.quantity)}
-              onChange={(e) => update(it.key, { quantity: Number(e.target.value) || 0 })}
+              onChange={(e) => update(it.key, { quantity: Number(e.target.value) || 0 }, true)}
               className="text-right"
             />
             {displayUnit(it) && (

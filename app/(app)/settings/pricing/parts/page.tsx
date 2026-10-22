@@ -17,7 +17,7 @@ export default async function PartsAdminPage({
 }: {
   searchParams: Promise<Record<string, string>>;
 }) {
-  await requirePage("settings_pricing");
+  await requirePage("settings_pricing_parts");
   const sp = await searchParams;
   // Only Active / Inactive tabs (no "All"); default to Active.
   const status: "active" | "inactive" = sp.status === "inactive" ? "inactive" : "active";

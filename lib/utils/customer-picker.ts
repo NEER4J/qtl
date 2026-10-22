@@ -18,6 +18,8 @@ export type CustomerPickerTuple = [
   string | null,
   string[],
   string | null,
+  /** VINs of the customer's vehicles — searchable, not shown. */
+  string[]?,
 ];
 
 export interface CustomerPickerRow {
@@ -32,7 +34,7 @@ export interface CustomerPickerRow {
 }
 
 export function decodeCustomerPicker(tuples: CustomerPickerTuple[]): CustomerPickerRow[] {
-  return tuples.map(([id, billing, company, phones, plates, legacy]) => {
+  return tuples.map(([id, billing, company, phones, plates, legacy, vins = []]) => {
     const shownPlates = plates.length > 0 ? plates : legacy ? [legacy] : [];
     const allPlates = [...plates, legacy ?? ""];
     return {
@@ -47,6 +49,8 @@ export function decodeCustomerPicker(tuples: CustomerPickerTuple[]): CustomerPic
         ...allPlates,
         // "B628AN" should find "B62 8AN".
         ...allPlates.map((p) => p.replace(/[\s-]/g, "")),
+        // A VIN, or part of one, finds the customer (client 2026-10-20).
+        ...vins,
       ]
         .filter(Boolean)
         .join(" ")

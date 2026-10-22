@@ -3,7 +3,7 @@ import { requirePage } from "@/lib/auth/require";
 import { listVendors } from "@/lib/actions/vendors";
 import { listActiveExpenseCategories } from "@/lib/actions/reference";
 import { listLocations } from "@/lib/actions/locations";
-import { hiddenColumnsForPage } from "@/lib/permissions/check";
+import { hiddenColumnsForPage, canUpdatePage } from "@/lib/permissions/check";
 
 import { VendorsTable } from "./vendors-table";
 
@@ -41,7 +41,7 @@ export default async function VendorsPage() {
         categories={categories}
         locations={locations.filter((l) => l.active)}
         hiddenColumns={[...hiddenColumnsForPage(profile, "vendors")]}
-        canMerge={profile.role === "owner" || profile.role === "co_owner"}
+        canMerge={(profile.role === "owner" || profile.role === "co_owner") && canUpdatePage(profile, "vendors")}
       />
     </div>
   );

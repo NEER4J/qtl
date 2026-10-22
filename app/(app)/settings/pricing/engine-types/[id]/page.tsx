@@ -20,7 +20,7 @@ export default async function EngineTypeDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requirePage("settings_pricing");
+  await requirePage("settings_pricing_engine_types");
   const { id } = await params;
   const [detail, packages] = await Promise.all([
     getEngineTypeDetail(id),

@@ -19,9 +19,12 @@ import { accessibleLocationIds } from "@/lib/auth/locations";
 import { listPayrollWeeks } from "@/lib/actions/payroll";
 import { getAppSettings } from "@/lib/actions/reference";
 import { formatDate, formatMoney } from "@/lib/utils/format";
+import { rollingYearStart } from "@/lib/utils/payroll-math";
+import { todayISO } from "@/lib/utils/tz";
 import { NewWeekDialog } from "@/components/payroll/week-form-dialog";
 import { PayrollSettingsCard } from "@/components/payroll/payroll-settings-card";
 import { PrintButton } from "@/components/pricing/print-button";
+import { canUpdatePage } from "@/lib/permissions/check";
 
 export const dynamic = "force-dynamic";
 
@@ -38,19 +41,24 @@ export default async function PayrollPage() {
   const weeks = await listPayrollWeeks(accessibleLocationIds(profile));
 
   const canCreate =
-    profile.role === "owner"
+
+    (profile.role === "owner"
     || profile.role === "co_owner"
     || profile.role === "manager"
-    || profile.role === "accountant";
+    || profile.role === "accountant") &&
+
+    canUpdatePage(profile, "payroll");
   // Vacation / WSIB rate editing is owner / co_owner only (matches the action).
-  const canEditSettings = profile.role === "owner" || profile.role === "co_owner";
+  const canEditSettings =
+    (profile.role === "owner" || profile.role === "co_owner") &&
+    canUpdatePage(profile, "payroll");
   const settings = canEditSettings ? await getAppSettings() : null;
 
   // ------- 12-month rolling totals -------
-  const cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - 12);
+  // Same cutoff as listPayrollWeeks, which reads every week since it.
+  const cutoff = rollingYearStart(todayISO());
   const ytd = weeks
-    .filter((w) => new Date(w.week_start) >= cutoff)
+    .filter((w) => w.week_start >= cutoff)
     .reduce(
       (acc, w) => ({
         gross: acc.gross + w.total_gross,
@@ -102,8 +110,9 @@ export default async function PayrollPage() {
         <ul>
           <li><strong>New week</strong> — pick a Sunday and a shop, weekly or bi-weekly. Each week moves through three states: Draft, Approved, Paid.</li>
           <li><strong>Everything stays editable.</strong> Entries, cash days, payments, and the week itself can be corrected or deleted at any status, and a week can be moved back to Draft. Changes are recorded in the audit log.</li>
-          <li><strong>Printing</strong> — open a week for the payroll register and per-employee pay stubs. <strong>Print</strong> here gives you this list of weeks; <strong>Export CSV</strong> gives the same as a spreadsheet.</li>
-          <li><strong>EI and CPP (tier 1 + 2)</strong> are typed on each entry from your payroll calculator — the rates change too often to calculate reliably. The employer side fills in as you type, and <strong>Estimate from rates</strong> on the entry uses <Link href="/settings/statutory-rates" className="underline">Settings → Statutory Rates</Link> as a starting point. Vacation pay (4% default) and WSIB are still calculated, from the rates in the Payroll settings panel below.</li>
+          <li><strong>Printing</strong> — open a week for the payroll register and per-employee pay stubs (PDF, with year-to-date totals). <strong>Print</strong> here gives you this list of weeks; <strong>Export CSV</strong> gives the same as a spreadsheet.</li>
+          <li><strong>EI and CPP (tier 1 + 2)</strong> are typed on each entry from your payroll calculator — the rates change too often to calculate reliably. The employer side fills in as you type, and <strong>Estimate from rates</strong> on the entry uses <Link href="/settings/statutory-rates" className="underline">Settings → Statutory Rates</Link> as a starting point. Vacation pay and WSIB are still calculated, from the rates in the Payroll settings panel below — or, for vacation, the employee&apos;s own rate when one is set on <Link href="/payroll/employees" className="underline">Employees</Link>.</li>
+          <li><strong>Pay defaults</strong> — each employee&apos;s usual hours, bonus, phone allowance, tax and benefits are saved on <Link href="/payroll/employees" className="underline">Employees</Link> and fill in their new payroll entry automatically.</li>
           <li><strong>Each of those is optional per person.</strong> EI, CPP, CPP2, income tax, vacation accrual, and WSIB are switches on every payroll entry, seeded from the employee&apos;s defaults on <Link href="/payroll/employees" className="underline">Employees</Link> — so an EI-exempt family member or a CPP-exempt worker over 70 is handled without hand-zeroing anything.</li>
           <li><strong>Employee vs management</strong> — management pay can include a cheque portion + daily cash; regular employees use just the standard fields.</li>
         </ul>

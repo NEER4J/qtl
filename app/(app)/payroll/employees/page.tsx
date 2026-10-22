@@ -8,19 +8,21 @@ import {
   listAllEmployees,
   listLinkableProfiles,
 } from "@/lib/actions/payroll";
-import { listActiveLocations } from "@/lib/actions/reference";
+import { getAppSettings, listActiveLocations } from "@/lib/actions/reference";
 
 import { EmployeesTable } from "./employees-table";
 
 export const dynamic = "force-dynamic";
 
 export default async function EmployeesPage() {
-  await requirePage("payroll");
-  const [rows, locations, profiles] = await Promise.all([
+  await requirePage("payroll_employees");
+  const [rows, locations, profiles, settings] = await Promise.all([
     listAllEmployees(),
     listActiveLocations(),
     listLinkableProfiles(),
+    getAppSettings(),
   ]);
+  const shopVacationRate = Number(settings.vacation_pay_rate ?? 0.04);
 
   return (
     <div className="flex flex-col gap-4">
@@ -45,13 +47,20 @@ export default async function EmployeesPage() {
         </p>
         <ul>
           <li><strong>Type</strong> — Employee uses the standard fields; Management can also take a cheque portion + daily cash.</li>
-          <li><strong>Default hourly rate</strong> pre-fills the rate on a new payroll entry (you can still override it per week).</li>
+          <li><strong>Default hourly rate</strong> and the <strong>Pay defaults</strong> (hours, overtime hours, bonus, phone allowance, misc extra, income tax, benefits) fill in a new payroll entry as soon as you pick this person — no retyping every week. Overtime starts at 1.5× the hourly rate. Anything can still be changed on the entry for a single week; leave a default blank for none.</li>
+          <li><strong>Vacation % override</strong> — this person&apos;s own vacation pay rate (e.g. 6% after five years). Blank uses the shop rate ({Math.round(shopVacationRate * 10000) / 100}%) from the Payroll page.</li>
+          <li><strong>Deductions that apply</strong> — EI, CPP, CPP2, income tax, vacation and WSIB switches that a new entry starts from.</li>
           <li><strong>Linked login user</strong> connects this employee to a sign-in account so that person can see their own pay on the <Link href="/my-pay" className="underline">My Pay</Link> page. Leave it unlinked for staff who don&apos;t log in.</li>
           <li><strong>Deactivate</strong> hides someone from new payroll entries but keeps their history intact.</li>
         </ul>
       </PageHelp>
 
-      <EmployeesTable rows={rows} locations={locations} profiles={profiles} />
+      <EmployeesTable
+        rows={rows}
+        locations={locations}
+        profiles={profiles}
+        shopVacationRate={shopVacationRate}
+      />
     </div>
   );
 }

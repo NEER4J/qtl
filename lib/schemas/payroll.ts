@@ -40,6 +40,19 @@ export const EmployeeInput = z.object({
   // this employee's pay on the staff-facing "My Pay" page.
   profile_id: z.string().uuid().nullable().optional().or(z.literal("")),
   notes: z.string().trim().max(500).nullable().optional().or(z.literal("")),
+  // Vacation override + pay defaults (0158, client 2026-10-20). They pre-fill
+  // a NEW payroll entry for this person; null = no default (the entry starts
+  // at 0, and vacation uses the shop rate). Left out entirely — a form opened
+  // before this shipped — the update keeps what is stored.
+  vacation_pay_rate: z.coerce.number().min(0).max(1, "Vacation can't be over 100%").nullable().optional(),
+  default_hours: z.coerce.number().min(0).max(168).nullable().optional(),
+  default_overtime_hours: z.coerce.number().min(0).max(168).nullable().optional(),
+  default_bonus: moneySchema.nullable().optional(),
+  default_phone_allowance: moneySchema.nullable().optional(),
+  default_misc_extra: moneySchema.nullable().optional(),
+  default_income_tax: moneySchema.nullable().optional(),
+  default_benefit_employee_deduction: moneySchema.nullable().optional(),
+  default_benefit_employer_contribution: moneySchema.nullable().optional(),
 }).merge(DeductionFlags);
 export type EmployeeInput = z.infer<typeof EmployeeInput>;
 
@@ -69,6 +82,14 @@ export const PayrollWeekInput = z.object({
     .refine(isSundayYmd, "Pay week must start on a Sunday"),
   // 1 = weekly (Sun–Sat), 2 = bi-weekly (two paycheques a month).
   period_weeks: z.coerce.number().int().min(1).max(2).default(1),
+  // The week's pay date (0158, client 2026-10-20) — prints on every stub
+  // unless an entry has its own. Left out, the week keeps what it has.
+  pay_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date")
+    .nullable()
+    .optional()
+    .or(z.literal("")),
   notes: z.string().trim().max(500).nullable().optional().or(z.literal("")),
 });
 export type PayrollWeekInput = z.infer<typeof PayrollWeekInput>;
@@ -103,6 +124,13 @@ export const PayrollEntryInput = z.object({
   holiday_rate: z.coerce.number().min(0).default(0),
   bonus: moneySchema.default(0),
   misc_extra: moneySchema.default(0),
+  // Phone allowance (0158, client 2026-10-20) — taxable and insurable. Left
+  // out (a tab opened before this shipped) the entry keeps the amount it has.
+  phone_allowance: moneySchema.optional(),
+  // Vacation rate for this entry as a fraction (0.04 = 4%). Left out, the
+  // entry keeps the rate it was saved at; null falls back to the employee's
+  // override, then the shop rate.
+  vacation_rate: z.coerce.number().min(0).max(1, "Vacation can't be over 100%").nullable().optional(),
   income_tax: moneySchema.default(0),
   // EI / CPP / CPP2, employee and employer side, typed from the owner's payroll
   // calculator (client 2026-09-15 — the rates change too often for the old

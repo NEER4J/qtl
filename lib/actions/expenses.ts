@@ -242,6 +242,7 @@ async function replaceExpenseItems(
 // ----------------------------------------------------------------------------
 export const createExpense = wrapAction({
   schema: ExpenseInput,
+  page: "expenses",
   roles: ["owner", "co_owner", "accountant", "manager", "staff"],
   handler: async (input, profile): Promise<Expense> => {
     // Staff write to a location they actually hold. With Multiple access
@@ -315,6 +316,7 @@ export const createExpense = wrapAction({
 // ----------------------------------------------------------------------------
 export const updateExpense = wrapAction({
   schema: UpdateExpenseInput,
+  page: "expenses",
   roles: ["owner", "co_owner", "accountant", "manager"],
   handler: async (input, profile): Promise<Expense> => {
     const supabase = await createClient();
@@ -396,6 +398,7 @@ async function syncExpensePaymentDetails(
 // ----------------------------------------------------------------------------
 export const addExpensePayment = wrapAction({
   schema: AddExpensePaymentInput,
+  page: "expenses",
   roles: ["owner", "co_owner", "accountant", "manager"],
   handler: async (input, profile): Promise<ExpensePaymentRow> => {
     const supabase = await createClient();
@@ -433,6 +436,7 @@ export const addExpensePayment = wrapAction({
 // ----------------------------------------------------------------------------
 export const payExpenses = wrapAction({
   schema: PayExpensesInput,
+  page: "expenses",
   roles: ["owner", "co_owner", "accountant", "manager"],
   handler: async (
     input,
@@ -489,6 +493,7 @@ export const payExpenses = wrapAction({
 // ----------------------------------------------------------------------------
 export const deactivateExpense = wrapAction({
   schema: DeactivateExpenseInput,
+  page: "expenses",
   roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<{ id: string }> => {
     const supabase = await createClient();

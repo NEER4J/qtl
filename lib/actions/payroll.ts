@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { applyLocationFilter } from "@/lib/auth/locations";
+import {
+  omitKeys,
+  writeDroppingPending,
+  type PendingColumns,
+} from "@/lib/supabase/pending-columns";
 import { wrapAction } from "@/lib/actions/_utils";
 import { REFERENCE_TAGS, revalidateReference } from "@/lib/cache/reference";
 import {
@@ -28,7 +34,59 @@ import type {
   PayrollWeek,
   StatutoryRate,
 } from "@/lib/db/types";
-import { computeStatutoryDeductions as _computeStatutoryDeductions } from "@/lib/utils/payroll-math";
+import {
+  computeEntryEarnings,
+  computeNetPay,
+  computeStatutoryDeductions as _computeStatutoryDeductions,
+  inferVacationRate,
+  payrollDeductions,
+  payrollGross,
+  resolveVacationRate,
+  rollingYearStart,
+} from "@/lib/utils/payroll-math";
+import { todayISO } from "@/lib/utils/tz";
+
+// ============================================================================
+// Columns from migrations that may not be applied yet (they are run by hand,
+// after the code ships): a write naming a missing one drops it and retries —
+// see lib/supabase/pending-columns.ts.
+// ============================================================================
+
+const NEEDS_0158 = "needs database update 0158, which hasn't been applied yet";
+
+// 0158 (client 2026-10-20): vacation override + pay defaults on the employee.
+const EMPLOYEE_PENDING: PendingColumns[] = [
+  {
+    columns: [
+      "vacation_pay_rate",
+      "default_hours",
+      "default_overtime_hours",
+      "default_bonus",
+      "default_phone_allowance",
+      "default_misc_extra",
+      "default_income_tax",
+      "default_benefit_employee_deduction",
+      "default_benefit_employer_contribution",
+    ],
+    ifSet: `Saving pay defaults or a vacation override ${NEEDS_0158}. Clear those boxes to save the rest.`,
+  },
+];
+
+const WEEK_PENDING: PendingColumns[] = [
+  { columns: ["pay_date"], ifSet: `Saving the week's pay date ${NEEDS_0158}. Clear it to save the rest.` },
+];
+
+const ENTRY_PENDING: PendingColumns[] = [
+  // A phone allowance left out of the row would still be in net pay, so a
+  // non-zero one stops the save rather than vanishing.
+  { columns: ["phone_allowance"], ifSet: `Saving a phone allowance ${NEEDS_0158}. Set it to 0 to save the rest.` },
+  // Only a snapshot — vacation_pay itself is already worked out at this rate.
+  { columns: ["vacation_rate"] },
+  // 0152: cheque number + pay date on the entry.
+  { columns: ["cheque_no", "pay_date"] },
+];
+
+const PAYMENT_PENDING: PendingColumns[] = [{ columns: ["updated_by"] }];
 
 // ============================================================================
 // Payroll settings — vacation pay rate + WSIB rate. Stored on app_settings
@@ -44,6 +102,7 @@ const PayrollSettingsInput = z.object({
 
 export const updatePayrollSettings = wrapAction({
   schema: PayrollSettingsInput,
+  page: "payroll",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ ok: true }> => {
     const supabase = await createClient();
@@ -135,6 +194,7 @@ const ToggleEmployeeActive = z.object({
 
 export const toggleEmployeeActive = wrapAction({
   schema: ToggleEmployeeActive,
+  page: "payroll_employees",
   roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<Employee> => {
     const supabase = await createClient();
@@ -167,6 +227,8 @@ export interface MyPayRow {
   bonus: number;
   holiday_pay: number;
   misc_extra: number;
+  /** 0 until get_my_pay is recreated by 0158. */
+  phone_allowance: number;
   ei_employee: number;
   cpp_employee: number;
   cpp_employee2: number;
@@ -176,6 +238,9 @@ export interface MyPayRow {
   cash_total: number;
   net_pay: number;
   paid: number;
+  /** Entry pay date, else the week's (0158). Null before that migration. */
+  pay_date: string | null;
+  cheque_no: string | null;
 }
 
 export async function getMyPay(): Promise<MyPayRow[]> {
@@ -189,6 +254,9 @@ export async function getMyPay(): Promise<MyPayRow[]> {
     bonus: Number(r.bonus),
     holiday_pay: Number(r.holiday_pay),
     misc_extra: Number(r.misc_extra),
+    phone_allowance: Number(r.phone_allowance ?? 0),
+    pay_date: r.pay_date ?? null,
+    cheque_no: r.cheque_no ?? null,
     ei_employee: Number(r.ei_employee),
     cpp_employee: Number(r.cpp_employee),
     cpp_employee2: Number(r.cpp_employee2),
@@ -210,12 +278,13 @@ export async function getEmployee(id: string): Promise<Employee | null> {
 
 export const createEmployee = wrapAction({
   schema: EmployeeInput,
+  page: "payroll_employees",
   roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<Employee> => {
     const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("employees")
-      .insert({
+    const { data, error } = await writeDroppingPending(
+      (row) => supabase.from("employees").insert(row).select("*").single(),
+      {
         ...input,
         code: input.code?.trim() || null,
         sin_last4: input.sin_last4 || null,
@@ -226,9 +295,9 @@ export const createEmployee = wrapAction({
         notes: input.notes || null,
         created_by: profile.id,
         updated_by: profile.id,
-      })
-      .select("*")
-      .single();
+      },
+      EMPLOYEE_PENDING,
+    );
     if (error) throw error;
     revalidatePath("/payroll");
     return data as Employee;
@@ -237,17 +306,17 @@ export const createEmployee = wrapAction({
 
 export const updateEmployee = wrapAction({
   schema: UpdateEmployeeInput,
+  page: "payroll_employees",
   roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<Employee> => {
     const supabase = await createClient();
     const { id, code, ...rest } = input;
     const codeUpdate = code?.trim() ? { code: code.trim() } : {};
-    const { data, error } = await supabase
-      .from("employees")
-      .update({ ...rest, ...codeUpdate, sin_last4: rest.sin_last4 || null, profile_id: rest.profile_id || null, notes: rest.notes || null, updated_by: profile.id })
-      .eq("id", id)
-      .select("*")
-      .single();
+    const { data, error } = await writeDroppingPending(
+      (patch) => supabase.from("employees").update(patch).eq("id", id).select("*").single(),
+      { ...rest, ...codeUpdate, sin_last4: rest.sin_last4 || null, profile_id: rest.profile_id || null, notes: rest.notes || null, updated_by: profile.id },
+      EMPLOYEE_PENDING,
+    );
     if (error) throw error;
     revalidatePath("/payroll");
     return data as Employee;
@@ -290,31 +359,37 @@ export async function listPayrollWeeks(
   locationIds?: string[] | null,
 ): Promise<PayrollWeekWithLocation[]> {
   const supabase = await createClient();
-  let q = supabase
-    .from("payroll_weeks")
-    .select(
-      `*,
-       locations(name, code),
-       payroll_entries(
-         gross_wages, overtime_wages, bonus, misc_extra, holiday_pay,
-         ei_employee, cpp_employee, cpp_employee2, income_tax,
-         benefit_employee_deduction, benefit_employer_contribution,
-         ei_employer, cpp_employer, cpp_employer2, wsib_employer,
-         vacation_pay, cash_total, net_pay
-       ),
-       payroll_payments(amount)`,
-    )
-    .order("week_start", { ascending: false })
-    .limit(52);
-  q = applyLocationFilter(q, "location_id", locationIds ?? null);
-  const { data, error } = await q;
-  if (error) throw error;
+  // Every week of the rolling 12 months the page totals — a flat 52 rows
+  // was only about 3 months with four shops on weekly pay — then older weeks
+  // so the list still holds at least 52.
+  const since = rollingYearStart(todayISO());
+  // payroll_entries(*), not a column list: phone_allowance only exists once
+  // 0158 is applied, and naming a missing column fails the whole read.
+  const select = `*,
+    locations(name, code),
+    payroll_entries(*),
+    payroll_payments(amount)`;
+  const recent = await fetchAllRows<unknown>((from, to) => {
+    let q = supabase.from("payroll_weeks").select(select).gte("week_start", since);
+    q = applyLocationFilter(q, "location_id", locationIds ?? null);
+    return q.order("week_start", { ascending: false }).order("id").range(from, to);
+  });
+  let older: unknown[] = [];
+  if (recent.length < 52) {
+    let q = supabase.from("payroll_weeks").select(select).lt("week_start", since);
+    q = applyLocationFilter(q, "location_id", locationIds ?? null);
+    const res = await q.order("week_start", { ascending: false }).order("id").limit(52 - recent.length);
+    if (res.error) throw res.error;
+    older = res.data ?? [];
+  }
+  const data = [...recent, ...older];
   type EntryShape = {
     gross_wages: number;
     overtime_wages: number;
     bonus: number;
     misc_extra: number;
     holiday_pay: number;
+    phone_allowance?: number;
     ei_employee: number;
     cpp_employee: number;
     cpp_employee2: number;
@@ -336,22 +411,8 @@ export async function listPayrollWeeks(
     const payments = (row.payroll_payments as { amount: number }[]) ?? [];
     const sum = (key: keyof EntryShape) =>
       entries.reduce((s, e) => s + Number(e[key] ?? 0), 0);
-    const totalGross = entries.reduce(
-      (s, e) =>
-        s
-        + Number(e.gross_wages)
-        + Number(e.overtime_wages)
-        + Number(e.bonus)
-        + Number(e.holiday_pay)
-        + Number(e.misc_extra),
-      0,
-    );
-    const totalDeductions =
-      sum("ei_employee")
-      + sum("cpp_employee")
-      + sum("cpp_employee2")
-      + sum("income_tax")
-      + sum("benefit_employee_deduction");
+    const totalGross = entries.reduce((s, e) => s + payrollGross(e), 0);
+    const totalDeductions = entries.reduce((s, e) => s + payrollDeductions(e), 0);
     const totalEmployerCost =
       sum("ei_employer")
       + sum("cpp_employer")
@@ -359,8 +420,11 @@ export async function listPayrollWeeks(
       + sum("wsib_employer")
       + sum("benefit_employer_contribution")
       + sum("vacation_pay");
+    // The joined rows were only needed for the roll-ups; don't carry every
+    // entry column along with each week.
+    const week = omitKeys(row, ["locations", "payroll_entries", "payroll_payments"]);
     return {
-      ...(row as unknown as PayrollWeek),
+      ...(week as unknown as PayrollWeek),
       location_name: loc?.name ?? "",
       location_code: loc?.code ?? "",
       entry_count: entries.length,
@@ -382,6 +446,10 @@ export interface PayrollWeekDetail extends PayrollWeek {
   location_address: string | null;
   location_phone: string | null;
   location_invoice_name: string | null;
+  /** HST/GST registration — the business number on the pay stub. */
+  location_hst_number: string | null;
+  /** The week's default pay date (0158); null before that migration. */
+  pay_date: string | null;
   entries: PayrollEntryWithEmployee[];
   payments: PayrollPayment[];
 }
@@ -391,6 +459,9 @@ export interface PayrollEntryWithEmployee extends PayrollEntry {
   employee_code: string | null;
   employee_payroll_type: string;
   cash_days: PayrollCashDaily[];
+  // Read as 0 / null when 0158 hasn't added the columns yet.
+  phone_allowance: number;
+  vacation_rate: number | null;
 }
 
 export async function getPayrollWeek(weekId: string): Promise<PayrollWeekDetail | null> {
@@ -398,7 +469,7 @@ export async function getPayrollWeek(weekId: string): Promise<PayrollWeekDetail 
 
   const { data: week, error: weekErr } = await supabase
     .from("payroll_weeks")
-    .select("*, locations(name, code, address, phone, invoice_name)")
+    .select("*, locations(name, code, address, phone, invoice_name, hst_number)")
     .eq("id", weekId)
     .single();
   if (weekErr || !week) return null;
@@ -424,6 +495,7 @@ export async function getPayrollWeek(weekId: string): Promise<PayrollWeekDetail 
       address: string | null;
       phone: string | null;
       invoice_name: string | null;
+      hst_number: string | null;
     };
   }).locations;
 
@@ -434,6 +506,8 @@ export async function getPayrollWeek(weekId: string): Promise<PayrollWeekDetail 
     location_address: loc?.address ?? null,
     location_phone: loc?.phone ?? null,
     location_invoice_name: loc?.invoice_name ?? null,
+    location_hst_number: loc?.hst_number ?? null,
+    pay_date: (week as { pay_date?: string | null }).pay_date ?? null,
     entries: ((entries ?? []) as unknown[]).map((e) => {
       const row = e as Record<string, unknown>;
       const emp = row.employees as {
@@ -448,6 +522,8 @@ export async function getPayrollWeek(weekId: string): Promise<PayrollWeekDetail 
         employee_code: emp?.code ?? null,
         employee_payroll_type: emp?.payroll_type ?? "employee",
         cash_days: cashDays,
+        phone_allowance: Number(row.phone_allowance ?? 0),
+        vacation_rate: row.vacation_rate == null ? null : Number(row.vacation_rate),
       };
     }),
     payments: (payments ?? []) as PayrollPayment[],
@@ -469,22 +545,24 @@ function snapToSunday(ymd: string): string {
 
 export const createPayrollWeek = wrapAction({
   schema: PayrollWeekInput,
+  page: "payroll",
   roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<PayrollWeek> => {
     const supabase = await createClient();
     const weekStart = snapToSunday(input.week_start);
-    const { data, error } = await supabase
-      .from("payroll_weeks")
-      .insert({
+    const { data, error } = await writeDroppingPending(
+      (row) => supabase.from("payroll_weeks").insert(row).select("*").single(),
+      {
         location_id: input.location_id,
         week_start: weekStart,
         period_weeks: input.period_weeks,
+        pay_date: input.pay_date || null,
         notes: input.notes || null,
         created_by: profile.id,
         updated_by: profile.id,
-      })
-      .select("*")
-      .single();
+      },
+      WEEK_PENDING,
+    );
     if (error) throw error;
     revalidatePath("/payroll");
     return data as PayrollWeek;
@@ -493,6 +571,7 @@ export const createPayrollWeek = wrapAction({
 
 export const updatePayrollWeekStatus = wrapAction({
   schema: UpdatePayrollWeekStatusInput,
+  page: "payroll",
   roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<PayrollWeek> => {
     const supabase = await createClient();
@@ -515,21 +594,23 @@ const PAYROLL_ROLES = ["owner", "co_owner", "manager", "accountant"] as const;
 
 export const updatePayrollWeek = wrapAction({
   schema: UpdatePayrollWeekInput,
+  page: "payroll",
   roles: [...PAYROLL_ROLES],
   handler: async (input, profile): Promise<PayrollWeek> => {
     const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("payroll_weeks")
-      .update({
+    const { data, error } = await writeDroppingPending(
+      (patch) => supabase.from("payroll_weeks").update(patch).eq("id", input.id).select("*").single(),
+      {
         location_id: input.location_id,
         week_start: snapToSunday(input.week_start),
         period_weeks: input.period_weeks,
+        // Only when the form sent it, so an older tab can't blank it out.
+        ...(input.pay_date !== undefined ? { pay_date: input.pay_date || null } : {}),
         notes: input.notes || null,
         updated_by: profile.id,
-      })
-      .eq("id", input.id)
-      .select("*")
-      .single();
+      },
+      WEEK_PENDING,
+    );
     if (error) throw error;
     revalidatePath(`/payroll/${input.id}`);
     revalidatePath("/payroll");
@@ -545,6 +626,7 @@ export const updatePayrollWeek = wrapAction({
  */
 export const deletePayrollWeek = wrapAction({
   schema: PayrollIdInput,
+  page: "payroll",
   roles: [...PAYROLL_ROLES],
   handler: async (input): Promise<{ ok: true }> => {
     const supabase = await createClient();
@@ -576,7 +658,7 @@ export const deletePayrollWeek = wrapAction({
 /**
  * Build the full payload (computed fields + raw inputs) for a payroll entry.
  *
- * One source of truth for upsert + update so we never drift on overtime,
+ * One source of truth for create + update so we never drift on overtime,
  * vacation, employer EI/CPP, or WSIB.
  */
 async function buildEntryPayload(
@@ -585,18 +667,14 @@ async function buildEntryPayload(
 ) {
   const round2 = (n: number) => Math.round(n * 100) / 100;
 
-  const regularWages = round2(input.hours * input.rate);
-  const overtimeWages = round2(input.overtime_hours * input.overtime_rate);
-  const grossWages = round2(regularWages + overtimeWages);
+  // A form opened before 0158 shipped sends no phone allowance or vacation
+  // rate; the entry it replaces is read so those keep what they had.
+  const keepStored = input.phone_allowance === undefined || input.vacation_rate === undefined;
 
-  // Holiday pay is hours × rate (0136), not a typed amount. Hours entered with
-  // no holiday rate fall back to the person's regular rate — stat hours at $0
-  // is never what anyone meant, and the form pre-fills the same way.
-  const holidayRate = input.holiday_rate > 0 ? input.holiday_rate : input.rate;
-  const holidayPay = round2(input.holiday_hours * holidayRate);
-
-  // Look up the year + vacation/WSIB rates
-  const [{ data: weekRow }, { data: settings }] = await Promise.all([
+  // The year, the shop's vacation/WSIB rates, the employee's vacation override.
+  // employees/payroll_entries are read with "*": the 0158 columns are named
+  // nowhere, so these reads work before that migration too.
+  const [{ data: weekRow }, { data: settings }, { data: employee }, stored] = await Promise.all([
     supabase
       .from("payroll_weeks")
       .select("week_start")
@@ -607,19 +685,41 @@ async function buildEntryPayload(
       .select("vacation_pay_rate, wsib_rate")
       .eq("id", 1)
       .single(),
+    supabase.from("employees").select("*").eq("id", input.employee_id).maybeSingle(),
+    keepStored
+      ? supabase
+          .from("payroll_entries")
+          .select("*")
+          .eq("payroll_week_id", input.payroll_week_id)
+          .eq("employee_id", input.employee_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
-  const year = weekRow ? new Date(weekRow.week_start).getFullYear() : new Date().getFullYear();
-  const vacationRate = Number(settings?.vacation_pay_rate ?? 0.04);
+  const year = weekRow ? Number(String(weekRow.week_start).slice(0, 4)) : new Date().getFullYear();
   const wsibRate = Number(settings?.wsib_rate ?? 0);
+  const existing = stored.data as PayrollEntry | null;
+  const emp = employee as Employee | null;
 
-  // Vacation accrual = % of (gross wages + OT + bonus + holiday pay)
-  const vacationPay = input.apply_vacation
-    ? round2((grossWages + input.bonus + holidayPay) * vacationRate)
-    : 0;
+  // Vacation rate (client 2026-10-20): the entry's own → the employee's
+  // override → the shop rate. An older form keeps the rate the entry was
+  // saved at (worked back from its vacation pay if it predates 0158).
+  const keptRate =
+    input.vacation_rate === undefined && existing
+      ? existing.vacation_rate ?? inferVacationRate(existing)
+      : null;
+  const vacationRate = resolveVacationRate(
+    input.vacation_rate,
+    keptRate,
+    emp?.vacation_pay_rate,
+    settings?.vacation_pay_rate ?? 0.04,
+  );
+  const phoneAllowance = input.phone_allowance ?? Number(existing?.phone_allowance ?? 0);
 
-  // Insurable earnings drive EI + CPP; holiday pay + bonus + OT are insurable;
-  // misc_extra is taxable but NOT insurable (per current convention).
-  const insurable = round2(grossWages + input.bonus + holidayPay);
+  // Regular / OT / holiday wages, vacation accrual (wages + OT + bonus +
+  // holiday — not phone allowance or misc), and insurable earnings (everything
+  // but misc_extra, which is taxable but NOT insurable).
+  const pay = computeEntryEarnings({ ...input, phone_allowance: phoneAllowance }, vacationRate);
+  const insurable = pay.insurable;
 
   // EI / CPP / CPP2 are typed on the entry (client 2026-09-15). Only an amount
   // the save left out is calculated from the rate table — see PayrollEntryInput
@@ -653,17 +753,13 @@ async function buildEntryPayload(
 
   const wsibEmployer = input.apply_wsib ? round2(insurable * wsibRate) : 0;
 
-  const netPay = round2(
-    grossWages
-      + input.bonus
-      + holidayPay
-      + input.misc_extra
-      - ei
-      - cpp
-      - cpp2
-      - incomeTax
-      - input.benefit_employee_deduction,
-  );
+  const netPay = computeNetPay(pay.gross, {
+    ei,
+    cpp,
+    cpp2,
+    incomeTax,
+    benefit: input.benefit_employee_deduction,
+  });
   // Deductions are typed now, so a slipped digit could take more than the
   // period paid. Nothing legitimate on this form produces a negative cheque.
   if (netPay < 0) {
@@ -677,16 +773,18 @@ async function buildEntryPayload(
     employee_id: input.employee_id,
     hours: input.hours,
     rate: input.rate,
-    gross_wages: regularWages,
+    gross_wages: pay.regularWages,
     overtime_hours: input.overtime_hours,
     overtime_rate: input.overtime_rate,
-    overtime_wages: overtimeWages,
+    overtime_wages: pay.overtimeWages,
     holiday_hours: input.holiday_hours,
-    holiday_rate: holidayRate,
-    holiday_pay: holidayPay,
-    vacation_pay: vacationPay,
+    holiday_rate: pay.holidayRate,
+    holiday_pay: pay.holidayPay,
+    vacation_pay: pay.vacationPay,
+    vacation_rate: vacationRate,
     bonus: input.bonus,
     misc_extra: input.misc_extra,
+    phone_allowance: phoneAllowance,
     insurable_earnings: insurable,
     ei_employee: ei,
     cpp_employee: cpp,
@@ -713,38 +811,30 @@ async function buildEntryPayload(
   };
 }
 
-// cheque_no / pay_date arrive with migration 0152. Until it is applied the
-// save drops them and goes through, rather than failing the whole entry.
-const ENTRY_0152_COLUMNS = ["cheque_no", "pay_date"] as const;
-
-function isMissingEntryColumn(error: { code?: string; message?: string } | null): boolean {
-  if (!error || (error.code !== "PGRST204" && error.code !== "42703")) return false;
-  return ENTRY_0152_COLUMNS.some((c) => (error.message ?? "").includes(c));
-}
-
-function without0152<T extends Record<string, unknown>>(row: T): T {
-  const out: Record<string, unknown> = { ...row };
-  for (const k of ENTRY_0152_COLUMNS) delete out[k];
-  return out as T;
-}
-
-export const upsertPayrollEntry = wrapAction({
+/**
+ * "Add entry". An insert, not an upsert: picking someone already on the week
+ * used to replace their saved entry — typed EI/CPP/tax, cheque no. and pay
+ * date — with the fresh form. Editing goes through updatePayrollEntry.
+ */
+export const createPayrollEntry = wrapAction({
   schema: PayrollEntryInput,
+  page: "payroll",
   roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<PayrollEntry> => {
     const supabase = await createClient();
     const payload = await buildEntryPayload(supabase, input);
 
-    const save = (row: Record<string, unknown>) =>
-      supabase
-        .from("payroll_entries")
-        .upsert(row, { onConflict: "payroll_week_id,employee_id" })
-        .select("*")
-        .single();
-    const row = { ...payload, created_by: profile.id, updated_by: profile.id };
-    let { data, error } = await save(row);
-    if (isMissingEntryColumn(error)) ({ data, error } = await save(without0152(row)));
-    if (error) throw error;
+    const { data, error } = await writeDroppingPending(
+      (row) => supabase.from("payroll_entries").insert(row).select("*").single(),
+      { ...payload, created_by: profile.id, updated_by: profile.id },
+      ENTRY_PENDING,
+    );
+    if (error) {
+      if (error.code === "23505") {
+        throw new Error("This employee is already on this pay week. Edit their entry instead.");
+      }
+      throw error;
+    }
     revalidatePath(`/payroll/${input.payroll_week_id}`);
     return data as PayrollEntry;
   },
@@ -752,17 +842,18 @@ export const upsertPayrollEntry = wrapAction({
 
 export const updatePayrollEntry = wrapAction({
   schema: UpdatePayrollEntryInput,
+  page: "payroll",
   roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<PayrollEntry> => {
     const supabase = await createClient();
     const { id, ...rest } = input;
     const payload = await buildEntryPayload(supabase, rest);
 
-    const save = (patch: Record<string, unknown>) =>
-      supabase.from("payroll_entries").update(patch).eq("id", id).select("*").single();
-    const patch = { ...payload, updated_by: profile.id };
-    let { data, error } = await save(patch);
-    if (isMissingEntryColumn(error)) ({ data, error } = await save(without0152(patch)));
+    const { data, error } = await writeDroppingPending(
+      (patch) => supabase.from("payroll_entries").update(patch).eq("id", id).select("*").single(),
+      { ...payload, updated_by: profile.id },
+      ENTRY_PENDING,
+    );
     if (error) throw error;
     revalidatePath(`/payroll/${rest.payroll_week_id}`);
     return data as PayrollEntry;
@@ -771,6 +862,7 @@ export const updatePayrollEntry = wrapAction({
 
 export const deletePayrollEntry = wrapAction({
   schema: PayrollIdInput,
+  page: "payroll",
   roles: [...PAYROLL_ROLES],
   handler: async (input): Promise<{ ok: true }> => {
     const supabase = await createClient();
@@ -797,6 +889,7 @@ export const deletePayrollEntry = wrapAction({
 
 export const upsertCashDaily = wrapAction({
   schema: PayrollCashDailyInput,
+  page: "payroll",
   roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<PayrollCashDaily> => {
     const supabase = await createClient();
@@ -815,6 +908,7 @@ export const upsertCashDaily = wrapAction({
 
 export const deleteCashDaily = wrapAction({
   schema: PayrollIdInput,
+  page: "payroll",
   roles: [...PAYROLL_ROLES],
   handler: async (input): Promise<{ ok: true }> => {
     const supabase = await createClient();
@@ -831,6 +925,7 @@ export const deleteCashDaily = wrapAction({
 
 export const addPayrollPayment = wrapAction({
   schema: PayrollPaymentInput,
+  page: "payroll",
   roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<PayrollPayment> => {
     const supabase = await createClient();
@@ -847,20 +942,24 @@ export const addPayrollPayment = wrapAction({
 
 export const updatePayrollPayment = wrapAction({
   schema: UpdatePayrollPaymentInput,
+  page: "payroll",
   roles: [...PAYROLL_ROLES],
-  handler: async (input): Promise<PayrollPayment> => {
+  handler: async (input, profile): Promise<PayrollPayment> => {
     const supabase = await createClient();
-    const { id, ...rest } = input;
-    const { data, error } = await supabase
-      .from("payroll_payments")
-      .update({
+    const { id, transaction_id, ...rest } = input;
+    const reference = transaction_id?.trim();
+    const { data, error } = await writeDroppingPending(
+      (patch) => supabase.from("payroll_payments").update(patch).eq("id", id).select("*").single(),
+      {
         ...rest,
         notes: rest.notes || null,
-        transaction_id: rest.transaction_id || null,
-      })
-      .eq("id", id)
-      .select("*")
-      .single();
+        // A blank reference keeps the one the payment has (its TXN- number,
+        // or what was typed) — editing the amount must not wipe it.
+        ...(reference ? { transaction_id: reference } : {}),
+        updated_by: profile.id,
+      },
+      PAYMENT_PENDING,
+    );
     if (error) throw error;
     revalidatePath(`/payroll/${rest.payroll_week_id}`);
     revalidatePath("/payroll");
@@ -870,6 +969,7 @@ export const updatePayrollPayment = wrapAction({
 
 export const deletePayrollPayment = wrapAction({
   schema: PayrollIdInput,
+  page: "payroll",
   roles: [...PAYROLL_ROLES],
   handler: async (input): Promise<{ ok: true }> => {
     const supabase = await createClient();

@@ -5,7 +5,7 @@ import { PrintButton } from "@/components/pricing/print-button";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireProfile } from "@/lib/auth/require";
-import { isActionAllowed } from "@/lib/permissions/check";
+import { isActionAllowed, canUpdatePage } from "@/lib/permissions/check";
 import { listInventory, listOilInventory } from "@/lib/actions/inventory";
 import { formatDate } from "@/lib/utils/format";
 import { isLowAnywhere } from "@/lib/utils/stock-limits";
@@ -22,10 +22,13 @@ export default async function InventoryPage() {
 
   // Editing counts is limited to high-level roles; everyone else is view-only.
   const canEdit =
-    profile.role === "owner" || profile.role === "co_owner" || profile.role === "manager";
+    (profile.role === "owner" || profile.role === "co_owner" || profile.role === "manager") &&
+    canUpdatePage(profile, "inventory");
   // Min/max thresholds are policy — part_location_limits / oil_location_limits
   // RLS is owner + co_owner only.
-  const canEditLimits = profile.role === "owner" || profile.role === "co_owner";
+  const canEditLimits =
+    (profile.role === "owner" || profile.role === "co_owner") &&
+    canUpdatePage(profile, "inventory");
   // `inventory.export` from the action registry — /api/export/inventory
   // enforces the same check, so hiding the button is presentation only.
   const canExport = isActionAllowed(profile, "inventory.export");

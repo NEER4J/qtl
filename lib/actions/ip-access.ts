@@ -40,6 +40,7 @@ export async function getIpLockEnabled(): Promise<boolean> {
 
 export const createIpRule = wrapAction({
   schema: CreateIpRuleInput,
+  page: "settings_ip_access",
   roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<IpAllowlistEntryWithLocation> => {
     const supabase = await createClient();
@@ -63,6 +64,7 @@ export const createIpRule = wrapAction({
 
 export const updateIpRule = wrapAction({
   schema: UpdateIpRuleInput,
+  page: "settings_ip_access",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<IpAllowlistEntryWithLocation> => {
     const supabase = await createClient();
@@ -86,6 +88,7 @@ export const updateIpRule = wrapAction({
 
 export const toggleIpRuleActive = wrapAction({
   schema: ToggleIpRuleActive,
+  page: "settings_ip_access",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<IpAllowlistEntryWithLocation> => {
     const supabase = await createClient();
@@ -103,6 +106,7 @@ export const toggleIpRuleActive = wrapAction({
 
 export const deleteIpRule = wrapAction({
   schema: DeleteIpRuleInput,
+  page: "settings_ip_access",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ id: string }> => {
     const supabase = await createClient();
@@ -115,6 +119,7 @@ export const deleteIpRule = wrapAction({
 
 export const setIpLockEnabled = wrapAction({
   schema: SetIpLockEnabledInput,
+  page: "settings_ip_access",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ enabled: boolean }> => {
     const supabase = await createClient();

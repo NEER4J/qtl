@@ -1,7 +1,7 @@
 import { PageHelp } from "@/components/help/page-help";
 import { requirePage } from "@/lib/auth/require";
 import { listCustomersPaged } from "@/lib/actions/customers";
-import { hiddenColumnsForPage, isActionAllowed } from "@/lib/permissions/check";
+import { hiddenColumnsForPage, isActionAllowed, canUpdatePage } from "@/lib/permissions/check";
 
 import { CustomersTable } from "./customers-table";
 
@@ -49,8 +49,9 @@ export default async function CustomersPage({
         page={result.page}
         pageSize={result.pageSize}
         hiddenColumns={[...hiddenColumnsForPage(profile, "customers")]}
-        canMerge={profile.role === "owner" || profile.role === "co_owner"}
+        canMerge={(profile.role === "owner" || profile.role === "co_owner") && canUpdatePage(profile, "customers")}
         canExport={isActionAllowed(profile, "customers.export")}
+        canEdit={canUpdatePage(profile, "customers")}
       />
     </div>
   );

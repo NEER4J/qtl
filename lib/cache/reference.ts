@@ -115,17 +115,18 @@ function cachedReference<T>(
  * that touches several tables at once.
  */
 export function revalidateReference(tag: ReferenceTag = REFERENCE_TAGS.all): void {
-  // Next 16 requires a cache-life profile alongside the tag. "max" is the
-  // longest-lived one, which is what we want for a purge marker: it must
-  // outlive any cached entry it is invalidating.
+  // Next 16 requires a cache-life profile alongside the tag. `{ expire: 0 }`
+  // expires the entry outright, so the very next read goes to the database.
+  // "max" only marked it stale, and a stale entry is still served once while
+  // it refreshes in the background — the first new sales job after a group
+  // rate or oil cost change was priced at the old rate.
   //
-  // revalidateTag rather than updateTag: every current caller is a Server
-  // Action, where updateTag's read-your-own-writes would also work, but
-  // revalidateTag is valid from route handlers too and so does not quietly
-  // break if one of these writers is ever called from a cron or webhook. The
-  // revalidatePath() call that accompanies each writer already refreshes the
-  // page the editor is looking at.
-  revalidateTag(tag, "max");
+  // revalidateTag rather than updateTag: same immediate expiry, but it is
+  // valid from route handlers too and so does not quietly break if one of
+  // these writers is ever called from a cron or webhook. The revalidatePath()
+  // call that accompanies each writer already refreshes the page the editor is
+  // looking at.
+  revalidateTag(tag, { expire: 0 });
 }
 
 // ---------------------------------------------------------------------------
@@ -265,6 +266,51 @@ const cachedEngineFilterOptions = cachedReference(
 export async function getCachedEngineFilterOptions() {
   try {
     return await cachedEngineFilterOptions();
+  } catch (error) {
+    const code = (error as { code?: string } | null)?.code;
+    if (code === "PGRST205" || code === "42P01") return [];
+    throw error;
+  }
+}
+
+/** Volume tiers — read on every new and edited sales job (the tier premium). */
+export const getCachedVolumeTiers = cachedReference(
+  "volume-tiers",
+  REFERENCE_TAGS.pricing,
+  async (db) => {
+    const { data, error } = await db
+      .from("volume_tiers")
+      .select("*")
+      .order("oil_type_id")
+      .order("min_litres");
+    if (error) throw error;
+    return data ?? [];
+  },
+);
+
+/**
+ * Active oil groups — read on every sales job form too. Like the filter
+ * options, a missing table (before 0133) throws out of the cached read so the
+ * empty answer is never cached.
+ */
+const cachedActiveOilGroups = cachedReference(
+  "active-oil-groups",
+  REFERENCE_TAGS.pricing,
+  async (db) => {
+    const { data, error } = await db
+      .from("oil_groups")
+      .select("*")
+      .eq("active", true)
+      .order("sort_order")
+      .order("name");
+    if (error) throw error;
+    return data ?? [];
+  },
+);
+
+export async function getCachedActiveOilGroups() {
+  try {
+    return await cachedActiveOilGroups();
   } catch (error) {
     const code = (error as { code?: string } | null)?.code;
     if (code === "PGRST205" || code === "42P01") return [];

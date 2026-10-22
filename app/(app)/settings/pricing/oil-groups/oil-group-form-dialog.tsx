@@ -32,6 +32,7 @@ type FormValues = {
   pricing_mode: OilGroupPricingMode;
   bulk_price_per_litre: string;
   gallon_price_per_container: string;
+  retail_price_per_litre: string;
   sort_order: string;
   active: boolean;
 };
@@ -41,6 +42,7 @@ const blank: FormValues = {
   pricing_mode: "manual",
   bulk_price_per_litre: "",
   gallon_price_per_container: "",
+  retail_price_per_litre: "",
   sort_order: "100",
   active: true,
 };
@@ -120,6 +122,8 @@ export function OilGroupFormDialog({
               group.gallon_price_per_container == null
                 ? ""
                 : String(group.gallon_price_per_container),
+            retail_price_per_litre:
+              group.retail_price_per_litre == null ? "" : String(group.retail_price_per_litre),
             sort_order: String(group.sort_order),
             active: group.active,
           }
@@ -164,6 +168,7 @@ export function OilGroupFormDialog({
         pricing_mode: values.pricing_mode,
         bulk_price_per_litre: rateOrNull(values.bulk_price_per_litre),
         gallon_price_per_container: rateOrNull(values.gallon_price_per_container),
+        retail_price_per_litre: rateOrNull(values.retail_price_per_litre),
         sort_order: Number(values.sort_order) || 100,
         active: values.active,
       };
@@ -322,6 +327,25 @@ export function OilGroupFormDialog({
                 />
               </div>
             )}
+
+            <FormField
+              control={form.control}
+              name="retail_price_per_litre"
+              render={({ field }) => (
+                <FormItem className="max-w-xs">
+                  <FormLabel>Extra oil (retail) $/L</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" min="0" placeholder="not set" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Oil a customer takes beyond the engine&apos;s capacity is charged at this, on
+                    its own line, and doesn&apos;t raise the tier premium. Empty = extra oil
+                    stays at the group rate.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {!auto && (
               <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">

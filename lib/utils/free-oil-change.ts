@@ -9,7 +9,8 @@ export function isFreeOilChangeEligible(
   asOf: Date = new Date(),
 ): boolean {
   if (!customer?.free_oil_change_until) return false;
-  // See isFreeGreaseEligible — string compare against Ontario's date.
+  // free_oil_change_until is YYYY-MM-DD and the whole day counts: compare as
+  // strings against Ontario's date, not a Date parsed in the runtime's zone.
   return toISODate(asOf) <= customer.free_oil_change_until;
 }
 

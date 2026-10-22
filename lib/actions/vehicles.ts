@@ -10,6 +10,7 @@ import {
   UpdateVehicleInput,
 } from "@/lib/schemas/vehicles";
 import { createClient } from "@/lib/supabase/server";
+import { orFilterValue } from "@/lib/utils/parts-search";
 import type { SalesJob, Vehicle } from "@/lib/db/types";
 
 // Map a 23505 (unique violation) coming back from the vehicles table into
@@ -64,7 +65,8 @@ export const searchVehicles = wrapAction({
     if (input.customer_id) q = q.eq("customer_id", input.customer_id);
 
     if (input.q) {
-      const term = `%${input.q.replace(/[%_]/g, (m) => `\\${m}`).toUpperCase()}%`;
+      // Quoted: a comma or bracket in the search would break the filter.
+      const term = orFilterValue(input.q.toUpperCase());
       q = q.or(`license_plate.ilike.${term},vin.ilike.${term}`);
     }
 
@@ -79,6 +81,7 @@ export const searchVehicles = wrapAction({
 // ----------------------------------------------------------------------------
 export const createVehicle = wrapAction({
   schema: CreateVehicleInput,
+  page: ["customers", "sales"],
   roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input, profile): Promise<Vehicle> => {
     const supabase = await createClient();
@@ -124,6 +127,7 @@ export const createVehicle = wrapAction({
 // ----------------------------------------------------------------------------
 export const updateVehicle = wrapAction({
   schema: UpdateVehicleInput,
+  page: "customers",
   roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input, profile): Promise<Vehicle> => {
     const supabase = await createClient();
@@ -158,6 +162,7 @@ export const updateVehicle = wrapAction({
 // ----------------------------------------------------------------------------
 export const markVehicleContacted = wrapAction({
   schema: DeactivateVehicleInput, // shares { id }
+  page: "customers",
   roles: ["owner", "co_owner", "manager", "staff"],
   handler: async (input, profile): Promise<Vehicle> => {
     const supabase = await createClient();
@@ -285,6 +290,7 @@ export async function getVehicleStats(vehicleId: string): Promise<VehicleStats> 
 // ----------------------------------------------------------------------------
 export const deactivateVehicle = wrapAction({
   schema: DeactivateVehicleInput,
+  page: "customers",
   roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<{ id: string }> => {
     const supabase = await createClient();

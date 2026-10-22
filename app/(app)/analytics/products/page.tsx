@@ -13,7 +13,7 @@ import {
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { PageHelp } from "@/components/help/page-help";
 import { SimpleBar, SimplePie, StackedBar } from "@/components/analytics/charts";
-import { requireProfile } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { getProductsAnalytics } from "@/lib/actions/analytics";
 import { listLowMarginParts } from "@/lib/actions/pricing";
 import { listActiveLocations } from "@/lib/actions/reference";
@@ -26,7 +26,7 @@ export default async function ProductsAnalyticsPage({
 }: {
   searchParams: Promise<Record<string, string>>;
 }) {
-  const profile = await requireProfile();
+  const profile = await requirePage("analytics_products");
   const sp = await searchParams;
 
   const [data, locations, lowMargin] = await Promise.all([

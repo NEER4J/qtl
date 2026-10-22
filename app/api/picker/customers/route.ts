@@ -25,7 +25,7 @@ export async function GET() {
     phone_search: string | null;
     plates_text: string | null;
   };
-  type VehicleRow = { customer_id: string | null; license_plate: string | null };
+  type VehicleRow = { customer_id: string | null; license_plate: string | null; vin: string | null };
 
   const [customers, vehicles] = await Promise.all([
     fetchAllRowsParallel<CustomerRow>((from, to, count) =>
@@ -41,7 +41,7 @@ export async function GET() {
     fetchAllRowsParallel<VehicleRow>((from, to, count) =>
       supabase
         .from("vehicles")
-        .select("customer_id, license_plate", { count })
+        .select("customer_id, license_plate, vin", { count })
         .is("deactivated_at", null)
         .not("license_plate", "is", null)
         .order("id")
@@ -50,12 +50,17 @@ export async function GET() {
   ]);
 
   const platesByCustomer = new Map<string, string[]>();
+  const vinsByCustomer = new Map<string, string[]>();
   for (const v of vehicles) {
+    if (!v.customer_id) continue;
     const plate = v.license_plate?.trim();
-    if (!v.customer_id || !plate) continue;
-    const list = platesByCustomer.get(v.customer_id) ?? [];
-    if (!list.includes(plate)) list.push(plate);
-    platesByCustomer.set(v.customer_id, list);
+    if (plate) {
+      const list = platesByCustomer.get(v.customer_id) ?? [];
+      if (!list.includes(plate)) list.push(plate);
+      platesByCustomer.set(v.customer_id, list);
+    }
+    const vin = v.vin?.trim();
+    if (vin) vinsByCustomer.set(v.customer_id, [...(vinsByCustomer.get(v.customer_id) ?? []), vin]);
   }
 
   const body: CustomerPickerTuple[] = customers.map((c) => [
@@ -65,6 +70,7 @@ export async function GET() {
     c.phone_search || null,
     platesByCustomer.get(c.id) ?? [],
     c.plates_text?.trim() || null,
+    vinsByCustomer.get(c.id) ?? [],
   ]);
 
   return NextResponse.json(body, { headers: { "Cache-Control": "private, no-store" } });

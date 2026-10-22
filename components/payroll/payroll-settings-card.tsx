@@ -67,7 +67,7 @@ export function PayrollSettingsCard({ initial }: Props) {
             value={vacationPct}
             onChange={setVacationPct}
             step="0.1"
-            tip="Accrued as a percentage of gross + holiday + bonus. Canadian standard is 4% (10 days/year)."
+            tip="Accrued as a percentage of wages + overtime + holiday + bonus (not phone allowance or misc extras). Ontario minimum is 4% (6% after five years). An employee's own rate on Payroll → Employees overrides this."
           />
           <Field
             label="WSIB rate (%)"

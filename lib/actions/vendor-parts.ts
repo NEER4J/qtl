@@ -54,6 +54,7 @@ export async function listVendorPartsForPart(
 // ----------------------------------------------------------------------------
 export const createVendorPart = wrapAction({
   schema: CreateVendorPartInput,
+  page: "vendors",
   roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<VendorPart> => {
     const supabase = await createClient();
@@ -74,6 +75,7 @@ export const createVendorPart = wrapAction({
 
 export const updateVendorPart = wrapAction({
   schema: UpdateVendorPartInput,
+  page: "vendors",
   roles: ["owner", "co_owner", "manager", "accountant"],
   handler: async (input, profile): Promise<VendorPart> => {
     const supabase = await createClient();
@@ -92,6 +94,7 @@ export const updateVendorPart = wrapAction({
 
 export const deactivateVendorPart = wrapAction({
   schema: DeactivateVendorPartInput,
+  page: "vendors",
   roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<VendorPart> => {
     const supabase = await createClient();

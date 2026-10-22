@@ -7,6 +7,7 @@ import { requireProfile } from "@/lib/auth/require";
 import { getOilChangeGrid } from "@/lib/actions/pricing";
 import { formatMoney } from "@/lib/utils/format";
 import { oilLabel } from "@/lib/utils/oil-labels";
+import { canUpdatePage } from "@/lib/permissions/check";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,9 @@ export default async function OilGridPage() {
   const profile = await requireProfile();
   // One row per engine, or per filter option of an engine sold with several.
   const { rows, oilTypes, cells, hstRate } = await getOilChangeGrid();
-  const isOwner = (profile.role === "owner" || profile.role === "co_owner");
+  const isOwner =
+    ((profile.role === "owner" || profile.role === "co_owner")) &&
+    canUpdatePage(profile, "pricing_oil_grid");
   const hstPct = Math.round(hstRate * 1000) / 10;
 
   return (

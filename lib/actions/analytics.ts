@@ -7,6 +7,7 @@ import { addDaysISO, parseDateOnly, todayISO } from "@/lib/utils/tz";
 import { requireProfile } from "@/lib/auth/require";
 import { applyLocationFilter, resolveLocationFilter } from "@/lib/auth/locations";
 import { isPageAllowed } from "@/lib/permissions/check";
+import { payrollGross } from "@/lib/utils/payroll-math";
 
 // ============================================================================
 // Shared filter shape
@@ -342,7 +343,8 @@ export async function getDeckAnalytics(
     pairs: [],
     weekly: [],
   };
-  if (!isPageAllowed(profile, "analytics")) return empty;
+  // Only the Jobs sheet shows decks (page and its CSV export).
+  if (!isPageAllowed(profile, "analytics_jobs")) return empty;
 
   const { data, error } = await supabase.rpc("deck_analytics", {
     p_from: from,
@@ -638,7 +640,8 @@ export async function getPayrollAnalytics(filter: AnalyticsFilter = {}): Promise
 
   type Row = {
     id: string;
-    gross_wages: number; bonus: number; misc_extra: number;
+    gross_wages: number; overtime_wages: number; bonus: number; holiday_pay: number;
+    misc_extra: number; phone_allowance?: number;
     ei_employee: number; cpp_employee: number; income_tax: number;
     benefit_employee_deduction: number; benefit_employer_contribution: number;
     cheque_amount: number; cash_total: number; net_pay: number;
@@ -650,9 +653,10 @@ export async function getPayrollAnalytics(filter: AnalyticsFilter = {}): Promise
     fetchAllRowsParallel<Row>((lo, hi, count) => {
       let q = supabase
         .from("payroll_entries")
+        // "*" rather than a column list: phone_allowance (0158) can't be named
+        // until that migration runs.
         .select(`
-          id, gross_wages, bonus, misc_extra, ei_employee, cpp_employee, income_tax,
-          benefit_employee_deduction, benefit_employer_contribution, cheque_amount, cash_total, net_pay, employee_id,
+          *,
           payroll_weeks!inner(id, week_start, location_id, locations:location_id(name))
         `, { count })
         .gte("payroll_weeks.week_start", from)
@@ -672,7 +676,7 @@ export async function getPayrollAnalytics(filter: AnalyticsFilter = {}): Promise
     }),
   ]);
 
-  const total_cost = rows.reduce((s, r) => s + Number(r.gross_wages) + Number(r.bonus) + Number(r.misc_extra) + Number(r.benefit_employer_contribution), 0);
+  const total_cost = rows.reduce((s, r) => s + payrollGross(r) + Number(r.benefit_employer_contribution), 0);
   const employees = new Set(rows.map((r) => r.employee_id));
   const total_employees = employees.size;
 
@@ -680,7 +684,7 @@ export async function getPayrollAnalytics(filter: AnalyticsFilter = {}): Promise
   const locMap: Record<string, number> = {};
   for (const r of rows) {
     const name = r.payroll_weeks.locations?.name ?? "Unknown";
-    locMap[name] = (locMap[name] ?? 0) + Number(r.gross_wages) + Number(r.bonus) + Number(r.misc_extra);
+    locMap[name] = (locMap[name] ?? 0) + payrollGross(r);
   }
   const by_location = Object.entries(locMap).map(([name, total]) => ({ name, total }));
 
@@ -690,7 +694,7 @@ export async function getPayrollAnalytics(filter: AnalyticsFilter = {}): Promise
     const key = `${r.payroll_weeks.week_start}|${r.payroll_weeks.locations?.name ?? ""}`;
     const name = r.payroll_weeks.locations?.name ?? "Unknown";
     weekMap[key] = weekMap[key] ?? { total: 0, location_name: name };
-    weekMap[key].total += Number(r.gross_wages) + Number(r.bonus) + Number(r.misc_extra);
+    weekMap[key].total += payrollGross(r);
   }
   const weekly_trend = Object.entries(weekMap)
     .map(([key, v]) => {

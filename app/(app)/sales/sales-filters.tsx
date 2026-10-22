@@ -20,6 +20,16 @@ import type { Location, ServiceType } from "@/lib/db/types";
 
 const ALL = "__all__";
 
+/** Where the search box looks (lib/schemas/sales.ts ListSalesJobsInput.field). */
+const SEARCH_FIELDS = [
+  { value: "all", label: "All fields", placeholder: "Invoice, customer, plate, VIN…" },
+  { value: "invoice", label: "Invoice #", placeholder: "Invoice number…" },
+  { value: "customer", label: "Customer", placeholder: "Customer name…" },
+  { value: "plate", label: "Plate", placeholder: "License plate…" },
+  { value: "vin", label: "VIN", placeholder: "VIN…" },
+  { value: "phone", label: "Phone", placeholder: "Phone number…" },
+] as const;
+
 export function SalesFilters({
   initial,
   locations,
@@ -56,10 +66,28 @@ export function SalesFilters({
   };
 
   const hasFilters = Array.from(params.keys()).some((k) => k !== "page");
+  const searchField = SEARCH_FIELDS.find((f) => f.value === params.get("field")) ?? SEARCH_FIELDS[0];
 
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-md border p-4">
-      {/* Live search — updates as you type (debounced), no submit needed. */}
+      {/* Live search — updates as you type (debounced), no submit needed.
+          Searching one field is quicker than all of them (client 2026-10-20);
+          the Invoice / Customer / Plate column headers set it too. */}
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-muted-foreground">Search in</label>
+        <Select value={searchField.value} onValueChange={(v) => setField("field", v === "all" ? "" : v)}>
+          <SelectTrigger className="h-9 w-32" aria-label="Search in">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SEARCH_FIELDS.map((f) => (
+              <SelectItem key={f.value} value={f.value}>
+                {f.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       <div className="relative">
         {searching || isPending ? (
           <Loader2 className="absolute left-2 top-2.5 size-4 animate-spin text-muted-foreground" />
@@ -69,7 +97,7 @@ export function SalesFilters({
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Invoice, customer, plate…"
+          placeholder={searchField.placeholder}
           aria-label="Search"
           className="h-9 w-64 pl-8"
         />

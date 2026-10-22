@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
-import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { fetchAllRowsParallel } from "@/lib/supabase/fetch-all";
 import { wrapAction } from "@/lib/actions/_utils";
 import { uuidSchema } from "@/lib/schemas/common";
 import type { StockLimit } from "@/lib/utils/stock-limits";
@@ -64,7 +64,7 @@ function isMissingRelation(err: unknown): boolean {
 
 // part_location_stock is past the 1000-row REST cap (parts × locations) and
 // used to silently drop the overflow, so hundreds of stock cells rendered as 0
-// — hence fetchAllRows on every table here.
+// — hence fetchAllRowsParallel on every table here.
 export async function listInventory(): Promise<InventoryData> {
   const supabase = await createClient();
 
@@ -86,30 +86,34 @@ export async function listInventory(): Promise<InventoryData> {
   // the 1000-row response cap.
   const [{ data: locs, error: locErr }, parts, stock, limits] = await Promise.all([
     supabase.from("locations").select("id, name").eq("active", true).order("name"),
-    fetchAllRows<PartRow>((from, to) =>
+    // Pages fetched side by side, not one after another (perf, 2026-10-20).
+    fetchAllRowsParallel<PartRow>((from, to, count) =>
       supabase
         .from("parts")
         // `category` is a FK now (category_id -> part_categories); pull its name.
-        .select("id, part_number, brand, description, part_categories:category_id(name)")
+        .select("id, part_number, brand, description, part_categories:category_id(name)", { count })
         .eq("active", true)
+        // part_number alone isn't unique (it is per brand), so `id` breaks
+        // ties — otherwise rows could repeat or vanish between pages.
         .order("part_number")
+        .order("id")
         .range(from, to),
     ),
-    fetchAllRows<{ part_id: string; location_id: string; qty: number }>((from, to) =>
+    fetchAllRowsParallel<{ part_id: string; location_id: string; qty: number }>((from, to, count) =>
       // Deterministic order across pages — without it rows could repeat or
       // vanish between chunks.
       supabase
         .from("part_location_stock")
-        .select("part_id, location_id, qty")
+        .select("part_id, location_id, qty", { count })
         .order("part_id")
         .order("location_id")
         .range(from, to),
     ),
     // null = the table isn't there yet (deploy window before migration 0151).
-    fetchAllRows<LimitRow>((from, to) =>
+    fetchAllRowsParallel<LimitRow>((from, to, count) =>
       supabase
         .from("part_location_limits")
-        .select("part_id, location_id, min_qty, max_qty")
+        .select("part_id, location_id, min_qty, max_qty", { count })
         .order("part_id")
         .order("location_id")
         .range(from, to),
@@ -177,6 +181,7 @@ const SetStockInput = z.object({
 
 export const setPartLocationStock = wrapAction({
   schema: SetStockInput,
+  page: "inventory",
   roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<{ qty: number }> => {
     const supabase = await createClient();
@@ -321,6 +326,7 @@ const SetPartLocationLimitsInput = z
 
 export const setPartLocationLimits = wrapAction({
   schema: SetPartLocationLimitsInput,
+  page: "inventory",
   roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<{ ok: true }> => {
     const supabase = await createClient();
@@ -351,6 +357,7 @@ const SetOilLocationLimitsInput = z
 
 export const setOilLocationLimits = wrapAction({
   schema: SetOilLocationLimitsInput,
+  page: "inventory",
   roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<{ ok: true }> => {
     const supabase = await createClient();
@@ -375,6 +382,7 @@ export const setOilLocationLimits = wrapAction({
 
 export const setOilLocationStock = wrapAction({
   schema: SetOilStockInput,
+  page: "inventory",
   roles: ["owner", "co_owner", "manager"],
   handler: async (input, profile): Promise<{ qty: number }> => {
     const supabase = await createClient();

@@ -50,6 +50,7 @@ function revalidateTech() {
 
 export const createTechnician = wrapAction({
   schema: CreateTechnicianInput,
+  page: "settings_technicians",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<Technician> => {
     const supabase = await createClient();
@@ -66,6 +67,7 @@ export const createTechnician = wrapAction({
 
 export const updateTechnician = wrapAction({
   schema: UpdateTechnicianInput,
+  page: "settings_technicians",
   roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<Technician> => {
     const supabase = await createClient();
@@ -83,6 +85,7 @@ export const updateTechnician = wrapAction({
 
 export const toggleTechnicianActive = wrapAction({
   schema: ToggleTechnicianActiveInput,
+  page: "settings_technicians",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<Technician> => {
     const supabase = await createClient();

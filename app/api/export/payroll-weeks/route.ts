@@ -1,6 +1,7 @@
 import { resolveLocationFilter } from "@/lib/auth/locations";
 import { listPayrollWeeks } from "@/lib/actions/payroll";
 import { getCurrentProfile } from "@/lib/auth/get-profile";
+import { isPageAllowed } from "@/lib/permissions/check";
 import { csvResponse, toCsv } from "@/lib/utils/csv";
 import { todayISO } from "@/lib/utils/tz";
 
@@ -11,6 +12,11 @@ export async function GET(req: Request) {
   const profile = await getCurrentProfile();
   if (!profile || profile.role === "portal_customer") {
     return new Response("Unauthorized", { status: 401 });
+  }
+  // Outside the (app) layout's page gate: RLS alone lets a manager read
+  // their shop's payroll.
+  if (!isPageAllowed(profile, "payroll")) {
+    return new Response("You don't have access to Payroll.", { status: 403 });
   }
 
   const requested = new URL(req.url).searchParams.get("location_id");

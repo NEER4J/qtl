@@ -23,6 +23,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -37,10 +38,16 @@ import { PayrollEntryInput } from "@/lib/schemas/payroll";
 import {
   getStatutoryRatesForYear,
   listEmployees,
-  upsertPayrollEntry,
+  createPayrollEntry,
+  updatePayrollEntry,
 } from "@/lib/actions/payroll";
 import type { Employee, PayrollEntry, StatutoryRate } from "@/lib/db/types";
-import { computeStatutoryDeductions } from "@/lib/utils/payroll-math";
+import {
+  computeEntryEarnings,
+  computeNetPay,
+  computeStatutoryDeductions,
+  inferVacationRate,
+} from "@/lib/utils/payroll-math";
 
 interface Props {
   weekId: string;
@@ -52,7 +59,12 @@ interface Props {
   hideEmployeeDeductions?: boolean;
   /** Same for the employer-remit column (employer EI / CPP). */
   hideEmployerDeductions?: boolean;
+  /** app_settings.vacation_pay_rate (fraction) — the fallback when neither the
+   *  entry nor the employee has its own rate. */
+  shopVacationRate: number;
   existing?: PayrollEntry & { employee_name: string; employee_payroll_type: string };
+  /** Employees already on this week — left out of "Add entry"; edit theirs instead. */
+  takenEmployeeIds?: readonly string[];
   children: React.ReactNode;
 }
 
@@ -66,12 +78,100 @@ type AmountKey =
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/** Fraction → the percent shown in the Vacation % box (0.04 → "4"). */
+const toPct = (rate: number) => String(Math.round(rate * 10000) / 100);
+
+/** A stored default (null = none) as the number a new entry starts from. */
+const dflt = (v: number | null | undefined) => (v == null ? 0 : Number(v) || 0);
+
+/** Form values for an entry being edited, or a blank new one. */
+function entryValues(
+  weekId: string,
+  existing: Props["existing"],
+  hideEmployeeDeductions: boolean,
+  hideEmployerDeductions: boolean,
+): PayrollEntryInput {
+  if (existing) {
+    return {
+      payroll_week_id: weekId,
+      employee_id: existing.employee_id,
+      hours: existing.hours,
+      rate: existing.rate,
+      overtime_hours: existing.overtime_hours,
+      overtime_rate: existing.overtime_rate,
+      holiday_hours: existing.holiday_hours ?? 0,
+      holiday_rate: existing.holiday_rate ?? 0,
+      bonus: existing.bonus,
+      misc_extra: existing.misc_extra,
+      phone_allowance: Number(existing.phone_allowance ?? 0),
+      income_tax: existing.income_tax,
+      benefit_employee_deduction: existing.benefit_employee_deduction,
+      benefit_employer_contribution: existing.benefit_employer_contribution,
+      cheque_amount: existing.cheque_amount,
+      cheque_no: existing.cheque_no ?? "",
+      pay_date: existing.pay_date ?? "",
+      // The stored amounts, even when this user can't see them — so editing
+      // hours never recalculates EI/CPP someone typed in.
+      ei_employee: Number(existing.ei_employee) || 0,
+      cpp_employee: Number(existing.cpp_employee) || 0,
+      cpp_employee2: Number(existing.cpp_employee2) || 0,
+      ei_employer: Number(existing.ei_employer) || 0,
+      cpp_employer: Number(existing.cpp_employer) || 0,
+      cpp_employer2: Number(existing.cpp_employer2) || 0,
+      // `?? true` guards a row saved before migration 0135 added the
+      // columns — those entries were calculated with everything applied.
+      apply_ei: existing.apply_ei ?? true,
+      apply_cpp: existing.apply_cpp ?? true,
+      apply_cpp2: existing.apply_cpp2 ?? true,
+      apply_income_tax: existing.apply_income_tax ?? true,
+      apply_vacation: existing.apply_vacation ?? true,
+      apply_wsib: existing.apply_wsib ?? true,
+      notes: existing.notes ?? "",
+    };
+  }
+  return {
+    payroll_week_id: weekId,
+    employee_id: "",
+    hours: 0,
+    rate: 0,
+    overtime_hours: 0,
+    overtime_rate: 0,
+    holiday_hours: 0,
+    holiday_rate: 0,
+    bonus: 0,
+    misc_extra: 0,
+    phone_allowance: 0,
+    income_tax: 0,
+    benefit_employee_deduction: 0,
+    benefit_employer_contribution: 0,
+    cheque_amount: 0,
+    cheque_no: "",
+    pay_date: "",
+    // A hidden pair is left out, so the server calculates it from the rates.
+    ei_employee: hideEmployeeDeductions ? undefined : 0,
+    cpp_employee: hideEmployeeDeductions ? undefined : 0,
+    cpp_employee2: hideEmployeeDeductions ? undefined : 0,
+    ei_employer: hideEmployerDeductions ? undefined : 0,
+    cpp_employer: hideEmployerDeductions ? undefined : 0,
+    cpp_employer2: hideEmployerDeductions ? undefined : 0,
+    apply_ei: true,
+    apply_cpp: true,
+    apply_cpp2: true,
+    apply_income_tax: true,
+    apply_vacation: true,
+    apply_wsib: true,
+    notes: "",
+  };
+}
+
 export function PayrollEntryDialog({
   weekId,
   weekStart,
   hideEmployeeDeductions = false,
   hideEmployerDeductions = false,
+  shopVacationRate,
   existing,
+  takenEmployeeIds,
   children,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -96,78 +196,56 @@ export function PayrollEntryDialog({
 
   const form = useForm<PayrollEntryInput>({
     resolver: zodResolver(PayrollEntryInput),
-    defaultValues: existing
-      ? {
-          payroll_week_id: weekId,
-          employee_id: existing.employee_id,
-          hours: existing.hours,
-          rate: existing.rate,
-          overtime_hours: existing.overtime_hours,
-          overtime_rate: existing.overtime_rate,
-          holiday_hours: existing.holiday_hours ?? 0,
-          holiday_rate: existing.holiday_rate ?? 0,
-          bonus: existing.bonus,
-          misc_extra: existing.misc_extra,
-          income_tax: existing.income_tax,
-          benefit_employee_deduction: existing.benefit_employee_deduction,
-          benefit_employer_contribution: existing.benefit_employer_contribution,
-          cheque_amount: existing.cheque_amount,
-          cheque_no: existing.cheque_no ?? "",
-          pay_date: existing.pay_date ?? "",
-          // The stored amounts, even when this user can't see them — so editing
-          // hours never recalculates EI/CPP someone typed in.
-          ei_employee: Number(existing.ei_employee) || 0,
-          cpp_employee: Number(existing.cpp_employee) || 0,
-          cpp_employee2: Number(existing.cpp_employee2) || 0,
-          ei_employer: Number(existing.ei_employer) || 0,
-          cpp_employer: Number(existing.cpp_employer) || 0,
-          cpp_employer2: Number(existing.cpp_employer2) || 0,
-          // `?? true` guards a row saved before migration 0135 added the
-          // columns — those entries were calculated with everything applied.
-          apply_ei: existing.apply_ei ?? true,
-          apply_cpp: existing.apply_cpp ?? true,
-          apply_cpp2: existing.apply_cpp2 ?? true,
-          apply_income_tax: existing.apply_income_tax ?? true,
-          apply_vacation: existing.apply_vacation ?? true,
-          apply_wsib: existing.apply_wsib ?? true,
-          notes: existing.notes ?? "",
-        }
-      : {
-          payroll_week_id: weekId,
-          employee_id: "",
-          hours: 0,
-          rate: 0,
-          overtime_hours: 0,
-          overtime_rate: 0,
-          holiday_hours: 0,
-          holiday_rate: 0,
-          bonus: 0,
-          misc_extra: 0,
-          income_tax: 0,
-          benefit_employee_deduction: 0,
-          benefit_employer_contribution: 0,
-          cheque_amount: 0,
-          cheque_no: "",
-          pay_date: "",
-          // A hidden pair is left out, so the server calculates it from the rates.
-          ei_employee: hideEmployeeDeductions ? undefined : 0,
-          cpp_employee: hideEmployeeDeductions ? undefined : 0,
-          cpp_employee2: hideEmployeeDeductions ? undefined : 0,
-          ei_employer: hideEmployerDeductions ? undefined : 0,
-          cpp_employer: hideEmployerDeductions ? undefined : 0,
-          cpp_employer2: hideEmployerDeductions ? undefined : 0,
-          apply_ei: true,
-          apply_cpp: true,
-          apply_cpp2: true,
-          apply_income_tax: true,
-          apply_vacation: true,
-          apply_wsib: true,
-          notes: "",
-        },
+    defaultValues: entryValues(weekId, existing, hideEmployeeDeductions, hideEmployerDeductions),
   });
 
+  /**
+   * The vacation rate this entry starts from, as a fraction: the rate it was
+   * saved at → (an entry from before 0158) the rate its vacation pay works
+   * back to → the employee's override → the shop rate.
+   */
+  function startingVacationRate(): number {
+    const empRate = (id: string) => employees.find((e) => e.id === id)?.vacation_pay_rate;
+    if (existing) {
+      return (
+        existing.vacation_rate ??
+        inferVacationRate(existing) ??
+        empRate(existing.employee_id) ??
+        shopVacationRate
+      );
+    }
+    return shopVacationRate;
+  }
+
+  // Vacation % is typed as a percent but saved as a fraction (like the
+  // Payroll settings card), so the box keeps its own text while typing.
+  const [vacationPct, setVacationPct] = useState(() => toPct(startingVacationRate()));
+
+  // Every open starts from the row as it is NOW. Values set once at mount went
+  // stale after a save + refresh, and "Add entry" reopened with the previous
+  // person's numbers — saving that again overwrote them (upsert on employee).
+  function onOpenChange(next: boolean) {
+    if (next) {
+      form.reset(entryValues(weekId, existing, hideEmployeeDeductions, hideEmployerDeductions));
+      setVacationPct(toPct(startingVacationRate()));
+    }
+    setOpen(next);
+  }
+
   async function onSubmit(values: PayrollEntryInput) {
-    const result = await upsertPayrollEntry(values);
+    // Blank = no rate of its own: the server uses the employee's, then the shop's.
+    let vacation_rate: number | null = null;
+    if (vacationPct.trim() !== "") {
+      const pct = Number(vacationPct);
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+        toast.error("Vacation % must be between 0 and 100.");
+        return;
+      }
+      vacation_rate = Math.round(pct * 100) / 10000;
+    }
+    const result = existing
+      ? await updatePayrollEntry({ ...values, vacation_rate, id: existing.id })
+      : await createPayrollEntry({ ...values, vacation_rate });
     if (!result.ok) {
       toast.error(result.error);
       return;
@@ -178,33 +256,54 @@ export function PayrollEntryDialog({
   }
 
   const isEdit = !!existing;
+  const pickable = isEdit
+    ? employees
+    : employees.filter((e) => !takenEmployeeIds?.includes(e.id));
   const applyEi = form.watch("apply_ei");
   const applyCpp = form.watch("apply_cpp");
   const applyCpp2 = form.watch("apply_cpp2");
   const applyTax = form.watch("apply_income_tax");
 
-  // Holiday pay is hours × rate now (0136). The rate field is optional: left at
-  // 0 it falls back to the regular hourly rate, both here and on the server.
-  const holidayHours = Number(form.watch("holiday_hours")) || 0;
-  const holidayRateInput = Number(form.watch("holiday_rate")) || 0;
-  const regularRate = Number(form.watch("rate")) || 0;
-  const effectiveHolidayRate = holidayRateInput > 0 ? holidayRateInput : regularRate;
-  const holidayPay = Math.round(holidayHours * effectiveHolidayRate * 100) / 100;
+  const applyVacation = form.watch("apply_vacation");
 
-  // Same pay basis as buildEntryPayload: insurable = regular + OT + bonus +
-  // holiday; misc extra is taxable but not insurable.
+  // The same calculation buildEntryPayload saves with (lib/utils/payroll-math):
+  // holiday pay is hours × rate (0136), its rate falling back to the regular
+  // one; insurable = regular + OT + bonus + holiday + phone allowance; misc
+  // extra is taxable but not insurable; vacation leaves out phone + misc.
   const num = (k: keyof PayrollEntryInput) => Number(form.watch(k)) || 0;
-  const gross = round2(num("hours") * regularRate + num("overtime_hours") * num("overtime_rate"));
-  const insurable = round2(gross + num("bonus") + holidayPay);
-  const netPreview = round2(
-    insurable +
-      num("misc_extra") -
-      (applyEi ? num("ei_employee") : 0) -
-      (applyCpp ? num("cpp_employee") : 0) -
-      (applyCpp && applyCpp2 ? num("cpp_employee2") : 0) -
-      (applyTax ? num("income_tax") : 0) -
-      num("benefit_employee_deduction"),
+  const holidayHours = num("holiday_hours");
+  const holidayRateInput = num("holiday_rate");
+  const selectedEmployee = employees.find((e) => e.id === form.watch("employee_id"));
+  // Blank falls back like the server does: the employee's rate, then the shop's.
+  const vacationRateNow =
+    vacationPct.trim() === ""
+      ? (selectedEmployee?.vacation_pay_rate ?? shopVacationRate)
+      : (Number(vacationPct) || 0) / 100;
+  const pay = computeEntryEarnings(
+    {
+      hours: num("hours"),
+      rate: num("rate"),
+      overtime_hours: num("overtime_hours"),
+      overtime_rate: num("overtime_rate"),
+      holiday_hours: holidayHours,
+      holiday_rate: holidayRateInput,
+      bonus: num("bonus"),
+      misc_extra: num("misc_extra"),
+      phone_allowance: num("phone_allowance"),
+      apply_vacation: applyVacation,
+    },
+    vacationRateNow,
   );
+  const effectiveHolidayRate = pay.holidayRate;
+  const holidayPay = pay.holidayPay;
+  const insurable = pay.insurable;
+  const netPreview = computeNetPay(pay.gross, {
+    ei: applyEi ? num("ei_employee") : 0,
+    cpp: applyCpp ? num("cpp_employee") : 0,
+    cpp2: applyCpp && applyCpp2 ? num("cpp_employee2") : 0,
+    incomeTax: applyTax ? num("income_tax") : 0,
+    benefit: num("benefit_employee_deduction"),
+  });
 
   /**
    * Typing an employee amount fills the employer side — EI × the employer
@@ -251,16 +350,34 @@ export function PayrollEntryDialog({
   }
 
   /**
-   * Picking an employee on a NEW entry seeds the switches from that person's
-   * payroll defaults (employees.apply_*). Editing never re-seeds — the entry
-   * records what applied to that pay period, and changing the employee record
-   * later must not silently rewrite history.
+   * Picking an employee on a NEW entry fills it from that person's record:
+   * hourly rate, the pay defaults (0158, client 2026-10-20 — they used to be
+   * typed every week), vacation %, and the switches (employees.apply_*). A
+   * default left blank starts at 0, so switching people never carries the
+   * last one's pay over. Editing never re-seeds — the entry records what
+   * applied to that pay period, and changing the employee record later must
+   * not silently rewrite history.
    */
   function onEmployeeChange(employeeId: string) {
     form.setValue("employee_id", employeeId, { shouldValidate: true });
     if (isEdit) return;
     const emp = employees.find((e) => e.id === employeeId);
     if (!emp) return;
+    const set = (k: keyof PayrollEntryInput, v: number) => form.setValue(k, v, { shouldDirty: true });
+    const rate = Number(emp.default_hourly_rate) || 0;
+    set("rate", rate);
+    set("hours", dflt(emp.default_hours));
+    set("overtime_hours", dflt(emp.default_overtime_hours));
+    // Ontario overtime is time-and-a-half; a default OT-hours figure with a $0
+    // OT rate would quietly pay nothing.
+    set("overtime_rate", round2(rate * 1.5));
+    set("bonus", dflt(emp.default_bonus));
+    set("phone_allowance", dflt(emp.default_phone_allowance));
+    set("misc_extra", dflt(emp.default_misc_extra));
+    set("income_tax", dflt(emp.default_income_tax));
+    set("benefit_employee_deduction", dflt(emp.default_benefit_employee_deduction));
+    set("benefit_employer_contribution", dflt(emp.default_benefit_employer_contribution));
+    setVacationPct(toPct(emp.vacation_pay_rate ?? shopVacationRate));
     form.setValue("apply_ei", emp.apply_ei ?? true);
     form.setValue("apply_cpp", emp.apply_cpp ?? true);
     form.setValue("apply_cpp2", emp.apply_cpp2 ?? true);
@@ -270,7 +387,7 @@ export function PayrollEntryDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -290,13 +407,17 @@ export function PayrollEntryDialog({
                       actionLabel="Add employees"
                       href="/payroll/employees"
                     />
+                  ) : pickable.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Every active employee is already on this week. Use Edit on their row to change an entry.
+                    </p>
                   ) : (
                     <Select value={field.value} onValueChange={onEmployeeChange} disabled={isEdit}>
                       <FormControl>
                         <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {employees.map((e) => (
+                        {pickable.map((e) => (
                           <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -368,6 +489,12 @@ export function PayrollEntryDialog({
                   tip="Performance or one-time bonus. Insurable — adds to EI + CPP base."
                 />
                 <NumberField
+                  name="phone_allowance"
+                  label="Phone allowance ($)"
+                  control={form.control}
+                  tip="Cell phone allowance paid this period. Taxable and insurable — counts in gross, EI, CPP and WSIB, but not in vacation pay."
+                />
+                <NumberField
                   name="misc_extra"
                   label="Misc extra ($)"
                   control={form.control}
@@ -380,10 +507,43 @@ export function PayrollEntryDialog({
                   disabled={!applyTax}
                   tip="Federal + provincial income tax withheld this period. Look up in CRA payroll tables or your payroll calculator."
                 />
+                <div className="grid gap-2">
+                  <Label htmlFor="entry-vacation-pct" className="flex items-center gap-1">
+                    Vacation (%)
+                    <InfoTip>
+                      Vacation accrued on wages + overtime + bonus + holiday pay (not the phone
+                      allowance or misc extras). Starts from the employee&apos;s own rate, else the
+                      shop rate. Leave blank to use those.
+                    </InfoTip>
+                  </Label>
+                  <Input
+                    id="entry-vacation-pct"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={vacationPct}
+                    onChange={(e) => setVacationPct(e.target.value)}
+                    placeholder={toPct(selectedEmployee?.vacation_pay_rate ?? shopVacationRate)}
+                  />
+                </div>
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                Vacation pay (4% default) and WSIB are calculated on save. EI and CPP are entered
-                in <strong>EI &amp; CPP</strong> below.
+                {applyVacation ? (
+                  <>
+                    Vacation accrued:{" "}
+                    <strong className="text-foreground">${pay.vacationPay.toFixed(2)}</strong> at{" "}
+                    {toPct(vacationRateNow)}% (shop rate {toPct(shopVacationRate)}%
+                    {selectedEmployee?.vacation_pay_rate != null
+                      ? `, ${selectedEmployee.full_name}'s rate ${toPct(selectedEmployee.vacation_pay_rate)}%`
+                      : ""}
+                    ).{" "}
+                  </>
+                ) : (
+                  <>Vacation accrual is switched off for this entry. </>
+                )}
+                WSIB is calculated on save. EI and CPP are entered in <strong>EI &amp; CPP</strong>{" "}
+                below.
               </p>
             </Fieldset>
 

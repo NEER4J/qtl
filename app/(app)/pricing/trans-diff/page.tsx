@@ -7,6 +7,7 @@ import { requireProfile } from "@/lib/auth/require";
 import { listOilTypes, listTransmissionServices } from "@/lib/actions/pricing";
 
 import { TransDiffManager } from "./trans-diff-manager";
+import { canUpdatePage } from "@/lib/permissions/check";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,9 @@ export default async function TransDiffPage() {
   const showCost =
     profile.role === "owner" || profile.role === "co_owner" || profile.role === "accountant";
   // Only owner / co_owner can edit the catalogue (matches the table's RLS).
-  const canEdit = profile.role === "owner" || profile.role === "co_owner";
+  const canEdit =
+    (profile.role === "owner" || profile.role === "co_owner") &&
+    canUpdatePage(profile, "pricing_trans_diff");
 
   const totalRows = groups.reduce((n, g) => n + g.rows.length, 0);
 

@@ -80,11 +80,13 @@ import {
   REFERENCE_TAGS,
   getCachedActiveEngineTypes,
   getCachedEngineFilterOptions,
+  getCachedActiveOilGroups,
   getCachedActiveOilTypes,
   getCachedActivePartBrands,
   getCachedActivePartCategories,
   getCachedAppSettings,
   getCachedServiceCosts,
+  getCachedVolumeTiers,
   revalidateReference,
 } from "@/lib/cache/reference";
 import { applyPartsSearch, orFilterValue } from "@/lib/utils/parts-search";
@@ -399,14 +401,9 @@ export async function listServiceCosts(): Promise<ServiceCost[]> {
 }
 
 export async function listVolumeTiers(): Promise<VolumeTier[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("volume_tiers")
-    .select("*")
-    .order("oil_type_id")
-    .order("min_litres");
-  if (error) throw error;
-  return (data ?? []) as VolumeTier[];
+  // Cached across requests (every sales job form reads it); pricing writes
+  // clear it through revalidatePricing.
+  return (await getCachedVolumeTiers()) as VolumeTier[];
 }
 
 // ============================================================================
@@ -870,6 +867,14 @@ export interface OilDetailResponse {
   lock: OilPriceLockInfo | null;
   /** False until migration 0122 creates the lock tables — hides the lock UI. */
   lock_supported: boolean;
+  /** Active group this oil is priced by, when its rate is set: Selling is then
+   *  the Computed price at the group rate, shared by every grade in it. In
+   *  highest-cost mode `anchor` is the dearest grade every other one follows. */
+  price_group: {
+    id: string;
+    name: string;
+    anchor: { code: string; name: string } | null;
+  } | null;
   /** False until migration 0130 adds engine_types.labour_package_id. */
   labour_link_supported: boolean;
   /** Engines whose Labour is the parts fallback, not a package charge. */
@@ -891,6 +896,7 @@ export async function getOilDetail(
     matchEnginePackage,
     locksRes,
     filterOptions,
+    groupsRes,
   ] =
     await Promise.all([
       supabase
@@ -930,6 +936,7 @@ export async function getOilDetail(
         .select("id, oil_type_id, container, lock_until, oil_price_lock_items(*)")
         .eq("container", container),
       loadEngineFilterOptions(supabase),
+      supabase.from("oil_groups").select("*").eq("active", true),
     ]);
   if (enginesRes.error) throw enginesRes.error;
   if (oilTypesRes.error) throw oilTypesRes.error;
@@ -1022,12 +1029,11 @@ export async function getOilDetail(
   }
 
   type TierRow = { oil_type_id: string; min_litres: number; premium: number };
-  const tiers = ((tiersRes.data ?? []) as TierRow[]).filter(
-    (t) => t.oil_type_id === oilType.id,
-  );
-  const tierFor = (cap: number): number => {
+  /** The volume tier premium `oilId` charges at `cap` litres. */
+  const tierFor = (oilId: string, cap: number): number => {
     let best: TierRow | null = null;
-    for (const t of tiers) {
+    for (const t of (tiersRes.data ?? []) as TierRow[]) {
+      if (t.oil_type_id !== oilId) continue;
       if (Number(t.min_litres) <= cap && (!best || Number(t.min_litres) > Number(best.min_litres))) {
         best = t;
       }
@@ -1040,9 +1046,52 @@ export async function getOilDetail(
     Number.isFinite(n) && n > 0 ? Math.ceil(n) - 0.01 : null;
 
   const lpg = Number(oilType.litres_per_gallon);
-  const perLitre = container === "gallon"
+  // An oil in an ACTIVE group is priced at the group's rate — the same rate a
+  // sales job charges — so every grade in the group shows one price per engine
+  // (in highest-cost mode, the dearest member's, e.g. Delo 400 XLE SB 15W40).
+  // Those rows sell at the Computed figure, not a per-grade manual override.
+  // A group with no rate set for this container falls back to the oil's own
+  // cost, as sales lines do. (client 2026-10-16.)
+  const group = oilType.oil_group_id
+    ? ((groupsRes.data ?? []) as OilGroup[]).find((g) => g.id === oilType.oil_group_id) ?? null
+    : null;
+  let groupPerLitre: number | null = null;
+  if (group) {
+    if (container === "bulk") {
+      groupPerLitre = group.bulk_price_per_litre != null ? Number(group.bulk_price_per_litre) : null;
+    } else if (group.pricing_mode === "highest_cost") {
+      groupPerLitre = group.gallon_price_per_litre != null ? Number(group.gallon_price_per_litre) : null;
+    } else if (group.gallon_price_per_container != null && lpg > 0) {
+      groupPerLitre = Number(group.gallon_price_per_container) / lpg;
+    }
+    if (groupPerLitre != null && !(groupPerLitre > 0)) groupPerLitre = null;
+  }
+  const groupPriced = groupPerLitre != null;
+  // Highest-cost mode: every grade sells at the price of the group's dearest
+  // grade (client 2026-10-20 — "whatever the highest 15W40 sells at, the rest
+  // follow, so we don't set each one by hand"). The rate above already is that
+  // grade's cost; its tier premium has to be borrowed too, or a grade with
+  // tiers of its own (Total 10W30) would drift off the shared price. Same pick
+  // as private.oil_group_highest_costs (0145): highest cost per litre.
+  const anchorOil =
+    groupPriced && group?.pricing_mode === "highest_cost"
+      ? oilTypes
+          .filter((o) => o.oil_group_id === group.id)
+          .map((o) => {
+            const jug = Number(o.litres_per_gallon);
+            const rate =
+              container === "gallon"
+                ? jug > 0 ? Number(o.gallon_cost_per_litre) / jug : 0
+                : Number(o.bulk_cost_per_litre);
+            return { oil: o, rate: Number.isFinite(rate) ? rate : 0 };
+          })
+          .filter((m) => m.rate > 0)
+          .sort((a, b) => b.rate - a.rate || a.oil.name.localeCompare(b.oil.name))[0]?.oil ?? null
+      : null;
+  const tierOilId = anchorOil?.id ?? oilType.id;
+  const perLitre = groupPerLitre ?? (container === "gallon"
     ? (Number.isFinite(lpg) && lpg > 0 ? Number(oilType.gallon_cost_per_litre) / lpg : NaN)
-    : Number(oilType.bulk_cost_per_litre);
+    : Number(oilType.bulk_cost_per_litre));
 
   // One row per engine, or per filter option: `e` is the engine as that row
   // prices it (the option's name, capacity and package), `row.key` what its
@@ -1073,7 +1122,7 @@ export async function getOilDetail(
     const extras = match.extras;
     const fuelCost = extras?.fuel ?? 0;
     const greaseCost = extras?.grease ?? 0;
-    const tier = tierFor(cap);
+    const tier = tierFor(tierOilId, cap);
     const oilCost = Number.isFinite(perLitre) ? perLitre * cap : 0;
     // Cost = filter + oil + fuel + grease: what the job actually consumes,
     // mirroring the Excel tabs where the combined "Fuel / Grease" column sits
@@ -1092,16 +1141,18 @@ export async function getOilDetail(
     // isn't positive so we don't render "-$0.01" for empty oils.
     const override = overrideMap.get(`${row.key}|${oilType.id}|${container}`);
     const lockedPrice = lockIsLive ? lockedPriceByRow.get(row.key) ?? null : null;
-    const liveSelling = override
-      ? override.price
-      : Number.isFinite(perLitre) && perLitre > 0
-        ? round99(sellBasis)
-        : null;
-    const selling = lockedPrice ?? liveSelling;
     // Proposed formula price: total cost + labour, unrounded. Null when there
     // is nothing to price against, so the column shows "—" rather than $0.00.
     const computedSelling =
       Number.isFinite(sellBasis) && sellBasis > 0 ? Math.round(sellBasis * 100) / 100 : null;
+    const liveSelling = groupPriced
+      ? computedSelling
+      : override
+        ? override.price
+        : Number.isFinite(perLitre) && perLitre > 0
+          ? round99(sellBasis)
+          : null;
+    const selling = lockedPrice ?? liveSelling;
     // When selling is null (no price data), profit/margin are also unknown —
     // return null so the UI shows "—" instead of "0%" or "100%".
     const profit = selling != null ? selling - totalCost : null;
@@ -1114,8 +1165,8 @@ export async function getOilDetail(
       engine_name: `${e.manufacturer} ${e.model}`,
       oil_capacity_litres: cap,
       selling,
-      is_override: !!override,
-      override_id: override?.id ?? null,
+      is_override: !groupPriced && !!override,
+      override_id: groupPriced ? null : override?.id ?? null,
       computed_selling: computedSelling,
       locked_price: lockedPrice,
       filter_cost: filterCost,
@@ -1148,6 +1199,14 @@ export async function getOilDetail(
     oil_types: oilTypes,
     lock,
     lock_supported: lockSupported,
+    price_group:
+      groupPriced && group
+        ? {
+            id: group.id,
+            name: group.name,
+            anchor: anchorOil ? { code: anchorOil.code, name: anchorOil.name } : null,
+          }
+        : null,
     labour_link_supported: labourLinkSupported,
     unlinked_labour_count: rows.filter((r) => r.service_cost_source === "parts").length,
   };
@@ -1411,6 +1470,7 @@ const StatutoryRateInput = z.object({
 
 export const upsertStatutoryRate = wrapAction({
   schema: StatutoryRateInput,
+  page: "settings_statutory",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<StatutoryRate> => {
     const supabase = await createClient();
@@ -1902,18 +1962,8 @@ function revalidatePricing(entity?: string) {
 
 /** Active groups, for the sales oil picker. [] until migration 0133. */
 export async function listOilGroups(): Promise<OilGroup[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("oil_groups")
-    .select("*")
-    .eq("active", true)
-    .order("sort_order")
-    .order("name");
-  if (error) {
-    if (isMissingRelation(error)) return [];
-    throw error;
-  }
-  return (data ?? []) as OilGroup[];
+  // Cached like the oil types; [] before migration 0133.
+  return (await getCachedActiveOilGroups()) as OilGroup[];
 }
 
 /** Active AND inactive, for the settings table. [] until migration 0133. */
@@ -1955,6 +2005,30 @@ function oilGroupWriteRow<T extends Partial<CreateOilGroupInput>>(input: T) {
   return rest;
 }
 
+/** True when the database predates 0157 and has no retail price column. */
+function isMissingRetailPrice(error: { code?: string; message?: string } | null): boolean {
+  return (
+    !!error &&
+    (error.code === "PGRST204" || error.code === "42703") &&
+    /retail_price_per_litre/i.test(error.message ?? "")
+  );
+}
+
+/**
+ * Drops retail_price_per_litre for a database without 0157 — but only when it
+ * is blank or 0. A typed price would be lost without a word, so the save stops
+ * and says why instead.
+ */
+function withoutRetailPrice<T extends { retail_price_per_litre?: unknown }>(row: T) {
+  const { retail_price_per_litre: retail, ...rest } = row;
+  if (Number(retail) > 0) {
+    throw new Error(
+      "Saving an extra-oil retail price needs migration 0157_extra_oil_retail.sql — apply it to the database, then try again. Clear the price to save the rest.",
+    );
+  }
+  return rest;
+}
+
 /** Drops pricing_mode for a database without 0145 — only valid for manual saves. */
 function withoutPricingMode<T extends { pricing_mode?: unknown }>(row: T) {
   const { pricing_mode: _mode, ...rest } = row;
@@ -1964,12 +2038,16 @@ function withoutPricingMode<T extends { pricing_mode?: unknown }>(row: T) {
 
 export const createOilGroup = wrapAction({
   schema: CreateOilGroupInput,
+  page: "settings_pricing_oil_groups",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<OilGroup> => {
     const supabase = await createClient();
     const insert = (row: object) =>
       supabase.from("oil_groups").insert(row).select("*").single();
     let { data, error } = await insert(oilGroupWriteRow(input));
+    if (isMissingRetailPrice(error)) {
+      ({ data, error } = await insert(withoutRetailPrice(oilGroupWriteRow(input))));
+    }
     if (error && isMissingPricingMode(error)) {
       if (input.pricing_mode === "highest_cost") throw new Error(OIL_GROUP_AUTO_NEEDS_MIGRATION);
       ({ data, error } = await insert(withoutPricingMode(input)));
@@ -1982,12 +2060,16 @@ export const createOilGroup = wrapAction({
 
 export const updateOilGroup = wrapAction({
   schema: UpdateOilGroupInput,
+  page: "settings_pricing_oil_groups",
   roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<OilGroup> => {
     const supabase = await createClient();
     const update = (row: object) =>
       supabase.from("oil_groups").update(row).eq("id", id).select("*").single();
     let { data, error } = await update(oilGroupWriteRow(fields));
+    if (isMissingRetailPrice(error)) {
+      ({ data, error } = await update(withoutRetailPrice(oilGroupWriteRow(fields))));
+    }
     if (error && isMissingPricingMode(error)) {
       if (fields.pricing_mode === "highest_cost") throw new Error(OIL_GROUP_AUTO_NEEDS_MIGRATION);
       ({ data, error } = await update(withoutPricingMode(fields)));
@@ -2012,6 +2094,7 @@ export const updateOilGroup = wrapAction({
  */
 export const setOilGroupMembers = wrapAction({
   schema: SetOilGroupMembersInput,
+  page: "settings_pricing_oil_groups",
   roles: ["owner", "co_owner"],
   handler: async ({ group_id, oil_type_ids }): Promise<{ member_count: number }> => {
     const supabase = await createClient();
@@ -2049,6 +2132,7 @@ export const setOilGroupMembers = wrapAction({
 
 export const toggleOilGroupActive = wrapAction({
   schema: ToggleActiveInput,
+  page: "settings_pricing_oil_groups",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<OilGroup> => {
     const supabase = await createClient();
@@ -2086,6 +2170,7 @@ async function demoteOtherBaseOils(
 
 export const createOilType = wrapAction({
   schema: CreateOilTypeInput,
+  page: "settings_pricing_oil_types",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<OilType> => {
     const supabase = await createClient();
@@ -2103,6 +2188,7 @@ export const createOilType = wrapAction({
 
 export const updateOilType = wrapAction({
   schema: UpdateOilTypeInput,
+  page: "settings_pricing_oil_types",
   roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<OilType> => {
     const supabase = await createClient();
@@ -2121,6 +2207,7 @@ export const updateOilType = wrapAction({
 
 export const toggleOilTypeActive = wrapAction({
   schema: ToggleActiveInput,
+  page: "settings_pricing_oil_types",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<OilType> => {
     const supabase = await createClient();
@@ -2142,6 +2229,7 @@ export const toggleOilTypeActive = wrapAction({
 
 export const createEngineType = wrapAction({
   schema: CreateEngineTypeInput,
+  page: "settings_pricing_engine_types",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<EngineType> => {
     const supabase = await createClient();
@@ -2158,6 +2246,7 @@ export const createEngineType = wrapAction({
 
 export const updateEngineType = wrapAction({
   schema: UpdateEngineTypeInput,
+  page: "settings_pricing_engine_types",
   roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<EngineType> => {
     const supabase = await createClient();
@@ -2175,6 +2264,7 @@ export const updateEngineType = wrapAction({
 
 export const toggleEngineTypeActive = wrapAction({
   schema: ToggleActiveInput,
+  page: "settings_pricing_engine_types",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<EngineType> => {
     const supabase = await createClient();
@@ -2198,6 +2288,7 @@ export const toggleEngineTypeActive = wrapAction({
  */
 export const setEngineLabourPackage = wrapAction({
   schema: SetEngineLabourPackageInput,
+  page: "settings_pricing_engine_types",
   roles: ["owner", "co_owner"],
   handler: async ({ id, labour_package_id }): Promise<EngineType> => {
     const supabase = await createClient();
@@ -2230,6 +2321,7 @@ export const setEngineLabourPackage = wrapAction({
  */
 export const applyEngineLabourPackages = wrapAction({
   schema: ApplyEngineLabourPackagesInput,
+  page: "settings_pricing_engine_types",
   roles: ["owner", "co_owner"],
   handler: async ({ links }): Promise<{ linked: number }> => {
     const supabase = await createClient();
@@ -2266,6 +2358,7 @@ export const applyEngineLabourPackages = wrapAction({
 
 export const addEngineFilterOption = wrapAction({
   schema: AddEngineFilterOptionInput,
+  page: "settings_pricing_engine_types",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ id: string }> => {
     const supabase = await createClient();
@@ -2286,6 +2379,7 @@ export const addEngineFilterOption = wrapAction({
 
 export const updateEngineFilterOption = wrapAction({
   schema: UpdateEngineFilterOptionInput,
+  page: "settings_pricing_engine_types",
   roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<EngineFilterOption> => {
     const supabase = await createClient();
@@ -2309,6 +2403,7 @@ export const updateEngineFilterOption = wrapAction({
 
 export const removeEngineFilterOption = wrapAction({
   schema: RemoveEngineFilterOptionInput,
+  page: "settings_pricing_engine_types",
   roles: ["owner", "co_owner"],
   handler: async ({ id }): Promise<{ id: string }> => {
     const supabase = await createClient();
@@ -2324,6 +2419,7 @@ export const removeEngineFilterOption = wrapAction({
 
 export const deleteEngineType = wrapAction({
   schema: DeleteEngineTypeInput,
+  page: "settings_pricing_engine_types",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ id: string }> => {
     const supabase = await createClient();
@@ -2364,6 +2460,7 @@ export const deleteEngineType = wrapAction({
  */
 export const mergeEngineType = wrapAction({
   schema: MergeEngineTypesInput,
+  page: "settings_pricing_engine_types",
   roles: ["owner", "co_owner"],
   handler: async ({ target_id, source_id }): Promise<{ moved_jobs: number }> => {
     const supabase = await createClient();
@@ -2433,6 +2530,7 @@ export async function checkPartNumberExists(input: {
 
 export const createPart = wrapAction({
   schema: CreatePartInput,
+  page: "settings_pricing_parts",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<Part> => {
     const supabase = await createClient();
@@ -2452,6 +2550,7 @@ export const createPart = wrapAction({
 
 export const updatePart = wrapAction({
   schema: UpdatePartInput,
+  page: "settings_pricing_parts",
   roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<Part> => {
     const supabase = await createClient();
@@ -2472,6 +2571,7 @@ export const updatePart = wrapAction({
 
 export const togglePartActive = wrapAction({
   schema: ToggleActiveInput,
+  page: "settings_pricing_parts",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<Part> => {
     const supabase = await createClient();
@@ -2493,6 +2593,7 @@ export const togglePartActive = wrapAction({
 
 export const createServiceCost = wrapAction({
   schema: CreateServiceCostInput,
+  page: "settings_pricing_service_costs",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<ServiceCost> => {
     const supabase = await createClient();
@@ -2509,6 +2610,7 @@ export const createServiceCost = wrapAction({
 
 export const updateServiceCost = wrapAction({
   schema: UpdateServiceCostInput,
+  page: "settings_pricing_service_costs",
   roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<ServiceCost> => {
     const supabase = await createClient();
@@ -2526,6 +2628,7 @@ export const updateServiceCost = wrapAction({
 
 export const toggleServiceCostActive = wrapAction({
   schema: ToggleActiveInput,
+  page: "settings_pricing_service_costs",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<ServiceCost> => {
     const supabase = await createClient();
@@ -2548,6 +2651,7 @@ export const toggleServiceCostActive = wrapAction({
 
 export const createVolumeTier = wrapAction({
   schema: CreateVolumeTierInput,
+  page: "settings_pricing_volume_tiers",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<VolumeTier> => {
     const supabase = await createClient();
@@ -2564,6 +2668,7 @@ export const createVolumeTier = wrapAction({
 
 export const updateVolumeTier = wrapAction({
   schema: UpdateVolumeTierInput,
+  page: "settings_pricing_volume_tiers",
   roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<VolumeTier> => {
     const supabase = await createClient();
@@ -2581,6 +2686,7 @@ export const updateVolumeTier = wrapAction({
 
 export const deleteVolumeTier = wrapAction({
   schema: DeleteVolumeTierInput,
+  page: "settings_pricing_volume_tiers",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ id: string }> => {
     const supabase = await createClient();
@@ -2600,6 +2706,7 @@ export const deleteVolumeTier = wrapAction({
 
 export const upsertEngineFilter = wrapAction({
   schema: UpsertEngineFilterInput,
+  page: "settings_pricing_engine_types",
   roles: ["owner", "co_owner"],
   handler: async ({ engine_option_id, ...input }): Promise<EngineFilter> => {
     const supabase = await createClient();
@@ -2629,6 +2736,7 @@ export const upsertEngineFilter = wrapAction({
 
 export const deleteEngineFilter = wrapAction({
   schema: DeleteEngineFilterInput,
+  page: "settings_pricing_engine_types",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ id: string }> => {
     const supabase = await createClient();
@@ -2673,6 +2781,7 @@ function withoutCostBucket<T extends { cost_bucket?: unknown }>(row: T) {
 
 export const createPartCategory = wrapAction({
   schema: CreatePartCategoryInput,
+  page: "settings_pricing_categories",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<PartCategory> => {
     const supabase = await createClient();
@@ -2691,6 +2800,7 @@ export const createPartCategory = wrapAction({
 
 export const updatePartCategory = wrapAction({
   schema: UpdatePartCategoryInput,
+  page: "settings_pricing_categories",
   roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<PartCategory> => {
     const supabase = await createClient();
@@ -2711,6 +2821,7 @@ export const updatePartCategory = wrapAction({
 
 export const togglePartCategoryActive = wrapAction({
   schema: ToggleActiveInput,
+  page: "settings_pricing_categories",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<PartCategory> => {
     const supabase = await createClient();
@@ -2733,6 +2844,7 @@ export const togglePartCategoryActive = wrapAction({
 
 export const createPartBrand = wrapAction({
   schema: CreatePartBrandInput,
+  page: "settings_pricing_brands",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<PartBrand> => {
     const supabase = await createClient();
@@ -2750,6 +2862,7 @@ export const createPartBrand = wrapAction({
 
 export const updatePartBrand = wrapAction({
   schema: UpdatePartBrandInput,
+  page: "settings_pricing_brands",
   roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<PartBrand> => {
     const supabase = await createClient();
@@ -2785,6 +2898,7 @@ export const updatePartBrand = wrapAction({
 
 export const togglePartBrandActive = wrapAction({
   schema: ToggleActiveInput,
+  page: "settings_pricing_brands",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<PartBrand> => {
     const supabase = await createClient();
@@ -2808,6 +2922,7 @@ export const togglePartBrandActive = wrapAction({
  */
 export const ensurePartCategory = wrapAction({
   schema: z.object({ name: z.string().trim().min(1).max(80) }),
+  page: ["settings_pricing_parts", "settings_pricing_categories"],
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ name: string }> => {
     const supabase = await createClient();
@@ -2823,6 +2938,7 @@ export const ensurePartCategory = wrapAction({
 
 export const ensurePartBrand = wrapAction({
   schema: z.object({ name: z.string().trim().min(1).max(80) }),
+  page: ["settings_pricing_parts", "settings_pricing_brands"],
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ name: string }> => {
     const supabase = await createClient();
@@ -3045,6 +3161,7 @@ const UpsertEngineSellPriceInput = z.object({
 
 export const upsertEngineSellPrice = wrapAction({
   schema: UpsertEngineSellPriceInput,
+  page: ["pricing_oil_detail", "pricing_oil_grid"],
   roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<EngineSellPriceRow> => {
     const supabase = await createClient();
@@ -3083,6 +3200,7 @@ export const upsertEngineSellPrice = wrapAction({
 
 export const deleteEngineSellPrice = wrapAction({
   schema: z.object({ id: z.string().uuid() }),
+  page: ["pricing_oil_detail", "pricing_oil_grid"],
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ id: string }> => {
     const supabase = await createClient();
@@ -3105,6 +3223,7 @@ export const deleteEngineSellPrice = wrapAction({
 
 export const lockOilPrices = wrapAction({
   schema: LockOilPricesInput,
+  page: ["pricing_oil_detail", "pricing_oil_grid"],
   roles: ["owner", "co_owner"],
   handler: async (
     { oil_type_id, container, lock_until },
@@ -3178,6 +3297,7 @@ export const lockOilPrices = wrapAction({
 
 export const unlockOilPrices = wrapAction({
   schema: UnlockOilPricesInput,
+  page: ["pricing_oil_detail", "pricing_oil_grid"],
   roles: ["owner", "co_owner"],
   handler: async ({ oil_type_id, container }): Promise<{ ok: true }> => {
     const supabase = await createClient();
@@ -3221,6 +3341,7 @@ const PricingSettingsInput = z.object({
 
 export const updatePricingSettings = wrapAction({
   schema: PricingSettingsInput,
+  page: "settings_pricing",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ ok: true }> => {
     const supabase = await createClient();
@@ -3252,6 +3373,7 @@ export const updatePricingSettings = wrapAction({
 
 export const updateMinMarginAlertPct = wrapAction({
   schema: z.object({ pct: z.coerce.number().min(0).max(100) }),
+  page: "settings_pricing",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ pct: number }> => {
     const supabase = await createClient();
@@ -3476,6 +3598,7 @@ export async function listPackagesForPicker(): Promise<PartPackageWithItems[]> {
 
 export const createPartPackage = wrapAction({
   schema: CreatePartPackageInput,
+  page: "settings_pricing_packages",
   roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<PartPackage> => {
     const supabase = await createClient();
@@ -3512,6 +3635,7 @@ export const createPartPackage = wrapAction({
 
 export const updatePartPackage = wrapAction({
   schema: UpdatePartPackageInput,
+  page: "settings_pricing_packages",
   roles: ["owner", "co_owner"],
   handler: async ({ id, items, ...fields }, profile): Promise<PartPackage> => {
     const supabase = await createClient();
@@ -3583,6 +3707,7 @@ export const updatePartPackage = wrapAction({
 
 export const lockPartPackage = wrapAction({
   schema: LockPartPackageInput,
+  page: "settings_pricing_packages",
   roles: ["owner", "co_owner"],
   handler: async ({ id, lock_until }, profile): Promise<PartPackage> => {
     const supabase = await createClient();
@@ -3629,6 +3754,7 @@ export const lockPartPackage = wrapAction({
 
 export const unlockPartPackage = wrapAction({
   schema: UnlockPartPackageInput,
+  page: "settings_pricing_packages",
   roles: ["owner", "co_owner"],
   handler: async ({ id }, profile): Promise<PartPackage> => {
     const supabase = await createClient();
@@ -3658,6 +3784,7 @@ export const unlockPartPackage = wrapAction({
 
 export const mergePartPackagePrices = wrapAction({
   schema: MergePartPackagePricesInput,
+  page: "settings_pricing_packages",
   roles: ["owner", "co_owner"],
   handler: async ({ id, items, labor_selling_price }, profile): Promise<PartPackage> => {
     const supabase = await createClient();
@@ -3696,6 +3823,7 @@ export const mergePartPackagePrices = wrapAction({
 
 export const togglePartPackageActive = wrapAction({
   schema: ToggleActiveInput,
+  page: "settings_pricing_packages",
   roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<PartPackage> => {
     const supabase = await createClient();
@@ -3826,6 +3954,7 @@ function revalidateTransDiff() {
 
 export const createTransmissionService = wrapAction({
   schema: CreateTransmissionServiceInput,
+  page: "pricing_trans_diff",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ id: string }> => {
     const supabase = await createClient();
@@ -3842,6 +3971,7 @@ export const createTransmissionService = wrapAction({
 
 export const updateTransmissionService = wrapAction({
   schema: UpdateTransmissionServiceInput,
+  page: "pricing_trans_diff",
   roles: ["owner", "co_owner"],
   handler: async ({ id, ...fields }): Promise<{ id: string }> => {
     const supabase = await createClient();
@@ -3857,6 +3987,7 @@ export const updateTransmissionService = wrapAction({
 
 export const toggleTransmissionServiceActive = wrapAction({
   schema: ToggleActiveInput,
+  page: "pricing_trans_diff",
   roles: ["owner", "co_owner"],
   handler: async (input): Promise<{ id: string; active: boolean }> => {
     const supabase = await createClient();

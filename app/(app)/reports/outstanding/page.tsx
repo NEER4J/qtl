@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { PageHelp } from "@/components/help/page-help";
-import { requireProfile } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { getOutstandingInvoices } from "@/lib/actions/reports";
 import { listActiveLocations } from "@/lib/actions/reference";
 import { formatDate, formatMoney } from "@/lib/utils/format";
@@ -32,7 +32,7 @@ export default async function OutstandingReportPage({
 }: {
   searchParams: Promise<Record<string, string>>;
 }) {
-  const profile = await requireProfile();
+  const profile = await requirePage("reports_outstanding");
   const sp = await searchParams;
 
   const [{ rows, total_outstanding, by_bucket }, locations] = await Promise.all([

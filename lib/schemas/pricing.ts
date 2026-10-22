@@ -65,6 +65,8 @@ export const CreateOilGroupInput = z.object({
   name: z.string().trim().min(1, "Name is required").max(80),
   bulk_price_per_litre: optionalRate,
   gallon_price_per_container: optionalRate,
+  // Extra oil beyond an engine's capacity is a retail sale at this price (0157).
+  retail_price_per_litre: optionalRate,
   pricing_mode: oilGroupPricingModeSchema.default("manual"),
   sort_order: z.coerce.number().int().min(0).default(100),
   active: z.coerce.boolean().default(true),

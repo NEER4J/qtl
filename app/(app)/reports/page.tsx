@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   CalendarDays,
   FileText,
+  Gauge,
   ReceiptText,
   ScrollText,
   TrendingUp,
@@ -22,7 +23,8 @@ const REPORTS = [
     title: "Daily job report",
     href: "/reports/daily",
     icon: CalendarDays,
-    description: "Single-day jobs, parts used, revenue by hour, customer mix.",
+    description:
+      "The whole day: every job with its payment methods, the payments taken that day on any invoice, parts used. Print or download as CSV.",
     roles: ["owner", "co_owner", "manager", "accountant", "staff"],
   },
   {
@@ -48,9 +50,18 @@ const REPORTS = [
   },
   {
     title: "Customer Statement",
-    href: "/customers",
+    href: "/reports/customer-statement",
     icon: ScrollText,
-    description: "Select a customer from the directory to view or export.",
+    description:
+      "Monthly statement per customer: opening balance, invoices, payments, store credit, closing balance. Print, PDF or email.",
+    roles: ["owner", "co_owner", "manager", "accountant"],
+  },
+  {
+    title: "Mileage",
+    href: "/reports/mileage",
+    icon: Gauge,
+    description:
+      "Km between services and km per day, per vehicle and across the fleet, from the odometer on each job.",
     roles: ["owner", "co_owner", "manager", "accountant"],
   },
   {
@@ -85,7 +96,10 @@ export default async function ReportsHubPage() {
           <li><strong>HST Summary</strong> — what you collected versus what you paid. For filing your HST return with CRA.</li>
           <li><strong>P&amp;L Report</strong> — the full profit-and-loss view. Includes payroll, unlike the dashboard snapshot.</li>
           <li><strong>Outstanding Invoices</strong> — unpaid invoices grouped by how overdue they are. For following up with customers.</li>
-          <li><strong>Customer or Vendor Statement</strong> — a per-customer or per-vendor transaction history. Open any customer or vendor profile and click the statement button.</li>
+          <li><strong>Daily job report</strong> — one day&apos;s jobs, payments by method and the cash drawer (payments taken that day). Print it or download it.</li>
+          <li><strong>Customer Statement</strong> — a monthly statement for one customer, to print, save as PDF or email. Also on every customer&apos;s page (Monthly statement).</li>
+          <li><strong>Mileage</strong> — how far each truck runs between services, from the odometer readings.</li>
+          <li><strong>Vendor Statement</strong> — a per-vendor transaction history. Open any vendor profile and click the statement button.</li>
         </ul>
         <p>Every report has a spreadsheet-download button.</p>
       </PageHelp>

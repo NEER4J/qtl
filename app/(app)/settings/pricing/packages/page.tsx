@@ -3,14 +3,18 @@ import { requirePage, requireProfile } from "@/lib/auth/require";
 import { listAllPartPackages } from "@/lib/actions/pricing";
 
 import { PartPackagesTable } from "./part-packages-table";
+import { canUpdatePage } from "@/lib/permissions/check";
 
 export const dynamic = "force-dynamic";
 
 export default async function PartPackagesPage() {
-  await requirePage("settings_pricing");
+  await requirePage("settings_pricing_packages");
   const profile = await requireProfile();
   const packages = await listAllPartPackages();
-  const isOwner = (profile.role === "owner" || profile.role === "co_owner");
+  // Cost, profit and margin are for the owner and Admin whatever their Update
+  // right; changing packages is what view only takes away.
+  const isOwner = profile.role === "owner" || profile.role === "co_owner";
+  const canEdit = canUpdatePage(profile, "settings_pricing_packages");
 
   return (
     <div className="flex flex-col gap-4">
@@ -35,7 +39,7 @@ export default async function PartPackagesPage() {
         </ul>
       </PageHelp>
 
-      <PartPackagesTable packages={packages} isOwner={isOwner} />
+      <PartPackagesTable packages={packages} isOwner={isOwner} canEdit={canEdit} />
     </div>
   );
 }

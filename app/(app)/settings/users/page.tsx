@@ -4,6 +4,7 @@ import { listLocations } from "@/lib/actions/locations";
 import { listUserPasswords, listUsers } from "@/lib/actions/users";
 
 import { UsersTable } from "./users-table";
+import { canUpdatePage } from "@/lib/permissions/check";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,9 @@ export default async function UsersPage() {
   // co_owner-only in the server action and in the profiles_guard trigger, so
   // anyone else granted this page gets a read-only view.
   const viewer = await requirePage("settings_users");
-  const canManage = viewer.role === "owner" || viewer.role === "co_owner";
+  const canManage =
+    (viewer.role === "owner" || viewer.role === "co_owner") &&
+    canUpdatePage(viewer, "settings_users");
   const [users, locations, passwords] = await Promise.all([
     listUsers(),
     listLocations(),

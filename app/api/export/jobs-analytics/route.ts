@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   // API routes sit outside the (app) layout's page gate, so check it here: the
   // file now carries sales per technician, which is Analytics-page data.
   const profile = await requireProfile();
-  if (!isPageAllowed(profile, "analytics")) {
+  if (!isPageAllowed(profile, "analytics_jobs")) {
     return new Response("You don't have access to Analytics.", { status: 403 });
   }
 

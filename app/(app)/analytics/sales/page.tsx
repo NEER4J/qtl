@@ -10,7 +10,7 @@ import {
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { PageHelp } from "@/components/help/page-help";
 import { SimpleArea, SimpleBar, SimplePie, StackedBar } from "@/components/analytics/charts";
-import { requireProfile } from "@/lib/auth/require";
+import { requirePage } from "@/lib/auth/require";
 import { getSalesAnalytics, getSalesYoy } from "@/lib/actions/analytics";
 import { listActiveLocations } from "@/lib/actions/reference";
 import { formatMoney } from "@/lib/utils/format";
@@ -23,7 +23,7 @@ export default async function SalesAnalyticsPage({
 }: {
   searchParams: Promise<Record<string, string>>;
 }) {
-  const profile = await requireProfile();
+  const profile = await requirePage("analytics_sales");
   const sp = await searchParams;
 
   const [data, yoy, locations] = await Promise.all([

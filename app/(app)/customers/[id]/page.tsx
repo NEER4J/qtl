@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, Download } from "lucide-react";
+import { ChevronLeft, Download, ScrollText } from "lucide-react";
 
 import { AddVehicleButton } from "./add-vehicle-button";
 import { Badge } from "@/components/ui/badge";
@@ -18,12 +18,17 @@ import { CustomerForm } from "@/components/customers/customer-form";
 import { StatusBadge } from "@/components/sales/status-badge";
 import {
   getCustomer,
+  getCustomerJobTotals,
   getCustomerRenameLinks,
   getCustomerSalesHistory,
+  listFreeGreaseUsedVehicleIds,
 } from "@/lib/actions/customers";
 import { fetchCustomerCreditBalance } from "@/lib/actions/customer-credits";
 import { getCustomerVehicles } from "@/lib/actions/vehicles";
-import { isFreeGreaseEligible } from "@/lib/utils/free-grease";
+import { requireProfile } from "@/lib/auth/require";
+import { isPageAllowed } from "@/lib/permissions/check";
+import { pageKeyForRequestPath } from "@/lib/permissions/registry";
+import { isVehicleFreeGreaseEligible, vehicleFreeGreaseUntil } from "@/lib/utils/free-grease";
 import { isFreeOilChangeEligible } from "@/lib/utils/free-oil-change";
 import { formatDate, formatMoney } from "@/lib/utils/format";
 
@@ -38,22 +43,37 @@ export default async function CustomerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [customer, jobs, vehicles, storeCredit] = await Promise.all([
-    getCustomer(id),
-    getCustomerSalesHistory(id),
-    getCustomerVehicles(id),
-    fetchCustomerCreditBalance(id),
-  ]);
-  if (!customer) notFound();
-  const renameLinks = await getCustomerRenameLinks(customer);
+  // One wave: the rename links and the free-grease lookup chain off the
+  // customer and vehicle reads rather than waiting for every first read.
+  const customerPromise = getCustomer(id);
+  const vehiclesPromise = getCustomerVehicles(id);
+  const [customer, jobs, totals, vehicles, storeCredit, renameLinks, greaseUsedIds, profile] =
+    await Promise.all([
+      customerPromise,
+      getCustomerSalesHistory(id),
+      getCustomerJobTotals(id),
+      vehiclesPromise,
+      fetchCustomerCreditBalance(id),
+      customerPromise.then((c) => (c ? getCustomerRenameLinks(c) : null)),
+      vehiclesPromise.then((vs) => listFreeGreaseUsedVehicleIds(vs.map((v) => v.id))),
+      requireProfile(),
+    ]);
+  if (!customer || !renameLinks) notFound();
 
-  const totalSpent = jobs.reduce((s, j) => s + j.total, 0);
-  const totalOutstanding = jobs.reduce((s, j) => s + j.outstanding, 0);
+  // Every job, not the 50 listed below (client 2026-10-20).
+  const totalSpent = totals.total_spent;
+  const totalOutstanding = totals.outstanding;
+  const canSeeStatement = isPageAllowed(
+    profile,
+    pageKeyForRequestPath("/reports/customer-statement") ?? "reports",
+  );
 
   const displayName =
     customer.billing_name ?? customer.last_or_company ?? "(no name)";
 
-  const greaseEligible = isFreeGreaseEligible(customer);
+  // Free grease is per vehicle: once, in each vehicle's first 30 days.
+  const usedGrease = new Set(greaseUsedIds);
+  const greaseVehicles = vehicles.filter((v) => isVehicleFreeGreaseEligible(v, usedGrease));
   const oilChangeEligible = isFreeOilChangeEligible(customer);
 
   return (
@@ -68,11 +88,11 @@ export default async function CustomerDetailPage({
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight">{displayName}</h1>
             {!customer.active && <Badge variant="secondary">Inactive</Badge>}
-            {greaseEligible && (
-              <Badge className="bg-emerald-600 hover:bg-emerald-700">
-                Free grease until {formatDate(customer.free_grease_until!)}
+            {greaseVehicles.map((v) => (
+              <Badge key={v.id} className="bg-emerald-600 hover:bg-emerald-700">
+                Free grease · {v.license_plate} until {formatDate(vehicleFreeGreaseUntil(v))}
               </Badge>
-            )}
+            ))}
             {oilChangeEligible && (
               <Badge className="bg-amber-600 hover:bg-amber-700">
                 Free oil change until {formatDate(customer.free_oil_change_until!)}
@@ -80,12 +100,19 @@ export default async function CustomerDetailPage({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <GrantFreeOilChangeButton
             customerId={customer.id}
             alreadyEligible={oilChangeEligible}
           />
           <AddVehicleButton customerId={customer.id} />
+          {canSeeStatement && (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/reports/customer-statement?customer_id=${customer.id}`}>
+                <ScrollText className="size-4" /> Monthly statement
+              </Link>
+            </Button>
+          )}
           <Button asChild variant="outline" size="sm">
             <a href={`/api/export/customer-statement?customer_id=${customer.id}`} download>
               <Download className="size-4" /> Statement CSV
@@ -126,7 +153,7 @@ export default async function CustomerDetailPage({
       )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Stat label="Total jobs" value={String(jobs.length)} />
+        <Stat label="Total jobs" value={String(totals.job_count)} />
         <Stat label="Total spent" value={formatMoney(totalSpent)} />
         <Stat
           label="Outstanding"
@@ -155,7 +182,14 @@ export default async function CustomerDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Job history</CardTitle>
+          <CardTitle>
+            Job history
+            {totals.job_count > jobs.length && (
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                latest {jobs.length} of {totals.job_count}
+              </span>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {jobs.length === 0 ? (

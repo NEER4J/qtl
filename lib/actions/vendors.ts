@@ -69,6 +69,7 @@ export async function listVendors(): Promise<Vendor[]> {
 // ----------------------------------------------------------------------------
 export const createVendor = wrapAction({
   schema: CreateVendorInput,
+  page: ["vendors", "expenses"],
   roles: ["owner", "co_owner", "accountant", "manager"],
   handler: async (input, profile): Promise<Vendor> => {
     const supabase = await createClient();
@@ -99,6 +100,7 @@ export const createVendor = wrapAction({
 // ----------------------------------------------------------------------------
 export const toggleVendorActive = wrapAction({
   schema: z.object({ id: z.string().uuid(), active: z.boolean() }),
+  page: "vendors",
   roles: ["owner", "co_owner", "accountant", "manager"],
   handler: async (input, profile): Promise<Vendor> => {
     const supabase = await createClient();
@@ -119,6 +121,7 @@ export const toggleVendorActive = wrapAction({
 // ----------------------------------------------------------------------------
 export const updateVendor = wrapAction({
   schema: UpdateVendorInput,
+  page: "vendors",
   roles: ["owner", "co_owner", "accountant", "manager"],
   handler: async (input, profile): Promise<Vendor> => {
     const supabase = await createClient();
@@ -153,6 +156,7 @@ export const updateVendor = wrapAction({
 // ----------------------------------------------------------------------------
 export const mergeVendors = wrapAction({
   schema: MergeVendorsInput,
+  page: "vendors",
   roles: ["owner", "co_owner"],
   handler: async ({ target_id, source_ids, location_map }): Promise<{ merged: number }> => {
     const supabase = await createClient();
@@ -232,6 +236,7 @@ export async function getVendorLocationDetails(
 
 export const upsertVendorLocation = wrapAction({
   schema: UpsertVendorLocationInput,
+  page: ["vendors", "expenses"],
   roles: ["owner", "co_owner", "accountant", "manager"],
   handler: async (input, profile): Promise<VendorLocation> => {
     const supabase = await createClient();
@@ -263,6 +268,7 @@ export const upsertVendorLocation = wrapAction({
 
 export const deleteVendorLocation = wrapAction({
   schema: DeleteVendorLocationInput,
+  page: "vendors",
   roles: ["owner", "co_owner", "accountant"],
   handler: async (input): Promise<{ vendor_id: string; location_id: string }> => {
     const supabase = await createClient();
@@ -318,6 +324,7 @@ export async function listVendorAccountsForLocation(
 // active set (no DELETE, per repo convention) and inserts the provided rows.
 export const replaceVendorLocationAccounts = wrapAction({
   schema: ReplaceVendorLocationAccountsInput,
+  page: ["vendors", "expenses"],
   roles: ["owner", "co_owner", "accountant", "manager"],
   handler: async (input, profile): Promise<{ vendor_id: string; location_id: string }> => {
     const supabase = await createClient();

@@ -108,9 +108,12 @@ function daysUntil(dateStr: string): number {
 export function PartPackagesTable({
   packages,
   isOwner,
+  canEdit,
 }: {
   packages: PartPackageWithItems[];
   isOwner: boolean;
+  /** False when the user is view only here: no add, edit, lock or toggle. */
+  canEdit: boolean;
 }) {
   const [editing, setEditing] = useState<PartPackageWithItems | null>(null);
   const [creating, setCreating] = useState(false);
@@ -150,11 +153,13 @@ export function PartPackagesTable({
 
   return (
     <>
-      <div className="flex justify-end">
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="size-4" /> New package
-        </Button>
-      </div>
+      {canEdit && (
+        <div className="flex justify-end">
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="size-4" /> New package
+          </Button>
+        </div>
+      )}
 
       <div className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
         <Table>
@@ -271,54 +276,56 @@ export function PartPackagesTable({
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right align-top">
-                        <div className="flex justify-end gap-1 flex-wrap">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setEditing(p)}
-                            disabled={locked}
-                            title={locked ? "Unlock to edit" : "Edit"}
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-                          {locked ? (
-                            <>
-                              {drift !== 0 && (
+                        {canEdit && (
+                          <div className="flex justify-end gap-1 flex-wrap">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setEditing(p)}
+                              disabled={locked}
+                              title={locked ? "Unlock to edit" : "Edit"}
+                            >
+                              <Pencil className="size-4" />
+                            </Button>
+                            {locked ? (
+                              <>
+                                {drift !== 0 && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setMerging(p)}
+                                  >
+                                    Review prices…
+                                  </Button>
+                                )}
                                 <Button
-                                  variant="outline"
+                                  variant="ghost"
                                   size="sm"
-                                  onClick={() => setMerging(p)}
+                                  disabled={pendingId === p.id}
+                                  onClick={() => handleUnlock(p)}
                                 >
-                                  Review prices…
+                                  <Unlock className="size-4" /> Unlock
                                 </Button>
-                              )}
+                              </>
+                            ) : (
                               <Button
-                                variant="ghost"
+                                variant="outline"
                                 size="sm"
-                                disabled={pendingId === p.id}
-                                onClick={() => handleUnlock(p)}
+                                onClick={() => setLocking(p)}
                               >
-                                <Unlock className="size-4" /> Unlock
+                                <Lock className="size-4" /> Lock…
                               </Button>
-                            </>
-                          ) : (
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => setLocking(p)}
+                              disabled={pendingId === p.id}
+                              onClick={() => handleToggle(p)}
                             >
-                              <Lock className="size-4" /> Lock…
+                              {p.active ? "Deactivate" : "Activate"}
                             </Button>
-                          )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={pendingId === p.id}
-                            onClick={() => handleToggle(p)}
-                          >
-                            {p.active ? "Deactivate" : "Activate"}
-                          </Button>
-                        </div>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                     {isOpen && (

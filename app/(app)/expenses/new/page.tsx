@@ -14,16 +14,18 @@ import {
 } from "@/lib/actions/reference";
 import { listOilTypes } from "@/lib/actions/pricing";
 import { accessibleLocationIds, canChooseLocation } from "@/lib/auth/locations";
+import { canUpdatePage } from "@/lib/permissions/check";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewExpensePage() {
   const profile = await requireProfile();
   const canCreate =
-    (profile.role === "owner" || profile.role === "co_owner") ||
+    ((profile.role === "owner" || profile.role === "co_owner") ||
     profile.role === "accountant" ||
     profile.role === "manager" ||
-    (profile.role === "staff" && profile.can_enter_expenses);
+    (profile.role === "staff" && profile.can_enter_expenses)) &&
+    canUpdatePage(profile, "expenses");
   if (!canCreate) redirect("/expenses");
 
   const [locations, categories, subcategories, settings, oilTypes] = await Promise.all([

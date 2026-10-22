@@ -1,11 +1,12 @@
 // React-PDF invoice template — imported dynamically in lib/actions/invoices.ts.
-// Layout mirrors the Quick Truck Lube paper invoice:
-//   - logo top-left + shop address / phone / GST / FAX on the same line
+// Layout mirrors the Quick Truck Lube paper invoice, filling the page
+// (client 2026-10-20):
+//   - large logo top-left + shop address / phone / GST on one line
 //   - bill-to + vehicle info in a 3-column boxed grid
-//   - "Description of Work" (labour, custom items) and "Parts" tables stacked
-//   - comments/payment-received line
-//   - bottom-left legal disclaimer + signature line
-//   - bottom-right Invoice Totals box
+//   - one line-items table that stretches to the bottom block
+//   - comments (job notes, the vehicle's printed comments, payments received)
+//     and the signature line beside the Invoice Totals box
+//   - the legal terms as fine print across the foot of the page
 import path from "path";
 import React from "react";
 import {
@@ -17,7 +18,7 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer";
 import type { SalesJobDetail } from "@/lib/actions/sales";
-import { buildDisplayRows } from "@/lib/utils/sales-display";
+import { OIL_TIER_GROUP, buildDisplayRows, foldOilTier } from "@/lib/utils/sales-display";
 
 const LOGO_PATH = path.join(process.cwd(), "public", "logo.png");
 
@@ -38,7 +39,7 @@ const styles = StyleSheet.create({
   // ----- Header
   header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
   headerLeft: { flexDirection: "row", alignItems: "center" },
-  logo: { width: 48, height: 48, objectFit: "contain", marginRight: 10 },
+  logo: { width: 104, height: 80, objectFit: "contain", marginRight: 12 },
   shopName: { fontSize: 18, fontFamily: "Helvetica-Bold" },
   shopLocation: { fontSize: 10, fontFamily: "Helvetica-Bold", marginTop: 1 },
   shopMeta: { fontSize: 8, color: MUTED, marginTop: 1 },
@@ -95,6 +96,8 @@ const styles = StyleSheet.create({
 
   // ----- Section table headers
   sectionTable: { borderWidth: 1, borderColor: LINE, marginBottom: 6 },
+  // The line-items table grows to fill the page down to the bottom block.
+  itemsTable: { borderWidth: 1, borderColor: LINE, marginBottom: 6, flexGrow: 1 },
   sectionHeaderRow: {
     flexDirection: "row",
     backgroundColor: "#eaeaea",
@@ -160,12 +163,20 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
 
-  // ----- Footer (disclaimer + totals)
-  footerRow: { flexDirection: "row", marginTop: 8 },
+  // ----- Footer (comments + signature beside the totals, fine print below)
+  footerRow: { flexDirection: "row", marginTop: 2 },
   disclaimerCol: { flex: 1.6, paddingRight: 8 },
-  disclaimerText: { fontSize: 7, color: TEXT, lineHeight: 1.3 },
+  finePrint: {
+    marginTop: 8,
+    paddingTop: 4,
+    borderTopWidth: 0.5,
+    borderTopColor: MUTED,
+    fontSize: 6.5,
+    color: MUTED,
+    lineHeight: 1.3,
+  },
   signatureLine: {
-    marginTop: 14,
+    marginTop: 22,
     fontSize: 8,
     color: MUTED,
     borderTopWidth: 1,
@@ -264,15 +275,27 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
     (it) => it.is_taxable === true,
     (it) => it.package_label ?? "Package",
   );
-  const packageRows = display.flatMap((r) =>
+  // What prints: the same rows, with an oil and its tier premium folded into
+  // one line (foldOilTier). The totals below keep using `display`, so the
+  // premium still counts under Miscellaneous.
+  const shown = buildDisplayRows(
+    foldOilTier(job.items),
+    (it) => Number(it.line_total ?? 0),
+    (it) => it.is_taxable === true,
+    (it) => it.package_label ?? "Package",
+  );
+  const packageRows = shown.flatMap((r) =>
     r.type === "package"
       ? [{ key: r.key, label: r.label, total: r.total, items: r.items }]
       : [],
   );
+  const shownSingles = shown.flatMap((r) => (r.type === "single" ? [r.item] : []));
   const singles = display.flatMap((r) => (r.type === "single" ? [r.item] : []));
   const labour = singles.filter((it) => !it.part_id);
   const parts = singles.filter((it) => !!it.part_id);
-  const packagesTotal = packageRows.reduce((s, r) => s + r.total, 0);
+  // Real packages only — from `display`, not the folded rows, or an oil folded
+  // with its tier would count twice (once here, once as a single line).
+  const packagesTotal = display.reduce((s, r) => (r.type === "package" ? s + r.total : s), 0);
   // Packages render in the Description-of-Work section, so their total rolls
   // into Total Labour. (Subtotal/HST/Total come from the stored job fields, so
   // this split is cosmetic and always reconciles to the stored subtotal.)
@@ -306,11 +329,10 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
               </Text>
               <View style={styles.shopMetaRow}>
                 <Text style={styles.shopMetaCell}>{job.location_phone || "(519) 622-0660"}</Text>
+                {/* The business number alone — "RT 001" is the account suffix,
+                    and the fax is gone (client 2026-10-20). */}
                 <Text style={styles.shopMetaCell}>
-                  GST {job.location_hst_number || "84754-0960 RT 001"}
-                </Text>
-                <Text style={styles.shopMetaCell}>
-                  FAX {job.location_fax || "519-622-2493"}
+                  GST {(job.location_hst_number || "84754-0960").replace(/\s*RT\s*\d+\s*$/i, "")}
                 </Text>
               </View>
             </View>
@@ -407,7 +429,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
         </View>
 
         {/* ---------------- Line items (work + parts in one table) ---------------- */}
-        <View style={styles.sectionTable}>
+        <View style={styles.itemsTable}>
           <View style={styles.sectionHeaderRow}>
             <Text style={[styles.sectionHeaderCell, styles.partsQty]}>Qty</Text>
             <Text style={[styles.sectionHeaderCell, styles.partsDesc]}>Description</Text>
@@ -442,9 +464,13 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
                     : 0),
                 0,
               );
+              const oilWithTier = r.key.startsWith(OIL_TIER_GROUP);
+              const oil = r.items[0]!;
               rows.push({
                 id: r.key,
-                qty: "1",
+                qty: oilWithTier
+                  ? `${Number(oil.quantity)} ${oil.oil_container === "gallon" ? "gal" : "ltr"}`
+                  : "1",
                 description:
                   saved > 0 ? `${r.label}  (merged — saved ${money(saved)})` : r.label,
                 unit: "",
@@ -469,7 +495,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
               }
             }
 
-            for (const it of labour) {
+            for (const it of shownSingles.filter((x) => !x.part_id)) {
               rows.push({
                 id: it.id,
                 qty: String(Number(it.quantity)),
@@ -480,7 +506,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
               });
             }
 
-            for (const it of parts) {
+            for (const it of shownSingles.filter((x) => !!x.part_id)) {
               const cs = it.is_customer_supplied === true;
               const wouldHaveCharged =
                 Math.round(Number(it.quantity) * Number(it.unit_price) * 100) / 100;
@@ -538,36 +564,38 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
           })()}
         </View>
 
-        {/* ---------------- Comments ---------------- */}
-        <View style={styles.commentsBox}>
-          <Text style={styles.commentsLabel}>Comments</Text>
-          {job.comments ? <Text>{job.comments}</Text> : null}
-          {/* Payments — iterate every sales_payments row so multi-mode
-              ("$100 cash + $50 Visa") shows up correctly. Fall back to the
-              legacy single line when the ledger is empty but paid_amount > 0,
-              which happens on imported / pre-multipay jobs. */}
-          {job.payments && job.payments.length > 0 ? (
-            <View style={{ marginTop: job.comments ? 3 : 0 }}>
-              {job.payments.map((p, idx) => (
-                <Text key={p.id ?? idx}>
-                  Payment of ${money(p.amount)} by {labelForMode(p.mode)}
+        {/* ---------------- Footer: comments + signature | totals ---------------- */}
+        <View style={styles.footerRow} wrap={false}>
+          <View style={styles.disclaimerCol}>
+            <View style={styles.commentsBox}>
+              <Text style={styles.commentsLabel}>Comments</Text>
+              {job.comments ? <Text>{job.comments}</Text> : null}
+              {/* The vehicle's "Printed comments (Invoice)" print on every invoice
+                  for that truck (client 2026-10-20). */}
+              {job.vehicle_printed_comments ? (
+                <Text style={{ marginTop: job.comments ? 3 : 0 }}>{job.vehicle_printed_comments}</Text>
+              ) : null}
+              {/* Payments — iterate every sales_payments row so multi-mode
+                  ("$100 cash + $50 Visa") shows up correctly. Fall back to the
+                  legacy single line when the ledger is empty but paid_amount > 0,
+                  which happens on imported / pre-multipay jobs. */}
+              {job.payments && job.payments.length > 0 ? (
+                <View style={{ marginTop: job.comments ? 3 : 0 }}>
+                  {job.payments.map((p, idx) => (
+                    <Text key={p.id ?? idx}>
+                      Payment of ${money(p.amount)} by {labelForMode(p.mode)}
+                      {job.invoice_no ? `, inv#${job.invoice_no}` : ""} — Received with thanks
+                    </Text>
+                  ))}
+                </View>
+              ) : job.paid_amount > 0 ? (
+                <Text style={{ marginTop: job.comments ? 3 : 0 }}>
+                  Payment of ${money(job.paid_amount)}
+                  {job.payment_mode ? ` by ${labelForMode(job.payment_mode)}` : ""}
                   {job.invoice_no ? `, inv#${job.invoice_no}` : ""} — Received with thanks
                 </Text>
-              ))}
+              ) : null}
             </View>
-          ) : job.paid_amount > 0 ? (
-            <Text style={{ marginTop: job.comments ? 3 : 0 }}>
-              Payment of ${money(job.paid_amount)}
-              {job.payment_mode ? ` by ${labelForMode(job.payment_mode)}` : ""}
-              {job.invoice_no ? `, inv#${job.invoice_no}` : ""} — Received with thanks
-            </Text>
-          ) : null}
-        </View>
-
-        {/* ---------------- Footer (disclaimer + totals) ---------------- */}
-        <View style={styles.footerRow}>
-          <View style={styles.disclaimerCol}>
-            <Text style={styles.disclaimerText}>{DISCLAIMER}</Text>
             <Text style={styles.signatureLine}>CUSTOMER&apos;S SIGNATURE</Text>
             <Text style={styles.printedAt}>Printed on {nowStamp()}</Text>
           </View>
@@ -618,6 +646,9 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
             )}
           </View>
         </View>
+
+        {/* ---------------- Fine print ---------------- */}
+        <Text style={styles.finePrint} wrap={false}>{DISCLAIMER}</Text>
       </Page>
     </Document>
   );
