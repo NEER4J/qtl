@@ -208,7 +208,7 @@ export default async function OilDetailPage({
           Priced by the <strong className="text-foreground">{data.price_group.name}</strong> oil
           group:{" "}
           {data.price_group.anchor == null ? (
-            <>Selling is the Computed price at the group&apos;s rate, the same for every grade in the group.</>
+            <>Selling is the price at the group&apos;s rate, the same for every grade in the group. Cost, Computed and profit are this grade&apos;s own.</>
           ) : data.price_group.anchor.code === data.oil_type.code ? (
             <>
               this is the group&apos;s highest-cost grade, so its Computed price is the Selling for
@@ -223,7 +223,7 @@ export default async function OilDetailPage({
               >
                 {data.price_group.anchor.name}
               </Link>{" "}
-              — the same price on every engine.
+              . Cost, Computed and profit are this grade&apos;s own, so they differ from it.
             </>
           )}{" "}
           <Link href="/settings/pricing/oil-groups" className="underline">Edit oil groups</Link>.

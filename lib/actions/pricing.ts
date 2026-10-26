@@ -1089,9 +1089,13 @@ export async function getOilDetail(
           .sort((a, b) => b.rate - a.rate || a.oil.name.localeCompare(b.oil.name))[0]?.oil ?? null
       : null;
   const tierOilId = anchorOil?.id ?? oilType.id;
-  const perLitre = groupPerLitre ?? (container === "gallon"
+  // What this grade actually costs us. Only the SELLING price follows the
+  // group; cost, Computed and profit stay this grade's own, so the page shows
+  // which brand makes how much (client 2026-10-26 — "computerized prices stay
+  // separate, their cost is different, or how do we know the profit?").
+  const ownPerLitre = container === "gallon"
     ? (Number.isFinite(lpg) && lpg > 0 ? Number(oilType.gallon_cost_per_litre) / lpg : NaN)
-    : Number(oilType.bulk_cost_per_litre));
+    : Number(oilType.bulk_cost_per_litre);
 
   // One row per engine, or per filter option: `e` is the engine as that row
   // prices it (the option's name, capacity and package), `row.key` what its
@@ -1122,8 +1126,11 @@ export async function getOilDetail(
     const extras = match.extras;
     const fuelCost = extras?.fuel ?? 0;
     const greaseCost = extras?.grease ?? 0;
-    const tier = tierFor(tierOilId, cap);
-    const oilCost = Number.isFinite(perLitre) ? perLitre * cap : 0;
+    // The tier this grade would charge on its own, and the one the group's
+    // selling price carries (the dearest grade's, in highest-cost mode).
+    const ownTier = tierFor(oilType.id, cap);
+    const tier = groupPriced ? tierFor(tierOilId, cap) : ownTier;
+    const oilCost = Number.isFinite(ownPerLitre) ? ownPerLitre * cap : 0;
     // Cost = filter + oil + fuel + grease: what the job actually consumes,
     // mirroring the Excel tabs where the combined "Fuel / Grease" column sits
     // inside cost. Labour and the volume tier premium are CHARGES — nothing is
@@ -1135,7 +1142,7 @@ export async function getOilDetail(
     // Adding fuel and grease to the cost therefore raises this basis by the
     // same $6-$10 — that is the point: a proposed price that didn't cover them
     // was short. Engines with a manual anchor (most of them) are untouched.
-    const sellBasis = totalCost + tier + serviceCost;
+    const sellBasis = totalCost + ownTier + serviceCost;
     // A live lock wins over everything (mirrors public.oil_change_price), then
     // the manual override, then cost-up. round99 returns null when the result
     // isn't positive so we don't render "-$0.01" for empty oils.
@@ -1145,11 +1152,18 @@ export async function getOilDetail(
     // is nothing to price against, so the column shows "—" rather than $0.00.
     const computedSelling =
       Number.isFinite(sellBasis) && sellBasis > 0 ? Math.round(sellBasis * 100) / 100 : null;
+    // The group's price: the same job with the oil at the group's rate — in
+    // highest-cost mode, the dearest grade's Computed price.
+    const groupBasis = groupPerLitre != null
+      ? filterCost + groupPerLitre * cap + fuelCost + greaseCost + tier + serviceCost
+      : NaN;
+    const groupSelling =
+      Number.isFinite(groupBasis) && groupBasis > 0 ? Math.round(groupBasis * 100) / 100 : null;
     const liveSelling = groupPriced
-      ? computedSelling
+      ? groupSelling
       : override
         ? override.price
-        : Number.isFinite(perLitre) && perLitre > 0
+        : Number.isFinite(ownPerLitre) && ownPerLitre > 0
           ? round99(sellBasis)
           : null;
     const selling = lockedPrice ?? liveSelling;

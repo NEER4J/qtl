@@ -838,11 +838,10 @@ export function SalesJobForm({
           setSelectedCustomer(c);
           // In create mode the form's billing/contact fields default to "" —
           // populate them from the customer so the user doesn't have to retype.
-          if (mode === "create") {
-            form.setValue("billing_name", c.billing_name ?? c.last_or_company ?? "");
-            form.setValue("contact_no", c.phone_cell ?? c.contact_no ?? "");
-            form.setValue("email", c.email ?? "");
-          }
+          // The address too: it used to be skipped here, so jobs started from
+          // a customer page or "Save & add new job" printed with no address
+          // (client 2026-10-26).
+          if (mode === "create") fillFromCustomer(c);
         }
         setCustomerVehicles(vs);
         // Auto-select the vehicle: an explicit vehicle_id wins; otherwise in
@@ -910,6 +909,26 @@ export function SalesJobForm({
     );
   };
 
+  /** Copy the customer's billing details onto the job. */
+  const fillFromCustomer = (c: Customer) => {
+    form.setValue("billing_name", c.billing_name ?? c.last_or_company ?? "");
+    form.setValue("contact_no", formatPhone(c.phone_cell ?? c.contact_no));
+    form.setValue("email", c.email ?? "");
+    // Billing address (item #3 — billing options live on customer)
+    const addr = [
+      c.address_1,
+      c.address_2,
+      [c.city, c.province].filter(Boolean).join(", "),
+      c.postal_code,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    form.setValue("billing_address", addr);
+    form.setValue("business_phone", formatPhone(c.phone_business));
+    form.setValue("alt_phone", formatPhone(c.phone_alt_1 ?? c.phone_home));
+    if (c.default_pay_method) form.setValue("payment_mode", c.default_pay_method);
+  };
+
   const applyCustomer = async (pick: CustomerPick) => {
     setAddingNewCustomer(false);
     form.setValue("customer_id", pick.id);
@@ -937,28 +956,7 @@ export function SalesJobForm({
     }
 
     setSelectedCustomer(c);
-    form.setValue(
-      "billing_name",
-      c.billing_name ?? c.last_or_company ?? "",
-    );
-    form.setValue("contact_no", formatPhone(c.phone_cell ?? c.contact_no));
-    form.setValue("email", c.email ?? "");
-
-    // Pull billing address (item #3 — billing options live on customer)
-    const addr = [
-      c.address_1,
-      c.address_2,
-      [c.city, c.province].filter(Boolean).join(", "),
-      c.postal_code,
-    ]
-      .filter(Boolean)
-      .join("\n");
-    form.setValue("billing_address", addr);
-    form.setValue("business_phone", formatPhone(c.phone_business));
-    form.setValue("alt_phone", formatPhone(c.phone_alt_1 ?? c.phone_home));
-
-    // Pull default pay method
-    if (c.default_pay_method) form.setValue("payment_mode", c.default_pay_method);
+    fillFromCustomer(c);
 
     // Free grease starts unticked — staff tick it when the customer takes it.
     form.setValue("free_grease_applied", false);
