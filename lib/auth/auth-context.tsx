@@ -69,9 +69,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session: Session | null) => {
-      await loadProfile(session?.user ?? null)
-      setLoading(false)
+    } = supabase.auth.onAuthStateChange((_event, session: Session | null) => {
+      // Never await Supabase calls in here. This callback runs while the auth
+      // client holds its internal lock, and loadProfile() queries the database,
+      // which needs that same lock — so with a stored session the whole client
+      // (sign-in included) hung forever, and only clearing cookies got the
+      // login screen working again. Defer the work until the lock is released.
+      setTimeout(() => {
+        void loadProfile(session?.user ?? null).finally(() => setLoading(false))
+      }, 0)
     })
 
     return () => subscription.unsubscribe()

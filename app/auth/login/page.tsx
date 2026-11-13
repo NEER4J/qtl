@@ -3,6 +3,7 @@ import { Globe } from "lucide-react";
 import { APP_CONFIG } from "@/config/app-config";
 
 import { LoginForm } from "@/components/auth/login-form";
+import { ResetSessionButton } from "@/components/auth/reset-session-button";
 
 export default function LoginV2() {
   return (
@@ -15,6 +16,7 @@ export default function LoginV2() {
         <div className="space-y-4">
           <LoginForm />
         </div>
+        <ResetSessionButton />
       </div>
 
       <div className="absolute bottom-5 flex w-full justify-between px-10">

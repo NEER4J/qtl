@@ -12,8 +12,10 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - auth/reset (clears the visitor's cookies; must work even when their
+     *   session cookie is the thing that's broken)
      * - images - .svg, .png, .jpg, .jpeg, .gif, .webp
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|auth/reset|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

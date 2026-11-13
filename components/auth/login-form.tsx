@@ -40,8 +40,22 @@ export function LoginForm() {
   const onSubmit = async (data: z.infer<typeof FormSchema>) => {
     setIsLoading(true);
 
-    const { error } = await signIn(data.identifier, data.password);
-    
+    // Never let the button spin forever: if the auth client is wedged (stale
+    // session), give up after a while and point at the reset link.
+    const { error } = await Promise.race([
+      signIn(data.identifier, data.password),
+      new Promise<{ error: string }>((resolve) =>
+        setTimeout(
+          () =>
+            resolve({
+              error:
+                "Sign-in is taking too long. Use \"Trouble signing in? Reset\" below the form, then try again.",
+            }),
+          20_000,
+        ),
+      ),
+    ]);
+
     if (error) {
       toast.error("Login failed", {
         description: error,
