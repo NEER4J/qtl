@@ -4,7 +4,7 @@ import { requireProfile } from "@/lib/auth/require";
 import { canChooseLocation } from "@/lib/auth/locations";
 import { isPageAllowed } from "@/lib/permissions/check";
 import { pageKeyForRequestPath } from "@/lib/permissions/registry";
-import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { csvResponse, toReportCsv } from "@/lib/utils/csv";
 import { formatTime } from "@/lib/utils/format";
 import { paymentModeLabel } from "@/lib/utils/payment-modes";
 import { ISO_DATE_RE, todayISO } from "@/lib/utils/tz";
@@ -52,7 +52,7 @@ export async function GET(req: Request) {
   sections.push("");
   sections.push("## Summary");
   sections.push(
-    toCsv(
+    toReportCsv(
       [
         { item: "Jobs", value: t.job_count },
         { item: "Sub total", value: money(t.sub_total) },
@@ -72,7 +72,7 @@ export async function GET(req: Request) {
 
   sections.push("## By payment method");
   sections.push(
-    toCsv(
+    toReportCsv(
       report.by_payment_method.map((m) => ({
         method: m.mode ? paymentModeLabel(m.mode) : "Not recorded",
         todays_jobs: m.jobs_count,
@@ -87,7 +87,7 @@ export async function GET(req: Request) {
 
   sections.push("## Jobs");
   sections.push(
-    toCsv(
+    toReportCsv(
       jobs.map((j) => ({
         time: j.start_time?.slice(0, 5) ?? "",
         invoice_no: j.invoice_no,
@@ -144,7 +144,7 @@ export async function GET(req: Request) {
 
   sections.push("## Payments received");
   sections.push(
-    toCsv(
+    toReportCsv(
       report.payments_received.map((p) => ({
         paid_on: p.paid_on,
         entered_at: p.created_at ? formatTime(p.created_at) : "",
@@ -177,7 +177,7 @@ export async function GET(req: Request) {
 
   sections.push("## Parts used");
   sections.push(
-    toCsv(
+    toReportCsv(
       report.parts_used.map((p) => ({
         part_number: p.part_number ?? "",
         brand: p.brand ?? "",

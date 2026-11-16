@@ -49,7 +49,7 @@ export default async function PrintListPage() {
             you the same table as a spreadsheet file.
           </p>
           <ul>
-            <li>Every price ends in .99 and is the active sell price (manual override if set, otherwise cost-up).</li>
+            <li>Every price is the same one the Oil Detail page shows and a sale charges: a live price lock or manual price if set, otherwise the calculated price.</li>
             <li><strong>Gallon</strong> column is shown for every oil. <strong>Bulk</strong> column is shown for synthetic oils (T6, Delo 5W30, Petro 5W30).</li>
             <li>The three reference bulk columns at the end (15W40, 10W30, Delo 5W30) let staff quickly compare against the base 15W40 price.</li>
             <li>Update the effective date and prices from{" "}

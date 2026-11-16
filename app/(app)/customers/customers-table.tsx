@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Download, GitMerge, History, Loader2, Pencil, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -169,11 +170,30 @@ export function CustomersTable({
                   <TableCell>
                     {c.plates.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
-                        {c.plates.map((p) => (
-                          <Badge key={p} variant="outline" className="font-mono text-xs">
-                            {p}
-                          </Badge>
-                        ))}
+                        {c.plates.map((p) => {
+                          const vid = c.plateVehicleIds[p];
+                          // A plate that is a vehicle opens that vehicle's history
+                          // (client 2026-11-02); legacy-only plates have no page.
+                          return vid ? (
+                            <Link
+                              key={p}
+                              href={`/customers/${c.id}/vehicles/${vid}/history`}
+                              title={`Open ${p}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Badge
+                                variant="outline"
+                                className="cursor-pointer font-mono text-xs hover:bg-accent"
+                              >
+                                {p}
+                              </Badge>
+                            </Link>
+                          ) : (
+                            <Badge key={p} variant="outline" className="font-mono text-xs">
+                              {p}
+                            </Badge>
+                          );
+                        })}
                       </div>
                     ) : (
                       <span className="text-muted-foreground">—</span>

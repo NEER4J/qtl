@@ -5,6 +5,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Download, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useDateCommit } from "@/hooks/use-date-commit";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -50,6 +51,11 @@ export function AnalyticsFilters({
     [params, pathname, router],
   );
 
+  // The date boxes commit on change, not blur: picking a date from the calendar
+  // never blurs the box, so a "To" picked that way showed in the box but never
+  // reached the URL and the report ran up to today (client 2026-11-03).
+  const setDateField = useDateCommit(setField);
+
   const clearAll = () => startTransition(() => router.push(pathname));
   const hasFilters = Array.from(params.keys()).length > 0;
 
@@ -65,7 +71,7 @@ export function AnalyticsFilters({
           type="date"
           className="h-9 w-[150px]"
           defaultValue={params.get("from") ?? ""}
-          onBlur={(e) => setField("from", e.target.value)}
+          onChange={(e) => setDateField("from", e.target.value)}
         />
       </div>
       <div className="space-y-1">
@@ -74,7 +80,7 @@ export function AnalyticsFilters({
           type="date"
           className="h-9 w-[150px]"
           defaultValue={params.get("to") ?? ""}
-          onBlur={(e) => setField("to", e.target.value)}
+          onChange={(e) => setDateField("to", e.target.value)}
         />
       </div>
 

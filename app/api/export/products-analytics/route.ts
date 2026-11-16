@@ -1,5 +1,5 @@
 import { getProductsAnalytics } from "@/lib/actions/analytics";
-import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { csvResponse, toReportCsv } from "@/lib/utils/csv";
 import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
@@ -19,19 +19,19 @@ export async function GET(req: Request) {
   sections.push(`Highest revenue,${data.highest_revenue ?? ""}\n`);
 
   sections.push(`## By count`);
-  sections.push(toCsv(data.by_count as unknown as Record<string, unknown>[], ["code", "name", "count"]));
+  sections.push(toReportCsv(data.by_count as unknown as Record<string, unknown>[], ["code", "name", "count"]));
   sections.push("");
 
   sections.push(`## By revenue`);
-  sections.push(toCsv(data.by_revenue as unknown as Record<string, unknown>[], ["code", "name", "total"]));
+  sections.push(toReportCsv(data.by_revenue as unknown as Record<string, unknown>[], ["code", "name", "total"]));
   sections.push("");
 
   sections.push(`## Per location`);
-  sections.push(toCsv(data.by_location as unknown as Record<string, unknown>[], ["name", "code", "count"]));
+  sections.push(toReportCsv(data.by_location as unknown as Record<string, unknown>[], ["name", "code", "count"]));
   sections.push("");
 
   sections.push(`## Monthly trend`);
-  sections.push(toCsv(data.trend as unknown as Record<string, unknown>[], Object.keys(data.trend[0] ?? { month: "" })));
+  sections.push(toReportCsv(data.trend as unknown as Record<string, unknown>[], Object.keys(data.trend[0] ?? { month: "" })));
 
   return csvResponse(`products-analytics-${todayISO()}.csv`, sections.join("\n"));
 }

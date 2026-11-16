@@ -2,7 +2,7 @@ import { getCustomerStatement } from "@/lib/actions/reports";
 import { requireProfile } from "@/lib/auth/require";
 import { isPageAllowed } from "@/lib/permissions/check";
 import { pageKeyForRequestPath } from "@/lib/permissions/registry";
-import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { csvResponse, toReportCsv } from "@/lib/utils/csv";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +35,7 @@ export async function GET(req: Request) {
   sections.push(`Total outstanding,${data.total_outstanding.toFixed(2)}\n`);
 
   sections.push(`## Invoices`);
-  sections.push(toCsv(data.rows as unknown as Record<string, unknown>[], ["job_date", "invoice_no", "total", "paid_amount", "outstanding", "payment_status"]));
+  sections.push(toReportCsv(data.rows as unknown as Record<string, unknown>[], ["job_date", "invoice_no", "total", "paid_amount", "outstanding", "payment_status"]));
 
   const safeName = data.customer_name.replace(/[^A-Za-z0-9-_]/g, "_");
   return csvResponse(`customer-statement-${safeName}.csv`, sections.join("\n"));

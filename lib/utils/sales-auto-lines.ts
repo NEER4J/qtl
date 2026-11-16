@@ -7,6 +7,9 @@
 //     only greasing: no oil, filters, fuel or Trans & Diff. Not charged on a
 //     free-grease redemption.
 //
+// The tier of an oil change's oil is priced on the engine's capacity at most
+// (tierCaps), so selling extra oil never moves it (client 2026-11-03).
+//
 // Rules shared by both:
 //   * the form reconciles only when staff change the lines (or the free-grease
 //     tick) — never just because a job was opened, so old invoices don't move;
@@ -46,6 +49,12 @@ export interface AutoLineItem {
 export interface AutoLineContext {
   oilTypes: readonly { id: string; name: string; litres_per_gallon: number }[];
   tiers: readonly VolumeTierRow[];
+  /**
+   * Litres an oil's tier is never priced above: the engine's capacity, for the
+   * oil of an oil change. Extra oil (or a gallon count rounded up past the
+   * capacity) must not move the tier — the price list prices it at capacity.
+   */
+  tierCaps?: ReadonlyMap<string, number>;
   /** app_settings.grease_only_fee; 0 turns the fee off. */
   greaseOnlyFee: number;
   freeGreaseApplied: boolean;
@@ -68,6 +77,7 @@ const fmtLitres = (n: number) => `${Number(n.toFixed(2))} L`;
 export function oilLitresByType(
   items: readonly AutoLineItem[],
   oilTypes: AutoLineContext["oilTypes"],
+  caps?: AutoLineContext["tierCaps"],
 ): Map<string, number> {
   const out = new Map<string, number>();
   for (const it of items) {
@@ -83,17 +93,23 @@ export function oilLitresByType(
     }
     out.set(it.oil_type_id, (out.get(it.oil_type_id) ?? 0) + litres);
   }
+  if (caps) {
+    for (const [oilTypeId, litres] of out) {
+      const cap = Number(caps.get(oilTypeId));
+      if (cap > 0 && litres > cap) out.set(oilTypeId, cap);
+    }
+  }
   return out;
 }
 
 /** The premium line this job should carry, or null when no oil reaches a tier. */
 export function tierPremiumFor(
   items: readonly AutoLineItem[],
-  ctx: Pick<AutoLineContext, "oilTypes" | "tiers">,
+  ctx: Pick<AutoLineContext, "oilTypes" | "tiers" | "tierCaps">,
 ): { amount: number; description: string } | null {
   const parts: string[] = [];
   let amount = 0;
-  for (const [oilTypeId, litres] of oilLitresByType(items, ctx.oilTypes)) {
+  for (const [oilTypeId, litres] of oilLitresByType(items, ctx.oilTypes, ctx.tierCaps)) {
     const tier = volumeTierFor(ctx.tiers, oilTypeId, litres);
     const premium = Number(tier?.premium ?? 0) || 0;
     if (!tier || premium <= 0) continue;

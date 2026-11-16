@@ -137,6 +137,8 @@ export interface CustomerListRow extends Customer {
    * one alone would hide plates that are genuinely on file.
    */
   plates: string[];
+  /** Plate -> vehicle id, for the plates that are vehicle rows (not legacy-only). */
+  plateVehicleIds: Record<string, string>;
 }
 
 export interface ListCustomersResult {
@@ -158,7 +160,7 @@ const PLATE_MATCH_CAP = 500;
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
 
 type JoinedRow = Customer & {
-  vehicles: { license_plate: string | null }[] | null;
+  vehicles: { id: string; license_plate: string | null }[] | null;
 };
 
 // Plate search has to go through vehicles: that is where plates added from
@@ -199,7 +201,7 @@ function buildCustomersQuery(
     // the page's plates — the database is far enough away that the extra hop
     // is worth avoiding. No `!inner`, so customers with no vehicles are
     // kept; the deactivated_at filter prunes the embedded rows only.
-    .select("*, vehicles(license_plate)", { count: "exact" })
+    .select("*, vehicles(id, license_plate)", { count: "exact" })
     .is("vehicles.deactivated_at", null)
     .order("billing_name")
     .range(opts.from, opts.to);
@@ -229,7 +231,11 @@ function mergePlates(data: unknown): CustomerListRow[] {
     const plates = Array.from(
       new Set([...fromVehicles, ...(rest.license_plates ?? [])]),
     ).sort();
-    return { ...(rest as Customer), plates };
+    const plateVehicleIds: Record<string, string> = {};
+    for (const v of vehicles ?? []) {
+      if (v.license_plate && !plateVehicleIds[v.license_plate]) plateVehicleIds[v.license_plate] = v.id;
+    }
+    return { ...(rest as Customer), plates, plateVehicleIds };
   });
 }
 

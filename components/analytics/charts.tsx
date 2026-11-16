@@ -29,6 +29,14 @@ export const CHART_COLORS = [
   "hsl(320 55% 55%)",
 ];
 
+// Anything that isn't money (minutes, counts, averages) shows at most 2
+// decimals in tooltips and on the axes (client 2026-11-03).
+function fmtNum(n: unknown): string | number {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return String(n);
+  return Math.round((x + Number.EPSILON) * 100) / 100;
+}
+
 function fmtMoney(n: number): string {
   return new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(n);
 }
@@ -51,8 +59,8 @@ export function SimpleLine({
       <LineChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
         <XAxis dataKey={xKey} tick={{ fontSize: 11 }} />
-        <YAxis tick={{ fontSize: 11 }} tickFormatter={money ? (v) => fmtMoney(Number(v)) : undefined} />
-        <Tooltip formatter={money ? (v) => fmtMoney(Number(v)) : undefined} />
+        <YAxis tick={{ fontSize: 11 }} tickFormatter={money ? (v) => fmtMoney(Number(v)) : (v) => String(fmtNum(v))} />
+        <Tooltip formatter={money ? (v) => fmtMoney(Number(v)) : (v) => fmtNum(v)} />
         <Line type="monotone" dataKey={yKey} stroke={CHART_COLORS[0]} strokeWidth={2} dot={false} />
       </LineChart>
     </ResponsiveContainer>
@@ -76,8 +84,8 @@ export function SimpleArea({
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
         <XAxis dataKey={xKey} tick={{ fontSize: 11 }} />
-        <YAxis tick={{ fontSize: 11 }} tickFormatter={money ? (v) => fmtMoney(Number(v)) : undefined} />
-        <Tooltip formatter={money ? (v) => fmtMoney(Number(v)) : undefined} />
+        <YAxis tick={{ fontSize: 11 }} tickFormatter={money ? (v) => fmtMoney(Number(v)) : (v) => String(fmtNum(v))} />
+        <Tooltip formatter={money ? (v) => fmtMoney(Number(v)) : (v) => fmtNum(v)} />
         <Area type="monotone" dataKey={yKey} stroke={CHART_COLORS[0]} fill="url(#fillPrimary)" />
       </AreaChart>
     </ResponsiveContainer>
@@ -96,16 +104,16 @@ export function SimpleBar({
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
         {horizontal ? (
           <>
-            <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={money ? (v) => fmtMoney(Number(v)) : undefined} />
+            <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={money ? (v) => fmtMoney(Number(v)) : (v) => String(fmtNum(v))} />
             <YAxis type="category" dataKey={xKey} tick={{ fontSize: 11 }} width={130} />
           </>
         ) : (
           <>
             <XAxis dataKey={xKey} tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} tickFormatter={money ? (v) => fmtMoney(Number(v)) : undefined} />
+            <YAxis tick={{ fontSize: 11 }} tickFormatter={money ? (v) => fmtMoney(Number(v)) : (v) => String(fmtNum(v))} />
           </>
         )}
-        <Tooltip formatter={money ? (v) => fmtMoney(Number(v)) : undefined} />
+        <Tooltip formatter={money ? (v) => fmtMoney(Number(v)) : (v) => fmtNum(v)} />
         <Bar dataKey={yKey} fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
@@ -135,7 +143,7 @@ export function SimplePie({
             <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
           ))}
         </Pie>
-        <Tooltip formatter={money ? (v) => fmtMoney(Number(v)) : undefined} />
+        <Tooltip formatter={money ? (v) => fmtMoney(Number(v)) : (v) => fmtNum(v)} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
       </PieChart>
     </ResponsiveContainer>
@@ -160,7 +168,7 @@ export function MultiLine({
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
         <XAxis dataKey={xKey} tick={{ fontSize: 11 }} />
         <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-        <Tooltip />
+        <Tooltip formatter={(v) => fmtNum(v)} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
         {keys.map((k, i) => (
           <Line
@@ -189,8 +197,8 @@ export function StackedBar({
       <BarChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
         <XAxis dataKey={xKey} tick={{ fontSize: 11 }} />
-        <YAxis tick={{ fontSize: 11 }} tickFormatter={money ? (v) => fmtMoney(Number(v)) : undefined} />
-        <Tooltip formatter={money ? (v) => fmtMoney(Number(v)) : undefined} />
+        <YAxis tick={{ fontSize: 11 }} tickFormatter={money ? (v) => fmtMoney(Number(v)) : (v) => String(fmtNum(v))} />
+        <Tooltip formatter={money ? (v) => fmtMoney(Number(v)) : (v) => fmtNum(v)} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
         {keys.map((k, i) => (
           <Bar key={k} dataKey={k} stackId="a" fill={CHART_COLORS[i % CHART_COLORS.length]} />

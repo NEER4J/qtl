@@ -1,5 +1,5 @@
 import { getVendorStatement } from "@/lib/actions/reports";
-import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { csvResponse, toReportCsv } from "@/lib/utils/csv";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,7 @@ export async function GET(req: Request) {
   sections.push(`Total outstanding,${data.total_outstanding.toFixed(2)}\n`);
 
   sections.push(`## Expenses`);
-  sections.push(toCsv(data.rows as unknown as Record<string, unknown>[], ["expense_date", "invoice_no", "total", "paid_amount", "balance", "payment_status"]));
+  sections.push(toReportCsv(data.rows as unknown as Record<string, unknown>[], ["expense_date", "invoice_no", "total", "paid_amount", "balance", "payment_status"]));
 
   const safeName = data.vendor_name.replace(/[^A-Za-z0-9-_]/g, "_");
   return csvResponse(`vendor-statement-${safeName}.csv`, sections.join("\n"));

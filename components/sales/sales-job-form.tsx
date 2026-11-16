@@ -436,6 +436,7 @@ export function SalesJobForm({
     (waived: AutoFeeWaivers, freeGrease: boolean): AutoLineContext => ({
       oilTypes,
       tiers: volumeTiers,
+      tierCaps: tierCapsRef.current,
       greaseOnlyFee,
       freeGreaseApplied: freeGrease,
       waived,
@@ -447,6 +448,10 @@ export function SalesJobForm({
   // The oil change's extra-oil rule, set further down once the engine and oil
   // picks are read; a ref so the handler below always sees the current one.
   const extraOilRuleRef = useRef<ExtraOilRule | null>(null);
+  // Litres the oil change's tier is capped at (the engine's capacity), set
+  // below with the rule. Independent of the retail price: with none set there
+  // is no extra-oil line, and the tier must still stay on the capacity.
+  const tierCapsRef = useRef<ReadonlyMap<string, number> | undefined>(undefined);
   // A quantity box is mid-edit: extra oil is settled when it loses focus.
   const splitPendingRef = useRef(false);
 
@@ -641,6 +646,15 @@ export function SalesJobForm({
     };
   }, [isOilChange, engineTypeId, engineOptionId, oilTypeId, oilContainer, engineTypes, oilTypes, oilGroups, filterOptions, ocPicksAsSaved, savedWithExtraOil]);
   extraOilRuleRef.current = extraOilRule;
+  tierCapsRef.current = useMemo(() => {
+    if (!isOilChange || !engineTypeId || !oilTypeId) return undefined;
+    // A job saved before the rule keeps its tier until its oil-change picks change.
+    if (ocPicksAsSaved && !savedWithExtraOil) return undefined;
+    const engine = engineTypes.find((e) => e.id === engineTypeId);
+    const option = filterOptions.find((o) => o.id === engineOptionId);
+    const capacity = Number(option?.oil_capacity_litres ?? engine?.oil_capacity_litres) || 0;
+    return capacity > 0 ? new Map([[oilTypeId, capacity]]) : undefined;
+  }, [isOilChange, engineTypeId, engineOptionId, oilTypeId, engineTypes, filterOptions, ocPicksAsSaved, savedWithExtraOil]);
 
   // A filter picked for one engine means nothing on another.
   useEffect(() => {
@@ -965,7 +979,13 @@ export function SalesJobForm({
 
     // Vehicles for the picker
     setCustomerVehicles(ctx.vehicles);
-    if (ctx.vehicles.length === 1) applyVehicle(ctx.vehicles[0]);
+    // A plate row in the picker names the truck; otherwise a lone vehicle.
+    const norm = (p: string | null | undefined) => (p ?? "").replace(/[\s-]/g, "").toUpperCase();
+    const byPlate = pick.plate
+      ? ctx.vehicles.find((v) => norm(v.license_plate) === norm(pick.plate))
+      : undefined;
+    if (byPlate) applyVehicle(byPlate);
+    else if (ctx.vehicles.length === 1) applyVehicle(ctx.vehicles[0]);
   };
 
   const clearCustomer = () => {

@@ -433,202 +433,32 @@ export async function getOilChangeGrid(): Promise<{
 }> {
   const supabase = await createClient();
 
-  // Mirrors public.oil_change_price(): one batched read per table instead of
-  // engines×oil_types×containers RPCs (the prior approach overwhelmed the
-  // request pipeline and surfaced as RangeError on this page).
-  const [
-    enginesRes,
-    oilTypesRes,
-    filtersRes,
-    tiersRes,
-    overrideRows,
-    settingsRes,
-    locksRes,
-    filterOptions,
-  ] =
-    await Promise.all([
-      supabase
-        .from("engine_types")
-        .select("*")
-        .eq("active", true)
-        .order("manufacturer")
-        .order("model"),
-      supabase
-        .from("oil_types")
-        .select("*")
-        .eq("active", true)
-        .eq("is_engine_oil", true)
-        .order("name"),
-      // `*` so engine_option_id comes along once migration 0150 adds it.
-      supabase
-        .from("engine_filters")
-        .select("*, parts:part_id(cost, mhsw_fee, service_costs:service_cost_id(cost))"),
-      supabase.from("volume_tiers").select("oil_type_id, min_litres, premium"),
-      // ~1,400 rows and growing — past the 1000-row REST cap, which .limit()
-      // can't lift. Page through them (see fetchAllRows).
-      fetchAllRows((from, to) =>
-        supabase.from("engine_sell_prices").select("*").order("id").range(from, to),
-      ),
-      supabase.from("app_settings").select("hst_rate").eq("id", 1).single(),
-      // Live price locks (oil-detail page). A locked price beats the override
-      // here exactly as it does in public.oil_change_price().
-      supabase
-        .from("oil_price_locks")
-        .select("oil_type_id, container, lock_until, oil_price_lock_items(*)"),
-      loadEngineFilterOptions(supabase),
-    ]);
-
-  if (enginesRes.error) throw enginesRes.error;
-  if (oilTypesRes.error) throw oilTypesRes.error;
-  if (filtersRes.error) throw filtersRes.error;
-  if (tiersRes.error) throw tiersRes.error;
-  // Migration 0122 not applied yet → no locks exist, so carry on without them.
-  if (locksRes.error && !isMissingRelation(locksRes.error)) throw locksRes.error;
+  // Priced by the same code as Oil detail (loadOilPricingData / priceOilRows):
+  // package labour and filters, the oil group's rate, tier premium, manual
+  // prices and live locks. That is what a sale charges, so the grid and the
+  // print list show it too. They used to run a cost-up formula of their own
+  // that ignored groups and packages (client 2026-11-02).
+  const [data, settingsRes] = await Promise.all([
+    loadOilPricingData(supabase),
+    supabase.from("app_settings").select("hst_rate").eq("id", 1).single(),
+  ]);
   const hstRate = Number(settingsRes.data?.hst_rate ?? 0.13);
 
-  // Everything below is keyed by ROW (engineRowKey): the filter option where
-  // the engine has them, the engine itself where it doesn't.
-  // "row|oil|container" -> locked_price, live locks only.
-  type LockGridRow = {
-    oil_type_id: string;
-    container: "bulk" | "gallon";
-    lock_until: string;
-    oil_price_lock_items:
-      | { engine_type_id: string; engine_option_id?: string | null; locked_price: number }[]
-      | null;
-  };
-  const lockedMap = new Map<string, number>();
-  for (const l of (locksRes.data ?? []) as unknown as LockGridRow[]) {
-    if (!isLockDateLive(l.lock_until)) continue;
-    for (const li of l.oil_price_lock_items ?? []) {
-      lockedMap.set(
-        `${engineRowKey(li.engine_type_id, li.engine_option_id)}|${l.oil_type_id}|${l.container}`,
-        Number(li.locked_price),
-      );
-    }
-  }
-
-  // Build override lookup: "row|oil|container" -> sell_price
-  type OverrideRow = {
-    engine_type_id: string;
-    engine_option_id?: string | null;
-    oil_type_id: string;
-    container: "bulk" | "gallon";
-    sell_price: number;
-  };
-  const overrideMap = new Map<string, number>();
-  for (const o of overrideRows as OverrideRow[]) {
-    overrideMap.set(
-      `${engineRowKey(o.engine_type_id, o.engine_option_id)}|${o.oil_type_id}|${o.container}`,
-      Number(o.sell_price),
-    );
-  }
-
-  const rows = expandEngineRows((enginesRes.data ?? []) as EngineType[], filterOptions);
-  const oilTypes = (oilTypesRes.data ?? []) as OilType[];
-
-  type FilterRow = {
-    engine_type_id: string;
-    engine_option_id?: string | null;
-    quantity: number;
-    parts: {
-      cost: number;
-      mhsw_fee: number;
-      service_costs: { cost: number } | null;
-    } | null;
-  };
-  const enginePartCost = new Map<string, number>();
-  const engineServiceCost = new Map<string, number>();
-  for (const f of (filtersRes.data ?? []) as unknown as FilterRow[]) {
-    if (!f.parts) continue;
-    const qty = Number(f.quantity) || 0;
-    const partCost = (Number(f.parts.cost) + Number(f.parts.mhsw_fee)) * qty;
-    const svcCost = Number(f.parts.service_costs?.cost ?? 0) * qty;
-    const key = engineRowKey(f.engine_type_id, f.engine_option_id);
-    enginePartCost.set(key, (enginePartCost.get(key) ?? 0) + partCost);
-    engineServiceCost.set(key, (engineServiceCost.get(key) ?? 0) + svcCost);
-  }
-
-  type TierRow = { oil_type_id: string; min_litres: number; premium: number };
-  const tiersByOil = new Map<string, TierRow[]>();
-  for (const t of (tiersRes.data ?? []) as TierRow[]) {
-    const arr = tiersByOil.get(t.oil_type_id) ?? [];
-    arr.push(t);
-    tiersByOil.set(t.oil_type_id, arr);
-  }
-
-  const tierPremiumFor = (oilId: string, capacity: number): number => {
-    const tiers = tiersByOil.get(oilId);
-    if (!tiers || tiers.length === 0) return 0;
-    let best: TierRow | null = null;
-    for (const t of tiers) {
-      if (Number(t.min_litres) <= capacity && (!best || Number(t.min_litres) > Number(best.min_litres))) {
-        best = t;
-      }
-    }
-    return best ? Number(best.premium) || 0 : 0;
-  };
-
-  /** Round any positive price up to the next .99. Anything ≤ 0 → null so the
-   *  UI shows "—" instead of a nonsensical "-$0.01" for oils with no cost. */
-  const round99 = (sell: number): number | null =>
-    Number.isFinite(sell) && sell > 0 ? Math.ceil(sell) - 0.01 : null;
+  const oilTypes = (data.oilTypesRes.data ?? []) as OilType[];
+  const rows = expandEngineRows((data.enginesRes.data ?? []) as EngineType[], data.filterOptions);
 
   const cells = new Map<string, PriceGridCell>();
-  for (const row of rows) {
-    const capacity = Number(row.engine.oil_capacity_litres);
-    const filterCost = enginePartCost.get(row.key) ?? 0;
-    const serviceCost = engineServiceCost.get(row.key) ?? 0;
-    if (!Number.isFinite(capacity) || capacity <= 0) {
-      for (const o of oilTypes) {
-        cells.set(`${row.key}|${o.id}`, {
-          engine_id: row.engine_id,
-          option_id: row.option_id,
-          oil_type_id: o.id,
-          bulk: null,
-          gallon: null,
-          gallon_with_tax: null,
-        });
-      }
-      continue;
-    }
-    for (const o of oilTypes) {
-      const tier = tierPremiumFor(o.id, capacity);
-      const bulkRate = Number(o.bulk_cost_per_litre);
-      // gallon_cost_per_litre stores price per gallon container; divide by the
-      // oil's own litres_per_gallon to get $/litre. Different oils ship in
-      // different gallon sizes (Imperial 4.546, US 3.785, metric 4.0).
-      const lpg = Number(o.litres_per_gallon);
-      const gallonRate =
-        Number.isFinite(lpg) && lpg > 0
-          ? Number(o.gallon_cost_per_litre) / lpg
-          : NaN;
-      // Override wins; otherwise fall back to cost-up. round99 returns null
-      // when the raw price isn't positive (oil has no cost configured), so
-      // "—" shows instead of -$0.01.
-      const overrideBulk   = overrideMap.get(`${row.key}|${o.id}|bulk`);
-      const overrideGallon = overrideMap.get(`${row.key}|${o.id}|gallon`);
-      const lockedBulk   = lockedMap.get(`${row.key}|${o.id}|bulk`);
-      const lockedGallon = lockedMap.get(`${row.key}|${o.id}|gallon`);
-      const bulk = lockedBulk != null
-        ? lockedBulk
-        : overrideBulk != null
-        ? overrideBulk
-        : Number.isFinite(bulkRate) && bulkRate > 0
-          ? round99(bulkRate * capacity + filterCost + serviceCost + tier)
-          : null;
-      const gallon = lockedGallon != null
-        ? lockedGallon
-        : overrideGallon != null
-        ? overrideGallon
-        : Number.isFinite(gallonRate) && gallonRate > 0
-          ? round99(gallonRate * capacity + filterCost + serviceCost + tier)
-          : null;
+  for (const o of oilTypes) {
+    const bulkByRow = new Map(priceOilRows(data, o, "bulk").rows.map((r) => [r.row_key, r.selling]));
+    const gallonByRow = new Map(priceOilRows(data, o, "gallon").rows.map((r) => [r.row_key, r.selling]));
+    for (const row of rows) {
+      const capacity = Number(row.engine.oil_capacity_litres);
+      const priced = Number.isFinite(capacity) && capacity > 0;
+      const bulk = priced ? bulkByRow.get(row.key) ?? null : null;
+      const gallon = priced ? gallonByRow.get(row.key) ?? null : null;
       // Item #21 — apply HST when the oil type is flagged taxable.
       const gallon_with_tax =
-        gallon != null && o.is_taxable
-          ? Math.round(gallon * (1 + hstRate) * 100) / 100
-          : null;
+        gallon != null && o.is_taxable ? Math.round(gallon * (1 + hstRate) * 100) / 100 : null;
       cells.set(`${row.key}|${o.id}`, {
         engine_id: row.engine_id,
         option_id: row.option_id,
@@ -881,12 +711,13 @@ export interface OilDetailResponse {
   unlinked_labour_count: number;
 }
 
-export async function getOilDetail(
-  oilCode: string,
-  container: "bulk" | "gallon",
-): Promise<OilDetailResponse | null> {
-  const supabase = await createClient();
-
+/**
+ * Everything the oil price pages read, in one batch. Oil detail, the oil-change
+ * grid and the print list all price from this through priceOilRows, so they
+ * can't drift apart: the grid and print list had their own older cost-up
+ * formula and stopped matching what a sale charges (client 2026-11-02).
+ */
+async function loadOilPricingData(supabase: Awaited<ReturnType<typeof createClient>>) {
   const [
     enginesRes,
     oilTypesRes,
@@ -930,11 +761,11 @@ export async function getOilDetail(
       // column shows the "Labor charge" of the package wired to the engine
       // (engine_types.labour_package_id, set in settings/pricing/engine-types).
       loadEnginePackages(supabase),
-      // Price lock for this page (oil type + container), with its snapshots.
+      // Every price lock (oil type + container), with its snapshots: the
+      // grid prices all oils at once, Oil detail picks its own.
       supabase
         .from("oil_price_locks")
-        .select("id, oil_type_id, container, lock_until, oil_price_lock_items(*)")
-        .eq("container", container),
+        .select("id, oil_type_id, container, lock_until, oil_price_lock_items(*)"),
       loadEngineFilterOptions(supabase),
       supabase.from("oil_groups").select("*").eq("active", true),
     ]);
@@ -947,9 +778,28 @@ export async function getOilDetail(
   const lockSupported = !locksRes.error;
   if (locksRes.error && !isMissingRelation(locksRes.error)) throw locksRes.error;
 
-  const oilTypes = (oilTypesRes.data ?? []) as OilType[];
-  const oilType = oilTypes.find((o) => o.code === oilCode);
-  if (!oilType) return null;
+
+  return {
+    enginesRes,
+    oilTypesRes,
+    filtersRes,
+    tiersRes,
+    overrideRows,
+    matchEnginePackage,
+    locksRes,
+    filterOptions,
+    groupsRes,
+    lockSupported,
+  };
+}
+
+type OilPricingData = Awaited<ReturnType<typeof loadOilPricingData>>;
+
+/** One oil + container priced for every engine row: package labour and
+ *  filters, the oil group's rate, tier premium, overrides and live locks. */
+function priceOilRows(d: OilPricingData, oilType: OilType, container: "bulk" | "gallon") {
+  const oilTypes = (d.oilTypesRes.data ?? []) as OilType[];
+  const { enginesRes, filtersRes, tiersRes, overrideRows, matchEnginePackage, locksRes, filterOptions, groupsRes } = d;
 
   type LockRow = {
     id: string;
@@ -961,7 +811,7 @@ export async function getOilDetail(
       | null;
   };
   const lockRow = ((locksRes.data ?? []) as unknown as LockRow[]).find(
-    (l) => l.oil_type_id === oilType.id,
+    (l) => l.oil_type_id === oilType.id && l.container === container,
   );
   const lockItems = lockRow?.oil_price_lock_items ?? [];
   const lockIsLive = isLockDateLive(lockRow?.lock_until);
@@ -1200,9 +1050,26 @@ export async function getOilDetail(
     };
   });
 
+
+  return { rows, lock, groupPriced, group, anchorOil };
+}
+
+export async function getOilDetail(
+  oilCode: string,
+  container: "bulk" | "gallon",
+): Promise<OilDetailResponse | null> {
+  const supabase = await createClient();
+  const d = await loadOilPricingData(supabase);
+
+  const oilTypes = (d.oilTypesRes.data ?? []) as OilType[];
+  const oilType = oilTypes.find((o) => o.code === oilCode);
+  if (!oilType) return null;
+
+  const { rows, lock, groupPriced, group, anchorOil } = priceOilRows(d, oilType, container);
+
   // The column only exists once 0130 is applied; before that every row falls
   // through to the name match and the settings picker hides itself.
-  const labourLinkSupported = ((enginesRes.data ?? []) as EngineType[]).some(
+  const labourLinkSupported = ((d.enginesRes.data ?? []) as EngineType[]).some(
     (e) => "labour_package_id" in e,
   );
 
@@ -1212,7 +1079,7 @@ export async function getOilDetail(
     rows,
     oil_types: oilTypes,
     lock,
-    lock_supported: lockSupported,
+    lock_supported: d.lockSupported,
     price_group:
       groupPriced && group
         ? {
@@ -1225,6 +1092,8 @@ export async function getOilDetail(
     unlinked_labour_count: rows.filter((r) => r.service_cost_source === "parts").length,
   };
 }
+
+
 
 // ============================================================================
 // Print List — the technician's print-friendly price card. One row per engine,

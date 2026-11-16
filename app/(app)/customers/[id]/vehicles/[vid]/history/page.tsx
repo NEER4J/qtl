@@ -62,6 +62,11 @@ export default async function VehicleHistoryPage({
             <Badge variant="outline">Unit #{vehicle.unit_number}</Badge>
           )}
           {vehicle.deactivated_at && <Badge variant="secondary">Deactivated</Badge>}
+          {!vehicle.deactivated_at && (
+            <Button size="sm" asChild className="ml-auto">
+              <Link href={`/sales/new?customer_id=${id}&vehicle_id=${vehicle.id}`}>New job</Link>
+            </Button>
+          )}
         </div>
       </div>
 

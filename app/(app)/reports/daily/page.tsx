@@ -21,7 +21,7 @@ import { listLocations } from "@/lib/actions/locations";
 import { getDailyJobReport } from "@/lib/actions/reports";
 import { requirePage } from "@/lib/auth/require";
 import { accessibleLocationIds, canChooseLocation } from "@/lib/auth/locations";
-import { formatDate, formatMoney, formatTime, todayISO } from "@/lib/utils/format";
+import { formatDate, formatMoney, formatQty, formatTime, todayISO } from "@/lib/utils/format";
 import { paymentModeLabel } from "@/lib/utils/payment-modes";
 
 export const dynamic = "force-dynamic";
@@ -491,7 +491,7 @@ export default async function DailyReportPage({
                     <TableCell className="font-mono">{p.part_number ?? "—"}</TableCell>
                     <TableCell>{p.brand ?? "—"}</TableCell>
                     <TableCell>{p.description}</TableCell>
-                    <TableCell className="text-right tabular-nums">{p.qty_total}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatQty(p.qty_total)}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatMoney(p.revenue)}
                     </TableCell>

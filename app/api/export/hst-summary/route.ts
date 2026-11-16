@@ -1,5 +1,5 @@
 import { getHstSummary } from "@/lib/actions/reports";
-import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { csvResponse, toReportCsv } from "@/lib/utils/csv";
 import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
@@ -21,11 +21,11 @@ export async function GET(req: Request) {
   sections.push(`Net HST payable,${data.net_hst_payable.toFixed(2)}\n`);
 
   sections.push(`## Monthly breakdown`);
-  sections.push(toCsv(data.by_month as unknown as Record<string, unknown>[], ["month", "hst_collected", "hst_paid"]));
+  sections.push(toReportCsv(data.by_month as unknown as Record<string, unknown>[], ["month", "hst_collected", "hst_paid"]));
   sections.push("");
 
   sections.push(`## By location`);
-  sections.push(toCsv(data.by_location as unknown as Record<string, unknown>[], ["location_name", "hst_collected", "hst_paid"]));
+  sections.push(toReportCsv(data.by_location as unknown as Record<string, unknown>[], ["location_name", "hst_collected", "hst_paid"]));
 
   return csvResponse(`hst-summary-${todayISO()}.csv`, sections.join("\n"));
 }

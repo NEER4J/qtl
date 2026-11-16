@@ -92,7 +92,7 @@ export default async function SalesAnalyticsPage({
             <div>
               <div className="text-xs text-muted-foreground">Change</div>
               <div className={`text-2xl font-bold tabular-nums ${yoy.pct_change >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                {yoy.pct_change >= 0 ? "+" : ""}{yoy.pct_change.toFixed(1)}%
+                {yoy.pct_change >= 0 ? "+" : ""}{yoy.pct_change.toFixed(2)}%
               </div>
             </div>
           </div>

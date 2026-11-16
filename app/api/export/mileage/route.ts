@@ -2,7 +2,7 @@ import { getMileageReport } from "@/lib/actions/mileage";
 import { requireProfile } from "@/lib/auth/require";
 import { isPageAllowed } from "@/lib/permissions/check";
 import { pageKeyForRequestPath } from "@/lib/permissions/registry";
-import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { csvResponse, toReportCsv } from "@/lib/utils/csv";
 import { MILEAGE_RULE } from "@/lib/utils/mileage";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +34,7 @@ export async function GET(req: Request) {
   sections.push("");
   sections.push("## Summary");
   sections.push(
-    toCsv(
+    toReportCsv(
       [
         { item: "Vehicles serviced", value: s.vehicles },
         { item: "Vehicles with 2+ counted readings", value: s.vehicles_with_mileage },
@@ -53,7 +53,7 @@ export async function GET(req: Request) {
   sections.push("");
   sections.push("## Vehicles");
   sections.push(
-    toCsv(
+    toReportCsv(
       report.vehicles.map((v) => ({
         plate: v.plate,
         customer: v.customer_name ?? "",

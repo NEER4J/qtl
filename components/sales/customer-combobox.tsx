@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, ChevronsUpDown, UserPlus } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { Check, ChevronsUpDown, Truck, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -44,6 +44,8 @@ export type CustomerPick = {
   id: string;
   billing_name: string | null;
   last_or_company: string | null;
+  /** Set when a plate row was picked: the form selects that vehicle too. */
+  plate?: string;
 };
 
 type Option = CustomerPick & { plates: string[] };
@@ -101,6 +103,27 @@ export function CustomerComboBox({
           plates: c.license_plates ?? [],
         }));
 
+  // A plate typed in the box lists the matching plates under each customer, so
+  // one click picks the customer and that exact truck (client 2026-11-02).
+  const plateQuery = q.replace(/[\s-]/g, "").toLowerCase();
+  const matchingPlates = (c: Option): string[] =>
+    showLocal && plateQuery.length >= 2
+      ? c.plates.filter((p) => p.replace(/[\s-]/g, "").toLowerCase().includes(plateQuery)).slice(0, 5)
+      : [];
+
+  const pickOption = (c: Option, plate?: string) => {
+    const pick: CustomerPick = {
+      id: c.id,
+      billing_name: c.billing_name,
+      last_or_company: c.last_or_company,
+      ...(plate ? { plate } : {}),
+    };
+    setPicked(pick);
+    onChange(c.id);
+    onSelectCustomer?.(pick);
+    setOpen(false);
+  };
+
   const label = (picked && picked.id === value ? picked.billing_name : null) ?? billingName;
 
   return (
@@ -153,36 +176,38 @@ export function CustomerComboBox({
             )}
             <CommandGroup heading="Customers">
               {options.map((c) => (
-                <CommandItem
-                  key={c.id}
-                  value={c.id}
-                  onSelect={() => {
-                    const pick = {
-                      id: c.id,
-                      billing_name: c.billing_name,
-                      last_or_company: c.last_or_company,
-                    };
-                    setPicked(pick);
-                    onChange(c.id);
-                    onSelectCustomer?.(pick);
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 size-4",
-                      value === c.id ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  <div className="flex flex-1 flex-col overflow-hidden">
-                    <span className="truncate font-medium">{c.billing_name}</span>
-                    {c.plates.length ? (
-                      <span className="truncate text-xs text-muted-foreground font-mono">
-                        {c.plates.slice(0, 3).join(", ")}
+                <Fragment key={c.id}>
+                  <CommandItem value={c.id} onSelect={() => pickOption(c)}>
+                    <Check
+                      className={cn(
+                        "mr-2 size-4",
+                        value === c.id ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    <div className="flex flex-1 flex-col overflow-hidden">
+                      <span className="truncate font-medium">{c.billing_name}</span>
+                      {c.plates.length ? (
+                        <span className="truncate text-xs text-muted-foreground font-mono">
+                          {c.plates.slice(0, 3).join(", ")}
+                        </span>
+                      ) : null}
+                    </div>
+                  </CommandItem>
+                  {matchingPlates(c).map((plate) => (
+                    <CommandItem
+                      key={`${c.id}:${plate}`}
+                      value={`${c.id}:${plate}`}
+                      onSelect={() => pickOption(c, plate)}
+                      className="py-1 pl-8"
+                    >
+                      <Truck className="mr-2 size-3.5 text-muted-foreground" />
+                      <span className="font-mono text-sm">{plate}</span>
+                      <span className="ml-2 truncate text-xs text-muted-foreground">
+                        {c.billing_name}
                       </span>
-                    ) : null}
-                  </div>
-                </CommandItem>
+                    </CommandItem>
+                  ))}
+                </Fragment>
               ))}
             </CommandGroup>
           </CommandList>

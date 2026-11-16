@@ -1,5 +1,5 @@
 import { getPnlReport } from "@/lib/actions/reports";
-import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { csvResponse, toReportCsv } from "@/lib/utils/csv";
 import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
@@ -20,11 +20,11 @@ export async function GET(req: Request) {
   sections.push(`Net profit,${data.net_profit.toFixed(2)}\n`);
 
   sections.push(`## By month`);
-  sections.push(toCsv(data.by_month as unknown as Record<string, unknown>[], ["month", "sales", "expenses", "payroll", "net"]));
+  sections.push(toReportCsv(data.by_month as unknown as Record<string, unknown>[], ["month", "sales", "expenses", "payroll", "net"]));
   sections.push("");
 
   sections.push(`## By location`);
-  sections.push(toCsv(data.by_location as unknown as Record<string, unknown>[], ["name", "sales", "expenses", "payroll", "net"]));
+  sections.push(toReportCsv(data.by_location as unknown as Record<string, unknown>[], ["name", "sales", "expenses", "payroll", "net"]));
 
   return csvResponse(`pnl-${todayISO()}.csv`, sections.join("\n"));
 }

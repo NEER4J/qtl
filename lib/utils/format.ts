@@ -12,6 +12,21 @@ const money = new Intl.NumberFormat("en-CA", {
   maximumFractionDigits: 2,
 });
 
+/** Round to 2 decimals (reports show at most two). Non-finite numbers pass through. */
+export function round2(n: number): number {
+  return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 100) / 100 : n;
+}
+
+const qtyFmt = new Intl.NumberFormat("en-CA", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+/** A quantity or measure for a report: at most 2 decimals, no stray float digits. */
+export function formatQty(value: number | string | null | undefined): string {
+  if (value == null || value === "") return "—";
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return qtyFmt.format(n);
+}
+
 export function formatMoney(value: number | string | null | undefined): string {
   if (value == null || value === "") return "—";
   const n = typeof value === "number" ? value : Number(value);

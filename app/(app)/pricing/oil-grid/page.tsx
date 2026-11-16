@@ -50,7 +50,7 @@ export default async function OilGridPage() {
           The main pricing lookup. Rows are engines, columns are oil grades. Each cell shows both bulk and gallon prices.
         </p>
         <p>
-          Prices are calculated from: oil cost × engine oil capacity, plus the cost of filters used on that engine, plus the labour for installing them, plus a flat premium that scales with oil capacity. Everything is rounded up to end in .99.
+          Every price here is the same price the Oil Detail page shows and a sale charges: oil (at its group rate where it has one) × engine oil capacity, plus the engine&apos;s package filters and labour, plus the volume-tier premium. Manual prices and live price locks win over the calculated figure.
         </p>
         <ul>
           <li>When the owner updates an oil cost, every price in that column updates right away.</li>

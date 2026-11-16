@@ -56,7 +56,7 @@ export default async function PayrollAnalyticsPage({
         <Stat label="Total payroll cost" value={formatMoney(data.total_cost)} />
         <Stat label="Employees" value={data.total_employees.toLocaleString()} />
         <Stat label="Avg weekly / employee" value={formatMoney(data.avg_weekly_per_employee)} />
-        <Stat label="% of revenue" value={`${data.payroll_vs_revenue_pct.toFixed(1)}%`} />
+        <Stat label="% of revenue" value={`${data.payroll_vs_revenue_pct.toFixed(2)}%`} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

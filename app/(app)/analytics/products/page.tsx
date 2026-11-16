@@ -105,7 +105,7 @@ export default async function ProductsAnalyticsPage({
                     <TableCell className="text-right tabular-nums">{formatMoney(p.cost)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(p.list_price)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(p.margin_amount)}</TableCell>
-                    <TableCell className="text-right tabular-nums font-medium text-amber-700">{p.margin_pct.toFixed(1)}%</TableCell>
+                    <TableCell className="text-right tabular-nums font-medium text-amber-700">{p.margin_pct.toFixed(2)}%</TableCell>
                   </TableRow>
                 ))}
                 {lowMargin.parts.length > 20 && (

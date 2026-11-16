@@ -1,5 +1,5 @@
 import { getOutstandingInvoices } from "@/lib/actions/reports";
-import { csvResponse, toCsv } from "@/lib/utils/csv";
+import { csvResponse, toReportCsv } from "@/lib/utils/csv";
 import { todayISO } from "@/lib/utils/tz";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export async function GET(req: Request) {
 
   sections.push(`## Invoices`);
   sections.push(
-    toCsv(
+    toReportCsv(
       rows as unknown as Record<string, unknown>[],
       ["invoice_no", "job_date", "billing_name", "location_name", "days_overdue", "bucket", "total", "paid_amount", "outstanding"],
     ),
