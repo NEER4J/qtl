@@ -24,7 +24,7 @@ const REPORTS = [
     href: "/reports/daily",
     icon: CalendarDays,
     description:
-      "The whole day: every job with its payment methods, the payments taken that day on any invoice, parts used. Print or download as CSV.",
+      "Every job in a day or a date range, with its payment methods, the payments taken in it on any invoice, parts used. Print or download as CSV.",
     roles: ["owner", "co_owner", "manager", "accountant", "staff"],
   },
   {
@@ -96,7 +96,7 @@ export default async function ReportsHubPage() {
           <li><strong>HST Summary</strong> — what you collected versus what you paid. For filing your HST return with CRA.</li>
           <li><strong>P&amp;L Report</strong> — the full profit-and-loss view. Includes payroll, unlike the dashboard snapshot.</li>
           <li><strong>Outstanding Invoices</strong> — unpaid invoices grouped by how overdue they are. For following up with customers.</li>
-          <li><strong>Daily job report</strong> — one day&apos;s jobs, payments by method and the cash drawer (payments taken that day). Print it or download it.</li>
+          <li><strong>Daily job report</strong> — the jobs in a day or a From–To range (up to 92 days), payments by method and the cash drawer (payments taken in it), each row dated. Print it or download it.</li>
           <li><strong>Customer Statement</strong> — a monthly statement for one customer, to print, save as PDF or email. Also on every customer&apos;s page (Monthly statement).</li>
           <li><strong>Mileage</strong> — how far each truck runs between services, from the odometer readings.</li>
           <li><strong>Vendor Statement</strong> — a per-vendor transaction history. Open any vendor profile and click the statement button.</li>

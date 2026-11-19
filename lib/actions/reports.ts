@@ -1,13 +1,12 @@
 "use server";
 
-import { format, subMonths } from "date-fns";
-
 import { createClient } from "@/lib/supabase/server";
-import { fetchAllRowsParallel } from "@/lib/supabase/fetch-all";
+import { fetchAllRows, fetchAllRowsParallel } from "@/lib/supabase/fetch-all";
 import { requireProfile } from "@/lib/auth/require";
 import { applyLocationFilter, resolveLocationFilter } from "@/lib/auth/locations";
 import { jobTenders, tendersByMode, type PaymentRowLike } from "@/lib/utils/job-tenders";
 import { payrollGross, type PayEarnings } from "@/lib/utils/payroll-math";
+import { addMonthsISO, isDateOnly, todayISO } from "@/lib/utils/tz";
 
 export interface ReportFilter {
   from?: string;
@@ -16,9 +15,12 @@ export interface ReportFilter {
 }
 
 function defaultRange(filter: ReportFilter): { from: string; to: string; label: string } {
-  const today = new Date();
-  const to = filter.to ?? format(today, "yyyy-MM-dd");
-  const from = filter.from ?? format(subMonths(today, 1), "yyyy-MM-dd");
+  // "Today" is Ontario's (the server runs in UTC, which is already tomorrow
+  // from 8 pm). A missing From is a month before the To the user chose, not a
+  // month before today: To = 5 Oct with no From used to start on 18 Oct and
+  // came back empty.
+  const to = filter.to ?? todayISO();
+  const from = filter.from ?? addMonthsISO(to, -1);
   const label = `${from} → ${to}`;
   return { from, to, label };
 }
@@ -145,21 +147,26 @@ export async function getOutstandingInvoices(filter: ReportFilter = {}): Promise
 }> {
   const profile = await requireProfile();
   const supabase = await createClient();
-
-  let q = supabase
-    .from("sales_jobs")
-    .select("id, invoice_no, job_date, billing_name, total, paid_amount, outstanding, location_id, locations:location_id(name)")
-    .is("deactivated_at", null)
-    .in("payment_status", ["outstanding", "partial"])
-    .order("job_date", { ascending: true });
-
   const { ids: locationIds } = resolveLocationFilter(profile, filter.location_id);
-  q = applyLocationFilter(q, "location_id", locationIds);
+  // From/To narrow by invoice date. Neither → every unpaid invoice, as before.
+  // The age buckets still count from today: this is what is owed now.
+  const from = isDateOnly(filter.from) ? filter.from : null;
+  const to = isDateOnly(filter.to) ? filter.to : null;
 
-  const { data, error } = await q;
-  if (error) throw error;
   type Row = { id: string; invoice_no: string; job_date: string; billing_name: string; total: number; paid_amount: number; outstanding: number; location_id: string; locations: { name: string } | null };
-  const raw = (data ?? []) as unknown as Row[];
+  // Paged: every unpaid invoice can pass PostgREST's 1,000-row cap, which
+  // truncates without an error.
+  const raw = await fetchAllRowsParallel<Row>((lo, hi, count) => {
+    let q = supabase
+      .from("sales_jobs")
+      .select("id, invoice_no, job_date, billing_name, total, paid_amount, outstanding, location_id, locations:location_id(name)", { count })
+      .is("deactivated_at", null)
+      .in("payment_status", ["outstanding", "partial"]);
+    if (from) q = q.gte("job_date", from);
+    if (to) q = q.lte("job_date", to);
+    q = applyLocationFilter(q, "location_id", locationIds);
+    return q.order("job_date", { ascending: true }).order("id").range(lo, hi);
+  });
 
   const today = Date.now();
   const rows: OutstandingInvoice[] = raw.map((r) => {
@@ -454,16 +461,19 @@ export async function getVendorStatement(
 
 // ============================================================================
 // Daily Job Report (item #11)
-// One-day snapshot for a single date and (optionally) a single location.
+// A From–To span (one day when they match) and (optionally) a single location.
 // Returns: per-job rows, aggregated parts list, service-type breakdown,
 // per-hour totals (using start_time), and customer-status mix — plus the
-// whole day's money (client 2026-10-20): every job's payment methods, the
-// payments received that day on any invoice (the cash drawer), and a
-// per-method summary of both.
+// span's money (client 2026-10-20): every job's payment methods, the
+// payments received in it on any invoice (the cash drawer), and a
+// per-method summary of both. Client 2026-11-17: pick the end date too, and
+// every list row carries its date, not just a time.
 // ============================================================================
 export interface DailyJobReportRow {
   id: string;
   invoice_no: string;
+  /** The invoice date (`job_date`). */
+  job_date: string;
   start_time: string | null;
   end_time: string | null;
   duration_minutes: number | null;
@@ -501,11 +511,11 @@ export interface DailyJobReportPart {
   revenue: number;
 }
 
-/** A payment taken on the report date, on any invoice. */
+/** A payment taken within the report span, on any invoice. */
 export interface DailyPaymentReceived {
   key: string;
   paid_on: string;
-  /** When it was entered — the time of day for the drawer. */
+  /** When it was entered (an instant: date and time of day). */
   created_at: string | null;
   amount: number;
   mode: string | null;
@@ -514,7 +524,7 @@ export interface DailyPaymentReceived {
   job_id: string;
   invoice_no: string;
   job_date: string;
-  /** Paid today on an invoice from an earlier day. */
+  /** Paid in the span on an invoice dated before it began. */
   older_invoice: boolean;
   customer_id: string | null;
   customer_name: string | null;
@@ -534,7 +544,8 @@ export interface DailyPaymentMethodRow {
 }
 
 export interface DailyJobReport {
-  date: string;
+  from: string;
+  to: string;
   location_id: string | null;
   totals: {
     job_count: number;
@@ -545,11 +556,11 @@ export interface DailyJobReport {
     credit_applied: number;
     /** Still owed by customers: each job floored at 0. */
     outstanding: number;
-    /** Owed back to customers on today's returns (negative balances). */
+    /** Owed back to customers on the span's returns (negative balances). */
     refunds_due: number;
     received: number;
     received_count: number;
-    /** Part of `received` paid on invoices from earlier days. */
+    /** Part of `received` paid on invoices dated before the span. */
     received_older: number;
   };
   jobs: DailyJobReportRow[];
@@ -562,7 +573,8 @@ export interface DailyJobReport {
 }
 
 export async function getDailyJobReport(
-  date: string,
+  from: string,
+  to: string,
   locationId: string | null = null,
 ): Promise<DailyJobReport> {
   const profile = await requireProfile();
@@ -571,26 +583,37 @@ export async function getDailyJobReport(
   // locations they're actually allowed to see (migration 0137).
   const { ids: locationIds } = resolveLocationFilter(profile, locationId);
 
-  let query = supabase
-    .from("sales_jobs")
-    .select(
-      `id, invoice_no, start_time, end_time, duration_minutes, total, paid_amount, outstanding,
-       payment_status, sub_total, hst, credit_applied, payment_mode, job_date, advisor_name,
-       upper_tech, lower_tech, customer_id, vehicle_id, odometer, unit_no,
-       license_plate, billing_name,
-       locations:location_id(code),
-       service_types:service_type_id(code, name),
-       customers:customer_id(status, billing_name, last_or_company),
-       vehicles:vehicle_id(license_plate, year, make, model, carrier_name),
-       sales_payments(id, paid_on, amount, mode, transaction_id, notes, created_at)`,
-    )
-    .is("deactivated_at", null)
-    .eq("job_date", date)
-    .order("start_time", { ascending: true, nullsFirst: false })
-    .order("invoice_no");
-  query = applyLocationFilter(query, "location_id", locationIds);
+  // Paged: a day is ~150 jobs but a month is ~2,300, and an unpaged read stops
+  // at PostgREST's 1,000-row cap without an error. Date, then time, then
+  // invoice; `id` last so the pages can't overlap.
+  const jobsPromise = fetchAllRowsParallel<Joined>((lo, hi, count) => {
+    let q = supabase
+      .from("sales_jobs")
+      .select(
+        `id, invoice_no, start_time, end_time, duration_minutes, total, paid_amount, outstanding,
+         payment_status, sub_total, hst, credit_applied, payment_mode, job_date, advisor_name,
+         upper_tech, lower_tech, customer_id, vehicle_id, odometer, unit_no,
+         license_plate, billing_name,
+         locations:location_id(code),
+         service_types:service_type_id(code, name),
+         customers:customer_id(status, billing_name, last_or_company),
+         vehicles:vehicle_id(license_plate, year, make, model, carrier_name),
+         sales_payments(id, paid_on, amount, mode, transaction_id, notes, created_at)`,
+        { count },
+      )
+      .is("deactivated_at", null)
+      .gte("job_date", from)
+      .lte("job_date", to);
+    q = applyLocationFilter(q, "location_id", locationIds);
+    return q
+      .order("job_date", { ascending: true })
+      .order("start_time", { ascending: true, nullsFirst: false })
+      .order("invoice_no")
+      .order("id")
+      .range(lo, hi);
+  });
 
-  // Payments dated today on ANY invoice — the cash drawer. Scoped to the
+  // Payments dated in the span on ANY invoice — the cash drawer. Scoped to the
   // location through the invoice. Paged: a busy day is ~150, but nothing
   // stops a bulk entry of back payments.
   type ReceivedRow = {
@@ -621,17 +644,14 @@ export async function getDailyJobReport(
            customers:customer_id(billing_name, last_or_company))`,
         { count },
       )
-      .eq("paid_on", date)
+      .gte("paid_on", from)
+      .lte("paid_on", to)
       .is("sales_jobs.deactivated_at", null);
     q = applyLocationFilter(q, "sales_jobs.location_id", locationIds);
     return q.order("id").range(lo, hi);
   });
 
-  const [{ data: jobsData, error: jobsErr }, receivedRows] = await Promise.all([
-    query,
-    receivedPromise,
-  ]);
-  if (jobsErr) throw jobsErr;
+  const [rows, receivedRows] = await Promise.all([jobsPromise, receivedPromise]);
 
   type Joined = {
     id: string;
@@ -692,22 +712,36 @@ export async function getDailyJobReport(
       | null;
     sales_payments: PaymentRowLike[] | null;
   };
-  const rows = (jobsData ?? []) as unknown as Joined[];
   const jobIds = rows.map((r) => r.id);
 
   // Aggregated parts list (only if any jobs)
   let parts: DailyJobReportPart[] = [];
   if (jobIds.length > 0) {
-    // ~8 lines a job, so a busy day across three shops nears the 1,000-row cap.
-    const items = await fetchAllRowsParallel<unknown>((lo, hi, count) =>
-      supabase
-        .from("sales_job_items")
-        // `*` so auto_fee (0149) is read when present without breaking before it.
-        .select("*, parts:part_id(part_number, brand)", { count })
-        .in("sales_job_id", jobIds)
-        .order("id")
-        .range(lo, hi),
-    );
+    // ~8 lines a job. The ids go in the URL, and a month of them (~2,300 UUIDs)
+    // is far past what a request line allows, so ask for the lines of 100 jobs
+    // at a time (each paged, in case a batch tops 1,000 lines), a few batches
+    // at once.
+    const ID_BATCH = 100;
+    const CONCURRENT = 6;
+    const batches: string[][] = [];
+    for (let i = 0; i < jobIds.length; i += ID_BATCH) batches.push(jobIds.slice(i, i + ID_BATCH));
+    const items: unknown[] = [];
+    for (let i = 0; i < batches.length; i += CONCURRENT) {
+      const got = await Promise.all(
+        batches.slice(i, i + CONCURRENT).map((ids) =>
+          fetchAllRows<unknown>((lo, hi) =>
+            supabase
+              .from("sales_job_items")
+              // `*` so auto_fee (0149) is read when present without breaking before it.
+              .select("*, parts:part_id(part_number, brand)")
+              .in("sales_job_id", ids)
+              .order("id")
+              .range(lo, hi),
+          ),
+        ),
+      );
+      for (const g of got) items.push(...g);
+    }
     type Item = {
       part_id: string | null;
       description: string;
@@ -787,6 +821,7 @@ export async function getDailyJobReport(
     return {
       id: r.id,
       invoice_no: r.invoice_no,
+      job_date: r.job_date,
       start_time: r.start_time,
       end_time: r.end_time,
       duration_minutes: r.duration_minutes,
@@ -815,8 +850,8 @@ export async function getDailyJobReport(
     };
   });
 
-  // Payments received today: the ledger rows, plus legacy jobs dated today
-  // (their paid_amount counts as paid on the job date).
+  // Payments received in the span: the ledger rows, plus legacy jobs dated in
+  // it (their paid_amount counts as paid on the job date).
   const payments_received: DailyPaymentReceived[] = receivedRows.map((p) => {
     const job = p.sales_jobs;
     return {
@@ -830,7 +865,7 @@ export async function getDailyJobReport(
       job_id: job.id,
       invoice_no: job.invoice_no,
       job_date: job.job_date,
-      older_invoice: job.job_date < date,
+      older_invoice: job.job_date < from,
       customer_id: job.customer_id,
       customer_name: job.customers?.billing_name ?? job.customers?.last_or_company ?? job.billing_name,
       location_code: job.locations?.code ?? null,
@@ -839,7 +874,7 @@ export async function getDailyJobReport(
   });
   for (const j of jobs) {
     for (const t of tendersByJob.get(j.id) ?? []) {
-      if (!t.legacy || t.paid_on !== date) continue;
+      if (!t.legacy || t.paid_on < from || t.paid_on > to) continue;
       payments_received.push({
         key: `legacy-${j.id}`,
         paid_on: t.paid_on,
@@ -850,7 +885,7 @@ export async function getDailyJobReport(
         notes: null,
         job_id: j.id,
         invoice_no: j.invoice_no,
-        job_date: date,
+        job_date: j.job_date,
         older_invoice: false,
         customer_id: j.customer_id,
         customer_name: j.customer_name,
@@ -861,11 +896,12 @@ export async function getDailyJobReport(
   }
   payments_received.sort(
     (a, b) =>
+      a.paid_on.localeCompare(b.paid_on) ||
       (a.created_at ?? "").localeCompare(b.created_at ?? "") ||
       a.invoice_no.localeCompare(b.invoice_no),
   );
 
-  // By payment method: how the day's invoices were paid, and what came in today.
+  // By payment method: how the span's invoices were paid, and what came in during it.
   const methodMap = new Map<string | null, DailyPaymentMethodRow>();
   const method = (mode: string | null) => {
     let row = methodMap.get(mode);
@@ -954,7 +990,8 @@ export async function getDailyJobReport(
   }));
 
   return {
-    date,
+    from,
+    to,
     location_id: locationId,
     totals,
     jobs,

@@ -25,9 +25,10 @@ export interface AnalyticsFilter {
 }
 
 function defaultRange(filter: AnalyticsFilter): { from: string; to: string; label: string } {
-  const today = todayISO();
-  const from = filter.from ?? addDaysISO(today, -29);
-  const to = filter.to ?? today;
+  // A missing From is 30 days before the To the user chose, not before today:
+  // To = 5 Oct with no From used to start on 20 Oct (today − 29) and came back empty.
+  const to = filter.to ?? todayISO();
+  const from = filter.from ?? addDaysISO(to, -29);
   const label = `${from} → ${to}`;
   return { from, to, label };
 }
@@ -468,7 +469,6 @@ export async function getProductsAnalytics(filter: AnalyticsFilter = {}): Promis
   const engMap: Record<string, { name: string; count: number; total: number }> = {};
   const cntMap: Record<string, { container: string; count: number; total: number }> = {};
   let linked = 0;
-  let linkedTotal = 0;
   for (const r of ocRows) {
     if (r.oil_type_id && r.oil_types) {
       const k = r.oil_type_id;
@@ -489,7 +489,6 @@ export async function getProductsAnalytics(filter: AnalyticsFilter = {}): Promis
     }
     if (r.engine_type_id && r.oil_type_id) {
       linked += 1;
-      linkedTotal += Number(r.total);
     }
   }
   const by_oil_grade = Object.values(oilMap).sort((a, b) => b.total - a.total);
@@ -775,7 +774,6 @@ export async function getSalesYoy(filter: AnalyticsFilter = {}): Promise<YoyComp
   const prior_total = prior.reduce((s, r) => s + Number(r.total), 0);
 
   // Bucket by relative month offset from the start date
-  const fromDate = new Date(from);
   const bucket = (rows: { job_date: string; total: number }[], baseFrom: string) => {
     const base = new Date(baseFrom);
     const m: Record<number, number> = {};

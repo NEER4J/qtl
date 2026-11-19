@@ -35,10 +35,14 @@ export default async function OutstandingReportPage({
   const profile = await requirePage("reports_outstanding");
   const sp = await searchParams;
 
+  // The From/To boxes in the filter bar narrow the list by invoice date. They
+  // were shown here but never passed on, so every date range came back as the
+  // whole list (client 2026-11-17).
   const [{ rows, total_outstanding, by_bucket }, locations] = await Promise.all([
-    getOutstandingInvoices({ location_id: sp.location_id }),
+    getOutstandingInvoices({ from: sp.from, to: sp.to, location_id: sp.location_id }),
     listActiveLocations(),
   ]);
+  const dated = sp.from || sp.to;
 
   const buckets: (keyof typeof BUCKET_COLORS)[] = ["current", "1-30", "31-60", "61-90", "90+"];
 
@@ -48,6 +52,9 @@ export default async function OutstandingReportPage({
         <h1 className="text-2xl font-semibold tracking-tight">Outstanding Invoices</h1>
         <p className="text-sm text-muted-foreground">
           {rows.length} invoice{rows.length !== 1 ? "s" : ""} · {formatMoney(total_outstanding)} outstanding
+          {dated
+            ? ` · invoices dated ${sp.from ? formatDate(sp.from) : "the start"} → ${sp.to ? formatDate(sp.to) : "today"}`
+            : ""}
         </p>
       </div>
 
@@ -58,6 +65,10 @@ export default async function OutstandingReportPage({
         <ul>
           <li>The brackets are Current, 1–30 days, 31–60, 61–90, and 90+. Standard accounts-receivable aging.</li>
           <li>The summary cards at the top show the total owed in each bracket. Prioritize calls to the oldest.</li>
+          <li>
+            Set <strong>From</strong> and <strong>To</strong> to list only the invoices dated in that
+            period. Leave them empty for every unpaid invoice. The age always counts from today.
+          </li>
           <li>Click any invoice to open it and record the payment once the customer pays.</li>
         </ul>
         <p>Download as a spreadsheet and hand it to whoever does collections.</p>

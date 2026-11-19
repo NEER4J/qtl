@@ -21,7 +21,8 @@ import { listLocations } from "@/lib/actions/locations";
 import { getDailyJobReport } from "@/lib/actions/reports";
 import { requirePage } from "@/lib/auth/require";
 import { accessibleLocationIds, canChooseLocation } from "@/lib/auth/locations";
-import { formatDate, formatMoney, formatQty, formatTime, todayISO } from "@/lib/utils/format";
+import { MAX_DETAIL_DAYS, resolveDetailRange } from "@/lib/utils/date-range";
+import { formatDate, formatDateTime, formatMoney, formatQty } from "@/lib/utils/format";
 import { paymentModeLabel } from "@/lib/utils/payment-modes";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +34,10 @@ export default async function DailyReportPage({
 }) {
   const profile = await requirePage("reports_daily");
   const sp = await searchParams;
-  const date = sp.date ?? todayISO();
+  const range = resolveDetailRange({ from: sp.from, to: sp.to, date: sp.date });
+  const { from, to } = range;
+  const periodLabel =
+    from === to ? formatDate(from) : `${formatDate(from)} → ${formatDate(to)}`;
 
   // Anyone with more than one shop in reach gets the picker; a single-location
   // user is pinned to theirs. getDailyJobReport clamps whatever we pass to the
@@ -42,7 +46,7 @@ export default async function DailyReportPage({
   const locationId = canPick ? (sp.location_id ?? null) : profile.location_id;
 
   const [report, locations] = await Promise.all([
-    getDailyJobReport(date, locationId ?? null),
+    getDailyJobReport(from, to, locationId ?? null),
     listLocations(),
   ]);
 
@@ -50,7 +54,7 @@ export default async function DailyReportPage({
     ? report.jobs.filter((j) => j.customer_status === sp.customer_status)
     : report.jobs;
 
-  const exportParams = new URLSearchParams({ date });
+  const exportParams = new URLSearchParams({ from, to });
   if (locationId) exportParams.set("location_id", locationId);
   if (sp.customer_status) exportParams.set("customer_status", sp.customer_status);
   const locationName = locationId
@@ -59,7 +63,7 @@ export default async function DailyReportPage({
 
   const sum = (pick: (j: (typeof filteredJobs)[number]) => number) =>
     filteredJobs.reduce((s, j) => s + pick(j), 0);
-  // Tendered on today's jobs beyond what they owed (the excess is store credit).
+  // Tendered on these jobs beyond what they owed (the excess is store credit).
   const overpaid =
     report.by_payment_method.reduce((s, m) => s + m.jobs_amount, 0) - report.totals.paid;
 
@@ -72,13 +76,15 @@ export default async function DailyReportPage({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Daily job report</h1>
           <p className="text-sm text-muted-foreground">
-            The whole day — every job with its payments, the payments taken today, parts used.
+            Every job in the period with its payments, the payments taken in it, parts used. Pick
+            the same date in both boxes for a single day.
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
           <DailyReportFilters
             initial={{
-              date,
+              from,
+              to,
               location_id: locationId ?? "",
               customer_status: sp.customer_status ?? "",
             }}
@@ -100,10 +106,17 @@ export default async function DailyReportPage({
         </div>
       </div>
 
+      {range.clamped && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 print:hidden dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+          This report covers at most {MAX_DETAIL_DAYS} days, so it starts on {formatDate(from)}. For
+          anything longer, use Sales &amp; Revenue under Analytics.
+        </div>
+      )}
+
       {/* Print header — only on paper. */}
       <div className="hidden print:block">
         <h1 className="text-lg font-semibold">
-          Daily report — {formatDate(date)} · {locationName}
+          Daily report — {periodLabel} · {locationName}
           {sp.customer_status ? ` · ${sp.customer_status} customers` : ""}
         </h1>
       </div>
@@ -126,7 +139,7 @@ export default async function DailyReportPage({
           }
         />
         <Stat
-          label="Received today"
+          label="Received"
           value={formatMoney(report.totals.received)}
           hint={
             report.totals.received_older > 0
@@ -144,9 +157,9 @@ export default async function DailyReportPage({
         <CardHeader>
           <CardTitle>By payment method</CardTitle>
           <p className="text-sm text-muted-foreground">
-            <strong>Today&apos;s jobs</strong> — how the day&apos;s invoices were paid, whenever
-            the money came in. <strong>Received today</strong> — every payment dated today, on any
-            invoice: what should be in the drawer and the card terminal.
+            <strong>Jobs</strong> — how these invoices were paid, whenever the money came in.{" "}
+            <strong>Received</strong> — every payment dated in the period, on any invoice: what
+            should be in the drawer and the card terminal.
           </p>
         </CardHeader>
         <CardContent className="p-0">
@@ -154,9 +167,9 @@ export default async function DailyReportPage({
             <TableHeader>
               <TableRow>
                 <TableHead>Method</TableHead>
-                <TableHead className="text-right">Today&apos;s jobs</TableHead>
+                <TableHead className="text-right">Jobs</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="text-right">Received today</TableHead>
+                <TableHead className="text-right">Received</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
               </TableRow>
             </TableHeader>
@@ -203,7 +216,7 @@ export default async function DailyReportPage({
                 </TableRow>
               )}
               <TableRow className="text-muted-foreground">
-                <TableCell>Still owing on today&apos;s jobs</TableCell>
+                <TableCell>Still owing on these jobs</TableCell>
                 <TableCell />
                 <TableCell className="text-right tabular-nums">
                   {formatMoney(report.totals.outstanding)}
@@ -245,6 +258,7 @@ export default async function DailyReportPage({
               <Table className="text-xs print:text-[9px]">
                 <TableHeader className="bg-background">
                   <TableRow>
+                    <TableHead>Date</TableHead>
                     <TableHead>Time</TableHead>
                     <TableHead>Invoice</TableHead>
                     <TableHead>Loc</TableHead>
@@ -266,6 +280,7 @@ export default async function DailyReportPage({
                 <TableBody>
                   {filteredJobs.map((j) => (
                     <TableRow key={j.id}>
+                      <TableCell className="whitespace-nowrap">{formatDate(j.job_date)}</TableCell>
                       <TableCell className="tabular-nums">
                         {j.start_time?.slice(0, 5) ?? "—"}
                       </TableCell>
@@ -362,7 +377,7 @@ export default async function DailyReportPage({
                 </TableBody>
                 <TableFooter>
                   <TableRow>
-                    <TableCell colSpan={8}>Total ({filteredJobs.length} jobs)</TableCell>
+                    <TableCell colSpan={9}>Total ({filteredJobs.length} jobs)</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(sum((j) => j.sub_total))}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(sum((j) => j.hst))}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(sum((j) => j.total))}</TableCell>
@@ -388,8 +403,8 @@ export default async function DailyReportPage({
             {formatMoney(report.totals.received)}
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Every payment dated {formatDate(date)}, whatever the invoice date. Payments on earlier
-            invoices are flagged.
+            Every payment dated {periodLabel}, whatever the invoice date. Payments on invoices
+            dated before {formatDate(from)} are flagged.
           </p>
         </CardHeader>
         <CardContent className="p-0">
@@ -402,6 +417,7 @@ export default async function DailyReportPage({
               <Table className="text-xs print:text-[9px]">
                 <TableHeader className="bg-background">
                   <TableRow>
+                    <TableHead>Paid on</TableHead>
                     <TableHead>Entered</TableHead>
                     <TableHead>Invoice</TableHead>
                     <TableHead>Loc</TableHead>
@@ -415,8 +431,10 @@ export default async function DailyReportPage({
                 <TableBody>
                   {report.payments_received.map((p) => (
                     <TableRow key={p.key}>
-                      <TableCell className="tabular-nums">
-                        {p.created_at ? formatTime(p.created_at) : "—"}
+                      <TableCell className="whitespace-nowrap">{formatDate(p.paid_on)}</TableCell>
+                      {/* When it was keyed in: an instant, so its date can differ from "Paid on". */}
+                      <TableCell className="whitespace-nowrap tabular-nums">
+                        {p.created_at ? formatDateTime(p.created_at) : "—"}
                       </TableCell>
                       <TableCell>
                         <Link href={`/sales/${p.job_id}`} className="font-mono hover:underline">
@@ -454,7 +472,7 @@ export default async function DailyReportPage({
                 </TableBody>
                 <TableFooter>
                   <TableRow>
-                    <TableCell colSpan={6}>Total received</TableCell>
+                    <TableCell colSpan={7}>Total received</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatMoney(report.totals.received)}
                     </TableCell>

@@ -65,9 +65,13 @@ export function AnalyticsFilters({
 
   return (
     <div className="flex flex-wrap items-end gap-3 border rounded-lg p-3 bg-muted/30">
+      {/* The boxes are uncontrolled (defaultValue), so they are keyed on the URL's
+          value: Clear emptied the URL but left the old dates showing in the
+          boxes while the report went back to its default period. */}
       <div className="space-y-1">
         <Label className="text-xs">From</Label>
         <Input
+          key={`from-${params.get("from") ?? ""}`}
           type="date"
           className="h-9 w-[150px]"
           defaultValue={params.get("from") ?? ""}
@@ -77,6 +81,7 @@ export function AnalyticsFilters({
       <div className="space-y-1">
         <Label className="text-xs">To</Label>
         <Input
+          key={`to-${params.get("to") ?? ""}`}
           type="date"
           className="h-9 w-[150px]"
           defaultValue={params.get("to") ?? ""}

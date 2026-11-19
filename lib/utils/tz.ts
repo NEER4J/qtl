@@ -73,6 +73,24 @@ export function addDaysISO(ymd: string, n: number): string {
   return date.toISOString().slice(0, 10);
 }
 
+/**
+ * Add `n` calendar months to a YYYY-MM-DD, clamping to the end of a shorter
+ * month (31 Mar − 1 month = 28/29 Feb), like date-fns' addMonths but with no
+ * dependence on the machine's zone.
+ */
+export function addMonthsISO(ymd: string, n: number): string {
+  const date = parseDateOnly(ymd);
+  if (!date) return ymd;
+  const day = date.getUTCDate();
+  date.setUTCDate(1);
+  date.setUTCMonth(date.getUTCMonth() + n);
+  const lastDay = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  date.setUTCDate(Math.min(day, lastDay));
+  return date.toISOString().slice(0, 10);
+}
+
 /** `n` days from today in Ontario, as YYYY-MM-DD. */
 export function daysFromTodayISO(n: number): string {
   return addDaysISO(todayISO(), n);
