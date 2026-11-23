@@ -8,6 +8,7 @@ import {
   TrendingUp,
   ChevronRight,
   Percent,
+  Recycle,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +33,13 @@ const REPORTS = [
     href: "/reports/hst",
     icon: Percent,
     description: "HST collected vs paid for tax filing.",
+    roles: ["owner", "co_owner", "accountant"],
+  },
+  {
+    title: "MHSW Summary",
+    href: "/reports/mhsw",
+    icon: Recycle,
+    description: "MHSW charged on sales vs MHSW paid on vendor bills, like the HST summary.",
     roles: ["owner", "co_owner", "accountant"],
   },
   {

@@ -74,6 +74,7 @@ const SECTIONS: Section[] = [
       { title: "Payroll analytics", href: "/analytics/payroll", summary: "Weekly cost, deductions, payroll-as-%-of-revenue." },
       { title: "Reports hub", href: "/reports", summary: "HST summary, P&L, outstanding invoices, statements." },
       { title: "HST Summary", href: "/reports/hst", summary: "Collected vs paid HST for CRA remittance." },
+      { title: "MHSW Summary", href: "/reports/mhsw", summary: "MHSW charged on sales vs paid on vendor bills." },
       { title: "P&L Report", href: "/reports/pnl", summary: "Sales − Expenses − Payroll = Net, by month and location." },
       { title: "Outstanding Invoices", href: "/reports/outstanding", summary: "Aged receivables bucketed by days overdue." },
     ],

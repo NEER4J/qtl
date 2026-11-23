@@ -491,6 +491,9 @@ export interface ExpenseItem {
   quantity: number;
   unit_cost: number;
   line_total: number;
+  /** MHSW the vendor charged per unit on this line (0166) — kept apart from
+   *  unit_cost, like HST. Absent before migration 0166. */
+  mhsw_unit?: number | null;
   position: number;
   /** Snapshot of the part's last buying price at the moment this row was
    *  picked from the catalog. Null when the part had no prior history or the

@@ -25,7 +25,7 @@ import { formatDate, formatMoney } from "@/lib/utils/format";
 import { OIL_TIER_GROUP, buildDisplayRows, foldOilTier } from "@/lib/utils/sales-display";
 import { canAccessLocation } from "@/lib/auth/locations";
 import { PAYMENT_MODE_LABELS, formatCardOnFile, isCardMode } from "@/lib/utils/payment-modes";
-import { canUpdatePage } from "@/lib/permissions/check";
+import { canReversePayments, canUpdatePage } from "@/lib/permissions/check";
 
 export const dynamic = "force-dynamic";
 
@@ -60,10 +60,9 @@ export default async function SalesJobDetailPage({
   // The customer's card on file, shown against card payments.
   const cardOnFile = formatCardOnFile(job.customer_card_number, job.customer_card_expiry);
 
-  // Reversing a payment re-opens the balance — owner / co_owner only (RLS 0153).
-  const canReversePayment =
-    ((profile.role === "owner" || profile.role === "co_owner") && !job.deactivated_at) &&
-    canUpdatePage(profile, "sales");
+  // Reversing a payment re-opens the balance — owners, plus anyone granted
+  // the "Reverse payment" action (RLS 0153 / 0165).
+  const canReversePayment = !job.deactivated_at && canReversePayments(profile);
 
   return (
     <div className="flex flex-col gap-6">
@@ -123,7 +122,7 @@ export default async function SalesJobDetailPage({
           <li><strong>Email</strong> — opens your email app with the invoice message written and a 30-day link to the PDF. Send it to the customer&apos;s email or type any other address.</li>
           <li><strong>Edit</strong> — owners, and managers / supervisors / staff at the same shop, can make changes. Every edit is recorded in the audit log so you know who changed what.</li>
           <li><strong>Record payment</strong> — appears when there&apos;s an unpaid balance. You can add partial payments over time; the status moves from Outstanding to Partial to Paid automatically.</li>
-          <li><strong>Reverse</strong> — owners can take back a payment (a bounced cheque, or one posted to the wrong invoice). The invoice goes back to Outstanding or Partial; the reversal is kept in the audit log.</li>
+          <li><strong>Reverse</strong> — owners (and anyone the Admin gives the &quot;Reverse payment&quot; permission) can take back a payment (a bounced cheque, or one posted to the wrong invoice). The invoice goes back to Outstanding or Partial; the reversal is kept in the audit log.</li>
         </ul>
         <p>
           Staff see a read-only version. Deactivated invoices are tagged and hidden from lists and reports, but kept in the system for your records.

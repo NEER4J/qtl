@@ -8,6 +8,7 @@
 // helpers (a sync formatter + a client-taking query), not client-callable
 // actions — so they live here and are imported by inventory.ts / sales.ts.
 import type { createClient } from "@/lib/supabase/server";
+import { isMhswCategoryName } from "@/lib/utils/mhsw";
 
 export interface StockConsumingLine {
   part_id?: string | null;
@@ -127,7 +128,10 @@ export async function findStockShortfalls(
           .in("part_id", partIds)
       : Promise.resolve({ data: [], error: null }),
     partIds.length
-      ? supabase.from("parts").select("id, brand, part_number").in("id", partIds)
+      ? supabase
+          .from("parts")
+          .select("id, brand, part_number, part_categories:category_id(name)")
+          .in("id", partIds)
       : Promise.resolve({ data: [], error: null }),
     oilIds.length
       ? supabase
@@ -151,6 +155,16 @@ export async function findStockShortfalls(
   const partLabelMap = new Map(
     (partNames ?? []).map((p) => [p.id as string, `${p.brand} ${p.part_number}`]),
   );
+  // MHSW is a fee, not stock (client 2026-11-19) — never short.
+  type CatJoin = { name: string | null } | { name: string | null }[] | null;
+  const nonStockPartIds = new Set(
+    (partNames ?? [])
+      .filter((p) => {
+        const c = (p as { part_categories?: CatJoin }).part_categories;
+        return isMhswCategoryName(Array.isArray(c) ? c[0]?.name : c?.name);
+      })
+      .map((p) => p.id as string),
+  );
   const oilStockMap = new Map(
     (oilStock ?? []).map((r) => [r.oil_type_id as string, Number(r.qty)]),
   );
@@ -162,6 +176,7 @@ export async function findStockShortfalls(
   for (const [key, required] of netNeeded) {
     const isPart = key.startsWith("part:");
     const id = key.slice(isPart ? 5 : 4);
+    if (isPart && nonStockPartIds.has(id)) continue;
     const available = isPart ? (partStockMap.get(id) ?? 0) : (oilStockMap.get(id) ?? 0);
     if (required > available + 0.0001) {
       shortfalls.push({

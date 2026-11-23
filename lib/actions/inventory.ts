@@ -8,6 +8,7 @@ import { fetchAllRowsParallel } from "@/lib/supabase/fetch-all";
 import { wrapAction } from "@/lib/actions/_utils";
 import { uuidSchema } from "@/lib/schemas/common";
 import type { StockLimit } from "@/lib/utils/stock-limits";
+import { isMhswCategoryName } from "@/lib/utils/mhsw";
 
 // ----------------------------------------------------------------------------
 // Inventory = per-location stock count for each catalogue part.
@@ -145,7 +146,15 @@ export async function listInventory(): Promise<InventoryData> {
     name: l.name as string,
   }));
 
-  const partsRows: InventoryPartRow[] = (parts ?? []).map((p) => {
+  // MHSW is a fee, not stock (client 2026-11-19): its catalogue "parts"
+  // (QTL1010 / QTL1011) never show in inventory or the low-stock count.
+  const catName = (p: PartRow) => {
+    const c = p.part_categories;
+    return Array.isArray(c) ? (c[0]?.name ?? "") : (c?.name ?? "");
+  };
+  const stockParts = (parts ?? []).filter((p) => !isMhswCategoryName(catName(p)));
+
+  const partsRows: InventoryPartRow[] = stockParts.map((p) => {
     const qtyByLocation: Record<string, number> = {};
     let total = 0;
     for (const loc of locations) {

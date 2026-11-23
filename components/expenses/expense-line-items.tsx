@@ -45,14 +45,29 @@ export interface ExpenseLineItem {
   description: string;
   quantity: number;
   unit_cost: number;
+  /** MHSW the vendor billed per unit — the "Environmental charge" line under
+   *  the part on their invoice. Kept apart from unit_cost, like HST (client
+   *  2026-11-20); it still counts toward the bill's sub total. */
+  mhsw_unit?: number;
   /** Snapshot of the part's last buying price at the moment it was picked,
    *  shown in the row so the user can see how today's unit_cost compares. */
   last_buying_price?: number | null;
 }
 
+/** Qty x (unit cost + MHSW) per line — the bill's sub total before HST. */
 export function lineItemsSubTotal(items: ExpenseLineItem[]): number {
   return items.reduce(
-    (sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unit_cost) || 0),
+    (sum, it) =>
+      sum +
+      (Number(it.quantity) || 0) * ((Number(it.unit_cost) || 0) + (Number(it.mhsw_unit) || 0)),
+    0,
+  );
+}
+
+/** MHSW paid on this bill: qty x MHSW per line. */
+export function lineItemsMhswTotal(items: ExpenseLineItem[]): number {
+  return items.reduce(
+    (sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.mhsw_unit) || 0),
     0,
   );
 }
@@ -74,6 +89,7 @@ export function newExpenseLineItem(partial: Partial<ExpenseLineItem> = {}): Expe
     description: "",
     quantity: 1,
     unit_cost: 0,
+    mhsw_unit: 0,
     last_buying_price: null,
     ...partial,
   };
@@ -285,7 +301,13 @@ export function ExpenseLineItems({
   );
 
   const addPart = (p: ExpensePartPickerRow) => {
-    const unit_cost = p.last_buying_price ?? p.cost ?? 0;
+    // The part's Buy MHSW seeds the MHSW column. The catalogue cost already
+    // includes it (part form: cost = base + Buy MHSW), so take it back out
+    // when there's no earlier bill to copy the unit cost from.
+    const mhsw_unit = p.mhsw_buy || 0;
+    const unit_cost =
+      p.last_buying_price ??
+      Math.round(((p.cost ?? 0) - mhsw_unit) * 10000) / 10000;
     onChange([
       ...items,
       newExpenseLineItem({
@@ -294,6 +316,7 @@ export function ExpenseLineItems({
         description: `${p.brand} ${p.part_number}${p.description ? ` — ${p.description}` : ""}`,
         quantity: 1,
         unit_cost,
+        mhsw_unit,
         last_buying_price: p.last_buying_price,
       }),
     ]);
@@ -345,6 +368,7 @@ export function ExpenseLineItems({
   };
 
   const total = lineItemsSubTotal(items);
+  const mhswTotal = lineItemsMhswTotal(items);
 
   return (
     <div className="space-y-3">
@@ -373,6 +397,9 @@ export function ExpenseLineItems({
                 <TableHead>Description</TableHead>
                 <TableHead className="w-24 text-right">Qty</TableHead>
                 <TableHead className="w-32 text-right">Unit cost</TableHead>
+                <TableHead className="w-28 text-right" title="MHSW the vendor charged per unit (their Environmental charge line)">
+                  MHSW / unit
+                </TableHead>
                 <TableHead className="w-32 text-right">Last buying price</TableHead>
                 <TableHead className="w-32 text-right">Line total</TableHead>
                 <TableHead className="w-12" />
@@ -382,7 +409,8 @@ export function ExpenseLineItems({
               {items.map((row) => {
                 const qty = Number(row.quantity) || 0;
                 const cost = Number(row.unit_cost) || 0;
-                const lineTotal = qty * cost;
+                const mhsw = Number(row.mhsw_unit) || 0;
+                const lineTotal = qty * (cost + mhsw);
                 // Oil stock is kept in litres, so a gallon line has to be
                 // scaled by that oil's own jug size (4.546 / 3.785 / 4.0 all
                 // occur) — mirrors migration 0132's trigger. An oil that's
@@ -455,6 +483,18 @@ export function ExpenseLineItems({
                         </p>
                       )}
                     </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="any"
+                        className="text-right"
+                        value={row.mhsw_unit ?? 0}
+                        onChange={(e) =>
+                          patchRow(row.client_id, { mhsw_unit: Number(e.target.value) })
+                        }
+                      />
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {last != null ? (
                         <div className="flex flex-col items-end">
@@ -494,9 +534,17 @@ export function ExpenseLineItems({
               })}
             </TableBody>
           </Table>
-          <div className="flex items-center justify-end px-4 py-2 border-t bg-muted/30 text-sm">
-            <span className="text-muted-foreground">Items total</span>
-            <span className="ml-3 font-medium tabular-nums">{formatMoney(total)}</span>
+          <div className="flex items-center justify-end gap-6 px-4 py-2 border-t bg-muted/30 text-sm">
+            {mhswTotal !== 0 && (
+              <span>
+                <span className="text-muted-foreground">of which MHSW</span>
+                <span className="ml-3 font-medium tabular-nums">{formatMoney(mhswTotal)}</span>
+              </span>
+            )}
+            <span>
+              <span className="text-muted-foreground">Items total</span>
+              <span className="ml-3 font-medium tabular-nums">{formatMoney(total)}</span>
+            </span>
           </div>
         </div>
       )}

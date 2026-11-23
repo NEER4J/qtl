@@ -155,6 +155,7 @@ export default async function ExpenseDetailPage({
                   <TableHead>Description</TableHead>
                   <TableHead className="text-right w-24">Qty</TableHead>
                   <TableHead className="text-right w-32">Unit cost</TableHead>
+                  <TableHead className="text-right w-28">MHSW / unit</TableHead>
                   <TableHead className="text-right w-32">Line total</TableHead>
                 </TableRow>
               </TableHeader>
@@ -164,7 +165,16 @@ export default async function ExpenseDetailPage({
                     <TableCell>{it.description}</TableCell>
                     <TableCell className="text-right tabular-nums">{Number(it.quantity)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatUnitCost(it.unit_cost)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatMoney(it.line_total)}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {Number(it.mhsw_unit) > 0 ? formatMoney(Number(it.mhsw_unit)) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {/* line_total is qty x unit cost (generated); MHSW sits on top. */}
+                      {formatMoney(
+                        Number(it.line_total) +
+                          Math.round(Number(it.quantity) * (Number(it.mhsw_unit) || 0) * 100) / 100,
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

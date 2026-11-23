@@ -8,6 +8,7 @@ import { isCardMode } from "@/lib/utils/payment-modes";
 import { InsufficientStockError, wrapAction } from "@/lib/actions/_utils";
 import { AuthorizationError } from "@/lib/auth/require";
 import { canAccessLocation } from "@/lib/auth/locations";
+import { canReversePayments } from "@/lib/permissions/check";
 import {
   assertCreditAppliedValid,
   assertCreditedFromJobValid,
@@ -281,6 +282,8 @@ export interface SalesJobItemRow extends SalesJobItem {
   unit_of_measure: UnitOfMeasure | null;
   /** Category id of the linked part — used for same-category dup detection on edit. */
   part_category_id: string | null;
+  /** Category name of the linked part — the invoice totals MHSW lines apart. */
+  part_category_name?: string | null;
 }
 
 export interface SalesPaymentRow {
@@ -317,7 +320,7 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
     supabase
       .from("sales_job_items")
       .select(
-        "*, parts:part_id(part_number, brand, category_id, part_categories:category_id(unit_of_measure))",
+        "*, parts:part_id(part_number, brand, category_id, part_categories:category_id(unit_of_measure, name))",
       )
       .eq("sales_job_id", id)
       .order("position", { ascending: true })
@@ -365,7 +368,7 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
       part_number: string | null;
       brand: string | null;
       category_id: string | null;
-      part_categories: { unit_of_measure: UnitOfMeasure } | null;
+      part_categories: { unit_of_measure: UnitOfMeasure; name: string | null } | null;
     } | null;
   };
   const items: SalesJobItemRow[] = ((itemsData ?? []) as unknown as ItemJoined[]).map(
@@ -377,6 +380,7 @@ export async function getSalesJob(id: string): Promise<SalesJobDetail | null> {
         part_brand: _p?.brand ?? null,
         unit_of_measure: _p?.part_categories?.unit_of_measure ?? null,
         part_category_id: _p?.category_id ?? null,
+        part_category_name: _p?.part_categories?.name ?? null,
       };
     },
   );
@@ -866,7 +870,8 @@ export const addSalesPayment = wrapAction({
 });
 
 // ----------------------------------------------------------------------------
-// Reverse a payment (owner only — also enforced by RLS, 0153)
+// Reverse a payment — owners, plus anyone the Admin grants the
+// "sales.reverse_payment" action (enforced by RLS too: 0153, 0165)
 // ----------------------------------------------------------------------------
 // A bounced cheque or a payment posted to the wrong invoice. The row is
 // removed; the rollup trigger re-totals the job (back to Partial / Outstanding)
@@ -874,8 +879,10 @@ export const addSalesPayment = wrapAction({
 export const reverseSalesPayment = wrapAction({
   schema: ReverseSalesPaymentInput,
   page: "sales",
-  roles: ["owner", "co_owner"],
   handler: async (input, profile): Promise<{ id: string }> => {
+    if (!canReversePayments(profile)) {
+      throw new Error("You don't have permission to reverse payments.");
+    }
     const supabase = await createClient();
     const { data: payment, error: fetchErr } = await supabase
       .from("sales_payments")

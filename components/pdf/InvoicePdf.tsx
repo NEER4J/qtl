@@ -19,6 +19,7 @@ import {
 } from "@react-pdf/renderer";
 import type { SalesJobDetail } from "@/lib/actions/sales";
 import { OIL_TIER_GROUP, buildDisplayRows, foldOilTier } from "@/lib/utils/sales-display";
+import { isMhswCategoryName } from "@/lib/utils/mhsw";
 
 const LOGO_PATH = path.join(process.cwd(), "public", "logo.png");
 
@@ -45,6 +46,8 @@ const styles = StyleSheet.create({
   shopMeta: { fontSize: 8, color: MUTED, marginTop: 1 },
   shopMetaRow: { flexDirection: "row", marginTop: 1 },
   shopMetaCell: { fontSize: 8, color: MUTED, marginRight: 14 },
+  // The GST/HST number prints bold and dark (client 2026-11-20).
+  gstNumber: { fontFamily: "Helvetica-Bold", color: TEXT },
   headerRight: { alignItems: "flex-end" },
   invoiceTitle: { fontSize: 13, fontFamily: "Helvetica-Bold" },
   invoiceMetaRight: { fontSize: 8, marginTop: 1, color: MUTED },
@@ -184,7 +187,7 @@ const styles = StyleSheet.create({
     paddingTop: 2,
     width: "75%",
   },
-  printedAt: { fontSize: 7, color: MUTED, marginTop: 8 },
+  printedAt: { fontSize: 7, color: MUTED, marginTop: 4 },
 
   totalsCol: { flex: 1, borderWidth: 1, borderColor: LINE },
   totalsHeader: {
@@ -292,21 +295,34 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
   const shownSingles = shown.flatMap((r) => (r.type === "single" ? [r.item] : []));
   const singles = display.flatMap((r) => (r.type === "single" ? [r.item] : []));
   const labour = singles.filter((it) => !it.part_id);
-  const parts = singles.filter((it) => !!it.part_id);
-  // Real packages only — from `display`, not the folded rows, or an oil folded
-  // with its tier would count twice (once here, once as a single line).
-  const packagesTotal = display.reduce((s, r) => (r.type === "package" ? s + r.total : s), 0);
-  // Packages render in the Description-of-Work section, so their total rolls
-  // into Total Labour. (Subtotal/HST/Total come from the stored job fields, so
-  // this split is cosmetic and always reconciles to the stored subtotal.)
+  // MHSW is charged through catalogue parts in the "MHSW" category, but it is
+  // not a part (client 2026-11-20, invoice 23023: "MHSW not parts", "Total
+  // Parts = only parts"). Those lines, plus any Sell MHSW baked into a part's
+  // unit price (mhsw_unit), total on their own row.
+  const isMhswLine = (it: (typeof singles)[number]) =>
+    !!it.part_id && isMhswCategoryName(it.part_category_name);
+  const parts = singles.filter((it) => !!it.part_id && !isMhswLine(it));
+  const mhswLines = singles.filter(isMhswLine);
+  // Packages, oil and labour lines used to total under "Total Labour"; the
+  // client struck that row out (invoice 23023, 2026-11-20), so they show on
+  // their own lines only. Subtotal/HST/Total come from the stored job fields,
+  // so the totals box never has to add up to the subtotal by itself.
   // Charges the sales form adds itself — the volume tier premium and the
-  // grease-only fee (0149) — print as their own lines like any other, but they
-  // aren't labour, so they total under Miscellaneous.
+  // grease-only fee (0149) — total under Miscellaneous.
   const isAutoCharge = (it: (typeof singles)[number]) => it.auto_fee != null;
-  const totalLabour =
-    labour.filter((it) => !isAutoCharge(it)).reduce((s, it) => s + Number(it.line_total ?? 0), 0) +
-    packagesTotal;
-  const totalParts = parts.reduce((s, it) => s + Number(it.line_total ?? 0), 0);
+  // Sell MHSW inside a part's price: per-unit snapshot x qty, negative on a
+  // return line. Customer-supplied parts charge nothing.
+  const embeddedMhsw = (it: (typeof singles)[number]) => {
+    if (it.is_customer_supplied === true) return 0;
+    const m = Number(it.mhsw_unit) || 0;
+    const sign = Number(it.line_total ?? 0) < 0 ? -1 : 1;
+    return Math.round(m * Number(it.quantity) * 100) / 100 * sign;
+  };
+  const totalEmbeddedMhsw = parts.reduce((s, it) => s + embeddedMhsw(it), 0);
+  const totalParts =
+    parts.reduce((s, it) => s + Number(it.line_total ?? 0), 0) - totalEmbeddedMhsw;
+  const totalMhsw =
+    mhswLines.reduce((s, it) => s + Number(it.line_total ?? 0), 0) + totalEmbeddedMhsw;
   const totalMisc = labour
     .filter(isAutoCharge)
     .reduce((s, it) => s + Number(it.line_total ?? 0), 0);
@@ -331,7 +347,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
                 <Text style={styles.shopMetaCell}>{job.location_phone || "(519) 622-0660"}</Text>
                 {/* The business number alone — "RT 001" is the account suffix,
                     and the fax is gone (client 2026-10-20). */}
-                <Text style={styles.shopMetaCell}>
+                <Text style={[styles.shopMetaCell, styles.gstNumber]}>
                   GST {(job.location_hst_number || "84754-0960").replace(/\s*RT\s*\d+\s*$/i, "")}
                 </Text>
               </View>
@@ -506,7 +522,14 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
               });
             }
 
-            for (const it of shownSingles.filter((x) => !!x.part_id)) {
+            // Parts first, then the MHSW lines — MHSW is not a part.
+            const partSingles = shownSingles.filter((x) => !!x.part_id);
+            const isMhsw = (x: (typeof partSingles)[number]) =>
+              isMhswCategoryName(x.part_category_name);
+            for (const it of [
+              ...partSingles.filter((x) => !isMhsw(x)),
+              ...partSingles.filter(isMhsw),
+            ]) {
               const cs = it.is_customer_supplied === true;
               const wouldHaveCharged =
                 Math.round(Number(it.quantity) * Number(it.unit_price) * 100) / 100;
@@ -597,18 +620,17 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
               ) : null}
             </View>
             <Text style={styles.signatureLine}>CUSTOMER&apos;S SIGNATURE</Text>
-            <Text style={styles.printedAt}>Printed on {nowStamp()}</Text>
           </View>
 
           <View style={styles.totalsCol}>
             <Text style={styles.totalsHeader}>Invoice Totals</Text>
             <View style={styles.totalsRow}>
-              <Text>Total Labour</Text>
-              <Text>{money(totalLabour)}</Text>
-            </View>
-            <View style={styles.totalsRow}>
               <Text>Total Parts</Text>
               <Text>{money(totalParts)}</Text>
+            </View>
+            <View style={styles.totalsRow}>
+              <Text>Total MHSW</Text>
+              <Text>{money(totalMhsw)}</Text>
             </View>
             <View style={styles.totalsRow}>
               <Text>Total Sublet</Text>
@@ -649,6 +671,8 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
 
         {/* ---------------- Fine print ---------------- */}
         <Text style={styles.finePrint} wrap={false}>{DISCLAIMER}</Text>
+        {/* At the very bottom, under the terms (client 2026-11-20). */}
+        <Text style={styles.printedAt}>Printed on {nowStamp()}</Text>
       </Page>
     </Document>
   );

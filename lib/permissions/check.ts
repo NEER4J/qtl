@@ -195,6 +195,20 @@ export function canUpdatePage(profile: ProfileSubset, pageKey: string): boolean 
   return isActionAllowed(profile, updateActionKey(pageKey));
 }
 
+/**
+ * Can this person reverse a payment on an invoice? Owners always can (RLS
+ * 0153 has always let them, and a saved override from before the action
+ * existed would otherwise lock them out); anyone else needs the
+ * "sales.reverse_payment" action, which RLS 0165 honours. Both need Sales
+ * Update.
+ */
+export function canReversePayments(profile: ProfileSubset): boolean {
+  if (!profile) return false;
+  if (!canUpdatePage(profile, "sales")) return false;
+  if (profile.role === "owner" || profile.role === "co_owner") return true;
+  return isActionAllowed(profile, "sales.reverse_payment");
+}
+
 // ----------------------------------------------------------------------------
 // Columns
 // ----------------------------------------------------------------------------

@@ -210,6 +210,7 @@ async function replaceExpenseItems(
     description: string;
     quantity: number;
     unit_cost: number;
+    mhsw_unit?: number;
     last_buying_price_snapshot?: number | null;
   }>,
   actorId: string,
@@ -220,6 +221,9 @@ async function replaceExpenseItems(
     .eq("expense_id", expenseId);
   if (delErr) throw delErr;
   if (items.length === 0) return;
+  // Only send mhsw_unit when a line has MHSW, so an expense without any still
+  // saves in the window before migration 0166 adds the column.
+  const hasMhsw = items.some((it) => (Number(it.mhsw_unit) || 0) !== 0);
   const rows = items.map((it, i) => ({
     expense_id: expenseId,
     part_id: it.part_id ?? null,
@@ -229,6 +233,7 @@ async function replaceExpenseItems(
     description: it.description,
     quantity: it.quantity,
     unit_cost: it.unit_cost,
+    ...(hasMhsw ? { mhsw_unit: Number(it.mhsw_unit) || 0 } : {}),
     last_buying_price_snapshot: it.last_buying_price_snapshot ?? null,
     position: i,
     created_by: actorId,
@@ -533,6 +538,8 @@ export interface ExpensePartPickerRow {
   category: string;
   unit_of_measure: UnitOfMeasure;
   cost: number;
+  /** Buy MHSW set on the part — seeds the MHSW column of a new bill line. */
+  mhsw_buy: number;
   last_buying_price: number | null;
   last_buying_date: string | null;
 }
@@ -647,6 +654,7 @@ function toExpensePickerRow(
     category: p.part_categories?.name ?? "",
     unit_of_measure: p.part_categories?.unit_of_measure ?? "pcs",
     cost: Number(p.cost) || 0,
+    mhsw_buy: Number(p.mhsw_buy) || 0,
     last_buying_price: last?.unit_cost ?? null,
     last_buying_date: last?.date ?? null,
   };

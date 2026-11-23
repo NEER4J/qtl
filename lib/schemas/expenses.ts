@@ -24,6 +24,9 @@ export const ExpenseItemInput = z.object({
   quantity: z.coerce.number().min(0.01, "Quantity must be at least 0.01"),
   // Signed so a promotion / vendor-discount line can carry a negative unit_cost.
   unit_cost: signedMoneySchema,
+  // MHSW the vendor billed per unit (their "Environmental charge" line under
+  // the part) — kept apart from unit_cost, like HST (client 2026-11-20).
+  mhsw_unit: moneySchema.default(0),
   // Snapshot of the part's last buying price at pick time. Persisted so the
   // drift indicator survives reopening the expense for edit.
   last_buying_price_snapshot: z.number().nullable().optional(),

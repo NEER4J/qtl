@@ -1,4 +1,5 @@
-import { Download, TriangleAlert } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeftRight, ClipboardList, Download, TriangleAlert } from "lucide-react";
 
 import { PageHelp } from "@/components/help/page-help";
 import { PrintButton } from "@/components/pricing/print-button";
@@ -62,6 +63,16 @@ export default async function InventoryPage() {
               </a>
             </Button>
           )}
+          <Button asChild variant="outline" size="sm">
+            <Link href="/inventory/transfers">
+              <ArrowLeftRight className="size-4" /> Transfers
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/inventory/count-sheet">
+              <ClipboardList className="size-4" /> Count sheet
+            </Link>
+          </Button>
           <PrintButton />
         </div>
       </div>

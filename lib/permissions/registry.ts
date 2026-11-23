@@ -84,6 +84,7 @@ export const PAGE_REGISTRY: PageDef[] = [
   { key: "analytics_expenses", label: "Analytics — Expenses", group: "Insights", path: "/analytics/expenses", defaultRoles: ["owner", "co_owner"] },
   { key: "reports", label: "Reports", group: "Insights", path: "/reports", defaultRoles: ["owner", "co_owner"] },
   { key: "reports_hst", label: "Reports — HST", group: "Insights", path: "/reports/hst", defaultRoles: ["owner", "co_owner"] },
+  { key: "reports_mhsw", label: "Reports — MHSW", group: "Insights", path: "/reports/mhsw", defaultRoles: ["owner", "co_owner"] },
   { key: "reports_daily", label: "Reports — Daily", group: "Insights", path: "/reports/daily", defaultRoles: ["owner", "co_owner"] },
   { key: "reports_outstanding", label: "Reports — Outstanding", group: "Insights", path: "/reports/outstanding", defaultRoles: ["owner", "co_owner"] },
   { key: "reports_pnl", label: "Reports — Profit & loss", group: "Insights", path: "/reports/pnl", defaultRoles: ["owner", "co_owner"] },
@@ -121,6 +122,7 @@ export const PAGE_REGISTRY: PageDef[] = [
   { key: "settings_statutory", label: "Statutory Rates", group: "Settings", path: "/settings/statutory-rates", defaultRoles: ["co_owner"] },
   { key: "settings_ip_access", label: "IP Access", group: "Settings", path: "/settings/ip-access", defaultRoles: ["co_owner"] },
   { key: "settings_audit_log", label: "Audit Log", group: "Settings", path: "/settings/audit-log", defaultRoles: ["co_owner"] },
+  { key: "settings_backup", label: "Backup", group: "Settings", path: "/settings/backup", defaultRoles: ["co_owner"] },
 ];
 
 /**
@@ -369,6 +371,16 @@ export const ACTION_REGISTRY: ActionDef[] = [
     pageKey: "customers",
     hint: "Download the entire customer directory — every name, phone and email — as a spreadsheet.",
     defaultRoles: ["owner", "co_owner", "manager", "supervisor", "accountant", "technician"],
+  },
+  {
+    // Owners always can (RLS 0153); the Admin can grant it to anyone else
+    // with Sales (client call 2026-11-19 — "make reverse a permission").
+    // RLS 0165 lets a person with this key in allowed_actions delete.
+    key: "sales.reverse_payment",
+    label: "Reverse payment",
+    pageKey: "sales",
+    hint: "Take back a payment on an invoice (bounced cheque, wrong invoice). The invoice goes back to Outstanding or Partial.",
+    defaultRoles: ["owner", "co_owner"],
   },
   {
     key: "inventory.export",

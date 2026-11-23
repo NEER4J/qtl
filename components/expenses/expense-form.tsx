@@ -250,6 +250,7 @@ export function ExpenseForm({
         description: it.description.trim() || "Item",
         quantity: Number(it.quantity) || 0,
         unit_cost: Number(it.unit_cost) || 0,
+        mhsw_unit: Number(it.mhsw_unit) || 0,
         last_buying_price_snapshot: it.last_buying_price ?? null,
       }));
 
