@@ -17,7 +17,6 @@ Hi, thanks for the voice notes. Update:
 5. Parts: Admin can now give any user permission to see and edit parts (Users > permissions > Pricing Catalogue > Parts).
 6. Gallon size is set per oil in Settings > Pricing Catalogue > Oil types. Chevron 3.78, Shell 5. Mobil is 3.89 on the bulk oil and 4 on the gallon. Please check it is right.
 7. MHSW column on expenses and Inventory > Transfers are ready, please check them now.
-
 8. Oil not coming in by itself on New Job: it waited for Bulk/Gallon to be picked. Now Bulk is the default, so it comes in as soon as engine, filter and oil are picked.
 
 *Next*
