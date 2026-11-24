@@ -206,7 +206,7 @@ export function OilTypeFormDialog({
                     <Input type="number" min="0.1" step="0.001" {...field} />
                   </FormControl>
                   <FormDescription className="text-xs">
-                    4.546 = Imperial gallon, 3.785 = US gallon, 4.000 = metric. Used to convert
+                    Jug size in litres for this oil (Chevron 3.78, Mobil 4, Shell 5; 4.546 = Imperial gallon). Used to convert
                     the per-gallon price into a per-litre rate when pricing oil-change jobs.
                   </FormDescription>
                   <FormMessage />

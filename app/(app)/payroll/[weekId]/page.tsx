@@ -69,9 +69,9 @@ export default async function PayrollWeekPage({
     (show("gross") ? 1 : 0) +
     (show("holiday_vacation") ? 2 : 0) + // Holiday + Vac
     (show("phone_allowance") ? 1 : 0) +
-    (show("ei_cpp") ? 3 : 0) + // EI, CPP, CPP2
+    (show("ei_cpp") ? 4 : 0) + // EI, CPP, CPP2, Benefit
     (show("income_tax") ? 1 : 0) +
-    (show("benefits") ? 3 : 0) + // Er EI, Er CPP, WSIB
+    (show("benefits") ? 4 : 0) + // Er EI, Er CPP, Er benefit, WSIB
     (show("net_pay") ? 1 : 0);
 
   // Editing is no longer gated on the week still being in Draft (migration
@@ -263,9 +263,12 @@ export default async function PayrollWeekPage({
                   {show("ei_cpp") && <TableHead className="text-right">CPP</TableHead>}
                   {show("ei_cpp") && <TableHead className="text-right">CPP2</TableHead>}
                   {show("income_tax") && <TableHead className="text-right">Tax</TableHead>}
+                  {/* Benefits were entered but never reported (client 2026-11-24). */}
+                  {show("ei_cpp") && <TableHead className="text-right">Benefit</TableHead>}
                   {show("holiday_vacation") && <TableHead className="text-right">Vac</TableHead>}
                   {show("benefits") && <TableHead className="text-right">Er EI</TableHead>}
                   {show("benefits") && <TableHead className="text-right">Er CPP</TableHead>}
+                  {show("benefits") && <TableHead className="text-right">Er benefit</TableHead>}
                   {show("benefits") && <TableHead className="text-right">WSIB</TableHead>}
                   {show("net_pay") && <TableHead className="text-right">Net pay</TableHead>}
                   <TableHead className="text-right">Cash</TableHead>
@@ -338,9 +341,11 @@ export default async function PayrollWeekPage({
                       {show("ei_cpp") && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.cpp_employee)}</TableCell>}
                       {show("ei_cpp") && <TableCell className="text-right tabular-nums text-muted-foreground">{entry.cpp_employee2 ? formatMoney(entry.cpp_employee2) : "—"}</TableCell>}
                       {show("income_tax") && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.income_tax)}</TableCell>}
+                      {show("ei_cpp") && <TableCell className="text-right tabular-nums text-muted-foreground">{entry.benefit_employee_deduction ? formatMoney(entry.benefit_employee_deduction) : "—"}</TableCell>}
                       {show("holiday_vacation") && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.vacation_pay)}</TableCell>}
                       {show("benefits") && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.ei_employer)}</TableCell>}
                       {show("benefits") && <TableCell className="text-right tabular-nums text-muted-foreground">{formatMoney(entry.cpp_employer + entry.cpp_employer2)}</TableCell>}
+                      {show("benefits") && <TableCell className="text-right tabular-nums text-muted-foreground">{entry.benefit_employer_contribution ? formatMoney(entry.benefit_employer_contribution) : "—"}</TableCell>}
                       {show("benefits") && <TableCell className="text-right tabular-nums text-muted-foreground">{entry.wsib_employer ? formatMoney(entry.wsib_employer) : "—"}</TableCell>}
                       {show("net_pay") && <TableCell className="text-right tabular-nums font-semibold">{formatMoney(entry.net_pay)}</TableCell>}
                       <TableCell className="text-right tabular-nums">{formatMoney(entry.cash_total)}</TableCell>

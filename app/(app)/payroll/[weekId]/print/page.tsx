@@ -128,9 +128,11 @@ export default async function PayrollPrintPage({
                 {show("ei_cpp") && <Th>CPP</Th>}
                 {show("ei_cpp") && <Th>CPP2</Th>}
                 {show("income_tax") && <Th>Tax</Th>}
+                {show("ei_cpp") && <Th>Benefit</Th>}
                 {show("holiday_vacation") && <Th>Vacation</Th>}
                 {show("benefits") && <Th>Er EI</Th>}
                 {show("benefits") && <Th>Er CPP</Th>}
+                {show("benefits") && <Th>Er benefit</Th>}
                 {show("benefits") && <Th>WSIB</Th>}
                 {show("net_pay") && <Th>Net pay</Th>}
                 <Th>Cash</Th>
@@ -178,9 +180,11 @@ export default async function PayrollPrintPage({
                   {show("ei_cpp") && <Td>{formatMoney(e.cpp_employee)}</Td>}
                   {show("ei_cpp") && <Td>{formatMoney(e.cpp_employee2)}</Td>}
                   {show("income_tax") && <Td>{formatMoney(e.income_tax)}</Td>}
+                  {show("ei_cpp") && <Td>{formatMoney(e.benefit_employee_deduction)}</Td>}
                   {show("holiday_vacation") && <Td>{formatMoney(e.vacation_pay)}</Td>}
                   {show("benefits") && <Td>{formatMoney(e.ei_employer)}</Td>}
                   {show("benefits") && <Td>{formatMoney(e.cpp_employer + e.cpp_employer2)}</Td>}
+                  {show("benefits") && <Td>{formatMoney(e.benefit_employer_contribution)}</Td>}
                   {show("benefits") && <Td>{formatMoney(e.wsib_employer)}</Td>}
                   {show("net_pay") && <Td className="font-semibold">{formatMoney(e.net_pay)}</Td>}
                   <Td>{formatMoney(e.cash_total)}</Td>
@@ -199,9 +203,11 @@ export default async function PayrollPrintPage({
                 {show("ei_cpp") && <Td>{formatMoney(sum((e) => e.cpp_employee))}</Td>}
                 {show("ei_cpp") && <Td>{formatMoney(sum((e) => e.cpp_employee2))}</Td>}
                 {show("income_tax") && <Td>{formatMoney(sum((e) => e.income_tax))}</Td>}
+                {show("ei_cpp") && <Td>{formatMoney(sum((e) => e.benefit_employee_deduction))}</Td>}
                 {show("holiday_vacation") && <Td>{formatMoney(sum((e) => e.vacation_pay))}</Td>}
                 {show("benefits") && <Td>{formatMoney(sum((e) => e.ei_employer))}</Td>}
                 {show("benefits") && <Td>{formatMoney(sum((e) => e.cpp_employer + e.cpp_employer2))}</Td>}
+                {show("benefits") && <Td>{formatMoney(sum((e) => e.benefit_employer_contribution))}</Td>}
                 {show("benefits") && <Td>{formatMoney(sum((e) => e.wsib_employer))}</Td>}
                 {show("net_pay") && <Td>{formatMoney(sum((e) => e.net_pay))}</Td>}
                 <Td>{formatMoney(sum((e) => e.cash_total))}</Td>

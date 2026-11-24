@@ -37,16 +37,28 @@ function isMissingRelation(err: unknown): boolean {
 
 /** null = the table isn't there yet (before migration 0167). */
 export async function listStockTransfers(limit = 200): Promise<StockTransferRow[] | null> {
+  return readStockTransfers({ limit });
+}
+
+/** One transfer, for its printable note. null = not found (or no table yet). */
+export async function getStockTransfer(id: string): Promise<StockTransferRow | null> {
+  const rows = await readStockTransfers({ id });
+  return rows?.[0] ?? null;
+}
+
+async function readStockTransfers(opts: { limit?: number; id?: string }): Promise<StockTransferRow[] | null> {
   await requirePage("inventory");
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let q = supabase
     .from("stock_transfers")
     .select(
       "id, transfer_date, quantity, unit_cost, notes, created_at, created_by, from:from_location_id(name), to:to_location_id(name), parts:part_id(brand, part_number), oil_types:oil_type_id(code, name)",
     )
     .order("transfer_date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(limit);
+    .order("created_at", { ascending: false });
+  if (opts.id) q = q.eq("id", opts.id);
+  else q = q.limit(opts.limit ?? 200);
+  const { data, error } = await q;
   if (error) {
     if (isMissingRelation(error)) return null;
     throw error;

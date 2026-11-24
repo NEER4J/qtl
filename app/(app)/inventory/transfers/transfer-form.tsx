@@ -78,7 +78,9 @@ export function TransferForm({
         toast.error(field ?? res.error);
         return;
       }
-      toast.success(`Moved ${qty}${picked.unit ? ` ${picked.unit}` : ""} of ${picked.label}`);
+      toast.success(`Moved ${qty}${picked.unit ? ` ${picked.unit}` : ""} of ${picked.label}`, {
+        action: { label: "Print note", onClick: () => router.push(`/inventory/transfers/${res.data.id}`) },
+      });
       setPicked(null);
       setQ("");
       setQty("1");

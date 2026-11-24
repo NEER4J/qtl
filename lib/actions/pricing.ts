@@ -2414,7 +2414,7 @@ export async function checkPartNumberExists(input: {
 export const createPart = wrapAction({
   schema: CreatePartInput,
   page: "settings_pricing_parts",
-  roles: ["owner", "co_owner"],
+  // Who: the page's Update right (Admin, or a parts manager given it).
   handler: async (input): Promise<Part> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -2434,7 +2434,7 @@ export const createPart = wrapAction({
 export const updatePart = wrapAction({
   schema: UpdatePartInput,
   page: "settings_pricing_parts",
-  roles: ["owner", "co_owner"],
+  // Who: the page's Update right (Admin, or a parts manager given it).
   handler: async ({ id, ...fields }): Promise<Part> => {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -2455,7 +2455,7 @@ export const updatePart = wrapAction({
 export const togglePartActive = wrapAction({
   schema: ToggleActiveInput,
   page: "settings_pricing_parts",
-  roles: ["owner", "co_owner"],
+  // Who: the page's Update right (Admin, or a parts manager given it).
   handler: async (input): Promise<Part> => {
     const supabase = await createClient();
     const { data, error } = await supabase

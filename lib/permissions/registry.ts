@@ -345,7 +345,10 @@ export const UPDATE_ROLES: Record<string, UserRole[]> = {
   settings_services: ADMIN_ONLY,
   settings_technicians: ADMIN_ONLY,
   settings_pricing: ADMIN_ONLY,
-  settings_pricing_parts: ADMIN_ONLY,
+  // The Admin can hand parts (view + edit) to a parts manager (client
+  // 2026-11-24). The page itself stays Admin-only by default; RLS 0168 lets
+  // anyone holding the page and its Update right write parts.
+  settings_pricing_parts: [...WRITE_FIELD, "accountant"],
   settings_pricing_packages: ADMIN_ONLY,
   settings_pricing_categories: ADMIN_ONLY,
   settings_pricing_brands: ADMIN_ONLY,

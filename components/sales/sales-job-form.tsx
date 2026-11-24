@@ -406,7 +406,9 @@ export function SalesJobForm({
     engine_type_id: initial?.engine_type_id ?? "",
     engine_option_id: initial?.engine_option_id ?? "",
     oil_type_id: initial?.oil_type_id ?? "",
-    oil_container: initial?.oil_container ?? "",
+    // New jobs start on Bulk: 80-90% of oil changes are bulk (client
+    // 2026-11-24). An edit keeps what was saved.
+    oil_container: initial?.oil_container ?? (mode === "create" ? "bulk" : ""),
   };
 
   const form = useForm<FormValues>({ defaultValues: defaults });
@@ -1145,7 +1147,8 @@ export function SalesJobForm({
         engine_type_id: values.engine_type_id || null,
         engine_option_id: values.engine_option_id || null,
         oil_type_id: values.oil_type_id || null,
-        oil_container: values.oil_container || null,
+        // The container only means something with an oil picked.
+        oil_container: values.oil_type_id ? values.oil_container || null : null,
         auto_priced_at: stillAutoPriced ? new Date().toISOString() : null,
         dump_truck_surcharge: appliedSurcharge,
         oil_tier_premium_waived: autoWaived.oil_tier_premium,
@@ -1889,7 +1892,7 @@ export function SalesJobForm({
                           </FormControl>
                           <SelectContent>
                             <SelectItem value="bulk">Bulk (per litre)</SelectItem>
-                            <SelectItem value="gallon">Imperial gallon</SelectItem>
+                            <SelectItem value="gallon">Gallon (jug size set per oil)</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />

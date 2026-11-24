@@ -76,6 +76,7 @@ export default async function StockTransfersPage() {
         <ul>
           <li>You can only send what the sending location has on hand.</li>
           <li>Transfers can&apos;t be edited or deleted. To undo one, transfer it back.</li>
+          <li>Each transfer has a printable <strong>Note</strong> (TR- number, both shops, item, quantity, value, signature lines) to keep on file.</li>
           <li>Owner, Admin, managers and supervisors can transfer; everyone with Inventory can see the list.</li>
         </ul>
       </PageHelp>
@@ -117,6 +118,7 @@ export default async function StockTransfersPage() {
                       <TableHead className="text-right">Value</TableHead>
                       <TableHead>By</TableHead>
                       <TableHead>Notes</TableHead>
+                      <TableHead />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -132,6 +134,11 @@ export default async function StockTransfersPage() {
                         <TableCell className="text-right tabular-nums">{formatMoney(t.value)}</TableCell>
                         <TableCell>{t.created_by_name ?? "—"}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{t.notes ?? ""}</TableCell>
+                        <TableCell>
+                          <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                            <Link href={`/inventory/transfers/${t.id}`}>Note</Link>
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

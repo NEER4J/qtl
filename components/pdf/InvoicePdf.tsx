@@ -287,11 +287,45 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
     (it) => it.is_taxable === true,
     (it) => it.package_label ?? "Package",
   );
-  const packageRows = shown.flatMap((r) =>
+  type PrintPackage = {
+    key: string;
+    label: string;
+    total: number;
+    items: (typeof job.items)[number][];
+    /** The oil folded into this line, printed as one more "Included" row. */
+    oilNote?: string;
+  };
+  const allPackageRows: PrintPackage[] = shown.flatMap((r) =>
     r.type === "package"
       ? [{ key: r.key, label: r.label, total: r.total, items: r.items }]
       : [],
   );
+  // Package + oil + tier print as ONE line, the oil grade shown under it and
+  // no tier line anywhere (client 2026-11-24: customers argue about the tier
+  // line). The oil-and-tier row goes into the engine's package — the first
+  // package with no oil of its own (a Trans & Diff package carries oils).
+  // With no such package the oil prints alone, still without the tier text.
+  // Paper only: the job screen keeps the tier visible for staff.
+  const oilTierRow = allPackageRows.find((r) => r.key.startsWith(OIL_TIER_GROUP)) ?? null;
+  const oilTierLine = oilTierRow?.items.find((m) => m.auto_fee == null) ?? null;
+  const oilTierText = oilTierLine
+    ? `${oilTierLine.description} × ${Number(oilTierLine.quantity)} ${
+        oilTierLine.oil_container === "gallon" ? "gal" : "L"
+      }`
+    : "";
+  const hostPackage = oilTierRow
+    ? allPackageRows.find(
+        (r) => r !== oilTierRow && !r.key.startsWith(OIL_TIER_GROUP) && r.items.every((m) => !m.oil_type_id),
+      ) ?? null
+    : null;
+  const packageRows: PrintPackage[] = allPackageRows.flatMap((r) => {
+    if (r === oilTierRow && hostPackage) return [];
+    if (r === hostPackage && oilTierRow) {
+      return [{ ...r, total: r.total + oilTierRow.total, oilNote: oilTierText }];
+    }
+    if (r === oilTierRow) return [{ ...r, label: oilTierText, items: [] }];
+    return [r];
+  });
   const shownSingles = shown.flatMap((r) => (r.type === "single" ? [r.item] : []));
   const singles = display.flatMap((r) => (r.type === "single" ? [r.item] : []));
   const labour = singles.filter((it) => !it.part_id);
@@ -323,8 +357,11 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
     parts.reduce((s, it) => s + Number(it.line_total ?? 0), 0) - totalEmbeddedMhsw;
   const totalMhsw =
     mhswLines.reduce((s, it) => s + Number(it.line_total ?? 0), 0) + totalEmbeddedMhsw;
+  // A tier premium folded into the oil line is inside that line's amount, so
+  // it doesn't total again under Miscellaneous.
   const totalMisc = labour
     .filter(isAutoCharge)
+    .filter((it) => !(oilTierRow && it.auto_fee === "oil_tier_premium"))
     .reduce((s, it) => s + Number(it.line_total ?? 0), 0);
 
   return (
@@ -481,10 +518,10 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
                 0,
               );
               const oilWithTier = r.key.startsWith(OIL_TIER_GROUP);
-              const oil = r.items[0]!;
+              const oil = oilWithTier ? oilTierLine : null;
               rows.push({
                 id: r.key,
-                qty: oilWithTier
+                qty: oil
                   ? `${Number(oil.quantity)} ${oil.oil_container === "gallon" ? "gal" : "ltr"}`
                   : "1",
                 description:
@@ -504,6 +541,18 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
                   unit: merged ? money(Number(m.merged_unit_price)) : "Included",
                   unitMuted: true,
                   unitStrike: merged,
+                  mhsw: "",
+                  amount: "",
+                  indent: true,
+                });
+              }
+              if (r.oilNote) {
+                rows.push({
+                  id: `${r.key}:oil`,
+                  qty: "",
+                  description: r.oilNote,
+                  unit: "Included",
+                  unitMuted: true,
                   mhsw: "",
                   amount: "",
                   indent: true,
