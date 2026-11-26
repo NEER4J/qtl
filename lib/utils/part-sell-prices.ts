@@ -7,7 +7,8 @@ import { roundUpTo99 } from "@/lib/utils/format";
 // the sales job part-add tier dialog. Kept in one place so both surfaces agree.
 //
 // Pricing model (client 2026-06):
-//   * Over the Counter = List price (cost + Sell MHSW + margin).
+//   * Over the Counter = List price (cost + margin; Sell MHSW is charged on
+//                        the job's own MHSW line — 0164).
 //   * With Service     = Total cost + Service charge.
 //                        (Total cost = part.cost, which already includes Buy
 //                        MHSW. "Service charge" is the per-part counter_premium
@@ -110,11 +111,11 @@ export function computePartSellTiers(
   globalCustomerSuppliesLabour: number,
   opts: PartSellTierOptions = {},
 ): PartSellTiers {
-  // "Cost price" = base cost (incl Buy MHSW) + Sell MHSW — the SAME basis the
-  // list price is built on (cost + Sell MHSW + margin). With Service is computed
-  // off this cost price, so Sell MHSW must be folded in here too. (client
-  // 2026-06-28 — previously used bare part.cost, which dropped the Sell MHSW.)
-  const totalCost = Number(part.cost) + Number(part.mhsw_fee);
+  // "Cost price" = base cost (incl Buy MHSW) — the same basis the list price is
+  // built on (cost + margin). Sell MHSW used to be folded in here (client
+  // 2026-06-28); since 0164 it is charged on the job's own MHSW line instead
+  // (client 2026-11-25), so it stays out of every sell price.
+  const totalCost = Number(part.cost);
   const listPrice = Number(part.list_price);
   const serviceCharge = effectiveCounterPremium(part, globalCounterPremium);
 

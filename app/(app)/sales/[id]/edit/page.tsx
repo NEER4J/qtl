@@ -103,6 +103,7 @@ export default async function EditSalesJobPage({
         dumpTruckSurcharge={Number(settings.dump_truck_surcharge ?? 0)}
         volumeTiers={volumeTiers}
         greaseOnlyFee={Number(settings.grease_only_fee ?? 0)}
+        mhswOilPerLitre={Number(settings.mhsw_oil_per_litre ?? 0)}
         partCategories={partCategories}
         greaseParts={greaseParts}
         currentUserRole={profile.role}
@@ -160,6 +161,9 @@ export default async function EditSalesJobPage({
           dump_truck_surcharge: Number(job.dump_truck_surcharge ?? 0),
           oil_tier_premium_waived: job.oil_tier_premium_waived ?? false,
           grease_only_fee_waived: job.grease_only_fee_waived ?? false,
+          // Undefined until 0164: the form then treats the job as an old one.
+          mhsw_parts_waived: job.mhsw_parts_waived,
+          mhsw_oil_waived: job.mhsw_oil_waived,
           free_grease_applied: job.free_grease_applied ?? false,
           free_grease_override_reason: job.free_grease_override_reason ?? "",
           comments: job.comments ?? "",

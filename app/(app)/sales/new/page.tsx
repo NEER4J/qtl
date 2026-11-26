@@ -117,6 +117,7 @@ export default async function NewSalesJobPage({
         dumpTruckSurcharge={Number(settings.dump_truck_surcharge ?? 0)}
         volumeTiers={volumeTiers}
         greaseOnlyFee={Number(settings.grease_only_fee ?? 0)}
+        mhswOilPerLitre={Number(settings.mhsw_oil_per_litre ?? 0)}
         partCategories={partCategories}
         greaseParts={greaseParts}
         lockedLocationId={lockedLocationId}

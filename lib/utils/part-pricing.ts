@@ -21,36 +21,29 @@ function roundMoney(value: number): number {
 }
 
 /**
- * Margin amount. Sell MHSW is folded into the cost basis FIRST, then the
- * margin is calculated on that combined basis (cost + Sell MHSW). For a percent
- * margin this means MHSW is marked up too; for a fixed margin the basis is
- * irrelevant. See `calculatePartListPrice` for the full chain.
+ * Margin amount, on cost alone. Sell MHSW is NOT part of the price: the job
+ * charges it on its own "MHSW — parts" line (client 2026-11-25, 0164). For a
+ * fixed margin the basis is irrelevant.
  */
 export function calculatePartMarginAmount({
   cost,
-  mhsw_fee,
   margin_type,
   margin_value,
-}: Pick<PartPriceInputs, "cost" | "mhsw_fee" | "margin_type" | "margin_value">): number {
-  const costBasis = toFiniteNumber(cost) + toFiniteNumber(mhsw_fee);
+}: Pick<PartPriceInputs, "cost" | "margin_type" | "margin_value">): number {
   const safeMarginValue = clampNonNegative(margin_value);
   return roundMoney(
     margin_type === "percent"
-      ? (costBasis * safeMarginValue) / 100
+      ? (toFiniteNumber(cost) * safeMarginValue) / 100
       : safeMarginValue,
   );
 }
 
 /**
- * List price = (cost + Sell MHSW) + margin, where margin is computed on the
- * combined cost basis. Mirror of the `set_part_list_price()` DB trigger.
+ * List price = cost + margin. Sell MHSW stays out (0164). Mirror of the
+ * `set_part_list_price()` DB trigger.
  */
 export function calculatePartListPrice(input: PartPriceInputs): number {
-  return roundMoney(
-    toFiniteNumber(input.cost) +
-      toFiniteNumber(input.mhsw_fee) +
-      calculatePartMarginAmount(input),
-  );
+  return roundMoney(toFiniteNumber(input.cost) + calculatePartMarginAmount(input));
 }
 
 export function normalizePartPricing<T extends Pick<Part, "cost" | "mhsw_fee" | "margin_type" | "margin_value" | "list_price">>(

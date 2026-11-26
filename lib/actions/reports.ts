@@ -7,6 +7,7 @@ import { applyLocationFilter, resolveLocationFilter } from "@/lib/auth/locations
 import { jobTenders, tendersByMode, type PaymentRowLike } from "@/lib/utils/job-tenders";
 import { payrollGross, type PayEarnings } from "@/lib/utils/payroll-math";
 import { addMonthsISO, isDateOnly, todayISO } from "@/lib/utils/tz";
+import { AUTO_FEE_LABEL, type AutoFee } from "@/lib/utils/sales-auto-lines";
 
 export interface ReportFilter {
   from?: string;
@@ -747,7 +748,7 @@ export async function getDailyJobReport(
       description: string;
       quantity: number;
       line_total: number;
-      auto_fee?: "oil_tier_premium" | "grease_only_fee" | null;
+      auto_fee?: AutoFee | null;
       parts:
         | { part_number: string | null; brand: string | null }
         | { part_number: string | null; brand: string | null }[]
@@ -759,12 +760,7 @@ export async function getDailyJobReport(
       const partRel = Array.isArray(it.parts) ? it.parts[0] : it.parts;
       // Automatic charges carry a per-job description ("Volume tier premium —
       // Delo … 34 L"), so group them by kind rather than one row per job.
-      const autoLabel =
-        it.auto_fee === "oil_tier_premium"
-          ? "Volume tier premium"
-          : it.auto_fee === "grease_only_fee"
-            ? "Grease-only service fee"
-            : null;
+      const autoLabel = it.auto_fee ? AUTO_FEE_LABEL[it.auto_fee] ?? null : null;
       if (autoLabel) it = { ...it, description: autoLabel };
       const key = it.part_id ?? (autoLabel ? `auto:${it.auto_fee}` : `desc:${it.description}`);
       const existing = map.get(key);

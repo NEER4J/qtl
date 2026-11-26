@@ -192,7 +192,8 @@ const normPackageName = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase
  * Filters are summed too — the Oil detail page takes an engine's filter cost
  * from its package (client 2026-09-15: "pull filter pricing from packages,
  * same as fuel / grease / labour", with the package's quantities, so LF17503
- * × 2 counts twice). Cost basis is (cost + MHSW) × quantity throughout.
+ * × 2 counts twice). Cost basis is cost × quantity throughout (Sell MHSW is
+ * charged on the job's own MHSW line since 0164).
  *
  * Engine → package resolves by the explicit `engine_types.labour_package_id`
  * link (migration 0130) first, then falls back to an exact engine-name ==
@@ -226,7 +227,7 @@ async function loadPackagesWithExtras(supabase: Awaited<ReturnType<typeof create
     if (!it.parts) continue; // oil / Trans & Diff lines — not a part category
     const bucket = costBucketFor(it.parts.part_categories);
     if (bucket !== "filter" && bucket !== "fuel" && bucket !== "grease") continue;
-    const line = (Number(it.parts.cost) + Number(it.parts.mhsw_fee)) * (Number(it.quantity) || 0);
+    const line = Number(it.parts.cost) * (Number(it.quantity) || 0);
     const slot = extrasByPackage.get(it.package_id) ?? { ...NO_EXTRAS };
     if (bucket === "filter") {
       slot.filter += line;
@@ -477,7 +478,7 @@ export async function getOilChangeGrid(): Promise<{
 // "All Filter Sell Price" — mirrors the eponymous Excel tab. Computes the 4
 // service-mode prices per filter (see computePartSellTiers for the source).
 //
-//   Over the Counter = List price (cost + Sell MHSW + margin)
+//   Over the Counter = List price (cost + margin; MHSW is its own job line)
 //   With Service     = Total cost (incl. Buy MHSW) + Service charge  (may be −)
 //   Without Service  = Linked labour (service_cost) + List price
 //   Customer Supplies = customer_supplies_labour (flat — customer brings their own filter)
@@ -869,7 +870,7 @@ function priceOilRows(d: OilPricingData, oilType: OilType, container: "bulk" | "
     enginePartCost.set(
       key,
       (enginePartCost.get(key) ?? 0)
-        + (Number(f.parts.cost) + Number(f.parts.mhsw_fee)) * qty,
+        + Number(f.parts.cost) * qty,
     );
     engineServiceCost.set(
       key,
@@ -1239,7 +1240,7 @@ export interface OilChangeDetailRow {
   extras_known: boolean;
   /** Name of the package the two came from, for the cell tooltip. */
   extras_package: string | null;
-  /** The filters in the engine's package, (cost + MHSW) × the package's qty —
+  /** The filters in the engine's package, cost × the package's qty —
    *  what Oil detail uses as filter cost. Null when there's no package or it
    *  lists no filters (Oil detail then falls back to the brand columns). */
   package_filter_cost: number | null;
@@ -1291,7 +1292,7 @@ export async function getOilChangeDetails(): Promise<{
     const qty = Number(r.quantity) || 0;
     const part = r.parts;
     const brand = part.brand ?? "(none)";
-    const filterCost = (Number(part.cost) + Number(part.mhsw_fee)) * qty;
+    const filterCost = Number(part.cost) * qty;
     const labourCost = Number(part.service_costs?.cost ?? 0) * qty;
 
     const rowKey = engineRowKey(r.engine_type_id, r.engine_option_id);
@@ -2905,7 +2906,8 @@ export async function listPriceHistory(
 
 // ============================================================================
 // Min-margin alerts — list active parts whose margin is below the configured
-// app_settings.min_margin_alert_pct threshold. Margin = list_price - cost - mhsw,
+// app_settings.min_margin_alert_pct threshold. Margin = list_price - cost (the
+// list price holds no Sell MHSW since 0164),
 // expressed as a fraction of list_price.
 // ============================================================================
 
@@ -2955,7 +2957,7 @@ export async function listLowMarginParts(): Promise<{
   for (const p of list) {
     const lp = Number(p.list_price);
     if (lp <= 0) continue;
-    const marginAmount = lp - Number(p.cost) - Number(p.mhsw_fee);
+    const marginAmount = lp - Number(p.cost);
     const marginFrac = marginAmount / lp;
     if (marginFrac < thresholdFrac) {
       flagged.push({
@@ -3214,6 +3216,8 @@ const PricingSettingsInput = z.object({
   dump_truck_surcharge: z.coerce.number().min(0),
   // Grease-only job fee (0149); optional so a save without it leaves it alone.
   grease_only_fee: z.coerce.number().min(0).max(9999).optional(),
+  // MHSW per litre of bulk oil (0164); optional like the grease fee.
+  mhsw_oil_per_litre: z.coerce.number().min(0).max(99).optional(),
   price_list_effective_date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -3236,12 +3240,18 @@ export const updatePricingSettings = wrapAction({
         dump_truck_surcharge: input.dump_truck_surcharge,
         price_list_effective_date: input.price_list_effective_date || null,
         ...(input.grease_only_fee !== undefined ? { grease_only_fee: input.grease_only_fee } : {}),
+        ...(input.mhsw_oil_per_litre !== undefined ? { mhsw_oil_per_litre: input.mhsw_oil_per_litre } : {}),
       })
       .eq("id", 1);
     if (error) {
       if ((error.code === "PGRST204" || error.code === "42703") && /grease_only_fee/.test(error.message ?? "")) {
         throw new Error(
           "The grease-only fee needs migration 0149_sales_auto_lines.sql — apply it to the database, then try again.",
+        );
+      }
+      if ((error.code === "PGRST204" || error.code === "42703") && /mhsw_oil_per_litre/.test(error.message ?? "")) {
+        throw new Error(
+          "MHSW on bulk oil needs migration 0164_mhsw_own_line.sql — apply it to the database, then try again.",
         );
       }
       throw error;
@@ -3340,7 +3350,8 @@ type PackageItemDbRow = Omit<PartPackageItem, "id"> & {
 
 function toPackageItemRow(row: PackageItemDbRow): PartPackageItemRow {
   const cat = row.part?.part_categories;
-  // A package charges each part at its COST basis (cost + Sell MHSW) only —
+  // A package charges each part at its COST only (no Sell MHSW since 0164 —
+  // the job's MHSW line charges it) —
   // NO service/labour markup. Labour for a package is a single separate line
   // (the package's own "Labor charge" / labor_selling_price), never folded
   // per-part. (client 2026-06-30 — previously added the counter_premium
@@ -3350,7 +3361,7 @@ function toPackageItemRow(row: PackageItemDbRow): PartPackageItemRow {
       ? 0
       : Math.max(
           0,
-          Math.round((Number(row.part.cost) + Number(row.part.mhsw_fee)) * 100) / 100,
+          Math.round(Number(row.part.cost) * 100) / 100,
         );
   const merged: PartPackageItemRow = {
     id: row.id,

@@ -29,7 +29,7 @@ export const SalesJobItemInput = z.object({
   // value the database would refuse must be refused here first.
   oil_container: z.enum(["bulk", "gallon"]).nullable().optional(),
   // A line the form adds itself: the volume tier premium / grease-only fee (0149).
-  auto_fee: z.enum(["oil_tier_premium", "grease_only_fee"]).nullable().optional(),
+  auto_fee: z.enum(["oil_tier_premium", "grease_only_fee", "mhsw_parts", "mhsw_oil"]).nullable().optional(),
   // Oil beyond the engine's capacity, sold at the retail rate (0157).
   is_extra_oil: z.coerce.boolean().default(false),
 })
@@ -132,6 +132,8 @@ export const SalesJobInput = z
     // before this shipped) keeps whatever the job already has.
     oil_tier_premium_waived: z.coerce.boolean().optional(),
     grease_only_fee_waived: z.coerce.boolean().optional(),
+    mhsw_parts_waived: z.coerce.boolean().optional(),
+    mhsw_oil_waived: z.coerce.boolean().optional(),
 
     // Free grease (item #15)
     free_grease_applied: z.coerce.boolean().default(false),

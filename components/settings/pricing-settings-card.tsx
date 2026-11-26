@@ -16,6 +16,8 @@ interface Props {
     dump_truck_surcharge: number;
     /** Undefined before migration 0149 — the field is then hidden. */
     grease_only_fee?: number;
+    /** Undefined before migration 0164 — the field is then hidden. */
+    mhsw_oil_per_litre?: number;
     price_list_effective_date: string | null;
   };
 }
@@ -26,6 +28,8 @@ export function PricingSettingsCard({ initial }: Props) {
   const [dumpTruck, setDumpTruck] = useState(String(initial.dump_truck_surcharge));
   const greaseFeeSupported = initial.grease_only_fee !== undefined;
   const [greaseFee, setGreaseFee] = useState(String(initial.grease_only_fee ?? 0));
+  const mhswOilSupported = initial.mhsw_oil_per_litre !== undefined;
+  const [mhswOil, setMhswOil] = useState(String(initial.mhsw_oil_per_litre ?? 0.06));
   const [effective, setEffective] = useState(initial.price_list_effective_date ?? "");
   const [isPending, startTransition] = useTransition();
 
@@ -34,12 +38,13 @@ export function PricingSettingsCard({ initial }: Props) {
     const suppliesNum = Number(supplies);
     const dumpTruckNum = Number(dumpTruck);
     const greaseFeeNum = Number(greaseFee);
+    const mhswOilNum = Number(mhswOil);
     // Service charge may be negative; the other amounts can't.
     if (!Number.isFinite(counterNum)) {
       toast.error("Service charge must be a number");
       return;
     }
-    if ([suppliesNum, dumpTruckNum, greaseFeeNum].some((n) => !Number.isFinite(n) || n < 0)) {
+    if ([suppliesNum, dumpTruckNum, greaseFeeNum, mhswOilNum].some((n) => !Number.isFinite(n) || n < 0)) {
       toast.error("Labour, surcharge and fee amounts must be ≥ 0");
       return;
     }
@@ -49,6 +54,7 @@ export function PricingSettingsCard({ initial }: Props) {
         customer_supplies_labour: suppliesNum,
         dump_truck_surcharge: dumpTruckNum,
         ...(greaseFeeSupported ? { grease_only_fee: greaseFeeNum } : {}),
+        ...(mhswOilSupported ? { mhsw_oil_per_litre: mhswOilNum } : {}),
         price_list_effective_date: effective || null,
       });
       if (!res.ok) {
@@ -95,6 +101,15 @@ export function PricingSettingsCard({ initial }: Props) {
               value={greaseFee}
               onChange={setGreaseFee}
               tip="Added as its own line on a sales job that is only greasing — grease items but no oil, filters, fuel or Trans & Diff. Not charged when the customer's free-grease offer is used. Staff can remove it on a job. 0 turns it off."
+            />
+          )}
+          {mhswOilSupported && (
+            <Field
+              label="MHSW on bulk oil ($ per litre)"
+              value={mhswOil}
+              onChange={setMhswOil}
+              step="0.0001"
+              tip="Charged on a sales job's own &quot;MHSW — bulk oil&quot; line: bulk litres × this rate. Parts' MHSW is set on each part (Sell MHSW) and goes on the &quot;MHSW — parts&quot; line. 0 turns the oil line off."
             />
           )}
           <div>

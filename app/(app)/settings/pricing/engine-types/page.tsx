@@ -45,7 +45,7 @@ export default async function EngineTypesPage() {
         <p>
           Each engine is a row on the oil-change grid. Two things drive the row&apos;s prices: the
           <strong> oil capacity</strong> (multiplied by the oil cost per litre) and the
-          <strong> filter set</strong> installed on the engine (each filter&apos;s part cost + MHSW fee + linked labour).
+          <strong> filter set</strong> installed on the engine (each filter&apos;s part cost + linked labour; MHSW is charged on its own job line).
         </p>
         <ul>
           <li>Click an engine to edit its filter set (which parts and how many of each).</li>

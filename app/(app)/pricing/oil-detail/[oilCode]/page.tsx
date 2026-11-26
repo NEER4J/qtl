@@ -160,7 +160,7 @@ export default async function OilDetailPage({
           )}
           <li>
             <strong>Filter cost</strong> — the filters in the package linked to this engine,
-            (part cost + MHSW) × the package&apos;s quantity, so a filter used twice counts twice.
+            part cost × the package&apos;s quantity, so a filter used twice counts twice.
             What counts as a filter is set per category in{" "}
             <Link href="/settings/pricing/categories" className="underline">Part categories</Link>.
             An engine with no package — or a package listing no filters — uses the filter set
@@ -170,7 +170,7 @@ export default async function OilDetailPage({
           <li><strong>Oil cost</strong> — per-litre cost × engine oil capacity.</li>
           <li>
             <strong>Fuel</strong> and <strong>Grease</strong> — what the job consumes beyond
-            the filters: (cost + MHSW) × qty for the <em>Fuel</em> and <em>Grease</em> items
+            the filters: cost × qty for the <em>Fuel</em> and <em>Grease</em> items
             inside the package linked to this engine. They are the Excel &ldquo;Fuel /
             Grease&rdquo; column, roughly $6–$10 a job, and they were missing from this page
             until now — so Profit here used to read $6–$10 high. A row with no package linked

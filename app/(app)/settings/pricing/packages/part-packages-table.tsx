@@ -34,7 +34,8 @@ import { PartPackageFormDialog } from "./part-package-form-dialog";
 
 // Item #20 — packages grid showing rolled-up cost / list / profit / margin.
 //
-// Cost = sum(parts.cost + parts.mhsw_fee) × quantity for part rows,
+// Cost = sum(parts.cost) × quantity for part rows (Sell MHSW is charged on
+//        the job's own MHSW line, not by the package — 0164),
 //        plus oil-type rate × litres for oil-typed rows (rate matches the
 //        oil grid so package totals reconcile with the grid).
 //        Labor is treated as pure margin — no internal cost is tracked.
@@ -45,7 +46,7 @@ import { PartPackageFormDialog } from "./part-package-form-dialog";
 
 function lineCost(it: PartPackageItemRow): number {
   const qty = Number(it.quantity) || 0;
-  if (it.part) return (Number(it.part.cost) + Number(it.part.mhsw_fee)) * qty;
+  if (it.part) return Number(it.part.cost) * qty;
   // Trans & Diff services carry no tracked cost — treated as pure margin,
   // same as labour.
   if (it.transmission_service) return 0;

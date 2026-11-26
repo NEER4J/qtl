@@ -6,11 +6,16 @@
 //   * grease_only_fee — the fee from Settings → Pricing defaults when a job is
 //     only greasing: no oil, filters, fuel or Trans & Diff. Not charged on a
 //     free-grease redemption.
+//   * mhsw_parts — "MHSW — parts": the Sell MHSW of every part sold on the job
+//     (mhsw_unit × quantity). MHSW is no longer inside part prices (client
+//     2026-11-25, 0164).
+//   * mhsw_oil — "MHSW — bulk oil": bulk litres × app_settings
+//     .mhsw_oil_per_litre (6¢/L).
 //
 // The tier of an oil change's oil is priced on the engine's capacity at most
 // (tierCaps), so selling extra oil never moves it (client 2026-11-03).
 //
-// Rules shared by both:
+// Rules shared by all of them:
 //   * the form reconciles only when staff change the lines (or the free-grease
 //     tick) — never just because a job was opened, so old invoices don't move;
 //   * editing or deleting an automatic line hands it over to the staff member:
@@ -24,7 +29,24 @@
 import type { CostBucket } from "@/lib/utils/cost-bucket";
 import { volumeTierFor, type VolumeTierRow } from "@/lib/utils/oil-tier";
 
-export type AutoFee = "oil_tier_premium" | "grease_only_fee";
+export type AutoFee = "oil_tier_premium" | "grease_only_fee" | "mhsw_parts" | "mhsw_oil";
+/** Every automatic charge, in the order its line is added. */
+export const AUTO_FEES: readonly AutoFee[] = ["oil_tier_premium", "grease_only_fee", "mhsw_parts", "mhsw_oil"];
+/** What staff see the charge called. */
+export const AUTO_FEE_LABEL: Record<AutoFee, string> = {
+  oil_tier_premium: "Volume tier premium",
+  grease_only_fee: "Grease-only service fee",
+  mhsw_parts: "MHSW on parts",
+  mhsw_oil: "MHSW on bulk oil",
+};
+/** Where the amount comes from, under the line on the job form. */
+export const AUTO_FEE_SOURCE: Record<AutoFee, string> = {
+  oil_tier_premium:
+    "from the oil on this job (Volume tiers) — the job and invoice show it with the oil as one line",
+  grease_only_fee: "— grease-only job (Pricing defaults)",
+  mhsw_parts: "— each part's Sell MHSW × quantity (Parts)",
+  mhsw_oil: "— bulk oil litres × the MHSW per litre (Pricing defaults)",
+};
 export type AutoFeeWaivers = Record<AutoFee, boolean>;
 
 /** The fields of a sales line this module reads and writes. */
@@ -44,6 +66,10 @@ export interface AutoLineItem {
   auto_fee?: AutoFee | null;
   /** Oil beyond the engine's capacity, sold at the retail rate (0157). */
   is_extra_oil?: boolean;
+  /** Per-unit Sell MHSW of the linked part (0083; charged on its own line since 0164). */
+  mhsw_unit?: number;
+  /** Set on a merged duplicate billed at $0. */
+  merged_unit_price?: number | null;
 }
 
 export interface AutoLineContext {
@@ -58,6 +84,8 @@ export interface AutoLineContext {
   /** app_settings.grease_only_fee; 0 turns the fee off. */
   greaseOnlyFee: number;
   freeGreaseApplied: boolean;
+  /** app_settings.mhsw_oil_per_litre — MHSW per litre of bulk oil; 0 turns it off. */
+  mhswOilPerLitre: number;
   waived: AutoFeeWaivers;
   /** Cost bucket of a part category (costBucketFor on the category). */
   bucketOf: (categoryId: string | null | undefined) => CostBucket;
@@ -218,6 +246,64 @@ export function isGreaseOnlyJob(
 }
 
 export const GREASE_ONLY_FEE_DESCRIPTION = "Grease-only service fee";
+export const MHSW_PARTS_DESCRIPTION = "MHSW — parts";
+export const MHSW_OIL_DESCRIPTION = "MHSW — bulk oil";
+
+/** A return line (negative price) gives its MHSW back. */
+const lineSign = (it: AutoLineItem) => (Number(it.unit_price) < 0 ? -1 : 1);
+
+/** Lines that never carry MHSW: automatic lines, the customer's own part or
+ *  oil, and merged duplicates billed at $0. */
+const noMhsw = (it: AutoLineItem) =>
+  Boolean(it.auto_fee) || Boolean(it.is_customer_supplied) || it.merged_unit_price != null;
+
+/**
+ * Sell MHSW of the parts on the job: each part line's mhsw_unit × quantity.
+ * A package part whose price is fixed (locked or typed) carries mhsw_unit 0 —
+ * that price was set with MHSW inside it.
+ */
+export function mhswPartsCharge(
+  items: readonly AutoLineItem[],
+): { amount: number; description: string } | null {
+  let amount = 0;
+  for (const it of items) {
+    if (!it.part_id || noMhsw(it)) continue;
+    const unit = Number(it.mhsw_unit) || 0;
+    const qty = Number(it.quantity) || 0;
+    if (unit <= 0 || qty <= 0) continue;
+    amount += lineSign(it) * unit * qty;
+  }
+  amount = round2(amount);
+  return amount !== 0 ? { amount, description: MHSW_PARTS_DESCRIPTION } : null;
+}
+
+/**
+ * MHSW on bulk oil: litres × the per-litre rate. Every standalone bulk oil
+ * line counts — the oil change's oil and the extra oil alike. Gallon jugs and
+ * oil inside a package (whose quantity is a package count, not litres) don't.
+ */
+export function mhswOilCharge(
+  items: readonly AutoLineItem[],
+  perLitre: number,
+): { amount: number; description: string } | null {
+  const rate = Number(perLitre) || 0;
+  if (rate <= 0) return null;
+  let litres = 0;
+  for (const it of items) {
+    if (!it.oil_type_id || it.package_group || noMhsw(it)) continue;
+    if (it.oil_container !== "bulk") continue;
+    const qty = Number(it.quantity) || 0;
+    if (qty <= 0) continue;
+    litres += lineSign(it) * qty;
+  }
+  litres = round2(litres);
+  const amount = round2(litres * rate);
+  if (amount === 0) return null;
+  return {
+    amount,
+    description: `${MHSW_OIL_DESCRIPTION} (${fmtLitres(litres)} × $${rate.toFixed(2)}/L)`,
+  };
+}
 
 /** What each automatic charge WOULD be right now, ignoring waivers. */
 export function autoCharges(
@@ -231,6 +317,8 @@ export function autoCharges(
       fee > 0 && !ctx.freeGreaseApplied && isGreaseOnlyJob(items, ctx.bucketOf)
         ? { amount: round2(fee), description: GREASE_ONLY_FEE_DESCRIPTION }
         : null,
+    mhsw_parts: mhswPartsCharge(items),
+    mhsw_oil: mhswOilCharge(items, ctx.mhswOilPerLitre),
   };
 }
 
@@ -247,7 +335,7 @@ export function reconcileAutoLines<T extends AutoLineItem>(
 ): T[] {
   const charges = autoCharges(items, ctx);
   let next: T[] = [...items];
-  for (const kind of ["oil_tier_premium", "grease_only_fee"] as const) {
+  for (const kind of AUTO_FEES) {
     if (ctx.waived[kind]) continue;
     const want = charges[kind];
     const existing = next.find((it) => it.auto_fee === kind);

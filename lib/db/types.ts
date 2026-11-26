@@ -376,6 +376,8 @@ export interface SalesJob {
    *  Absent before that migration. */
   oil_tier_premium_waived?: boolean;
   grease_only_fee_waived?: boolean;
+  mhsw_parts_waived?: boolean;
+  mhsw_oil_waived?: boolean;
   comments: string | null;
   sub_total: number;
   hst: number;
@@ -439,7 +441,7 @@ export interface SalesJobItem {
    *  NULL = saved before 0149, treated as litres. */
   oil_container?: "bulk" | "gallon" | null;
   /** A line the sales form adds itself (0149). */
-  auto_fee?: "oil_tier_premium" | "grease_only_fee" | null;
+  auto_fee?: "oil_tier_premium" | "grease_only_fee" | "mhsw_parts" | "mhsw_oil" | null;
   /** Oil beyond the engine's capacity, at the retail rate (0157). */
   is_extra_oil?: boolean;
   created_at: string;
@@ -523,6 +525,8 @@ export interface AppSettings {
   dump_truck_surcharge: number;
   /** Extra charge on a grease-only sales job; 0 = off (0149, absent before it). */
   grease_only_fee?: number;
+  /** MHSW per litre of bulk oil on a sales job (0164). */
+  mhsw_oil_per_litre?: number;
   /** Master switch for the IP lock (Settings → IP Access). */
   ip_lock_enabled: boolean;
   updated_at: string;
