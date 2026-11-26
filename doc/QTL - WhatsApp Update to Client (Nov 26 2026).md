@@ -25,9 +25,5 @@ Hi, my side is done. Everything you asked for is built. Please check on the link
 8. Admin can give any user permission to see and edit parts, and to reverse payments.
 9. Settings > Backup downloads all the data.
 
-*Waiting on you*
-1. Free grease: once per truck in its first 30 days, or within 30 days after a full service oil change?
-2. With / without service: where is it missing? A screenshot please.
-3. Owner email: remove it from the Owner user, or just hide it on the list? The owner logs in with it.
-4. Customer statement (outstanding only, 30/60/90, location): I will do it as soon as you say OK.
+Not changed yet: customer statement, free grease rule, with/without service, Owner email. Message me when you want these and I will do them.
 ```
