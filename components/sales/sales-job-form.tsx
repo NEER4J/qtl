@@ -157,7 +157,7 @@ export interface SalesJobFormProps {
     /** Staff took over the automatic tier premium / grease-only fee (0149). */
     oil_tier_premium_waived?: boolean;
     grease_only_fee_waived?: boolean;
-    /** The MHSW lines (0164). A job from before 0164 has MHSW inside its part
+    /** The MHSW lines (0169). A job from before 0169 has MHSW inside its part
      *  prices, so both start waived on it. */
     mhsw_parts_waived?: boolean;
     mhsw_oil_waived?: boolean;
@@ -176,7 +176,7 @@ export interface SalesJobFormProps {
   volumeTiers?: VolumeTierRow[];
   /** Fee for a grease-only job (app setting; 0 = off). */
   greaseOnlyFee?: number;
-  /** app_settings.mhsw_oil_per_litre — MHSW per litre of bulk oil (0164). */
+  /** app_settings.mhsw_oil_per_litre — MHSW per litre of bulk oil (0169). */
   mhswOilPerLitre?: number;
   /** Part categories with their cost bucket — tells a grease line from a filter. */
   partCategories?: { id: string; name: string; cost_bucket?: string | null }[];
@@ -318,7 +318,7 @@ export function SalesJobForm({
   const [autoWaived, setAutoWaived] = useState<AutoFeeWaivers>({
     oil_tier_premium: initial?.oil_tier_premium_waived ?? false,
     grease_only_fee: initial?.grease_only_fee_waived ?? false,
-    // A saved job that doesn't say (0164 not applied yet) is an old job.
+    // A saved job that doesn't say (0169 not applied yet) is an old job.
     mhsw_parts: initial?.mhsw_parts_waived ?? mode === "edit",
     mhsw_oil: initial?.mhsw_oil_waived ?? mode === "edit",
   });

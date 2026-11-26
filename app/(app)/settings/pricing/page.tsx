@@ -113,7 +113,7 @@ export default async function PricingAdminHubPage() {
           // Absent until migration 0149 — the card hides the field until then.
           grease_only_fee:
             settings.grease_only_fee === undefined ? undefined : Number(settings.grease_only_fee),
-          // Absent until migration 0164.
+          // Absent until migration 0169.
           mhsw_oil_per_litre:
             settings.mhsw_oil_per_litre === undefined ? undefined : Number(settings.mhsw_oil_per_litre),
           price_list_effective_date: settings.price_list_effective_date ?? null,

@@ -528,7 +528,7 @@ export interface AppSettings {
   dump_truck_surcharge: number;
   /** Extra charge on a grease-only sales job; 0 = off (0149, absent before it). */
   grease_only_fee?: number;
-  /** MHSW per litre of bulk oil on a sales job (0164). */
+  /** MHSW per litre of bulk oil on a sales job (0169). */
   mhsw_oil_per_litre?: number;
   /** Master switch for the IP lock (Settings → IP Access). */
   ip_lock_enabled: boolean;

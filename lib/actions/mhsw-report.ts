@@ -5,8 +5,10 @@
 // exactly like the HST summary — what we paid on parts and what we received").
 //
 // Charged (sales): every line of a catalogue part in the "MHSW" category
-// (QTL1010 per filter, QTL1011 per litre) at its line total, plus any Sell
-// MHSW baked into a part's price (sales_job_items.mhsw_unit x qty).
+// (QTL1010 per filter, QTL1011 per litre) at its line total, the automatic
+// "MHSW — parts" / "MHSW — bulk oil" lines (auto_fee mhsw_parts / mhsw_oil,
+// from migration 0169), plus — on jobs from before 0169 only — any Sell MHSW
+// baked into a part's price (sales_job_items.mhsw_unit x qty).
 // Paid (expenses): expense_items.mhsw_unit x qty (migration 0166).
 
 import { createClient } from "@/lib/supabase/server";
@@ -68,19 +70,42 @@ export async function getMhswSummary(filter: MhswSummaryFilter = {}): Promise<Mh
     line_total: number;
     mhsw_unit: number | null;
     is_customer_supplied: boolean | null;
-    sales_jobs: { job_date: string; location_id: string; locations: LocJoin } | { job_date: string; location_id: string; locations: LocJoin }[] | null;
+    sales_jobs: SaleJob | SaleJob[] | null;
   };
-  const saleSelect =
-    "id, quantity, line_total, mhsw_unit, is_customer_supplied, sales_jobs:sales_job_id!inner(job_date, location_id, deactivated_at, locations:location_id(name))";
+  type SaleJob = {
+    job_date: string;
+    location_id: string;
+    locations: LocJoin;
+    mhsw_parts_waived?: boolean;
+    mhsw_oil_waived?: boolean;
+  };
+  // The waiver columns arrive with migration 0169; before it every job has its
+  // MHSW inside the part prices.
+  const baseSelect =
+    "id, quantity, line_total, mhsw_unit, is_customer_supplied, sales_jobs:sales_job_id!inner(job_date, location_id, deactivated_at, locations:location_id(name)";
+  const saleSelect = `${baseSelect}, mhsw_parts_waived, mhsw_oil_waived)`;
+  const saleSelectOld = `${baseSelect})`;
+  let select = saleSelect;
 
-  const salesItems = (build: (q: ReturnType<typeof baseSales>) => ReturnType<typeof baseSales>) =>
-    fetchAllRowsParallel<SaleItem>((lo, hi, count) =>
-      build(baseSales(count)).order("id").range(lo, hi),
-    );
+  const salesItems = async (build: (q: ReturnType<typeof baseSales>) => ReturnType<typeof baseSales>) => {
+    try {
+      return await fetchAllRowsParallel<SaleItem>((lo, hi, count) =>
+        build(baseSales(count)).order("id").range(lo, hi),
+      );
+    } catch (e) {
+      if (select === saleSelect && isMissingColumn(e)) {
+        select = saleSelectOld;
+        return await fetchAllRowsParallel<SaleItem>((lo, hi, count) =>
+          build(baseSales(count)).order("id").range(lo, hi),
+        );
+      }
+      throw e;
+    }
+  };
   function baseSales(count?: "exact") {
     let q = supabase
       .from("sales_job_items")
-      .select(saleSelect, { count })
+      .select(select, { count })
       .is("sales_jobs.deactivated_at", null)
       .gte("sales_jobs.job_date", from)
       .lte("sales_jobs.job_date", to);
@@ -95,10 +120,15 @@ export async function getMhswSummary(filter: MhswSummaryFilter = {}): Promise<Mh
     expenses: { expense_date: string; location_id: string; locations: LocJoin } | { expense_date: string; location_id: string; locations: LocJoin }[] | null;
   };
 
-  const [mhswLines, embeddedLines, expenseLines] = await Promise.all([
+  const [mhswLines, autoLines, embeddedLines, expenseLines] = await Promise.all([
     mhswPartIds.length
       ? salesItems((q) => q.in("part_id", mhswPartIds))
       : Promise.resolve([] as SaleItem[]),
+    // The automatic MHSW lines (0169). Before it no line has an auto_fee that
+    // matches, so this is empty rather than an error.
+    salesItems((q) => q.in("auto_fee", ["mhsw_parts", "mhsw_oil"])).catch(
+      () => [] as SaleItem[],
+    ),
     // Parts with Sell MHSW inside their price (not the MHSW parts themselves).
     salesItems((q) => {
       let r = q.gt("mhsw_unit", 0);
@@ -147,10 +177,20 @@ export async function getMhswSummary(filter: MhswSummaryFilter = {}): Promise<Mh
     charged += amt;
     bump(job.job_date.slice(0, 7), one(job.locations)?.name ?? "—", "charged", amt);
   }
+  for (const it of autoLines) {
+    const job = one(it.sales_jobs);
+    if (!job) continue;
+    const amt = Number(it.line_total) || 0;
+    charged += amt;
+    bump(job.job_date.slice(0, 7), one(job.locations)?.name ?? "—", "charged", amt);
+  }
   for (const it of embeddedLines) {
     if (it.is_customer_supplied) continue;
     const job = one(it.sales_jobs);
     if (!job) continue;
+    // From 0169 a job's part prices hold no MHSW (its own lines charge it).
+    // Old jobs have both waivers set, and so does a job before the columns.
+    if (job.mhsw_parts_waived === false || job.mhsw_oil_waived === false) continue;
     const sign = Number(it.line_total) < 0 ? -1 : 1;
     const amt = round2((Number(it.mhsw_unit) || 0) * (Number(it.quantity) || 0)) * sign;
     charged += amt;

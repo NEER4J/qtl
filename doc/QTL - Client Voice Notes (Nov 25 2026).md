@@ -160,3 +160,9 @@ Source files (on the Desktop): `WhatsApp Ptt 2026-11-25 at 17.39.44.ogg`, `... 1
 3. Jobs: add MHSW lines automatically: per part from the part's Sell MHSW, and per litre ($0.06/L) for bulk oil (notes 3 and 5).
 4. Users: confirm what "remove the email on Owner" means, then do it (note 7).
 5. Still waiting on answers to Questions 2 and 3.
+
+## Done on 26 Nov
+
+- **MHSW own lines** (notes 3, 4, 5): built on the PC on 25 Nov and merged into main on 26 Nov. Migration renumbered **0169** (main's 0164 is `mhsw_not_stock`). Sell MHSW leaves the part list price, jobs get "MHSW - parts" and "MHSW - bulk oil" lines automatically, and the invoice and MHSW Summary report follow the new lines. The client can now enter MHSW on each part.
+- **Invoice not changed on the client's side** (note 1): likely the other link (note 6). Confirm which link he uses.
+- Still open: note 7 (Owner email), with/without service, free grease rule.

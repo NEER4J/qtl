@@ -8,7 +8,7 @@ import { roundUpTo99 } from "@/lib/utils/format";
 //
 // Pricing model (client 2026-06):
 //   * Over the Counter = List price (cost + margin; Sell MHSW is charged on
-//                        the job's own MHSW line — 0164).
+//                        the job's own MHSW line — 0169).
 //   * With Service     = Total cost + Service charge.
 //                        (Total cost = part.cost, which already includes Buy
 //                        MHSW. "Service charge" is the per-part counter_premium
@@ -113,7 +113,7 @@ export function computePartSellTiers(
 ): PartSellTiers {
   // "Cost price" = base cost (incl Buy MHSW) — the same basis the list price is
   // built on (cost + margin). Sell MHSW used to be folded in here (client
-  // 2026-06-28); since 0164 it is charged on the job's own MHSW line instead
+  // 2026-06-28); since 0169 it is charged on the job's own MHSW line instead
   // (client 2026-11-25), so it stays out of every sell price.
   const totalCost = Number(part.cost);
   const listPrice = Number(part.list_price);

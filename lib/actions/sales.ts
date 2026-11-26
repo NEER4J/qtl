@@ -84,9 +84,9 @@ const JOB_0149_COLUMNS = ["oil_tier_premium_waived", "grease_only_fee_waived"] a
 // 0150: which filter option an oil change was sold with. No engine has options
 // until that migration, so dropping the column loses nothing.
 const JOB_0150_COLUMNS = ["engine_option_id"] as const;
-// 0164: the MHSW lines' waivers. Before it the form treats every saved job as
+// 0169: the MHSW lines' waivers. Before it the form treats every saved job as
 // waived, so leaving them out loses nothing.
-const JOB_0164_COLUMNS = ["mhsw_parts_waived", "mhsw_oil_waived"] as const;
+const JOB_0169_COLUMNS = ["mhsw_parts_waived", "mhsw_oil_waived"] as const;
 const ITEM_0149_COLUMNS = ["oil_container", "auto_fee"] as const;
 // 0157: oil beyond the engine's capacity. Before it, such a line saves as a
 // plain oil line — still priced and stocked right, just not flagged.
@@ -571,7 +571,7 @@ export const createSalesJob = wrapAction({
     let { data, error } = await insertJob(jobRow);
     // Either pending migration drops its own columns and tries again; with both
     // pending the second pass clears the other.
-    for (const pending of [JOB_0164_COLUMNS, JOB_0150_COLUMNS, JOB_0149_COLUMNS]) {
+    for (const pending of [JOB_0169_COLUMNS, JOB_0150_COLUMNS, JOB_0149_COLUMNS]) {
       if (!isMissingColumn(error, pending)) continue;
       for (const k of pending) delete (jobRow as Record<string, unknown>)[k];
       ({ data, error } = await insertJob(jobRow));
@@ -790,7 +790,7 @@ export const updateSalesJob = wrapAction({
     const updateJob = (patch: Record<string, unknown>) =>
       supabase.from("sales_jobs").update(patch).eq("id", input.id).select("*").single();
     let { data, error } = await updateJob(jobPatch);
-    for (const pending of [JOB_0164_COLUMNS, JOB_0150_COLUMNS, JOB_0149_COLUMNS]) {
+    for (const pending of [JOB_0169_COLUMNS, JOB_0150_COLUMNS, JOB_0149_COLUMNS]) {
       if (!isMissingColumn(error, pending)) continue;
       for (const k of pending) delete (jobPatch as Record<string, unknown>)[k];
       ({ data, error } = await updateJob(jobPatch));
@@ -1049,7 +1049,7 @@ async function replaceJobItems(
     pending = pending.map((r) => omitKeys(r, cols));
     ({ error: insErr } = await supabase.from("sales_job_items").insert(pending));
   }
-  // Before 0164 the auto_fee check only knows the 0149 charges: the MHSW lines
+  // Before 0169 the auto_fee check only knows the 0149 charges: the MHSW lines
   // then save as plain lines (same amount, just not flagged automatic).
   if (insErr?.code === "23514" && /auto_fee/.test(insErr.message ?? "")) {
     pending = pending.map((r) =>

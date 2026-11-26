@@ -8,7 +8,7 @@
 //     free-grease redemption.
 //   * mhsw_parts — "MHSW — parts": the Sell MHSW of every part sold on the job
 //     (mhsw_unit × quantity). MHSW is no longer inside part prices (client
-//     2026-11-25, 0164).
+//     2026-11-25, 0169).
 //   * mhsw_oil — "MHSW — bulk oil": bulk litres × app_settings
 //     .mhsw_oil_per_litre (6¢/L).
 //
@@ -66,7 +66,7 @@ export interface AutoLineItem {
   auto_fee?: AutoFee | null;
   /** Oil beyond the engine's capacity, sold at the retail rate (0157). */
   is_extra_oil?: boolean;
-  /** Per-unit Sell MHSW of the linked part (0083; charged on its own line since 0164). */
+  /** Per-unit Sell MHSW of the linked part (0083; charged on its own line since 0169). */
   mhsw_unit?: number;
   /** Set on a merged duplicate billed at $0. */
   merged_unit_price?: number | null;

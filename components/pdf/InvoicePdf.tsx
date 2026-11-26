@@ -333,10 +333,20 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
   // not a part (client 2026-11-20, invoice 23023: "MHSW not parts", "Total
   // Parts = only parts"). Those lines, plus any Sell MHSW baked into a part's
   // unit price (mhsw_unit), total on their own row.
+  // Two kinds of MHSW line: the "MHSW" category parts staff added by hand
+  // (QTL1010 / QTL1011), and the automatic "MHSW — parts" / "MHSW — bulk oil"
+  // lines the job form adds since 0169 (auto_fee mhsw_parts / mhsw_oil).
+  const isAutoMhsw = (it: (typeof singles)[number]) =>
+    it.auto_fee === "mhsw_parts" || it.auto_fee === "mhsw_oil";
   const isMhswLine = (it: (typeof singles)[number]) =>
-    !!it.part_id && isMhswCategoryName(it.part_category_name);
+    isAutoMhsw(it) || (!!it.part_id && isMhswCategoryName(it.part_category_name));
   const parts = singles.filter((it) => !!it.part_id && !isMhswLine(it));
   const mhswLines = singles.filter(isMhswLine);
+  // Jobs from before 0169 carry their MHSW inside the part prices (mhsw_unit
+  // is the portion). From 0169 a job's parts are priced without it and the
+  // MHSW lines charge it, so nothing is "inside". Old jobs have both waivers
+  // set (0169 step 4), and so does a job saved before the columns exist.
+  const mhswInsidePrices = job.mhsw_parts_waived !== false && job.mhsw_oil_waived !== false;
   // Packages, oil and labour lines used to total under "Total Labour"; the
   // client struck that row out (invoice 23023, 2026-11-20), so they show on
   // their own lines only. Subtotal/HST/Total come from the stored job fields,
@@ -347,7 +357,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
   // Sell MHSW inside a part's price: per-unit snapshot x qty, negative on a
   // return line. Customer-supplied parts charge nothing.
   const embeddedMhsw = (it: (typeof singles)[number]) => {
-    if (it.is_customer_supplied === true) return 0;
+    if (!mhswInsidePrices || it.is_customer_supplied === true) return 0;
     const m = Number(it.mhsw_unit) || 0;
     const sign = Number(it.line_total ?? 0) < 0 ? -1 : 1;
     return Math.round(m * Number(it.quantity) * 100) / 100 * sign;
@@ -361,6 +371,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
   // it doesn't total again under Miscellaneous.
   const totalMisc = labour
     .filter(isAutoCharge)
+    .filter((it) => !isAutoMhsw(it))
     .filter((it) => !(oilTierRow && it.auto_fee === "oil_tier_premium"))
     .reduce((s, it) => s + Number(it.line_total ?? 0), 0);
 
@@ -493,7 +504,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
           {(() => {
             // One table for everything: packages (collapsed — items shown as
             // "Included"), then labour, then catalog parts. The MHSW column is
-            // each part's MHSW per unit: on jobs from 0164 on it is charged on
+            // each part's MHSW per unit: on jobs from 0169 on it is charged on
             // the "MHSW — parts" line; on older jobs it sits inside the amount.
             type LineRow = {
               id: string;
@@ -561,7 +572,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
               }
             }
 
-            for (const it of shownSingles.filter((x) => !x.part_id)) {
+            for (const it of shownSingles.filter((x) => !x.part_id && !isAutoMhsw(x))) {
               rows.push({
                 id: it.id,
                 qty: String(Number(it.quantity)),
@@ -579,6 +590,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
             for (const it of [
               ...partSingles.filter((x) => !isMhsw(x)),
               ...partSingles.filter(isMhsw),
+              ...shownSingles.filter(isAutoMhsw),
             ]) {
               const cs = it.is_customer_supplied === true;
               const wouldHaveCharged =

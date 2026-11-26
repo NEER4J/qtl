@@ -193,7 +193,7 @@ const normPackageName = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase
  * from its package (client 2026-09-15: "pull filter pricing from packages,
  * same as fuel / grease / labour", with the package's quantities, so LF17503
  * × 2 counts twice). Cost basis is cost × quantity throughout (Sell MHSW is
- * charged on the job's own MHSW line since 0164).
+ * charged on the job's own MHSW line since 0169).
  *
  * Engine → package resolves by the explicit `engine_types.labour_package_id`
  * link (migration 0130) first, then falls back to an exact engine-name ==
@@ -2907,7 +2907,7 @@ export async function listPriceHistory(
 // ============================================================================
 // Min-margin alerts — list active parts whose margin is below the configured
 // app_settings.min_margin_alert_pct threshold. Margin = list_price - cost (the
-// list price holds no Sell MHSW since 0164),
+// list price holds no Sell MHSW since 0169),
 // expressed as a fraction of list_price.
 // ============================================================================
 
@@ -3216,7 +3216,7 @@ const PricingSettingsInput = z.object({
   dump_truck_surcharge: z.coerce.number().min(0),
   // Grease-only job fee (0149); optional so a save without it leaves it alone.
   grease_only_fee: z.coerce.number().min(0).max(9999).optional(),
-  // MHSW per litre of bulk oil (0164); optional like the grease fee.
+  // MHSW per litre of bulk oil (0169); optional like the grease fee.
   mhsw_oil_per_litre: z.coerce.number().min(0).max(99).optional(),
   price_list_effective_date: z
     .string()
@@ -3251,7 +3251,7 @@ export const updatePricingSettings = wrapAction({
       }
       if ((error.code === "PGRST204" || error.code === "42703") && /mhsw_oil_per_litre/.test(error.message ?? "")) {
         throw new Error(
-          "MHSW on bulk oil needs migration 0164_mhsw_own_line.sql — apply it to the database, then try again.",
+          "MHSW on bulk oil needs migration 0169_mhsw_own_line.sql — apply it to the database, then try again.",
         );
       }
       throw error;
@@ -3350,7 +3350,7 @@ type PackageItemDbRow = Omit<PartPackageItem, "id"> & {
 
 function toPackageItemRow(row: PackageItemDbRow): PartPackageItemRow {
   const cat = row.part?.part_categories;
-  // A package charges each part at its COST only (no Sell MHSW since 0164 —
+  // A package charges each part at its COST only (no Sell MHSW since 0169 —
   // the job's MHSW line charges it) —
   // NO service/labour markup. Labour for a package is a single separate line
   // (the package's own "Labor charge" / labor_selling_price), never folded

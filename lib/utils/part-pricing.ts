@@ -22,7 +22,7 @@ function roundMoney(value: number): number {
 
 /**
  * Margin amount, on cost alone. Sell MHSW is NOT part of the price: the job
- * charges it on its own "MHSW — parts" line (client 2026-11-25, 0164). For a
+ * charges it on its own "MHSW — parts" line (client 2026-11-25, 0169). For a
  * fixed margin the basis is irrelevant.
  */
 export function calculatePartMarginAmount({
@@ -39,7 +39,7 @@ export function calculatePartMarginAmount({
 }
 
 /**
- * List price = cost + margin. Sell MHSW stays out (0164). Mirror of the
+ * List price = cost + margin. Sell MHSW stays out (0169). Mirror of the
  * `set_part_list_price()` DB trigger.
  */
 export function calculatePartListPrice(input: PartPriceInputs): number {

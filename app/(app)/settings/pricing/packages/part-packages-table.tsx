@@ -35,7 +35,7 @@ import { PartPackageFormDialog } from "./part-package-form-dialog";
 // Item #20 — packages grid showing rolled-up cost / list / profit / margin.
 //
 // Cost = sum(parts.cost) × quantity for part rows (Sell MHSW is charged on
-//        the job's own MHSW line, not by the package — 0164),
+//        the job's own MHSW line, not by the package — 0169),
 //        plus oil-type rate × litres for oil-typed rows (rate matches the
 //        oil grid so package totals reconcile with the grid).
 //        Labor is treated as pure margin — no internal cost is tracked.

@@ -57,7 +57,7 @@ export interface LineItem {
   quantity: number;
   unit_price: number;
   /** Per-unit Sell MHSW for the linked part. Charged on the job's automatic
-   *  "MHSW — parts" line (0164; before that it sat inside unit_price). 0 for
+   *  "MHSW — parts" line (0169; before that it sat inside unit_price). 0 for
    *  non-part / labour lines and package parts held at a fixed price. */
   mhsw_unit?: number;
   /** Whether this line contributes to the HST taxable subtotal. Defaults true. */

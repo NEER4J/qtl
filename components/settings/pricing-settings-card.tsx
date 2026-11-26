@@ -16,7 +16,7 @@ interface Props {
     dump_truck_surcharge: number;
     /** Undefined before migration 0149 — the field is then hidden. */
     grease_only_fee?: number;
-    /** Undefined before migration 0164 — the field is then hidden. */
+    /** Undefined before migration 0169 — the field is then hidden. */
     mhsw_oil_per_litre?: number;
     price_list_effective_date: string | null;
   };

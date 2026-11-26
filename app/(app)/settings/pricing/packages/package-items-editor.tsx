@@ -74,7 +74,7 @@ export function PackageItemsEditor({
         subLabel: p.description,
         // Packages charge the part at COST — no service/labour markup (the
         // package's own "Labor charge" line covers labour) and no Sell MHSW
-        // (the job's MHSW line charges it — 0164).
+        // (the job's MHSW line charges it — 0169).
         catalogPrice:
           Math.max(0, Math.round(Number(p.cost) * 100) / 100) ||
           Number(p.list_price) ||

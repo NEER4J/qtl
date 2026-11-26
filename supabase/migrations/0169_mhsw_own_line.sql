@@ -1,4 +1,4 @@
--- 0164_mhsw_own_line.sql
+-- 0169_mhsw_own_line.sql
 --
 -- MHSW is charged on its own line, not inside prices (client 2026-11-25):
 --   "Sell MHSW in Parts is being added to the list price — remove it. Then I
@@ -127,7 +127,7 @@ begin
     from public.oil_types where id = p_oil_type_id;
   if v_cost_per_litre is null or v_cost_per_litre <= 0 then return null; end if;
 
-  -- Filters at cost; MHSW is charged on its own job line (0164).
+  -- Filters at cost; MHSW is charged on its own job line (0169).
   select coalesce(sum(p.cost * ef.quantity), 0),
          coalesce(sum(coalesce(sc.cost, 0) * ef.quantity), 0)
     into v_filter_cost, v_service_cost
@@ -166,10 +166,10 @@ alter table public.sales_job_items
   check (auto_fee is null or auto_fee in ('oil_tier_premium', 'grease_only_fee', 'mhsw_parts', 'mhsw_oil'));
 
 comment on column public.sales_job_items.auto_fee is
-  'Set on a line the sales form adds and keeps up to date itself: oil_tier_premium / grease_only_fee (0149), mhsw_parts / mhsw_oil (0164).';
+  'Set on a line the sales form adds and keeps up to date itself: oil_tier_premium / grease_only_fee (0149), mhsw_parts / mhsw_oil (0169).';
 
 comment on column public.sales_job_items.mhsw_unit is
-  'Per-unit Sell MHSW snapshot for the linked part. Before 0164 it was inside unit_price; from 0164 it is charged on the job''s "MHSW — parts" line instead. 0 for non-part lines.';
+  'Per-unit Sell MHSW snapshot for the linked part. Before 0169 it was inside unit_price; from 0169 it is charged on the job''s "MHSW — parts" line instead. 0 for non-part lines.';
 
 alter table public.app_settings
   add column if not exists mhsw_oil_per_litre numeric(10,4) not null default 0.06;
@@ -180,7 +180,7 @@ alter table public.app_settings
   add constraint app_settings_mhsw_oil_per_litre_check check (mhsw_oil_per_litre >= 0);
 
 comment on column public.app_settings.mhsw_oil_per_litre is
-  'MHSW charged per litre of bulk oil on a sales job ("MHSW — bulk oil" line). 0 = off (0164).';
+  'MHSW charged per litre of bulk oil on a sales job ("MHSW — bulk oil" line). 0 = off (0169).';
 
 -- ============================================================================
 -- 4. Waivers — existing jobs start waived
@@ -199,6 +199,6 @@ alter table public.sales_jobs
   alter column mhsw_oil_waived set not null;
 
 comment on column public.sales_jobs.mhsw_parts_waived is
-  'The form no longer manages the "MHSW — parts" line: staff edited or removed it, or the job is from before 0164 (MHSW inside its part prices).';
+  'The form no longer manages the "MHSW — parts" line: staff edited or removed it, or the job is from before 0169 (MHSW inside its part prices).';
 comment on column public.sales_jobs.mhsw_oil_waived is
-  'The form no longer manages the "MHSW — bulk oil" line: staff edited or removed it, or the job is from before 0164.';
+  'The form no longer manages the "MHSW — bulk oil" line: staff edited or removed it, or the job is from before 0169.';
