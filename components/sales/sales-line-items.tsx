@@ -46,7 +46,7 @@ import {
 } from "@/lib/utils/package-pricing";
 import { oilLabel } from "@/lib/utils/oil-labels";
 import { buildDisplayRows, packageGroupKey } from "@/lib/utils/sales-display";
-import type { AutoFee } from "@/lib/utils/sales-auto-lines";
+import { AUTO_FEE_SOURCE, type AutoFee } from "@/lib/utils/sales-auto-lines";
 
 export interface LineItem {
   /** Local key for React; not persisted. */
@@ -56,8 +56,9 @@ export interface LineItem {
   description: string;
   quantity: number;
   unit_price: number;
-  /** Per-unit Sell MHSW for the linked part (already inside unit_price); shown
-   *  as the MHSW column. 0 for non-part / labour / package-collapsed lines. */
+  /** Per-unit Sell MHSW for the linked part. Charged on the job's automatic
+   *  "MHSW — parts" line (0164; before that it sat inside unit_price). 0 for
+   *  non-part / labour lines and package parts held at a fixed price. */
   mhsw_unit?: number;
   /** Whether this line contributes to the HST taxable subtotal. Defaults true. */
   is_taxable: boolean;
@@ -226,6 +227,7 @@ export function packageLineItems(
     let oilTypeId: string | null = null;
     let oilContainer: "bulk" | "gallon" | null = null;
     let transId: string | null = null;
+    let mhswUnit = 0;
     if (it.oil_type_id && it.oil_type) {
       price = locked
         ? effectiveLockedPriceForItem(it)
@@ -259,6 +261,11 @@ export function packageLineItems(
       isTaxable = it.part.is_taxable;
       unitOfMeasure = it.part.unit_of_measure;
       categoryId = it.part.category_id ?? null;
+      // The part's Sell MHSW goes on the job's "MHSW — parts" line — unless
+      // the package holds this part at a fixed price (locked or typed), which
+      // was set with the MHSW inside it.
+      const fixedPrice = locked ? it.locked_unit_price != null || it.unit_price != null : it.unit_price != null;
+      mhswUnit = fixedPrice ? 0 : Number(it.part.mhsw_fee) || 0;
     } else {
       continue;
     }
@@ -273,6 +280,7 @@ export function packageLineItems(
         // the indicator.
         unit_price: merged ? 0 : basePrice,
         merged_unit_price: merged ? basePrice : null,
+        mhsw_unit: mhswUnit,
         is_taxable: merged ? false : isTaxable,
         unit_of_measure: unitOfMeasure,
         package_label: pkg.name,
@@ -700,11 +708,7 @@ function SalesLineItemsTable({
           />
           {it.auto_fee && (
             <p className="text-[10px] text-muted-foreground mt-1">
-              Added automatically
-              {it.auto_fee === "oil_tier_premium"
-                ? " from the oil on this job (Volume tiers) — the job and invoice show it with the oil as one line"
-                : " — grease-only job (Pricing defaults)"}
-              . Edit or delete it to set it by hand.
+              Added automatically {AUTO_FEE_SOURCE[it.auto_fee]}. Edit or delete it to set it by hand.
             </p>
           )}
           {it.is_extra_oil && (

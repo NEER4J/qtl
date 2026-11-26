@@ -47,6 +47,8 @@ import {
   autoCharges,
   reconcileAutoLines,
   splitExtraOil,
+  AUTO_FEES,
+  AUTO_FEE_LABEL,
   type AutoFee,
   type AutoFeeWaivers,
   type AutoLineContext,
@@ -155,6 +157,10 @@ export interface SalesJobFormProps {
     /** Staff took over the automatic tier premium / grease-only fee (0149). */
     oil_tier_premium_waived?: boolean;
     grease_only_fee_waived?: boolean;
+    /** The MHSW lines (0164). A job from before 0164 has MHSW inside its part
+     *  prices, so both start waived on it. */
+    mhsw_parts_waived?: boolean;
+    mhsw_oil_waived?: boolean;
   };
   locations: Location[];
   serviceTypes: ServiceType[];
@@ -170,6 +176,8 @@ export interface SalesJobFormProps {
   volumeTiers?: VolumeTierRow[];
   /** Fee for a grease-only job (app setting; 0 = off). */
   greaseOnlyFee?: number;
+  /** app_settings.mhsw_oil_per_litre — MHSW per litre of bulk oil (0164). */
+  mhswOilPerLitre?: number;
   /** Part categories with their cost bucket — tells a grease line from a filter. */
   partCategories?: { id: string; name: string; cost_bucket?: string | null }[];
   /** Grease parts the free-grease offer can draw, the usual one first. */
@@ -282,6 +290,7 @@ export function SalesJobForm({
   dumpTruckSurcharge,
   volumeTiers = NO_TIERS,
   greaseOnlyFee = 0,
+  mhswOilPerLitre = 0,
   partCategories = NO_CATEGORIES,
   greaseParts = NO_GREASE_PARTS,
   lockedLocationId,
@@ -309,6 +318,9 @@ export function SalesJobForm({
   const [autoWaived, setAutoWaived] = useState<AutoFeeWaivers>({
     oil_tier_premium: initial?.oil_tier_premium_waived ?? false,
     grease_only_fee: initial?.grease_only_fee_waived ?? false,
+    // A saved job that doesn't say (0164 not applied yet) is an old job.
+    mhsw_parts: initial?.mhsw_parts_waived ?? mode === "edit",
+    mhsw_oil: initial?.mhsw_oil_waived ?? mode === "edit",
   });
   // Create-mode multi-payment ledger. Each row becomes a sales_payments
   // insert at save time. Edit mode uses the existing AddPaymentDialog on the
@@ -440,11 +452,12 @@ export function SalesJobForm({
       tiers: volumeTiers,
       tierCaps: tierCapsRef.current,
       greaseOnlyFee,
+      mhswOilPerLitre,
       freeGreaseApplied: freeGrease,
       waived,
       bucketOf: (id) => (id ? bucketByCategory.get(id) ?? "other" : "other"),
     }),
-    [oilTypes, volumeTiers, greaseOnlyFee, bucketByCategory],
+    [oilTypes, volumeTiers, greaseOnlyFee, mhswOilPerLitre, bucketByCategory],
   );
 
   // The oil change's extra-oil rule, set further down once the engine and oil
@@ -508,7 +521,7 @@ export function SalesJobForm({
   // Charges that would apply but are waived — shown with an "Add it back" link.
   const waivedCharges = useMemo(() => {
     const would = autoCharges(lineItems, autoLineContext(autoWaived, Boolean(freeGreaseApplied)));
-    return (["oil_tier_premium", "grease_only_fee"] as const).filter(
+    return AUTO_FEES.filter(
       (k) => autoWaived[k] && would[k] != null && !lineItems.some((it) => it.auto_fee === k),
     ).map((k) => ({ kind: k, ...would[k]! }));
   }, [lineItems, autoWaived, autoLineContext, freeGreaseApplied]);
@@ -1153,6 +1166,8 @@ export function SalesJobForm({
         dump_truck_surcharge: appliedSurcharge,
         oil_tier_premium_waived: autoWaived.oil_tier_premium,
         grease_only_fee_waived: autoWaived.grease_only_fee,
+        mhsw_parts_waived: autoWaived.mhsw_parts,
+        mhsw_oil_waived: autoWaived.mhsw_oil,
         initial_payments: cleanedPayments.length > 0 ? cleanedPayments : undefined,
         items: lineItems.map((it) => ({
           part_id: it.part_id,
@@ -2031,7 +2046,7 @@ export function SalesJobForm({
             </div>
             {waivedCharges.map((c) => (
               <p key={c.kind} className="text-xs text-muted-foreground">
-                {c.kind === "oil_tier_premium" ? "Volume tier premium" : "Grease-only fee"} (
+                {AUTO_FEE_LABEL[c.kind]} (
                 {formatMoney(c.amount)}) is set by hand on this job.{" "}
                 <button
                   type="button"

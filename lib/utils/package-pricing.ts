@@ -29,7 +29,8 @@ export function effectiveCatalogPriceForItem(item: PartPackageItemRow): number {
     return Number.isFinite(v) ? v : 0;
   }
 
-  // A package charges each part at its COST basis (cost + Sell MHSW),
+  // A package charges each part at its COST (no Sell MHSW — the job's MHSW
+  // line charges it, 0164),
   // precomputed server-side in fetchPackageItems. NO service/labour markup is
   // folded in per-part — the package's labour is a single separate line (its
   // own "Labor charge"). (client 2026-06-30.)

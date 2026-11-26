@@ -57,7 +57,7 @@ export default async function PartsAdminPage({
         </p>
         <ul>
           <li><strong>Part # + brand</strong> is unique — a single brand won&apos;t have two rows with the same number.</li>
-          <li><strong>List price</strong> = cost + MHSW fee + margin, and it appears on the filter price list that staff see.</li>
+          <li><strong>List price</strong> = cost + margin, and it appears on the filter price list that staff see. The Sell MHSW is not in the list price: each job charges it on its own &quot;MHSW — parts&quot; line.</li>
           <li><strong>Margin</strong> can be either a fixed dollar amount or a percent of the cost.</li>
           <li><strong>Service cost</strong> (optional) links this part to a labour charge. When the part is installed on an engine, that labour is added to the oil-change price automatically.</li>
           <li>Deactivate a part (never delete) — it stays on historical jobs but disappears from the price list.</li>

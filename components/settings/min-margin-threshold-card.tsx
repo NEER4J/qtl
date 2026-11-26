@@ -35,7 +35,7 @@ export function MinMarginThresholdCard({ initialPct }: { initialPct: number }) {
       </CardHeader>
       <CardContent>
         <p className="text-sm text-muted-foreground mb-3">
-          Active parts whose margin (list price minus cost minus MHSW) falls below this percentage of the list price are flagged on the Products & Services analytics page. Set to 0 to disable alerts.
+          Active parts whose margin (list price minus cost) falls below this percentage of the list price are flagged on the Products & Services analytics page. Set to 0 to disable alerts.
         </p>
         <div className="flex items-center gap-2 max-w-xs">
           <Input

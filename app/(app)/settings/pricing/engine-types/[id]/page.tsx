@@ -58,7 +58,7 @@ export default async function EngineTypeDetailPage({
       <PageHelp id="settings-pricing-engine-detail">
         <p>
           The <strong>filters on this engine</strong> are added into every oil-change price for this row.
-          For each filter, the cost is <em>(part cost + MHSW fee + linked labour) × quantity</em>.
+          For each filter, the cost is <em>(part cost + linked labour) × quantity</em> (MHSW is charged on its own job line).
         </p>
         <ul>
           <li>Add any part you stock. Typical sets are oil + fuel + air, sometimes plus cabin / coolant / DEF.</li>

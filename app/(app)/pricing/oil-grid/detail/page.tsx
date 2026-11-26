@@ -60,7 +60,7 @@ export default async function OilChangeDetailPage() {
               <li>
                 <em>Fuel</em> and <em>Grease</em> are what the job consumes beyond the
                 filters — the diesel treatment and grease items inside the package linked
-                to that engine, at (cost + MHSW) × quantity. They run roughly $6–$10 a job
+                to that engine, at cost × quantity. They run roughly $6–$10 a job
                 and come straight off profit.
               </li>
               <li>

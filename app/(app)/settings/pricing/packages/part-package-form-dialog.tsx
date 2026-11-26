@@ -105,8 +105,8 @@ export function PartPackageFormDialog({
               unit_price,
               label: `${it.part!.brand} ${it.part!.part_number}`,
               subLabel: it.part!.description,
-              // Packages charge the COST basis (cost + Sell MHSW) — no
-              // service/labour markup; the package's "Labor charge" covers labour.
+              // Packages charge the part at COST — no service/labour markup
+              // (the package's "Labor charge" covers labour), no Sell MHSW.
               catalogPrice: Number(it.part!.package_unit_price ?? it.part!.list_price),
               unitOfMeasure: it.part!.unit_of_measure,
             };

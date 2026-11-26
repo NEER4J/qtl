@@ -492,8 +492,9 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
           </View>
           {(() => {
             // One table for everything: packages (collapsed — items shown as
-            // "Included"), then labour, then catalog parts. Amounts already
-            // include MHSW; the MHSW column shows the portion baked into each part.
+            // "Included"), then labour, then catalog parts. The MHSW column is
+            // each part's MHSW per unit: on jobs from 0164 on it is charged on
+            // the "MHSW — parts" line; on older jobs it sits inside the amount.
             type LineRow = {
               id: string;
               qty: string;

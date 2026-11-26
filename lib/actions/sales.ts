@@ -84,6 +84,9 @@ const JOB_0149_COLUMNS = ["oil_tier_premium_waived", "grease_only_fee_waived"] a
 // 0150: which filter option an oil change was sold with. No engine has options
 // until that migration, so dropping the column loses nothing.
 const JOB_0150_COLUMNS = ["engine_option_id"] as const;
+// 0164: the MHSW lines' waivers. Before it the form treats every saved job as
+// waived, so leaving them out loses nothing.
+const JOB_0164_COLUMNS = ["mhsw_parts_waived", "mhsw_oil_waived"] as const;
 const ITEM_0149_COLUMNS = ["oil_container", "auto_fee"] as const;
 // 0157: oil beyond the engine's capacity. Before it, such a line saves as a
 // plain oil line — still priced and stocked right, just not flagged.
@@ -99,10 +102,14 @@ function omitKeys<T extends Record<string, unknown>>(row: T, keys: readonly stri
 function waiverColumns(input: {
   oil_tier_premium_waived?: boolean;
   grease_only_fee_waived?: boolean;
+  mhsw_parts_waived?: boolean;
+  mhsw_oil_waived?: boolean;
 }): Record<string, boolean> {
   const out: Record<string, boolean> = {};
   if (input.oil_tier_premium_waived !== undefined) out.oil_tier_premium_waived = input.oil_tier_premium_waived;
   if (input.grease_only_fee_waived !== undefined) out.grease_only_fee_waived = input.grease_only_fee_waived;
+  if (input.mhsw_parts_waived !== undefined) out.mhsw_parts_waived = input.mhsw_parts_waived;
+  if (input.mhsw_oil_waived !== undefined) out.mhsw_oil_waived = input.mhsw_oil_waived;
   return out;
 }
 
@@ -564,7 +571,7 @@ export const createSalesJob = wrapAction({
     let { data, error } = await insertJob(jobRow);
     // Either pending migration drops its own columns and tries again; with both
     // pending the second pass clears the other.
-    for (const pending of [JOB_0150_COLUMNS, JOB_0149_COLUMNS]) {
+    for (const pending of [JOB_0164_COLUMNS, JOB_0150_COLUMNS, JOB_0149_COLUMNS]) {
       if (!isMissingColumn(error, pending)) continue;
       for (const k of pending) delete (jobRow as Record<string, unknown>)[k];
       ({ data, error } = await insertJob(jobRow));
@@ -783,7 +790,7 @@ export const updateSalesJob = wrapAction({
     const updateJob = (patch: Record<string, unknown>) =>
       supabase.from("sales_jobs").update(patch).eq("id", input.id).select("*").single();
     let { data, error } = await updateJob(jobPatch);
-    for (const pending of [JOB_0150_COLUMNS, JOB_0149_COLUMNS]) {
+    for (const pending of [JOB_0164_COLUMNS, JOB_0150_COLUMNS, JOB_0149_COLUMNS]) {
       if (!isMissingColumn(error, pending)) continue;
       for (const k of pending) delete (jobPatch as Record<string, unknown>)[k];
       ({ data, error } = await updateJob(jobPatch));
@@ -984,7 +991,7 @@ async function replaceJobItems(
         merged_unit_price?: number | null;
         is_customer_supplied?: boolean;
         oil_container?: "bulk" | "gallon" | null;
-        auto_fee?: "oil_tier_premium" | "grease_only_fee" | null;
+        auto_fee?: "oil_tier_premium" | "grease_only_fee" | "mhsw_parts" | "mhsw_oil" | null;
         is_extra_oil?: boolean;
       }[]
     | undefined,
@@ -1040,6 +1047,14 @@ async function replaceJobItems(
   for (const cols of [ITEM_0157_COLUMNS, ITEM_0149_COLUMNS]) {
     if (!isMissingColumn(insErr, cols)) continue;
     pending = pending.map((r) => omitKeys(r, cols));
+    ({ error: insErr } = await supabase.from("sales_job_items").insert(pending));
+  }
+  // Before 0164 the auto_fee check only knows the 0149 charges: the MHSW lines
+  // then save as plain lines (same amount, just not flagged automatic).
+  if (insErr?.code === "23514" && /auto_fee/.test(insErr.message ?? "")) {
+    pending = pending.map((r) =>
+      r.auto_fee === "mhsw_parts" || r.auto_fee === "mhsw_oil" ? { ...r, auto_fee: null } : r,
+    );
     ({ error: insErr } = await supabase.from("sales_job_items").insert(pending));
   }
   if (insErr) throw insErr;

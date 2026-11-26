@@ -501,7 +501,7 @@ export function PartFormDialog({
                   <FormItem>
                     <FormLabel className="flex items-center gap-1">
                       Sell MHSW
-                      <InfoTip>Customer-facing MHSW — added into the cost basis first, then marked up by the margin into the list/sell price.</InfoTip>
+                      <InfoTip>Customer-facing MHSW per unit. Not part of the list price: every job charges it on its own &quot;MHSW — parts&quot; line.</InfoTip>
                     </FormLabel>
                     <FormControl>
                       <Input type="number" min="0" step="0.01" {...field} />
@@ -675,7 +675,7 @@ export function PartFormDialog({
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="fixed">Fixed amount</SelectItem>
-                        <SelectItem value="percent">Percent of (cost + Sell MHSW)</SelectItem>
+                        <SelectItem value="percent">Percent of cost</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -843,7 +843,7 @@ export function PartFormDialog({
                     <div className="leading-none">
                       <FormLabel className="cursor-pointer">Bundled in a package</FormLabel>
                       <FormDescription className="text-xs">
-                        Marks the part as part of a package. A package charges this part at its cost basis (cost + Sell MHSW) — the package&apos;s labour is its own separate line. Adding this part to a job on its own charges <strong>With Service</strong> at $0, since the package already covered it. The With service box above and the price lists show $0 with the calculated price alongside.
+                        Marks the part as part of a package. A package charges this part at its cost (its Sell MHSW goes on the job&apos;s MHSW line) — the package&apos;s labour is its own separate line. Adding this part to a job on its own charges <strong>With Service</strong> at $0, since the package already covered it. The With service box above and the price lists show $0 with the calculated price alongside.
                       </FormDescription>
                     </div>
                   </FormItem>
