@@ -40,6 +40,7 @@ import { oilLabel } from "@/lib/utils/oil-labels";
 import { createVehicle, getCustomerVehicles, searchVehicles } from "@/lib/actions/vehicles";
 import { VehicleFormDialog } from "@/components/customers/vehicle-form-dialog";
 import { isVehicleFreeGreaseEligible, vehicleFreeGreaseUntil } from "@/lib/utils/free-grease";
+import { matchEngines } from "@/lib/utils/engine-match";
 import { isFreeOilChangeEligible } from "@/lib/utils/free-oil-change";
 import { costBucketFor } from "@/lib/utils/cost-bucket";
 import type { VolumeTierRow } from "@/lib/utils/oil-tier";
@@ -611,19 +612,26 @@ export function SalesJobForm({
   // nothing matches. (client 2026-06-28 — was narrowed by vehicle Make.)
   const vehicleEngineSize = useWatch({ control: form.control, name: "engine_size" });
   const { engineOptions, engineMakeFiltered } = useMemo(() => {
-    const size = (vehicleEngineSize ?? "").trim().toLowerCase();
+    const size = (vehicleEngineSize ?? "").trim();
     if (!size) return { engineOptions: engineTypes, engineMakeFiltered: false };
-    const matched = engineTypes.filter(
-      (e) =>
-        e.display_name.toLowerCase().includes(size) ||
-        e.model.toLowerCase().includes(size),
-    );
+    // Forgiving match (DET60, MP8, VOLVO D13, C13/15 …): lib/utils/engine-match.ts.
+    const matched = matchEngines(engineTypes, size);
     return matched.length > 0
       ? { engineOptions: matched, engineMakeFiltered: true }
       : { engineOptions: engineTypes, engineMakeFiltered: false };
   }, [engineTypes, vehicleEngineSize]);
 
   const isOilChange = serviceTypes.find((s) => s.id === serviceTypeId)?.code === "OC";
+
+  // When the vehicle's engine size points at exactly one catalogue engine, pick
+  // it: the package, its parts and the MHSW then follow without a manual pick
+  // (client 2026-11-27: "the engine isn't selected"). New jobs only, and never
+  // over an engine staff already chose.
+  useEffect(() => {
+    if (mode !== "create" || !isOilChange || engineTypeId) return;
+    if (!engineMakeFiltered || engineOptions.length !== 1) return;
+    form.setValue("engine_type_id", engineOptions[0]!.id, { shouldDirty: true });
+  }, [mode, isOilChange, engineTypeId, engineMakeFiltered, engineOptions, form]);
 
   // An engine sold with a choice of filter brand has one price per option, so
   // the filter has to be picked too. Most engines have no options.
