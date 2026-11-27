@@ -45,6 +45,7 @@ import {
   isPartPackageLocked,
 } from "@/lib/utils/package-pricing";
 import { oilLabel } from "@/lib/utils/oil-labels";
+import { packageLaborLabel } from "@/lib/utils/package-labor";
 import { buildDisplayRows, packageGroupKey } from "@/lib/utils/sales-display";
 import { AUTO_FEE_SOURCE, type AutoFee } from "@/lib/utils/sales-auto-lines";
 
@@ -261,11 +262,10 @@ export function packageLineItems(
       isTaxable = it.part.is_taxable;
       unitOfMeasure = it.part.unit_of_measure;
       categoryId = it.part.category_id ?? null;
-      // The part's Sell MHSW goes on the job's "MHSW — parts" line — unless
-      // the package holds this part at a fixed price (locked or typed), which
-      // was set with the MHSW inside it.
-      const fixedPrice = locked ? it.locked_unit_price != null || it.unit_price != null : it.unit_price != null;
-      mhswUnit = fixedPrice ? 0 : Number(it.part.mhsw_fee) || 0;
+      // The part's Sell MHSW goes on the job's "MHSW — parts" line, whether or
+      // not the package holds the part at a fixed price (client 2026-11-27: the
+      // Cat and Detroit package filters were left out of the MHSW count).
+      mhswUnit = Number(it.part.mhsw_fee) || 0;
     } else {
       continue;
     }
@@ -301,7 +301,7 @@ export function packageLineItems(
     rows.push(
       newLineItem({
         part_id: null,
-        description: pkg.labor_description ?? "Labor",
+        description: packageLaborLabel(pkg.labor_description),
         quantity: 1,
         unit_price: laborSell,
         is_taxable: true,

@@ -179,6 +179,8 @@ export interface SalesJobFormProps {
   greaseOnlyFee?: number;
   /** app_settings.mhsw_oil_per_litre — MHSW per litre of bulk oil (0169). */
   mhswOilPerLitre?: number;
+  /** False until migration 0169 is applied: no automatic MHSW lines then. */
+  mhswLines?: boolean;
   /** Part categories with their cost bucket — tells a grease line from a filter. */
   partCategories?: { id: string; name: string; cost_bucket?: string | null }[];
   /** Grease parts the free-grease offer can draw, the usual one first. */
@@ -292,6 +294,7 @@ export function SalesJobForm({
   volumeTiers = NO_TIERS,
   greaseOnlyFee = 0,
   mhswOilPerLitre = 0,
+  mhswLines = true,
   partCategories = NO_CATEGORIES,
   greaseParts = NO_GREASE_PARTS,
   lockedLocationId,
@@ -454,11 +457,12 @@ export function SalesJobForm({
       tierCaps: tierCapsRef.current,
       greaseOnlyFee,
       mhswOilPerLitre,
+      mhswLines,
       freeGreaseApplied: freeGrease,
       waived,
       bucketOf: (id) => (id ? bucketByCategory.get(id) ?? "other" : "other"),
     }),
-    [oilTypes, volumeTiers, greaseOnlyFee, mhswOilPerLitre, bucketByCategory],
+    [oilTypes, volumeTiers, greaseOnlyFee, mhswOilPerLitre, mhswLines, bucketByCategory],
   );
 
   // The oil change's extra-oil rule, set further down once the engine and oil

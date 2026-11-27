@@ -104,6 +104,7 @@ export default async function EditSalesJobPage({
         volumeTiers={volumeTiers}
         greaseOnlyFee={Number(settings.grease_only_fee ?? 0)}
         mhswOilPerLitre={Number(settings.mhsw_oil_per_litre ?? 0)}
+        mhswLines={settings.mhsw_oil_per_litre !== undefined}
         partCategories={partCategories}
         greaseParts={greaseParts}
         currentUserRole={profile.role}

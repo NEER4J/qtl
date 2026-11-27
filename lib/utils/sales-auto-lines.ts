@@ -86,6 +86,12 @@ export interface AutoLineContext {
   freeGreaseApplied: boolean;
   /** app_settings.mhsw_oil_per_litre — MHSW per litre of bulk oil; 0 turns it off. */
   mhswOilPerLitre: number;
+  /**
+   * False until migration 0169 is applied: part prices still hold their MHSW
+   * then, so a separate MHSW line would charge it twice (and the line can't be
+   * saved as automatic). Default true.
+   */
+  mhswLines?: boolean;
   waived: AutoFeeWaivers;
   /** Cost bucket of a part category (costBucketFor on the category). */
   bucketOf: (categoryId: string | null | undefined) => CostBucket;
@@ -348,8 +354,8 @@ export function autoCharges(
       fee > 0 && !ctx.freeGreaseApplied && isGreaseOnlyJob(items, ctx.bucketOf)
         ? { amount: round2(fee), description: GREASE_ONLY_FEE_DESCRIPTION }
         : null,
-    mhsw_parts: mhswPartsCharge(items),
-    mhsw_oil: mhswOilCharge(items, ctx.mhswOilPerLitre),
+    mhsw_parts: ctx.mhswLines === false ? null : mhswPartsCharge(items),
+    mhsw_oil: ctx.mhswLines === false ? null : mhswOilCharge(items, ctx.mhswOilPerLitre),
   };
 }
 

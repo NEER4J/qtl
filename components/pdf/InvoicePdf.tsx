@@ -264,6 +264,26 @@ export interface InvoiceDocOptions {
   hstRate?: number;
 }
 
+/**
+ * What a line prints as. A part prints as its brand and number only (client
+ * 2026-11-27: "no need to show description on invoice, only part number"), so
+ * "Detroit 23530573 — Same as LF3620" is "Detroit 23530573". "Fuel Fuel — Clear
+ * Diesel" has no number of its own and keeps its description. A package's
+ * labour line that was loaded as "0" prints as "Labor".
+ */
+function printedName(it: { part_id?: string | null; description: string }): string {
+  const d = it.description;
+  if (!it.part_id) return d.trim() === "0" ? "Labor" : d;
+  const i = d.indexOf(" — ");
+  if (i <= 0) return d;
+  const left = d.slice(0, i).trim();
+  const words = left.split(/\s+/);
+  if (words.length > 1 && words.every((w) => w.toLowerCase() === words[0]!.toLowerCase())) {
+    return `${words[0]} — ${d.slice(i + 3)}`;
+  }
+  return left;
+}
+
 export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {}) {
   const hstLabel =
     opts.hstRate != null
@@ -360,7 +380,13 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
     if (!mhswInsidePrices || it.is_customer_supplied === true) return 0;
     const m = Number(it.mhsw_unit) || 0;
     const sign = Number(it.line_total ?? 0) < 0 ? -1 : 1;
-    return Math.round(m * Number(it.quantity) * 100) / 100 * sign;
+    // Never more than the line itself: a part sold at $0 holds no MHSW (it made
+    // Total Parts -1.50 on invoice 332066).
+    const inside = Math.min(
+      Math.round(m * Number(it.quantity) * 100) / 100,
+      Math.abs(Number(it.line_total ?? 0)),
+    );
+    return inside * sign;
   };
   const totalEmbeddedMhsw = parts.reduce((s, it) => s + embeddedMhsw(it), 0);
   const totalParts =
@@ -548,8 +574,8 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
                   id: m.id,
                   qty: "",
                   description: merged
-                    ? `${m.description} — merged (already on the job)`
-                    : m.description,
+                    ? `${printedName(m)} — merged (already on the job)`
+                    : printedName(m),
                   unit: merged ? money(Number(m.merged_unit_price)) : "Included",
                   unitMuted: true,
                   unitStrike: merged,
@@ -576,7 +602,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
               rows.push({
                 id: it.id,
                 qty: String(Number(it.quantity)),
-                description: it.description,
+                description: printedName(it),
                 unit: money(Number(it.unit_price)),
                 mhsw: "—",
                 amount: money(Number(it.line_total)),
@@ -600,7 +626,7 @@ export function buildInvoiceDoc(job: SalesJobDetail, opts: InvoiceDocOptions = {
                 qty: it.unit_of_measure
                   ? `${Number(it.quantity)} ${it.unit_of_measure}`
                   : String(Number(it.quantity)),
-                description: it.description,
+                description: printedName(it),
                 unit: money(Number(it.unit_price)),
                 mhsw: Number(it.mhsw_unit) > 0 ? money(Number(it.mhsw_unit)) : "—",
                 amount: money(Number(it.line_total)),

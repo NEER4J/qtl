@@ -19,6 +19,7 @@ import {
   effectiveCatalogPriceForItem,
   effectiveLockedPriceForItem,
 } from "@/lib/utils/package-pricing";
+import { packageLaborLabel } from "@/lib/utils/package-labor";
 
 type RowState = { item_id: string; new_unit_price: string };
 
@@ -158,7 +159,7 @@ export function MergePricesDialog({
               })}
               <tr className="bg-amber-50/50 dark:bg-amber-950/20">
                 <td className="py-2 px-3 font-medium">
-                  {pkg.labor_description ?? "Labor"}
+                  {packageLaborLabel(pkg.labor_description)}
                 </td>
                 <td className="py-2 px-2 text-right tabular-nums">1</td>
                 <td className="py-2 px-2 text-right tabular-nums text-muted-foreground">

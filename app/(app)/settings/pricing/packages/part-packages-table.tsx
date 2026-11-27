@@ -31,6 +31,7 @@ import {
 import { LockPackageDialog } from "./lock-package-dialog";
 import { MergePricesDialog } from "./merge-prices-dialog";
 import { PartPackageFormDialog } from "./part-package-form-dialog";
+import { packageLaborLabel } from "@/lib/utils/package-labor";
 
 // Item #20 — packages grid showing rolled-up cost / list / profit / margin.
 //
@@ -466,7 +467,7 @@ function PackageBreakdown({
           {laborSell > 0 && (
             <tr className="border-b last:border-0 bg-amber-50/50 dark:bg-amber-950/20">
               <td className="py-1.5 pr-2 font-medium">
-                {pkg.labor_description ?? "Labor"}
+                {packageLaborLabel(pkg.labor_description)}
               </td>
               <td className="text-right tabular-nums py-1.5 px-2">
                 1<span className="text-[10px] uppercase text-muted-foreground ml-1">each</span>
