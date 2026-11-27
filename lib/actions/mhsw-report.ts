@@ -31,17 +31,46 @@ export interface MhswSummary {
   mhsw_charged: number;
   mhsw_paid: number;
   net: number;
+  /** How many parts (filters, jugs) were charged MHSW on sales. */
+  qty_charged: number;
+  /** Litres of bulk oil charged MHSW on sales. */
+  litres_charged: number;
+  /** How many parts carried MHSW on vendor bills. */
+  qty_paid: number;
   /** False until migration 0166 adds expense_items.mhsw_unit. */
   paid_supported: boolean;
-  by_month: { month: string; charged: number; paid: number }[];
-  by_location: { location_name: string; charged: number; paid: number }[];
+  by_month: MhswMonthRow[];
+  by_location: (MhswRow & { location_name: string })[];
 }
+
+interface MhswRow {
+  charged: number;
+  paid: number;
+  qty_charged: number;
+  litres_charged: number;
+  qty_paid: number;
+}
+// Added to the month rows (the location rows carry location_name instead).
+export type MhswMonthRow = MhswRow & { month: string };
 
 type LocJoin = { name: string | null } | { name: string | null }[] | null;
 const one = <T,>(v: T | T[] | null | undefined): T | null =>
   Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+const roundRow = (v: {
+  charged: number;
+  paid: number;
+  qty_charged: number;
+  litres_charged: number;
+  qty_paid: number;
+}) => ({
+  charged: round2(v.charged),
+  paid: round2(v.paid),
+  qty_charged: round2(v.qty_charged),
+  litres_charged: round2(v.litres_charged),
+  qty_paid: round2(v.qty_paid),
+});
 
 function isMissingColumn(e: unknown): boolean {
   const err = e as { code?: string; message?: string } | null;
@@ -67,8 +96,10 @@ export async function getMhswSummary(filter: MhswSummaryFilter = {}): Promise<Mh
   type SaleItem = {
     id: string;
     quantity: number;
+    unit_price: number;
     line_total: number;
     mhsw_unit: number | null;
+    auto_fee: string | null;
     is_customer_supplied: boolean | null;
     sales_jobs: SaleJob | SaleJob[] | null;
   };
@@ -82,7 +113,7 @@ export async function getMhswSummary(filter: MhswSummaryFilter = {}): Promise<Mh
   // The waiver columns arrive with migration 0169; before it every job has its
   // MHSW inside the part prices.
   const baseSelect =
-    "id, quantity, line_total, mhsw_unit, is_customer_supplied, sales_jobs:sales_job_id!inner(job_date, location_id, deactivated_at, locations:location_id(name)";
+    "id, quantity, unit_price, line_total, mhsw_unit, auto_fee, is_customer_supplied, sales_jobs:sales_job_id!inner(job_date, location_id, deactivated_at, locations:location_id(name)";
   const saleSelect = `${baseSelect}, mhsw_parts_waived, mhsw_oil_waived)`;
   const saleSelectOld = `${baseSelect})`;
   let select = saleSelect;
@@ -157,32 +188,57 @@ export async function getMhswSummary(filter: MhswSummaryFilter = {}): Promise<Mh
     ),
   ]);
 
-  const monthMap = new Map<string, { charged: number; paid: number }>();
-  const locMap = new Map<string, { charged: number; paid: number }>();
-  const bump = (month: string, loc: string, field: "charged" | "paid", amt: number) => {
+  const blank = (): MhswRow => ({ charged: 0, paid: 0, qty_charged: 0, litres_charged: 0, qty_paid: 0 });
+  const monthMap = new Map<string, MhswRow>();
+  const locMap = new Map<string, MhswRow>();
+  const bump = (month: string, loc: string, field: keyof MhswRow, amt: number) => {
     if (!amt) return;
-    const m = monthMap.get(month) ?? { charged: 0, paid: 0 };
+    const m = monthMap.get(month) ?? blank();
     m[field] += amt;
     monthMap.set(month, m);
-    const l = locMap.get(loc) ?? { charged: 0, paid: 0 };
+    const l = locMap.get(loc) ?? blank();
     l[field] += amt;
     locMap.set(loc, l);
   };
 
   let charged = 0;
+  let qtyCharged = 0;
+  let litresCharged = 0;
+  // A line's quantity counts as parts or as litres. The automatic lines say
+  // which; for the hand-added MHSW parts, QTL1011 (a few cents a litre) is
+  // litres and QTL1010 ($1.50 a filter) is parts.
+  const countLine = (month: string, loc: string, it: SaleItem) => {
+    const sign = Number(it.line_total) < 0 ? -1 : 1;
+    const qty = (Number(it.quantity) || 0) * sign;
+    const isLitres =
+      it.auto_fee === "mhsw_oil" || (!it.auto_fee && Math.abs(Number(it.unit_price) || 0) <= 0.25);
+    if (isLitres) {
+      litresCharged += qty;
+      bump(month, loc, "litres_charged", qty);
+    } else {
+      qtyCharged += qty;
+      bump(month, loc, "qty_charged", qty);
+    }
+  };
   for (const it of mhswLines) {
     const job = one(it.sales_jobs);
     if (!job) continue;
     const amt = Number(it.line_total) || 0;
+    const month = job.job_date.slice(0, 7);
+    const loc = one(job.locations)?.name ?? "—";
     charged += amt;
-    bump(job.job_date.slice(0, 7), one(job.locations)?.name ?? "—", "charged", amt);
+    bump(month, loc, "charged", amt);
+    countLine(month, loc, it);
   }
   for (const it of autoLines) {
     const job = one(it.sales_jobs);
     if (!job) continue;
     const amt = Number(it.line_total) || 0;
+    const month = job.job_date.slice(0, 7);
+    const loc = one(job.locations)?.name ?? "—";
     charged += amt;
-    bump(job.job_date.slice(0, 7), one(job.locations)?.name ?? "—", "charged", amt);
+    bump(month, loc, "charged", amt);
+    countLine(month, loc, it);
   }
   for (const it of embeddedLines) {
     if (it.is_customer_supplied) continue;
@@ -194,16 +250,27 @@ export async function getMhswSummary(filter: MhswSummaryFilter = {}): Promise<Mh
     const sign = Number(it.line_total) < 0 ? -1 : 1;
     const amt = round2((Number(it.mhsw_unit) || 0) * (Number(it.quantity) || 0)) * sign;
     charged += amt;
-    bump(job.job_date.slice(0, 7), one(job.locations)?.name ?? "—", "charged", amt);
+    const month = job.job_date.slice(0, 7);
+    const loc = one(job.locations)?.name ?? "—";
+    bump(month, loc, "charged", amt);
+    const qty = (Number(it.quantity) || 0) * sign;
+    qtyCharged += qty;
+    bump(month, loc, "qty_charged", qty);
   }
 
   let paid = 0;
+  let qtyPaid = 0;
   for (const it of expenseLines.rows) {
     const exp = one(it.expenses);
     if (!exp) continue;
     const amt = round2((Number(it.mhsw_unit) || 0) * (Number(it.quantity) || 0));
+    const month = exp.expense_date.slice(0, 7);
+    const loc = one(exp.locations)?.name ?? "—";
     paid += amt;
-    bump(exp.expense_date.slice(0, 7), one(exp.locations)?.name ?? "—", "paid", amt);
+    bump(month, loc, "paid", amt);
+    const qty = Number(it.quantity) || 0;
+    qtyPaid += qty;
+    bump(month, loc, "qty_paid", qty);
   }
 
   return {
@@ -213,12 +280,15 @@ export async function getMhswSummary(filter: MhswSummaryFilter = {}): Promise<Mh
     mhsw_charged: round2(charged),
     mhsw_paid: round2(paid),
     net: round2(charged - paid),
+    qty_charged: round2(qtyCharged),
+    litres_charged: round2(litresCharged),
+    qty_paid: round2(qtyPaid),
     paid_supported: expenseLines.supported,
     by_month: [...monthMap.entries()]
-      .map(([month, v]) => ({ month, charged: round2(v.charged), paid: round2(v.paid) }))
+      .map(([month, v]) => ({ month, ...roundRow(v) }))
       .sort((a, b) => a.month.localeCompare(b.month)),
     by_location: [...locMap.entries()]
-      .map(([location_name, v]) => ({ location_name, charged: round2(v.charged), paid: round2(v.paid) }))
+      .map(([location_name, v]) => ({ location_name, ...roundRow(v) }))
       .sort((a, b) => a.location_name.localeCompare(b.location_name)),
   };
 }

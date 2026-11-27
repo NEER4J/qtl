@@ -246,6 +246,20 @@ export function isGreaseOnlyJob(
 }
 
 export const GREASE_ONLY_FEE_DESCRIPTION = "Grease-only service fee";
+/**
+ * An automatic charge. `quantity` x `unitPrice` is the amount when the line can
+ * show a real quantity (5 filters at 1.50, 40 litres at 0.06); without them it
+ * is one line of the whole amount. MHSW lines carry a quantity so the invoice
+ * and the report can say how many were charged (client 2026-11-27: 3 package
+ * filters + 2 extra = quantity 5, not 1).
+ */
+export interface AutoCharge {
+  amount: number;
+  description: string;
+  quantity?: number;
+  unitPrice?: number;
+}
+
 export const MHSW_PARTS_DESCRIPTION = "MHSW — parts";
 export const MHSW_OIL_DESCRIPTION = "MHSW — bulk oil";
 
@@ -262,19 +276,30 @@ const noMhsw = (it: AutoLineItem) =>
  * A package part whose price is fixed (locked or typed) carries mhsw_unit 0 —
  * that price was set with MHSW inside it.
  */
-export function mhswPartsCharge(
-  items: readonly AutoLineItem[],
-): { amount: number; description: string } | null {
+export function mhswPartsCharge(items: readonly AutoLineItem[]): AutoCharge | null {
   let amount = 0;
+  let count = 0;
   for (const it of items) {
     if (!it.part_id || noMhsw(it)) continue;
     const unit = Number(it.mhsw_unit) || 0;
     const qty = Number(it.quantity) || 0;
     if (unit <= 0 || qty <= 0) continue;
     amount += lineSign(it) * unit * qty;
+    count += lineSign(it) * qty;
   }
   amount = round2(amount);
-  return amount !== 0 ? { amount, description: MHSW_PARTS_DESCRIPTION } : null;
+  if (amount === 0) return null;
+  // The line shows how many parts carry MHSW. unit_price holds 2 decimals, so
+  // quantity x price must come back to the amount to the cent (three at 1.50,
+  // or 3 + 2 with an even average, do; an average like 1.6667 doesn't). When
+  // it doesn't, the line is one charge of the whole amount.
+  if (count > 0) {
+    const unitPrice = round2(amount / count);
+    if (round2(count * unitPrice) === amount) {
+      return { amount, description: MHSW_PARTS_DESCRIPTION, quantity: count, unitPrice };
+    }
+  }
+  return { amount, description: MHSW_PARTS_DESCRIPTION };
 }
 
 /**
@@ -285,7 +310,7 @@ export function mhswPartsCharge(
 export function mhswOilCharge(
   items: readonly AutoLineItem[],
   perLitre: number,
-): { amount: number; description: string } | null {
+): AutoCharge | null {
   const rate = Number(perLitre) || 0;
   if (rate <= 0) return null;
   let litres = 0;
@@ -299,9 +324,15 @@ export function mhswOilCharge(
   litres = round2(litres);
   const amount = round2(litres * rate);
   if (amount === 0) return null;
+  // Litres x the per-litre rate, shown as the line's quantity and price (40 at
+  // 0.06). A rate with more than 2 decimals can't be held in unit_price, so it
+  // stays one line of the whole amount with the working in the description.
+  if (litres > 0 && round2(rate) === rate && round2(litres * rate) === amount) {
+    return { amount, description: MHSW_OIL_DESCRIPTION, quantity: litres, unitPrice: rate };
+  }
   return {
     amount,
-    description: `${MHSW_OIL_DESCRIPTION} (${fmtLitres(litres)} × $${rate.toFixed(2)}/L)`,
+    description: `${MHSW_OIL_DESCRIPTION} (${fmtLitres(litres)} × $${Number(rate.toFixed(4))}/L)`,
   };
 }
 
@@ -309,7 +340,7 @@ export function mhswOilCharge(
 export function autoCharges(
   items: readonly AutoLineItem[],
   ctx: AutoLineContext,
-): Record<AutoFee, { amount: number; description: string } | null> {
+): Record<AutoFee, AutoCharge | null> {
   const fee = Number(ctx.greaseOnlyFee) || 0;
   return {
     oil_tier_premium: tierPremiumFor(items, ctx),
@@ -343,15 +374,17 @@ export function reconcileAutoLines<T extends AutoLineItem>(
       if (existing) next = next.filter((it) => it !== existing);
       continue;
     }
+    const wantQty = want.quantity ?? 1;
+    const wantPrice = want.unitPrice ?? want.amount;
     if (existing) {
       if (
-        Number(existing.unit_price) !== want.amount ||
+        Number(existing.unit_price) !== wantPrice ||
         existing.description !== want.description ||
-        Number(existing.quantity) !== 1
+        Number(existing.quantity) !== wantQty
       ) {
         next = next.map((it) =>
           it === existing
-            ? { ...it, unit_price: want.amount, description: want.description, quantity: 1 }
+            ? { ...it, unit_price: wantPrice, description: want.description, quantity: wantQty }
             : it,
         );
       }
@@ -362,8 +395,8 @@ export function reconcileAutoLines<T extends AutoLineItem>(
       makeLine({
         part_id: null,
         description: want.description,
-        quantity: 1,
-        unit_price: want.amount,
+        quantity: wantQty,
+        unit_price: wantPrice,
         is_taxable: true,
         auto_fee: kind,
       } as Partial<T>),

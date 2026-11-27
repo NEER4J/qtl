@@ -56,8 +56,18 @@ export default async function MhswSummaryPage({
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Stat label="MHSW charged (sales)" value={formatMoney(data.mhsw_charged)} accent="pos" />
-        <Stat label="MHSW paid (expenses)" value={formatMoney(data.mhsw_paid)} accent="neg" />
+        <Stat
+          label="MHSW charged (sales)"
+          value={formatMoney(data.mhsw_charged)}
+          sub={`${data.qty_charged} part${data.qty_charged === 1 ? "" : "s"} · ${data.litres_charged} L bulk oil`}
+          accent="pos"
+        />
+        <Stat
+          label="MHSW paid (expenses)"
+          value={formatMoney(data.mhsw_paid)}
+          sub={`${data.qty_paid} part${data.qty_paid === 1 ? "" : "s"}`}
+          accent="neg"
+        />
         <Stat label="Net MHSW" value={formatMoney(data.net)} accent={data.net >= 0 ? "warn" : "pos"} big />
       </div>
 
@@ -71,7 +81,10 @@ export default async function MhswSummaryPage({
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Month</TableHead>
+                  <TableHead className="text-right">Parts charged</TableHead>
+                  <TableHead className="text-right">Litres charged</TableHead>
                   <TableHead className="text-right">MHSW charged</TableHead>
+                  <TableHead className="text-right">Parts paid</TableHead>
                   <TableHead className="text-right">MHSW paid</TableHead>
                   <TableHead className="text-right">Net</TableHead>
                 </TableRow>
@@ -80,14 +93,20 @@ export default async function MhswSummaryPage({
                 {data.by_month.map((r) => (
                   <TableRow key={r.month}>
                     <TableCell className="font-medium">{r.month}</TableCell>
+                    <TableCell className="text-right tabular-nums">{r.qty_charged}</TableCell>
+                    <TableCell className="text-right tabular-nums">{r.litres_charged}</TableCell>
                     <TableCell className="text-right tabular-nums text-emerald-600">{formatMoney(r.charged)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{r.qty_paid}</TableCell>
                     <TableCell className="text-right tabular-nums text-rose-600">{formatMoney(r.paid)}</TableCell>
                     <TableCell className="text-right tabular-nums font-medium">{formatMoney(r.charged - r.paid)}</TableCell>
                   </TableRow>
                 ))}
                 <TableRow className="border-t font-semibold">
                   <TableCell>Total</TableCell>
+                  <TableCell className="text-right tabular-nums">{data.qty_charged}</TableCell>
+                  <TableCell className="text-right tabular-nums">{data.litres_charged}</TableCell>
                   <TableCell className="text-right tabular-nums text-emerald-600">{formatMoney(data.mhsw_charged)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{data.qty_paid}</TableCell>
                   <TableCell className="text-right tabular-nums text-rose-600">{formatMoney(data.mhsw_paid)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatMoney(data.net)}</TableCell>
                 </TableRow>
@@ -105,7 +124,10 @@ export default async function MhswSummaryPage({
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Location</TableHead>
+                  <TableHead className="text-right">Parts charged</TableHead>
+                  <TableHead className="text-right">Litres charged</TableHead>
                   <TableHead className="text-right">MHSW charged</TableHead>
+                  <TableHead className="text-right">Parts paid</TableHead>
                   <TableHead className="text-right">MHSW paid</TableHead>
                   <TableHead className="text-right">Net</TableHead>
                 </TableRow>
@@ -114,7 +136,10 @@ export default async function MhswSummaryPage({
                 {data.by_location.map((r) => (
                   <TableRow key={r.location_name}>
                     <TableCell className="font-medium">{r.location_name}</TableCell>
+                    <TableCell className="text-right tabular-nums">{r.qty_charged}</TableCell>
+                    <TableCell className="text-right tabular-nums">{r.litres_charged}</TableCell>
                     <TableCell className="text-right tabular-nums text-emerald-600">{formatMoney(r.charged)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{r.qty_paid}</TableCell>
                     <TableCell className="text-right tabular-nums text-rose-600">{formatMoney(r.paid)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(r.charged - r.paid)}</TableCell>
                   </TableRow>
@@ -128,7 +153,7 @@ export default async function MhswSummaryPage({
   );
 }
 
-function Stat({ label, value, accent, big }: { label: string; value: string; accent?: "pos" | "neg" | "warn"; big?: boolean }) {
+function Stat({ label, value, sub, accent, big }: { label: string; value: string; sub?: string; accent?: "pos" | "neg" | "warn"; big?: boolean }) {
   const color =
     accent === "pos" ? "text-emerald-600" :
     accent === "neg" ? "text-rose-600" :
@@ -138,6 +163,7 @@ function Stat({ label, value, accent, big }: { label: string; value: string; acc
       <CardContent className="pt-6">
         <div className="text-xs text-muted-foreground">{label}</div>
         <div className={`${big ? "text-3xl" : "text-2xl"} font-bold tabular-nums mt-1 ${color}`}>{value}</div>
+        {sub && <div className="mt-1 text-xs text-muted-foreground">{sub}</div>}
       </CardContent>
     </Card>
   );
